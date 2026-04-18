@@ -37,18 +37,18 @@ Deferred:
 
 Initial crate candidates:
 
-- `tree-haver-rs`
-- `ast-merge-rs`
-- `text-merge-rs`
-- `json-merge-rs`
+- `tree-haver`
+- `ast-merge`
+- `text-merge`
+- `json-merge`
 
 Possible later crates:
 
-- `toml-merge-rs`
-- `yaml-merge-rs`
-- `markdown-merge-rs`
-- `merge-ruleset-rs`
-- `crate-template-rs`
+- `toml-merge`
+- `yaml-merge`
+- `markdown-merge`
+- `merge-ruleset`
+- `crate-template`
 
 ## Ruby Mapping
 
@@ -80,27 +80,27 @@ Requirements:
 
 ## MVP Deliverables
 
-### 1. `tree-haver-rs`
+### 1. `tree-haver`
 
 - parser loader
 - grammar selection API
 - parse error reporting
 
-### 2. `ast-merge-rs`
+### 2. `ast-merge`
 
 - merge result model
 - diagnostic types
 - match/refiner traits
 - freeze region representation
 
-### 3. `text-merge-rs`
+### 3. `text-merge`
 
 - normalized text segmentation
 - block matching
 - similarity scoring
 - configurable thresholds
 
-### 4. `json-merge-rs`
+### 4. `json-merge`
 
 - strict JSON/JSONC merge behavior
 - comment-aware handling where supported by grammar/runtime
@@ -130,7 +130,7 @@ Requirements:
 ## First Implementation Sequence
 
 1. define Rust core traits and diagnostic enums
-2. implement `tree-haver-rs`
+2. implement `tree-haver`
 3. implement fixture runner
-4. implement `text-merge-rs`
-5. implement `json-merge-rs`
+4. implement `text-merge`
+5. implement `json-merge`

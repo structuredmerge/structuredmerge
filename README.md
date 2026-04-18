@@ -5,7 +5,7 @@ family.
 
 Initial workspace crates:
 
-- `tree-haver-rs`
-- `ast-merge-rs`
-- `text-merge-rs`
-- `json-merge-rs`
+- `tree-haver`
+- `ast-merge`
+- `text-merge`
+- `json-merge`

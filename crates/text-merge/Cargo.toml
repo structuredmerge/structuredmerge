@@ -1,5 +1,5 @@
 [package]
-name = "json-merge-rs"
+name = "text-merge"
 version = "0.0.0"
 edition = "2024"
 
