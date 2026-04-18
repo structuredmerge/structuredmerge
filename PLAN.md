@@ -120,9 +120,12 @@ Requirements:
 
 ## Open Questions
 
-1. Keep crates in one Cargo workspace or separate repos?
-2. Which comment-preservation abstractions are worth porting in v1?
-3. Should Rust become the future reference kernel, or remain a peer implementation?
+1. Which comment-preservation abstractions are worth porting in v1?
+2. Should Rust become the future reference kernel, or remain a peer implementation?
+
+## Decisions
+
+- Use one Cargo workspace monorepo with multiple publishable crates.
 
 ## First Implementation Sequence
 
@@ -131,4 +134,3 @@ Requirements:
 3. implement fixture runner
 4. implement `text-merge-rs`
 5. implement `json-merge-rs`
-
