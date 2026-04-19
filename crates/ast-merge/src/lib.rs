@@ -414,6 +414,26 @@ pub fn review_replay_context_compatible(
         && candidate.families == current.families
 }
 
+pub fn conformance_manifest_review_request_ids(
+    manifest: &ConformanceManifest,
+    options: &ConformanceManifestReviewOptions,
+) -> Vec<String> {
+    if !options.require_explicit_contexts {
+        return Vec::new();
+    }
+
+    let mut request_ids: Vec<String> = conformance_suite_names(manifest)
+        .into_iter()
+        .filter_map(|suite_name| conformance_suite_definition(manifest, &suite_name))
+        .filter(|definition| !options.contexts.contains_key(&definition.family))
+        .filter(|definition| options.family_profiles.contains_key(&definition.family))
+        .map(|definition| review_request_id_for_family_context(&definition.family))
+        .collect();
+    request_ids.sort();
+    request_ids.dedup();
+    request_ids
+}
+
 pub fn resolve_conformance_family_context(
     family: &str,
     options: &ConformanceManifestPlanningOptions,
@@ -810,22 +830,21 @@ pub fn review_conformance_manifest(
     let mut diagnostics = Vec::new();
     let mut requests = Vec::new();
     let mut applied_decisions = Vec::new();
-    let effective_options = if options.review_decisions.is_empty() {
-        options.clone()
-    } else if options.review_replay_context.is_none() {
+    let mut effective_options = options.clone();
+    if !options.review_decisions.is_empty() && options.review_replay_context.is_none() {
         diagnostics.push(Diagnostic {
             severity: DiagnosticSeverity::Error,
             category: DiagnosticCategory::ReplayRejected,
             message: "review decisions were provided without replay context.".to_string(),
             path: None,
         });
-        let mut cloned = options.clone();
-        cloned.review_decisions.clear();
-        cloned
-    } else if !review_replay_context_compatible(
-        &replay_context,
-        options.review_replay_context.as_ref(),
-    ) {
+        effective_options.review_decisions.clear();
+    } else if !options.review_decisions.is_empty()
+        && !review_replay_context_compatible(
+            &replay_context,
+            options.review_replay_context.as_ref(),
+        )
+    {
         diagnostics.push(Diagnostic {
             severity: DiagnosticSeverity::Error,
             category: DiagnosticCategory::ReplayRejected,
@@ -833,12 +852,34 @@ pub fn review_conformance_manifest(
                 .to_string(),
             path: None,
         });
-        let mut cloned = options.clone();
-        cloned.review_decisions.clear();
-        cloned
-    } else {
-        options.clone()
-    };
+        effective_options.review_decisions.clear();
+    } else if !options.review_decisions.is_empty() {
+        let allowed_request_ids: HashMap<String, bool> =
+            conformance_manifest_review_request_ids(manifest, options)
+                .into_iter()
+                .map(|request_id| (request_id, true))
+                .collect();
+        effective_options.review_decisions = options
+            .review_decisions
+            .iter()
+            .filter_map(|decision| {
+                if allowed_request_ids.contains_key(&decision.request_id) {
+                    Some(decision.clone())
+                } else {
+                    diagnostics.push(Diagnostic {
+                        severity: DiagnosticSeverity::Error,
+                        category: DiagnosticCategory::ReplayRejected,
+                        message: format!(
+                            "review decision {} does not match any current review request.",
+                            decision.request_id
+                        ),
+                        path: None,
+                    });
+                    None
+                }
+            })
+            .collect();
+    }
     let mut resolved_contexts: HashMap<String, Option<ConformanceFamilyPlanContext>> =
         HashMap::new();
 

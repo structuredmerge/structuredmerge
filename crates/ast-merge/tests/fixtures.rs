@@ -10,19 +10,20 @@ use ast_merge::{
     NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
     NamedConformanceSuiteResults, PolicySurface, ReviewHostHints, ReviewReplayContext,
     ReviewRequest, conformance_family_feature_profile_path, conformance_fixture_path,
-    conformance_manifest_replay_context, conformance_review_host_hints,
-    conformance_suite_definition, conformance_suite_names, default_conformance_family_context,
-    plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
-    plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
-    report_conformance_manifest, report_conformance_suite, report_named_conformance_suite,
-    report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
-    report_named_conformance_suite_manifest, report_planned_conformance_suite,
-    report_planned_named_conformance_suites, resolve_conformance_family_context,
-    review_conformance_family_context, review_conformance_manifest,
-    review_replay_context_compatible, review_request_id_for_family_context, run_conformance_case,
-    run_conformance_suite, run_named_conformance_suite, run_named_conformance_suite_entry,
-    run_planned_conformance_suite, run_planned_named_conformance_suites, select_conformance_case,
-    summarize_conformance_results, summarize_named_conformance_suite_reports,
+    conformance_manifest_replay_context, conformance_manifest_review_request_ids,
+    conformance_review_host_hints, conformance_suite_definition, conformance_suite_names,
+    default_conformance_family_context, plan_conformance_suite, plan_named_conformance_suite,
+    plan_named_conformance_suite_entry, plan_named_conformance_suites,
+    plan_named_conformance_suites_with_diagnostics, report_conformance_manifest,
+    report_conformance_suite, report_named_conformance_suite, report_named_conformance_suite_entry,
+    report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
+    report_planned_conformance_suite, report_planned_named_conformance_suites,
+    resolve_conformance_family_context, review_conformance_family_context,
+    review_conformance_manifest, review_replay_context_compatible,
+    review_request_id_for_family_context, run_conformance_case, run_conformance_suite,
+    run_named_conformance_suite, run_named_conformance_suite_entry, run_planned_conformance_suite,
+    run_planned_named_conformance_suites, select_conformance_case, summarize_conformance_results,
+    summarize_named_conformance_suite_reports,
 };
 use serde_json::Value;
 
@@ -1100,6 +1101,46 @@ fn conforms_to_slice_65_review_replay_compatibility_fixture() {
 #[test]
 fn conforms_to_slice_66_review_replay_rejection_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("review_replay_rejection"));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let options =
+        serde_json::from_value::<ConformanceManifestReviewOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected =
+        serde_json::from_value::<ConformanceManifestReviewState>(fixture["expected_state"].clone())
+            .expect("expected state should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+    let state = review_conformance_manifest(&manifest, &options, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        serde_json::from_value::<ConformanceCaseExecution>(
+            executions.get(&key).cloned().unwrap_or_else(
+                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+            ),
+        )
+        .expect("execution should deserialize")
+    });
+
+    assert_eq!(state, expected);
+}
+
+#[test]
+fn conforms_to_slice_67_review_request_ids_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("review_request_ids"));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let options =
+        serde_json::from_value::<ConformanceManifestReviewOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected = serde_json::from_value::<Vec<String>>(fixture["expected_request_ids"].clone())
+        .expect("expected request ids should deserialize");
+
+    assert_eq!(conformance_manifest_review_request_ids(&manifest, &options), expected);
+}
+
+#[test]
+fn conforms_to_slice_68_stale_review_decision_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("stale_review_decision"));
     let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
         .expect("manifest should deserialize");
     let options =
