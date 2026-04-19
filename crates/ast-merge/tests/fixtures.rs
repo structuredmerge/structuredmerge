@@ -2,16 +2,18 @@ use std::{fs, path::PathBuf};
 
 use ast_merge::{
     ConformanceCaseExecution, ConformanceCaseRef, ConformanceCaseRequirements,
-    ConformanceCaseResult, ConformanceCaseRun, ConformanceFeatureProfileView, ConformanceManifest,
-    ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuitePlan, ConformanceSuiteReport,
+    ConformanceCaseResult, ConformanceCaseRun, ConformanceFamilyPlanContext,
+    ConformanceFeatureProfileView, ConformanceManifest, ConformanceOutcome,
+    ConformanceSelectionStatus, ConformanceSuitePlan, ConformanceSuiteReport,
     ConformanceSuiteSummary, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile,
-    NamedConformanceSuiteReport, PolicySurface, conformance_family_feature_profile_path,
-    conformance_fixture_path, conformance_suite_definition, conformance_suite_names,
-    plan_conformance_suite, plan_named_conformance_suite, report_conformance_suite,
-    report_named_conformance_suite, report_named_conformance_suite_entry,
-    report_planned_conformance_suite, run_conformance_case, run_conformance_suite,
-    run_named_conformance_suite, run_planned_conformance_suite, select_conformance_case,
-    summarize_conformance_results,
+    NamedConformanceSuitePlan, NamedConformanceSuiteReport, PolicySurface,
+    conformance_family_feature_profile_path, conformance_fixture_path,
+    conformance_suite_definition, conformance_suite_names, plan_conformance_suite,
+    plan_named_conformance_suite, plan_named_conformance_suite_entry,
+    plan_named_conformance_suites, report_conformance_suite, report_named_conformance_suite,
+    report_named_conformance_suite_entry, report_planned_conformance_suite, run_conformance_case,
+    run_conformance_suite, run_named_conformance_suite, run_planned_conformance_suite,
+    select_conformance_case, summarize_conformance_results,
 };
 use serde_json::Value;
 
@@ -690,4 +692,71 @@ fn conforms_to_slice_47_named_conformance_suite_entry_fixture() {
     );
 
     assert_eq!(entry, Some(expected));
+}
+
+#[test]
+fn conforms_to_slice_48_named_conformance_suite_plan_entry_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_plan_entry"));
+    let manifest = read_manifest();
+    let suite_name = fixture["suite_name"].as_str().expect("suite name should be a string");
+    let context =
+        serde_json::from_value::<ConformanceFamilyPlanContext>(fixture["context"].clone())
+            .expect("context should deserialize");
+    let expected =
+        serde_json::from_value::<NamedConformanceSuitePlan>(fixture["expected_entry"].clone())
+            .expect("expected entry should deserialize");
+
+    assert_eq!(plan_named_conformance_suite_entry(&manifest, suite_name, &context), Some(expected),);
+}
+
+#[test]
+fn conforms_to_slice_49_conformance_family_plan_context_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("family_plan_context"));
+    let context =
+        serde_json::from_value::<ConformanceFamilyPlanContext>(fixture["context"].clone())
+            .expect("context should deserialize");
+
+    assert_eq!(
+        context,
+        ConformanceFamilyPlanContext {
+            family_profile: FamilyFeatureProfile {
+                family: "json".to_string(),
+                supported_dialects: vec!["json".to_string(), "jsonc".to_string()],
+                supported_policies: vec![
+                    ast_merge::PolicyReference {
+                        surface: PolicySurface::Array,
+                        name: "destination_wins_array".to_string(),
+                    },
+                    ast_merge::PolicyReference {
+                        surface: PolicySurface::Fallback,
+                        name: "trailing_comma_destination_fallback".to_string(),
+                    },
+                ],
+            },
+            feature_profile: Some(ConformanceFeatureProfileView {
+                backend: "kreuzberg-language-pack".to_string(),
+                supports_dialects: false,
+                supported_policies: vec![ast_merge::PolicyReference {
+                    surface: PolicySurface::Array,
+                    name: "destination_wins_array".to_string(),
+                }],
+            }),
+        },
+    );
+}
+
+#[test]
+fn conforms_to_slice_50_named_conformance_suite_plans_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_plans"));
+    let manifest = read_manifest();
+    let contexts = serde_json::from_value::<
+        std::collections::HashMap<String, ConformanceFamilyPlanContext>,
+    >(fixture["contexts"].clone())
+    .expect("contexts should deserialize");
+    let expected = serde_json::from_value::<Vec<NamedConformanceSuitePlan>>(
+        fixture["expected_entries"].clone(),
+    )
+    .expect("expected entries should deserialize");
+
+    assert_eq!(plan_named_conformance_suites(&manifest, &contexts), expected);
 }

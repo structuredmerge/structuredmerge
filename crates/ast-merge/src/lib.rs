@@ -169,6 +169,18 @@ pub struct NamedConformanceSuiteReport {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceFamilyPlanContext {
+    pub family_profile: FamilyFeatureProfile,
+    pub feature_profile: Option<ConformanceFeatureProfileView>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NamedConformanceSuitePlan {
+    pub suite: String,
+    pub plan: ConformanceSuitePlan,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ConformanceSuiteSummary {
     pub total: usize,
     pub passed: usize,
@@ -470,4 +482,32 @@ pub fn plan_named_conformance_suite(
         family_profile,
         feature_profile,
     ))
+}
+
+pub fn plan_named_conformance_suite_entry(
+    manifest: &ConformanceManifest,
+    suite_name: &str,
+    context: &ConformanceFamilyPlanContext,
+) -> Option<NamedConformanceSuitePlan> {
+    let plan = plan_named_conformance_suite(
+        manifest,
+        suite_name,
+        &context.family_profile,
+        context.feature_profile.as_ref(),
+    )?;
+    Some(NamedConformanceSuitePlan { suite: suite_name.to_string(), plan })
+}
+
+pub fn plan_named_conformance_suites(
+    manifest: &ConformanceManifest,
+    contexts: &HashMap<String, ConformanceFamilyPlanContext>,
+) -> Vec<NamedConformanceSuitePlan> {
+    conformance_suite_names(manifest)
+        .into_iter()
+        .filter_map(|suite_name| {
+            let definition = conformance_suite_definition(manifest, &suite_name)?;
+            let context = contexts.get(&definition.family)?;
+            plan_named_conformance_suite_entry(manifest, &suite_name, context)
+        })
+        .collect()
 }
