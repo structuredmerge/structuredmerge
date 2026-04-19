@@ -7,9 +7,9 @@ use ast_merge::{
     ConformanceSuiteSummary, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile,
     PolicySurface, conformance_family_feature_profile_path, conformance_fixture_path,
     conformance_suite_definition, plan_conformance_suite, plan_named_conformance_suite,
-    report_conformance_suite, report_planned_conformance_suite, run_conformance_case,
-    run_conformance_suite, run_planned_conformance_suite, select_conformance_case,
-    summarize_conformance_results,
+    report_conformance_suite, report_named_conformance_suite, report_planned_conformance_suite,
+    run_conformance_case, run_conformance_suite, run_planned_conformance_suite,
+    select_conformance_case, summarize_conformance_results,
 };
 use serde_json::Value;
 
@@ -554,4 +554,44 @@ fn conforms_to_slice_43_conformance_suite_definitions_fixture() {
             None,
         )),
     );
+}
+
+#[test]
+fn conforms_to_slice_44_named_conformance_suite_report_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_report"));
+    let manifest = read_manifest();
+    let suite_name = fixture["suite_name"].as_str().expect("suite name should be a string");
+    let family_profile =
+        serde_json::from_value::<FamilyFeatureProfile>(fixture["family_profile"].clone())
+            .expect("family profile should deserialize");
+    let expected =
+        serde_json::from_value::<ConformanceSuiteReport>(fixture["expected_report"].clone())
+            .expect("expected report should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+    let feature_profile = ConformanceFeatureProfileView {
+        backend: "kreuzberg-language-pack".to_string(),
+        supports_dialects: false,
+        supported_policies: vec![ast_merge::PolicyReference {
+            surface: PolicySurface::Array,
+            name: "destination_wins_array".to_string(),
+        }],
+    };
+
+    let report = report_named_conformance_suite(
+        &manifest,
+        suite_name,
+        &family_profile,
+        |run| {
+            let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+            serde_json::from_value::<ConformanceCaseExecution>(
+                executions.get(&key).cloned().unwrap_or_else(
+                    || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+                ),
+            )
+            .expect("execution should deserialize")
+        },
+        Some(&feature_profile),
+    );
+
+    assert_eq!(report, Some(expected));
 }

@@ -356,6 +356,17 @@ pub fn report_planned_conformance_suite(
     report_conformance_suite(&run_planned_conformance_suite(plan, execute))
 }
 
+pub fn report_named_conformance_suite(
+    manifest: &ConformanceManifest,
+    suite_name: &str,
+    family_profile: &FamilyFeatureProfile,
+    execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
+    feature_profile: Option<&ConformanceFeatureProfileView>,
+) -> Option<ConformanceSuiteReport> {
+    let plan = plan_named_conformance_suite(manifest, suite_name, family_profile, feature_profile)?;
+    Some(report_planned_conformance_suite(&plan, execute))
+}
+
 pub fn report_conformance_suite(results: &[ConformanceCaseResult]) -> ConformanceSuiteReport {
     ConformanceSuiteReport {
         results: results.to_vec(),
