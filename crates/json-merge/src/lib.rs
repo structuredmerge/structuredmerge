@@ -76,6 +76,11 @@ pub trait JsonOwnerMatcher {
     fn match_owners(&self, template: &JsonAnalysis, destination: &JsonAnalysis) -> JsonOwnerMatchResult;
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct JsonMergeResolution {
+    pub output: String,
+}
+
 pub fn json_parse_request(source: &str, dialect: JsonDialect) -> ParserRequest {
     ParserRequest {
         source: source.to_string(),
@@ -380,11 +385,118 @@ pub fn match_json_owners(template: &JsonAnalysis, destination: &JsonAnalysis) ->
     }
 }
 
+fn parse_normalized_json(source: &str, dialect: JsonDialect) -> Result<Value, Diagnostic> {
+    let result = parse_json(source, dialect);
+    if !result.ok {
+        return Err(result
+            .diagnostics
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| parse_error("JSON parse failed.")));
+    }
+
+    let analysis = result.analysis.expect("successful parse should include analysis");
+    serde_json::from_str::<Value>(&analysis.normalized_source).map_err(|_| parse_error("JSON parse failed."))
+}
+
+fn merge_values(template: Value, destination: Value) -> Value {
+    match (template, destination) {
+        (Value::Object(template_map), Value::Object(destination_map)) => {
+            let mut merged = serde_json::Map::new();
+            let keys: std::collections::BTreeSet<String> = template_map
+                .keys()
+                .chain(destination_map.keys())
+                .cloned()
+                .collect();
+
+            for key in keys {
+                match (template_map.get(&key), destination_map.get(&key)) {
+                    (Some(template_value), Some(destination_value)) => {
+                        merged.insert(
+                            key.clone(),
+                            merge_values(template_value.clone(), destination_value.clone()),
+                        );
+                    }
+                    (None, Some(destination_value)) => {
+                        merged.insert(key.clone(), destination_value.clone());
+                    }
+                    (Some(template_value), None) => {
+                        merged.insert(key.clone(), template_value.clone());
+                    }
+                    (None, None) => {}
+                }
+            }
+
+            Value::Object(merged)
+        }
+        (Value::Array(_), Value::Array(destination_array)) => Value::Array(destination_array),
+        (_, destination) => destination,
+    }
+}
+
+fn canonical_json(value: &Value) -> String {
+    match value {
+        Value::Null => "null".to_string(),
+        Value::Bool(boolean) => boolean.to_string(),
+        Value::Number(number) => number.to_string(),
+        Value::String(string) => serde_json::to_string(string).expect("string serialization should succeed"),
+        Value::Array(items) => format!(
+            "[{}]",
+            items.iter().map(canonical_json).collect::<Vec<_>>().join(",")
+        ),
+        Value::Object(map) => {
+            let keys: std::collections::BTreeSet<&String> = map.keys().collect();
+            let entries = keys
+                .into_iter()
+                .map(|key| {
+                    format!(
+                        "{}:{}",
+                        serde_json::to_string(key).expect("key serialization should succeed"),
+                        canonical_json(map.get(key).expect("key should exist"))
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("{{{entries}}}")
+        }
+    }
+}
+
+pub fn merge_json(template_source: &str, destination_source: &str, dialect: JsonDialect) -> MergeResult<String> {
+    let template = match parse_normalized_json(template_source, dialect) {
+        Ok(value) => value,
+        Err(diagnostic) => {
+            return MergeResult {
+                ok: false,
+                diagnostics: vec![diagnostic],
+                output: None,
+            }
+        }
+    };
+    let destination = match parse_normalized_json(destination_source, dialect) {
+        Ok(value) => value,
+        Err(diagnostic) => {
+            return MergeResult {
+                ok: false,
+                diagnostics: vec![diagnostic],
+                output: None,
+            }
+        }
+    };
+
+    let merged = merge_values(template, destination);
+    MergeResult {
+        ok: true,
+        diagnostics: vec![],
+        output: Some(canonical_json(&merged)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        match_json_owners, parse_json, JsonDialect, JsonOwner, JsonOwnerKind, JsonOwnerMatch,
-        JsonRootKind,
+        match_json_owners, merge_json, parse_json, JsonDialect, JsonOwner, JsonOwnerKind,
+        JsonOwnerMatch, JsonRootKind,
     };
     use ast_merge::DiagnosticCategory;
 
@@ -495,5 +607,20 @@ mod tests {
         );
         assert_eq!(result.unmatched_template, vec!["/tags/1".to_string()]);
         assert_eq!(result.unmatched_destination, vec!["/extra".to_string()]);
+    }
+
+    #[test]
+    fn resolves_json_merge() {
+        let result = merge_json(
+            "{\n  \"name\": \"structuredmerge\",\n  \"meta\": {\"enabled\": false, \"mode\": \"template\"},\n  \"tags\": [\"template\"],\n  \"template_only\": 1\n}\n",
+            "{\n  \"meta\": {\"enabled\": true},\n  \"tags\": [\"destination\"],\n  \"destination_only\": 2\n}\n",
+            JsonDialect::Json,
+        );
+
+        assert!(result.ok);
+        assert_eq!(
+            result.output,
+            Some("{\"destination_only\":2,\"meta\":{\"enabled\":true,\"mode\":\"template\"},\"name\":\"structuredmerge\",\"tags\":[\"destination\"],\"template_only\":1}".to_string())
+        );
     }
 }
