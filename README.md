@@ -27,3 +27,6 @@ The Rust workspace uses:
 - `cargo clippy` for linting
 - `cargo check` for type checking
 - `cargo test` for unit and integration tests
+
+Integration tests consume the shared fixture corpus from the sibling
+`../fixtures` repository instead of copying fixture data into the workspace.
