@@ -37,3 +37,15 @@ pub struct MergeResult<TOutput> {
     pub diagnostics: Vec<Diagnostic>,
     pub output: Option<TOutput>,
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PolicySurface {
+    Fallback,
+    Array,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PolicyReference {
+    pub surface: PolicySurface,
+    pub name: String,
+}

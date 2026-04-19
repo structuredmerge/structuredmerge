@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use ast_merge::{DiagnosticCategory, DiagnosticSeverity};
+use ast_merge::{DiagnosticCategory, DiagnosticSeverity, PolicySurface};
 use serde_json::Value;
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -95,4 +95,40 @@ fn conforms_to_slice_02_diagnostic_vocabulary_fixture() {
         ),
         fixture["categories"]
     );
+}
+
+#[test]
+fn conforms_to_slice_17_policy_vocabulary_fixture() {
+    let fixture =
+        read_fixture(&["diagnostics", "slice-17-policy-vocabulary", "policy-references.json"]);
+
+    let surfaces = vec![
+        match PolicySurface::Fallback {
+            PolicySurface::Fallback => "fallback",
+            PolicySurface::Array => "array",
+        },
+        match PolicySurface::Array {
+            PolicySurface::Fallback => "fallback",
+            PolicySurface::Array => "array",
+        },
+    ];
+
+    let policies = serde_json::json!([
+        {
+            "surface": "fallback",
+            "name": "trailing_comma_destination_fallback"
+        },
+        {
+            "surface": "array",
+            "name": "destination_wins_array"
+        }
+    ]);
+
+    assert_eq!(
+        Value::Array(
+            surfaces.into_iter().map(|value| serde_json::json!(value)).collect::<Vec<_>>(),
+        ),
+        fixture["surfaces"]
+    );
+    assert_eq!(policies, fixture["policies"]);
 }
