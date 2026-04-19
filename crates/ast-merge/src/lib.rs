@@ -167,6 +167,21 @@ pub struct ConformanceSuiteReport {
     pub summary: ConformanceSuiteSummary,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceSuitePlanEntry {
+    #[serde(rename = "ref")]
+    pub ref_: ConformanceCaseRef,
+    pub path: Vec<String>,
+    pub run: ConformanceCaseRun,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceSuitePlan {
+    pub family: String,
+    pub entries: Vec<ConformanceSuitePlanEntry>,
+    pub missing_roles: Vec<String>,
+}
+
 fn includes_policy(supported_policies: &[PolicyReference], policy: &PolicyReference) -> bool {
     supported_policies.iter().any(|supported_policy| supported_policy == policy)
 }
@@ -311,9 +326,53 @@ pub fn run_conformance_suite(
     runs.iter().map(|run| run_conformance_case(run, execute)).collect()
 }
 
+pub fn run_planned_conformance_suite(
+    plan: &ConformanceSuitePlan,
+    execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
+) -> Vec<ConformanceCaseResult> {
+    plan.entries.iter().map(|entry| run_conformance_case(&entry.run, execute)).collect()
+}
+
 pub fn report_conformance_suite(results: &[ConformanceCaseResult]) -> ConformanceSuiteReport {
     ConformanceSuiteReport {
         results: results.to_vec(),
         summary: summarize_conformance_results(results),
     }
+}
+
+pub fn plan_conformance_suite(
+    manifest: &ConformanceManifest,
+    family: &str,
+    roles: &[String],
+    family_profile: &FamilyFeatureProfile,
+    feature_profile: Option<&ConformanceFeatureProfileView>,
+) -> ConformanceSuitePlan {
+    let mut entries = Vec::new();
+    let mut missing_roles = Vec::new();
+
+    for role in roles {
+        let Some(path) = conformance_fixture_path(manifest, family, role) else {
+            missing_roles.push(role.clone());
+            continue;
+        };
+
+        let ref_ = ConformanceCaseRef {
+            family: family.to_string(),
+            role: role.clone(),
+            case: role.clone(),
+        };
+
+        entries.push(ConformanceSuitePlanEntry {
+            ref_: ref_.clone(),
+            path: path.to_vec(),
+            run: ConformanceCaseRun {
+                ref_,
+                requirements: ConformanceCaseRequirements { dialect: None, policies: Vec::new() },
+                family_profile: family_profile.clone(),
+                feature_profile: feature_profile.cloned(),
+            },
+        });
+    }
+
+    ConformanceSuitePlan { family: family.to_string(), entries, missing_roles }
 }

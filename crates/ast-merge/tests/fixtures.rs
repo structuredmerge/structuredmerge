@@ -3,11 +3,11 @@ use std::{fs, path::PathBuf};
 use ast_merge::{
     ConformanceCaseExecution, ConformanceCaseRef, ConformanceCaseRequirements,
     ConformanceCaseResult, ConformanceCaseRun, ConformanceFeatureProfileView, ConformanceManifest,
-    ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuiteReport,
+    ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuitePlan, ConformanceSuiteReport,
     ConformanceSuiteSummary, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile,
     PolicySurface, conformance_family_feature_profile_path, conformance_fixture_path,
-    report_conformance_suite, run_conformance_case, run_conformance_suite, select_conformance_case,
-    summarize_conformance_results,
+    plan_conformance_suite, report_conformance_suite, run_conformance_case, run_conformance_suite,
+    run_planned_conformance_suite, select_conformance_case, summarize_conformance_results,
 };
 use serde_json::Value;
 
@@ -405,4 +405,57 @@ fn conforms_to_slice_36_conformance_suite_report_fixture() {
         .expect("report should deserialize");
 
     assert_eq!(report_conformance_suite(&results), report);
+}
+
+#[test]
+fn conforms_to_slice_39_conformance_suite_plan_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("suite_plan"));
+    let manifest = read_manifest();
+    let roles = fixture["roles"]
+        .as_array()
+        .expect("roles should be present")
+        .iter()
+        .map(|value| value.as_str().expect("role should be a string").to_string())
+        .collect::<Vec<_>>();
+    let family_profile =
+        serde_json::from_value::<FamilyFeatureProfile>(fixture["family_profile"].clone())
+            .expect("family profile should deserialize");
+    let feature_profile =
+        serde_json::from_value::<ConformanceFeatureProfileView>(fixture["feature_profile"].clone())
+            .ok();
+    let expected = serde_json::from_value::<ConformanceSuitePlan>(fixture["expected"].clone())
+        .expect("expected suite plan should deserialize");
+
+    let plan = plan_conformance_suite(
+        &manifest,
+        fixture["family"].as_str().expect("family should be a string"),
+        &roles,
+        &family_profile,
+        feature_profile.as_ref(),
+    );
+
+    assert_eq!(plan, expected);
+}
+
+#[test]
+fn conforms_to_slice_40_planned_conformance_suite_runner_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("planned_suite_runner"));
+    let plan = serde_json::from_value::<ConformanceSuitePlan>(fixture["plan"].clone())
+        .expect("plan should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+    let expected =
+        serde_json::from_value::<Vec<ConformanceCaseResult>>(fixture["expected_results"].clone())
+            .expect("expected results should deserialize");
+
+    let results = run_planned_conformance_suite(&plan, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        serde_json::from_value::<ConformanceCaseExecution>(
+            executions.get(&key).cloned().unwrap_or_else(
+                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+            ),
+        )
+        .expect("execution should deserialize")
+    });
+
+    assert_eq!(results, expected);
 }
