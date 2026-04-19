@@ -112,6 +112,29 @@ pub struct ConformanceCaseSelection {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceFeatureProfileView {
+    pub backend: String,
+    pub supports_dialects: bool,
+    #[serde(default)]
+    pub supported_policies: Vec<PolicyReference>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceCaseRun {
+    #[serde(rename = "ref")]
+    pub ref_: ConformanceCaseRef,
+    pub requirements: ConformanceCaseRequirements,
+    pub family_profile: FamilyFeatureProfile,
+    pub feature_profile: Option<ConformanceFeatureProfileView>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceCaseExecution {
+    pub outcome: ConformanceOutcome,
+    pub messages: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ConformanceManifestEntry {
     pub role: String,
     pub path: Vec<String>,
@@ -194,7 +217,7 @@ pub fn select_conformance_case(
     ref_: ConformanceCaseRef,
     requirements: &ConformanceCaseRequirements,
     family_profile: &FamilyFeatureProfile,
-    feature_profile: Option<&tree_haver_like::ConformanceFeatureProfileView<'_>>,
+    feature_profile: Option<&ConformanceFeatureProfileView>,
 ) -> ConformanceCaseSelection {
     let mut messages = Vec::new();
 
@@ -228,7 +251,7 @@ pub fn select_conformance_case(
         }
 
         if let Some(feature_profile) = feature_profile {
-            if !includes_policy(feature_profile.supported_policies, policy) {
+            if !includes_policy(&feature_profile.supported_policies, policy) {
                 messages.push(format!(
                     "backend {} does not support policy {}.",
                     feature_profile.backend, policy.name
@@ -248,12 +271,36 @@ pub fn select_conformance_case(
     }
 }
 
-pub mod tree_haver_like {
-    use crate::PolicyReference;
+pub fn run_conformance_case(
+    run: &ConformanceCaseRun,
+    execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution,
+) -> ConformanceCaseResult {
+    let selection = select_conformance_case(
+        run.ref_.clone(),
+        &run.requirements,
+        &run.family_profile,
+        run.feature_profile.as_ref(),
+    );
 
-    pub struct ConformanceFeatureProfileView<'a> {
-        pub backend: &'a str,
-        pub supports_dialects: bool,
-        pub supported_policies: &'a [PolicyReference],
+    if matches!(selection.status, ConformanceSelectionStatus::Skipped) {
+        return ConformanceCaseResult {
+            ref_: run.ref_.clone(),
+            outcome: ConformanceOutcome::Skipped,
+            messages: selection.messages,
+        };
     }
+
+    let execution = execute(run);
+    ConformanceCaseResult {
+        ref_: run.ref_.clone(),
+        outcome: execution.outcome,
+        messages: execution.messages,
+    }
+}
+
+pub fn run_conformance_suite(
+    runs: &[ConformanceCaseRun],
+    execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
+) -> Vec<ConformanceCaseResult> {
+    runs.iter().map(|run| run_conformance_case(run, execute)).collect()
 }

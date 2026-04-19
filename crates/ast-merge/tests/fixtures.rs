@@ -1,11 +1,12 @@
 use std::{fs, path::PathBuf};
 
 use ast_merge::{
-    ConformanceCaseRef, ConformanceCaseRequirements, ConformanceCaseResult, ConformanceManifest,
+    ConformanceCaseExecution, ConformanceCaseRef, ConformanceCaseRequirements,
+    ConformanceCaseResult, ConformanceCaseRun, ConformanceFeatureProfileView, ConformanceManifest,
     ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuiteSummary, DiagnosticCategory,
     DiagnosticSeverity, FamilyFeatureProfile, PolicySurface,
-    conformance_family_feature_profile_path, conformance_fixture_path, select_conformance_case,
-    summarize_conformance_results, tree_haver_like,
+    conformance_family_feature_profile_path, conformance_fixture_path, run_conformance_case,
+    run_conformance_suite, select_conformance_case, summarize_conformance_results,
 };
 use serde_json::Value;
 
@@ -326,10 +327,10 @@ fn conforms_to_slice_33_capability_aware_selection_fixture() {
             ref_.clone(),
             &requirements,
             &family_profile,
-            Some(&tree_haver_like::ConformanceFeatureProfileView {
-                backend,
+            Some(&ConformanceFeatureProfileView {
+                backend: backend.to_string(),
                 supports_dialects,
-                supported_policies: &supported_policies,
+                supported_policies,
             }),
         );
 
@@ -350,4 +351,46 @@ fn conforms_to_slice_33_capability_aware_selection_fixture() {
         assert_eq!(selection.status, expected_status);
         assert_eq!(selection.messages, expected_messages);
     }
+}
+
+#[test]
+fn conforms_to_slice_34_conformance_case_runner_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("case_runner"));
+    let cases = fixture["cases"].as_array().expect("cases should be present");
+
+    for case in cases {
+        let run = serde_json::from_value::<ConformanceCaseRun>(case["run"].clone())
+            .expect("run should deserialize");
+        let execution =
+            serde_json::from_value::<ConformanceCaseExecution>(case["execution"].clone())
+                .expect("execution should deserialize");
+        let expected = serde_json::from_value::<ConformanceCaseResult>(case["expected"].clone())
+            .expect("expected should deserialize");
+
+        let result = run_conformance_case(&run, |_| execution.clone());
+        assert_eq!(result, expected);
+    }
+}
+
+#[test]
+fn conforms_to_slice_35_conformance_suite_runner_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("suite_runner"));
+    let runs = serde_json::from_value::<Vec<ConformanceCaseRun>>(fixture["cases"].clone())
+        .expect("cases should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+    let expected =
+        serde_json::from_value::<Vec<ConformanceCaseResult>>(fixture["expected_results"].clone())
+            .expect("expected_results should deserialize");
+
+    let results = run_conformance_suite(&runs, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        serde_json::from_value::<ConformanceCaseExecution>(
+            executions.get(&key).cloned().unwrap_or_else(
+                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+            ),
+        )
+        .expect("execution should deserialize")
+    });
+
+    assert_eq!(results, expected);
 }

@@ -1,9 +1,9 @@
 use std::{fs, path::PathBuf};
 
 use ast_merge::{
-    ConformanceCaseRef, ConformanceCaseRequirements, ConformanceManifest,
-    ConformanceSelectionStatus, conformance_family_feature_profile_path, conformance_fixture_path,
-    select_conformance_case, tree_haver_like,
+    ConformanceCaseRef, ConformanceCaseRequirements, ConformanceFeatureProfileView,
+    ConformanceManifest, ConformanceSelectionStatus, conformance_family_feature_profile_path,
+    conformance_fixture_path, select_conformance_case,
 };
 use json_merge::{
     JsonDialect, JsonOwner, JsonOwnerKind, JsonRootKind, json_feature_profile, match_json_owners,
@@ -546,10 +546,10 @@ fn selects_backend_limited_tree_sitter_cases_through_the_slice_33_capability_con
         supported_policies: json_feature_profile().supported_policies.clone(),
     };
     let adapter_info = language_pack_adapter_info();
-    let feature_profile = tree_haver_like::ConformanceFeatureProfileView {
-        backend: &adapter_info.backend,
+    let feature_profile = ConformanceFeatureProfileView {
+        backend: adapter_info.backend.clone(),
         supports_dialects: adapter_info.supports_dialects,
-        supported_policies: &adapter_info.supported_policies,
+        supported_policies: adapter_info.supported_policies.clone(),
     };
 
     let selected = select_conformance_case(
