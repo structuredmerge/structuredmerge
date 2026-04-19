@@ -1,4 +1,4 @@
-use ast_merge::{Diagnostic, ParseResult};
+use ast_merge::{Diagnostic, ParseResult, PolicyReference};
 
 pub const PACKAGE_NAME: &str = "tree-haver";
 
@@ -17,6 +17,7 @@ pub struct ParserRequest {
 pub struct AdapterInfo {
     pub backend: String,
     pub supports_dialects: bool,
+    pub supported_policies: Vec<PolicyReference>,
 }
 
 pub trait ParserAdapter<TAnalysis: AnalysisHandle> {

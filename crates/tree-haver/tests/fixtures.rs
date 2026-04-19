@@ -47,6 +47,7 @@ fn conforms_to_slice_06_parser_request_fixture() {
         supports_dialects: fixture["adapter_info"]["supports_dialects"]
             .as_bool()
             .expect("supports_dialects should be boolean"),
+        supported_policies: vec![],
     };
 
     assert_eq!(
@@ -61,6 +62,49 @@ fn conforms_to_slice_06_parser_request_fixture() {
         serde_json::json!({
             "backend": adapter_info.backend,
             "supports_dialects": adapter_info.supports_dialects,
+        }),
+        fixture["adapter_info"]
+    );
+}
+
+#[test]
+fn conforms_to_slice_19_adapter_policy_support_fixture() {
+    let fixture =
+        read_fixture(&["diagnostics", "slice-19-adapter-policy-support", "adapter-info.json"]);
+
+    let adapter_info = AdapterInfo {
+        backend: fixture["adapter_info"]["backend"]
+            .as_str()
+            .expect("backend should be present")
+            .to_string(),
+        supports_dialects: fixture["adapter_info"]["supports_dialects"]
+            .as_bool()
+            .expect("supports_dialects should be boolean"),
+        supported_policies: vec![
+            ast_merge::PolicyReference {
+                surface: ast_merge::PolicySurface::Array,
+                name: "destination_wins_array".to_string(),
+            },
+            ast_merge::PolicyReference {
+                surface: ast_merge::PolicySurface::Fallback,
+                name: "trailing_comma_destination_fallback".to_string(),
+            },
+        ],
+    };
+
+    assert_eq!(
+        serde_json::json!({
+            "backend": adapter_info.backend,
+            "supports_dialects": adapter_info.supports_dialects,
+            "supported_policies": adapter_info.supported_policies.iter().map(|policy| {
+                serde_json::json!({
+                    "surface": match policy.surface {
+                        ast_merge::PolicySurface::Fallback => "fallback",
+                        ast_merge::PolicySurface::Array => "array",
+                    },
+                    "name": policy.name
+                })
+            }).collect::<Vec<_>>(),
         }),
         fixture["adapter_info"]
     );
