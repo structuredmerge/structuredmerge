@@ -114,6 +114,15 @@ fn destination_parse_error(message: &str) -> Diagnostic {
     }
 }
 
+fn fallback_applied(message: &str) -> Diagnostic {
+    Diagnostic {
+        severity: DiagnosticSeverity::Warning,
+        category: DiagnosticCategory::FallbackApplied,
+        message: message.to_string(),
+        path: None,
+    }
+}
+
 fn detect_trailing_comma(source: &str) -> bool {
     let chars: Vec<char> = source.chars().collect();
     let mut in_string = false;
@@ -264,6 +273,100 @@ fn strip_json_comments(source: &str) -> String {
             in_block_comment = true;
             index += 2;
             continue;
+        }
+
+        result.push(char);
+        index += 1;
+    }
+
+    result
+}
+
+fn strip_trailing_commas(source: &str) -> String {
+    let chars: Vec<char> = source.chars().collect();
+    let mut result = String::new();
+    let mut in_string = false;
+    let mut in_line_comment = false;
+    let mut in_block_comment = false;
+    let mut escaped = false;
+    let mut index = 0usize;
+
+    while index < chars.len() {
+        let char = chars[index];
+        let next = chars.get(index + 1).copied();
+
+        if in_line_comment {
+            result.push(char);
+            if char == '\n' {
+                in_line_comment = false;
+            }
+            index += 1;
+            continue;
+        }
+
+        if in_block_comment {
+            result.push(char);
+            if char == '*' && next == Some('/') {
+                result.push('/');
+                in_block_comment = false;
+                index += 2;
+                continue;
+            }
+            index += 1;
+            continue;
+        }
+
+        if in_string {
+            result.push(char);
+            if escaped {
+                escaped = false;
+                index += 1;
+                continue;
+            }
+            if char == '\\' {
+                escaped = true;
+                index += 1;
+                continue;
+            }
+            if char == '"' {
+                in_string = false;
+            }
+            index += 1;
+            continue;
+        }
+
+        if char == '"' {
+            in_string = true;
+            result.push(char);
+            index += 1;
+            continue;
+        }
+
+        if char == '/' && next == Some('/') {
+            in_line_comment = true;
+            result.push('/');
+            result.push('/');
+            index += 2;
+            continue;
+        }
+
+        if char == '/' && next == Some('*') {
+            in_block_comment = true;
+            result.push('/');
+            result.push('*');
+            index += 2;
+            continue;
+        }
+
+        if char == ',' {
+            let mut lookahead = index + 1;
+            while lookahead < chars.len() && chars[lookahead].is_whitespace() {
+                lookahead += 1;
+            }
+            if matches!(chars.get(lookahead), Some(']') | Some('}')) {
+                index += 1;
+                continue;
+            }
         }
 
         result.push(char);
@@ -495,16 +598,50 @@ pub fn merge_json(
             return MergeResult { ok: false, diagnostics: vec![diagnostic], output: None };
         }
     };
+    let mut diagnostics = Vec::new();
     let destination =
         match parse_normalized_json(destination_source, dialect, destination_parse_error) {
             Ok(value) => value,
             Err(diagnostic) => {
-                return MergeResult { ok: false, diagnostics: vec![diagnostic], output: None };
+                if diagnostic.category == DiagnosticCategory::DestinationParseError
+                    && detect_trailing_comma(destination_source)
+                {
+                    let sanitized_destination = strip_trailing_commas(destination_source);
+                    if sanitized_destination == destination_source {
+                        return MergeResult {
+                            ok: false,
+                            diagnostics: vec![diagnostic],
+                            output: None,
+                        };
+                    }
+
+                    match parse_normalized_json(
+                        &sanitized_destination,
+                        dialect,
+                        destination_parse_error,
+                    ) {
+                        Ok(value) => {
+                            diagnostics.push(fallback_applied(
+                                "Applied destination trailing-comma fallback during merge.",
+                            ));
+                            value
+                        }
+                        Err(retry_diagnostic) => {
+                            return MergeResult {
+                                ok: false,
+                                diagnostics: vec![retry_diagnostic],
+                                output: None,
+                            };
+                        }
+                    }
+                } else {
+                    return MergeResult { ok: false, diagnostics: vec![diagnostic], output: None };
+                }
             }
         };
 
     let merged = merge_values(template, destination);
-    MergeResult { ok: true, diagnostics: vec![], output: Some(canonical_json(&merged)) }
+    MergeResult { ok: true, diagnostics, output: Some(canonical_json(&merged)) }
 }
 
 #[cfg(test)]
@@ -513,7 +650,7 @@ mod tests {
         JsonDialect, JsonOwner, JsonOwnerKind, JsonOwnerMatch, JsonRootKind, match_json_owners,
         merge_json, parse_json,
     };
-    use ast_merge::DiagnosticCategory;
+    use ast_merge::{DiagnosticCategory, DiagnosticSeverity};
 
     #[test]
     fn accepts_jsonc_comments() {
@@ -645,5 +782,16 @@ mod tests {
 
         assert!(!result.ok);
         assert_eq!(result.diagnostics[0].category, DiagnosticCategory::DestinationParseError);
+    }
+
+    #[test]
+    fn applies_trailing_comma_fallback_during_merge() {
+        let result = merge_json("{\"alpha\":1}", "{\"beta\":[1,2,],}", JsonDialect::Json);
+
+        assert!(result.ok);
+        assert_eq!(result.output.as_deref(), Some("{\"alpha\":1,\"beta\":[1,2]}"));
+        assert_eq!(result.diagnostics.len(), 1);
+        assert_eq!(result.diagnostics[0].severity, DiagnosticSeverity::Warning);
+        assert_eq!(result.diagnostics[0].category, DiagnosticCategory::FallbackApplied);
     }
 }
