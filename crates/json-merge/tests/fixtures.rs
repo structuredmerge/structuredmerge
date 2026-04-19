@@ -50,9 +50,26 @@ fn read_fixture_from_path(path: PathBuf) -> Value {
     serde_json::from_str(&source).expect("fixture should be valid json")
 }
 
+fn json_fixture_path(role: &str) -> PathBuf {
+    let manifest =
+        read_fixture(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
+    let entries = manifest["json"].as_array().expect("json should be an array");
+    let entry = entries
+        .iter()
+        .find(|candidate| candidate["role"].as_str() == Some(role))
+        .expect("json fixture entry should be present");
+
+    let mut path = fixture_path(&[]);
+    for segment in entry["path"].as_array().expect("path should be an array") {
+        path.push(segment.as_str().expect("path segment should be a string"));
+    }
+
+    path
+}
+
 #[test]
 fn conforms_to_jsonc_comments_accepted_fixture() {
-    let fixture = read_fixture(&["jsonc", "slice-04-parse", "comments-accepted.json"]);
+    let fixture = read_fixture_from_path(json_fixture_path("parse_comments"));
     let source = fixture["source"].as_str().expect("source should be present");
     let result = parse_json(source, JsonDialect::Jsonc);
 
@@ -66,7 +83,7 @@ fn conforms_to_jsonc_comments_accepted_fixture() {
 
 #[test]
 fn conforms_to_slice_07_structure_fixtures() {
-    let object_fixture = read_fixture(&["json", "slice-07-structure", "object-and-array.json"]);
+    let object_fixture = read_fixture_from_path(json_fixture_path("structure_json"));
     let object_source = object_fixture["source"].as_str().expect("source should be present");
     let object_result = parse_json(object_source, JsonDialect::Json);
 
@@ -101,7 +118,7 @@ fn conforms_to_slice_07_structure_fixtures() {
         .collect::<Vec<_>>();
     assert_eq!(Value::Array(object_owners), object_fixture["expected"]["owners"]);
 
-    let jsonc_fixture = read_fixture(&["jsonc", "slice-07-structure", "commented-object.json"]);
+    let jsonc_fixture = read_fixture_from_path(json_fixture_path("structure_jsonc"));
     let jsonc_source = jsonc_fixture["source"].as_str().expect("source should be present");
     let jsonc_result = parse_json(jsonc_source, JsonDialect::Jsonc);
 
@@ -139,7 +156,7 @@ fn conforms_to_slice_07_structure_fixtures() {
 
 #[test]
 fn conforms_to_slice_08_path_matching_fixture() {
-    let fixture = read_fixture(&["json", "slice-08-matching", "path-equality.json"]);
+    let fixture = read_fixture_from_path(json_fixture_path("matching"));
     let template = parse_json(
         fixture["template"].as_str().expect("template should be present"),
         JsonDialect::Json,
@@ -182,7 +199,7 @@ fn conforms_to_slice_08_path_matching_fixture() {
 
 #[test]
 fn conforms_to_slice_09_object_merge_fixture() {
-    let fixture = read_fixture(&["json", "slice-09-merge", "object-merge.json"]);
+    let fixture = read_fixture_from_path(json_fixture_path("merge_object"));
     let template = fixture["template"].as_str().expect("template should be present");
     let destination = fixture["destination"].as_str().expect("destination should be present");
     let result = merge_json(template, destination, JsonDialect::Json);
@@ -194,7 +211,7 @@ fn conforms_to_slice_09_object_merge_fixture() {
 #[test]
 fn conforms_to_slice_09_invalid_merge_fixtures() {
     let invalid_template_fixture =
-        read_fixture(&["json", "slice-09-merge", "invalid-template.json"]);
+        read_fixture_from_path(json_fixture_path("merge_invalid_template"));
     let invalid_template_result = merge_json(
         invalid_template_fixture["template"].as_str().expect("template should be present"),
         invalid_template_fixture["destination"].as_str().expect("destination should be present"),
@@ -231,7 +248,7 @@ fn conforms_to_slice_09_invalid_merge_fixtures() {
     );
 
     let invalid_destination_fixture =
-        read_fixture(&["json", "slice-09-merge", "invalid-destination.json"]);
+        read_fixture_from_path(json_fixture_path("merge_invalid_destination"));
     let invalid_destination_result = merge_json(
         invalid_destination_fixture["template"].as_str().expect("template should be present"),
         invalid_destination_fixture["destination"].as_str().expect("destination should be present"),
@@ -270,7 +287,7 @@ fn conforms_to_slice_09_invalid_merge_fixtures() {
 
 #[test]
 fn conforms_to_slice_14_fallback_fixture() {
-    let fixture = read_fixture(&["json", "slice-14-fallback", "trailing-comma-destination.json"]);
+    let fixture = read_fixture_from_path(json_fixture_path("fallback"));
     let result = merge_json(
         fixture["template"].as_str().expect("template should be present"),
         fixture["destination"].as_str().expect("destination should be present"),
@@ -319,11 +336,7 @@ fn conforms_to_slice_14_fallback_fixture() {
 
 #[test]
 fn conforms_to_slice_15_fallback_boundary_fixtures() {
-    let template_fixture = read_fixture(&[
-        "json",
-        "slice-15-fallback-boundaries",
-        "template-trailing-comma-not-recovered.json",
-    ]);
+    let template_fixture = read_fixture_from_path(json_fixture_path("fallback_boundary_template"));
     let template_result = merge_json(
         template_fixture["template"].as_str().expect("template should be present"),
         template_fixture["destination"].as_str().expect("destination should be present"),
@@ -356,11 +369,7 @@ fn conforms_to_slice_15_fallback_boundary_fixtures() {
     assert_eq!(Value::Array(template_diagnostics), template_fixture["expected"]["diagnostics"]);
     assert!(template_result.output.is_none());
 
-    let comments_fixture = read_fixture(&[
-        "json",
-        "slice-15-fallback-boundaries",
-        "strict-json-comments-not-recovered.json",
-    ]);
+    let comments_fixture = read_fixture_from_path(json_fixture_path("fallback_boundary_comments"));
     let comments_result = merge_json(
         comments_fixture["template"].as_str().expect("template should be present"),
         comments_fixture["destination"].as_str().expect("destination should be present"),
@@ -396,7 +405,7 @@ fn conforms_to_slice_15_fallback_boundary_fixtures() {
 
 #[test]
 fn conforms_to_slice_16_array_policy_fixture() {
-    let fixture = read_fixture(&["json", "slice-16-array-policy", "destination-wins-array.json"]);
+    let fixture = read_fixture_from_path(json_fixture_path("array_policy"));
     let result = merge_json(
         fixture["template"].as_str().expect("template should be present"),
         fixture["destination"].as_str().expect("destination should be present"),

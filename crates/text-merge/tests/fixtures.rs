@@ -50,9 +50,26 @@ fn read_fixture_from_path(path: PathBuf) -> Value {
     serde_json::from_str(&source).expect("fixture should be valid json")
 }
 
+fn text_fixture_path(role: &str) -> PathBuf {
+    let manifest =
+        read_fixture(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
+    let entries = manifest["text"].as_array().expect("text should be an array");
+    let entry = entries
+        .iter()
+        .find(|candidate| candidate["role"].as_str() == Some(role))
+        .expect("text fixture entry should be present");
+
+    let mut path = fixture_path(&[]);
+    for segment in entry["path"].as_array().expect("path should be an array") {
+        path.push(segment.as_str().expect("path segment should be a string"));
+    }
+
+    path
+}
+
 #[test]
 fn conforms_to_slice_03_analysis_fixture() {
-    let fixture = read_fixture(&["text", "slice-03-analysis", "whitespace-and-blocks.json"]);
+    let fixture = read_fixture_from_path(text_fixture_path("analysis"));
     let source = fixture["source"].as_str().expect("fixture source should be present");
     let analysis = analyze_text(source);
 
@@ -79,7 +96,7 @@ fn conforms_to_slice_03_analysis_fixture() {
 
 #[test]
 fn conforms_to_slice_11_exact_matching_fixture() {
-    let fixture = read_fixture(&["text", "slice-11-matching", "exact-content.json"]);
+    let fixture = read_fixture_from_path(text_fixture_path("matching_exact"));
     let template = fixture["template"].as_str().expect("template should be present");
     let destination = fixture["destination"].as_str().expect("destination should be present");
     let result = match_text_blocks(template, destination);
@@ -113,7 +130,7 @@ fn conforms_to_slice_11_exact_matching_fixture() {
 
 #[test]
 fn conforms_to_slice_05_similarity_fixture() {
-    let fixture = read_fixture(&["text", "slice-05-similarity", "similarity-cases.json"]);
+    let fixture = read_fixture_from_path(text_fixture_path("similarity"));
     let cases = fixture["cases"].as_array().expect("cases should be an array");
 
     for case in cases {
@@ -136,8 +153,7 @@ fn conforms_to_slice_05_similarity_fixture() {
 
 #[test]
 fn conforms_to_slice_13_refined_matching_fixture() {
-    let fixture =
-        read_fixture(&["text", "slice-13-refined-matching", "content-refined-merge.json"]);
+    let fixture = read_fixture_from_path(text_fixture_path("merge_refined"));
     let template = fixture["template"].as_str().expect("template should be present");
     let destination = fixture["destination"].as_str().expect("destination should be present");
     let result = match_text_blocks(template, destination);
