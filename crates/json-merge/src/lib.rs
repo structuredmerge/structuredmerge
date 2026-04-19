@@ -31,6 +31,19 @@ pub struct JsonOwner {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct JsonOwnerMatch {
+    pub template_path: String,
+    pub destination_path: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct JsonOwnerMatchResult {
+    pub matched: Vec<JsonOwnerMatch>,
+    pub unmatched_template: Vec<String>,
+    pub unmatched_destination: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct JsonAnalysis {
     pub dialect: JsonDialect,
     pub allows_comments: bool,
@@ -57,6 +70,10 @@ pub trait JsonAnalyzer {
 
 pub trait JsonStructureAnalyzer {
     fn analyze(&self, source: &str, dialect: JsonDialect) -> ParseResult<JsonAnalysis>;
+}
+
+pub trait JsonOwnerMatcher {
+    fn match_owners(&self, template: &JsonAnalysis, destination: &JsonAnalysis) -> JsonOwnerMatchResult;
 }
 
 pub fn json_parse_request(source: &str, dialect: JsonDialect) -> ParserRequest {
@@ -323,9 +340,52 @@ pub fn parse_json(source: &str, dialect: JsonDialect) -> ParseResult<JsonAnalysi
     }
 }
 
+pub fn match_json_owners(template: &JsonAnalysis, destination: &JsonAnalysis) -> JsonOwnerMatchResult {
+    let destination_paths: std::collections::BTreeSet<&str> =
+        destination.owners.iter().map(|owner| owner.path.as_str()).collect();
+    let template_paths: std::collections::BTreeSet<&str> =
+        template.owners.iter().map(|owner| owner.path.as_str()).collect();
+
+    let matched = template
+        .owners
+        .iter()
+        .map(|owner| owner.path.as_str())
+        .filter(|path| destination_paths.contains(path))
+        .map(|path| JsonOwnerMatch {
+            template_path: path.to_string(),
+            destination_path: path.to_string(),
+        })
+        .collect();
+
+    let unmatched_template = template
+        .owners
+        .iter()
+        .map(|owner| owner.path.as_str())
+        .filter(|path| !destination_paths.contains(path))
+        .map(str::to_string)
+        .collect();
+
+    let unmatched_destination = destination
+        .owners
+        .iter()
+        .map(|owner| owner.path.as_str())
+        .filter(|path| !template_paths.contains(path))
+        .map(str::to_string)
+        .collect();
+
+    JsonOwnerMatchResult {
+        matched,
+        unmatched_template,
+        unmatched_destination,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{parse_json, JsonDialect, JsonOwner, JsonOwnerKind, JsonRootKind};
+    use super::{
+        match_json_owners, parse_json, JsonDialect, JsonOwner, JsonOwnerKind, JsonOwnerMatch,
+        JsonRootKind,
+    };
     use ast_merge::DiagnosticCategory;
 
     #[test]
@@ -389,5 +449,51 @@ mod tests {
                 }
             ]
         );
+    }
+
+    #[test]
+    fn matches_json_owners_by_path() {
+        let template = parse_json(
+            "{\n  \"name\": \"structuredmerge\",\n  \"tags\": [\"merge\", \"ast\"],\n  \"meta\": {\"enabled\": true}\n}\n",
+            JsonDialect::Json,
+        )
+        .analysis
+        .unwrap();
+        let destination = parse_json(
+            "{\n  \"name\": \"structuredmerge\",\n  \"tags\": [\"merge\"],\n  \"meta\": {\"enabled\": true},\n  \"extra\": 1\n}\n",
+            JsonDialect::Json,
+        )
+        .analysis
+        .unwrap();
+
+        let result = match_json_owners(&template, &destination);
+
+        assert_eq!(
+            result.matched,
+            vec![
+                JsonOwnerMatch {
+                    template_path: "/meta".to_string(),
+                    destination_path: "/meta".to_string(),
+                },
+                JsonOwnerMatch {
+                    template_path: "/meta/enabled".to_string(),
+                    destination_path: "/meta/enabled".to_string(),
+                },
+                JsonOwnerMatch {
+                    template_path: "/name".to_string(),
+                    destination_path: "/name".to_string(),
+                },
+                JsonOwnerMatch {
+                    template_path: "/tags".to_string(),
+                    destination_path: "/tags".to_string(),
+                },
+                JsonOwnerMatch {
+                    template_path: "/tags/0".to_string(),
+                    destination_path: "/tags/0".to_string(),
+                },
+            ]
+        );
+        assert_eq!(result.unmatched_template, vec!["/tags/1".to_string()]);
+        assert_eq!(result.unmatched_destination, vec!["/extra".to_string()]);
     }
 }
