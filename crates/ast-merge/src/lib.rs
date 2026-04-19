@@ -163,6 +163,12 @@ pub struct ConformanceSuiteDefinition {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NamedConformanceSuiteReport {
+    pub suite: String,
+    pub report: ConformanceSuiteReport,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ConformanceSuiteSummary {
     pub total: usize,
     pub passed: usize,
@@ -233,6 +239,12 @@ pub fn conformance_suite_definition<'a>(
     suite_name: &str,
 ) -> Option<&'a ConformanceSuiteDefinition> {
     manifest.suites.get(suite_name)
+}
+
+pub fn conformance_suite_names(manifest: &ConformanceManifest) -> Vec<String> {
+    let mut names = manifest.suites.keys().cloned().collect::<Vec<_>>();
+    names.sort();
+    names
 }
 
 pub fn summarize_conformance_results(results: &[ConformanceCaseResult]) -> ConformanceSuiteSummary {
@@ -349,6 +361,17 @@ pub fn run_planned_conformance_suite(
     plan.entries.iter().map(|entry| run_conformance_case(&entry.run, execute)).collect()
 }
 
+pub fn run_named_conformance_suite(
+    manifest: &ConformanceManifest,
+    suite_name: &str,
+    family_profile: &FamilyFeatureProfile,
+    execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
+    feature_profile: Option<&ConformanceFeatureProfileView>,
+) -> Option<Vec<ConformanceCaseResult>> {
+    let plan = plan_named_conformance_suite(manifest, suite_name, family_profile, feature_profile)?;
+    Some(run_planned_conformance_suite(&plan, execute))
+}
+
 pub fn report_planned_conformance_suite(
     plan: &ConformanceSuitePlan,
     execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
@@ -365,6 +388,23 @@ pub fn report_named_conformance_suite(
 ) -> Option<ConformanceSuiteReport> {
     let plan = plan_named_conformance_suite(manifest, suite_name, family_profile, feature_profile)?;
     Some(report_planned_conformance_suite(&plan, execute))
+}
+
+pub fn report_named_conformance_suite_entry(
+    manifest: &ConformanceManifest,
+    suite_name: &str,
+    family_profile: &FamilyFeatureProfile,
+    execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
+    feature_profile: Option<&ConformanceFeatureProfileView>,
+) -> Option<NamedConformanceSuiteReport> {
+    let report = report_named_conformance_suite(
+        manifest,
+        suite_name,
+        family_profile,
+        execute,
+        feature_profile,
+    )?;
+    Some(NamedConformanceSuiteReport { suite: suite_name.to_string(), report })
 }
 
 pub fn report_conformance_suite(results: &[ConformanceCaseResult]) -> ConformanceSuiteReport {
