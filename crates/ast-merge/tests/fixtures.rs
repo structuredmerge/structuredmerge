@@ -1,10 +1,11 @@
 use std::{fs, path::PathBuf};
 
 use ast_merge::{
-    ConformanceCaseRef, ConformanceCaseResult, ConformanceManifest, ConformanceOutcome,
-    ConformanceSuiteSummary, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile,
-    PolicySurface, conformance_family_feature_profile_path, conformance_fixture_path,
-    summarize_conformance_results,
+    ConformanceCaseRef, ConformanceCaseRequirements, ConformanceCaseResult, ConformanceManifest,
+    ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuiteSummary, DiagnosticCategory,
+    DiagnosticSeverity, FamilyFeatureProfile, PolicySurface,
+    conformance_family_feature_profile_path, conformance_fixture_path, select_conformance_case,
+    summarize_conformance_results, tree_haver_like,
 };
 use serde_json::Value;
 
@@ -293,4 +294,60 @@ fn conforms_to_slice_32_conformance_suite_summary_fixture() {
         serde_json::from_value(fixture["summary"].clone()).expect("summary should deserialize");
 
     assert_eq!(summarize_conformance_results(&results), summary);
+}
+
+#[test]
+fn conforms_to_slice_33_capability_aware_selection_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("capability_selection"));
+    let cases = fixture["cases"].as_array().expect("cases should be present");
+
+    for case in cases {
+        let ref_ = serde_json::from_value::<ConformanceCaseRef>(case["ref"].clone())
+            .expect("ref should deserialize");
+        let requirements =
+            serde_json::from_value::<ConformanceCaseRequirements>(case["requirements"].clone())
+                .expect("requirements should deserialize");
+        let family_profile =
+            serde_json::from_value::<FamilyFeatureProfile>(case["family_profile"].clone())
+                .expect("family_profile should deserialize");
+        let feature_profile =
+            serde_json::from_value::<serde_json::Value>(case["feature_profile"].clone())
+                .expect("feature_profile should deserialize");
+        let backend = feature_profile["backend"].as_str().expect("backend should be present");
+        let supports_dialects = feature_profile["supports_dialects"]
+            .as_bool()
+            .expect("supports_dialects should be present");
+        let supported_policies = serde_json::from_value::<Vec<ast_merge::PolicyReference>>(
+            case["feature_profile"]["supported_policies"].clone(),
+        )
+        .expect("supported_policies should deserialize");
+
+        let selection = select_conformance_case(
+            ref_.clone(),
+            &requirements,
+            &family_profile,
+            Some(&tree_haver_like::ConformanceFeatureProfileView {
+                backend,
+                supports_dialects,
+                supported_policies: &supported_policies,
+            }),
+        );
+
+        let expected_status =
+            match case["expected"]["status"].as_str().expect("status should be present") {
+                "selected" => ConformanceSelectionStatus::Selected,
+                "skipped" => ConformanceSelectionStatus::Skipped,
+                other => panic!("unexpected status: {other}"),
+            };
+        let expected_messages = case["expected"]["messages"]
+            .as_array()
+            .expect("messages should be present")
+            .iter()
+            .map(|message| message.as_str().expect("message should be a string").to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(selection.ref_, ref_);
+        assert_eq!(selection.status, expected_status);
+        assert_eq!(selection.messages, expected_messages);
+    }
 }

@@ -90,6 +90,28 @@ pub struct ConformanceCaseResult {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceCaseRequirements {
+    pub dialect: Option<String>,
+    #[serde(default)]
+    pub policies: Vec<PolicyReference>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConformanceSelectionStatus {
+    Selected,
+    Skipped,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceCaseSelection {
+    #[serde(rename = "ref")]
+    pub ref_: ConformanceCaseRef,
+    pub status: ConformanceSelectionStatus,
+    pub messages: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ConformanceManifestEntry {
     pub role: String,
     pub path: Vec<String>,
@@ -114,6 +136,14 @@ pub struct ConformanceSuiteSummary {
     pub passed: usize,
     pub failed: usize,
     pub skipped: usize,
+}
+
+fn includes_policy(supported_policies: &[PolicyReference], policy: &PolicyReference) -> bool {
+    supported_policies.iter().any(|supported_policy| supported_policy == policy)
+}
+
+fn is_default_dialect(family_profile: &FamilyFeatureProfile, dialect: &str) -> bool {
+    dialect == family_profile.family
 }
 
 pub fn conformance_family_entries<'a>(
@@ -158,4 +188,72 @@ pub fn summarize_conformance_results(results: &[ConformanceCaseResult]) -> Confo
                 + usize::from(matches!(result.outcome, ConformanceOutcome::Skipped)),
         },
     )
+}
+
+pub fn select_conformance_case(
+    ref_: ConformanceCaseRef,
+    requirements: &ConformanceCaseRequirements,
+    family_profile: &FamilyFeatureProfile,
+    feature_profile: Option<&tree_haver_like::ConformanceFeatureProfileView<'_>>,
+) -> ConformanceCaseSelection {
+    let mut messages = Vec::new();
+
+    if let Some(dialect) = &requirements.dialect {
+        if !family_profile
+            .supported_dialects
+            .iter()
+            .any(|supported_dialect| supported_dialect == dialect)
+        {
+            messages.push(format!(
+                "family {} does not support dialect {}.",
+                family_profile.family, dialect
+            ));
+        } else if let Some(feature_profile) = feature_profile {
+            if !feature_profile.supports_dialects && !is_default_dialect(family_profile, dialect) {
+                messages.push(format!(
+                    "backend {} does not support dialect {} for family {}.",
+                    feature_profile.backend, dialect, family_profile.family
+                ));
+            }
+        }
+    }
+
+    for policy in &requirements.policies {
+        if !includes_policy(&family_profile.supported_policies, policy) {
+            messages.push(format!(
+                "family {} does not support policy {}.",
+                family_profile.family, policy.name
+            ));
+            continue;
+        }
+
+        if let Some(feature_profile) = feature_profile {
+            if !includes_policy(feature_profile.supported_policies, policy) {
+                messages.push(format!(
+                    "backend {} does not support policy {}.",
+                    feature_profile.backend, policy.name
+                ));
+            }
+        }
+    }
+
+    ConformanceCaseSelection {
+        ref_,
+        status: if messages.is_empty() {
+            ConformanceSelectionStatus::Selected
+        } else {
+            ConformanceSelectionStatus::Skipped
+        },
+        messages,
+    }
+}
+
+pub mod tree_haver_like {
+    use crate::PolicyReference;
+
+    pub struct ConformanceFeatureProfileView<'a> {
+        pub backend: &'a str,
+        pub supports_dialects: bool,
+        pub supported_policies: &'a [PolicyReference],
+    }
 }

@@ -1,13 +1,16 @@
 use std::{fs, path::PathBuf};
 
 use ast_merge::{
-    ConformanceManifest, conformance_family_feature_profile_path, conformance_fixture_path,
+    ConformanceCaseRef, ConformanceCaseRequirements, ConformanceManifest,
+    ConformanceSelectionStatus, conformance_family_feature_profile_path, conformance_fixture_path,
+    select_conformance_case, tree_haver_like,
 };
 use json_merge::{
     JsonDialect, JsonOwner, JsonOwnerKind, JsonRootKind, json_feature_profile, match_json_owners,
     merge_json, parse_json, parse_json_with_language_pack,
 };
 use serde_json::Value;
+use tree_haver::language_pack_adapter_info;
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -526,6 +529,60 @@ fn conforms_to_slice_26_tree_sitter_adapter_fixture() {
             assert!(result.analysis.is_none());
         }
     }
+}
+
+#[test]
+fn selects_backend_limited_tree_sitter_cases_through_the_slice_33_capability_contract() {
+    let family_profile = ast_merge::FamilyFeatureProfile {
+        family: json_feature_profile().family.to_string(),
+        supported_dialects: json_feature_profile()
+            .supported_dialects
+            .iter()
+            .map(|dialect| match dialect {
+                JsonDialect::Json => "json".to_string(),
+                JsonDialect::Jsonc => "jsonc".to_string(),
+            })
+            .collect(),
+        supported_policies: json_feature_profile().supported_policies.clone(),
+    };
+    let adapter_info = language_pack_adapter_info();
+    let feature_profile = tree_haver_like::ConformanceFeatureProfileView {
+        backend: &adapter_info.backend,
+        supports_dialects: adapter_info.supports_dialects,
+        supported_policies: &adapter_info.supported_policies,
+    };
+
+    let selected = select_conformance_case(
+        ConformanceCaseRef {
+            family: "json".to_string(),
+            role: "tree_sitter_adapter".to_string(),
+            case: "valid_strict_json".to_string(),
+        },
+        &ConformanceCaseRequirements { dialect: Some("json".to_string()), policies: vec![] },
+        &family_profile,
+        Some(&feature_profile),
+    );
+    assert_eq!(selected.status, ConformanceSelectionStatus::Selected);
+    assert!(selected.messages.is_empty());
+
+    let skipped = select_conformance_case(
+        ConformanceCaseRef {
+            family: "json".to_string(),
+            role: "tree_sitter_adapter".to_string(),
+            case: "jsonc_unsupported".to_string(),
+        },
+        &ConformanceCaseRequirements { dialect: Some("jsonc".to_string()), policies: vec![] },
+        &family_profile,
+        Some(&feature_profile),
+    );
+    assert_eq!(skipped.status, ConformanceSelectionStatus::Skipped);
+    assert_eq!(
+        skipped.messages,
+        vec![
+            "backend kreuzberg-language-pack does not support dialect jsonc for family json."
+                .to_string()
+        ]
+    );
 }
 
 #[test]
