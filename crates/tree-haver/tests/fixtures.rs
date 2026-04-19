@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use serde_json::Value;
-use tree_haver::{AdapterInfo, FeatureProfile, ParserRequest};
+use tree_haver::{AdapterInfo, BackendReference, FeatureProfile, ParserRequest};
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -44,6 +44,7 @@ fn conforms_to_slice_06_parser_request_fixture() {
             .as_str()
             .expect("backend should be present")
             .to_string(),
+        backend_ref: None,
         supports_dialects: fixture["adapter_info"]["supports_dialects"]
             .as_bool()
             .expect("supports_dialects should be boolean"),
@@ -77,6 +78,7 @@ fn conforms_to_slice_19_adapter_policy_support_fixture() {
             .as_str()
             .expect("backend should be present")
             .to_string(),
+        backend_ref: None,
         supports_dialects: fixture["adapter_info"]["supports_dialects"]
             .as_bool()
             .expect("supports_dialects should be boolean"),
@@ -120,6 +122,7 @@ fn conforms_to_slice_20_adapter_feature_profile_fixture() {
             .as_str()
             .expect("backend should be present")
             .to_string(),
+        backend_ref: None,
         supports_dialects: fixture["feature_profile"]["supports_dialects"]
             .as_bool()
             .expect("supports_dialects should be boolean"),
@@ -150,5 +153,42 @@ fn conforms_to_slice_20_adapter_feature_profile_fixture() {
             }).collect::<Vec<_>>(),
         }),
         fixture["feature_profile"]
+    );
+}
+
+#[test]
+fn conforms_to_slice_25_backend_registry_fixture() {
+    let fixture =
+        read_fixture(&["diagnostics", "slice-25-backend-registry", "backend-identities.json"]);
+
+    let backends = [
+        BackendReference { id: "native".to_string(), family: "builtin".to_string() },
+        BackendReference { id: "tree-sitter".to_string(), family: "tree-sitter".to_string() },
+    ];
+    let profile = FeatureProfile {
+        backend: "tree-sitter".to_string(),
+        backend_ref: Some(backends[1].clone()),
+        supports_dialects: true,
+        supported_policies: vec![],
+    };
+
+    assert_eq!(
+        serde_json::json!(
+            backends
+                .iter()
+                .map(|backend| serde_json::json!({ "id": backend.id, "family": backend.family }))
+                .collect::<Vec<_>>()
+        ),
+        fixture["backends"]
+    );
+    assert_eq!(
+        serde_json::json!({
+            "id": profile.backend_ref.as_ref().map(|backend| backend.id.clone()),
+            "family": profile.backend_ref.as_ref().map(|backend| backend.family.clone()),
+        }),
+        serde_json::json!({
+            "id": "tree-sitter",
+            "family": "tree-sitter",
+        })
     );
 }
