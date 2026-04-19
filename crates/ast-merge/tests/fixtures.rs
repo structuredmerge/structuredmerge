@@ -6,15 +6,17 @@ use ast_merge::{
     ConformanceFeatureProfileView, ConformanceManifest, ConformanceOutcome,
     ConformanceSelectionStatus, ConformanceSuitePlan, ConformanceSuiteReport,
     ConformanceSuiteSummary, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile,
-    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteResults,
-    PolicySurface, conformance_family_feature_profile_path, conformance_fixture_path,
-    conformance_suite_definition, conformance_suite_names, plan_conformance_suite,
-    plan_named_conformance_suite, plan_named_conformance_suite_entry,
+    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
+    NamedConformanceSuiteResults, PolicySurface, conformance_family_feature_profile_path,
+    conformance_fixture_path, conformance_suite_definition, conformance_suite_names,
+    plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
     plan_named_conformance_suites, report_conformance_suite, report_named_conformance_suite,
-    report_named_conformance_suite_entry, report_planned_conformance_suite,
+    report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
+    report_named_conformance_suite_manifest, report_planned_conformance_suite,
     report_planned_named_conformance_suites, run_conformance_case, run_conformance_suite,
     run_named_conformance_suite, run_named_conformance_suite_entry, run_planned_conformance_suite,
     run_planned_named_conformance_suites, select_conformance_case, summarize_conformance_results,
+    summarize_named_conformance_suite_reports,
 };
 use serde_json::Value;
 
@@ -856,4 +858,58 @@ fn conforms_to_slice_53_planned_named_conformance_suite_reports_fixture() {
     });
 
     assert_eq!(entries, expected);
+}
+
+#[test]
+fn conforms_to_slice_54_named_conformance_suite_summary_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_summary"));
+    let entries =
+        serde_json::from_value::<Vec<NamedConformanceSuiteReport>>(fixture["entries"].clone())
+            .expect("entries should deserialize");
+    let expected =
+        serde_json::from_value::<ConformanceSuiteSummary>(fixture["expected_summary"].clone())
+            .expect("expected summary should deserialize");
+
+    assert_eq!(summarize_named_conformance_suite_reports(&entries), expected);
+}
+
+#[test]
+fn conforms_to_slice_55_named_conformance_suite_report_envelope_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_report_envelope"));
+    let entries =
+        serde_json::from_value::<Vec<NamedConformanceSuiteReport>>(fixture["entries"].clone())
+            .expect("entries should deserialize");
+    let expected = serde_json::from_value::<NamedConformanceSuiteReportEnvelope>(
+        fixture["expected_report"].clone(),
+    )
+    .expect("expected report should deserialize");
+
+    assert_eq!(report_named_conformance_suite_envelope(&entries), expected);
+}
+
+#[test]
+fn conforms_to_slice_56_named_conformance_suite_report_manifest_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_report_manifest"));
+    let manifest = read_manifest();
+    let contexts = serde_json::from_value::<
+        std::collections::HashMap<String, ConformanceFamilyPlanContext>,
+    >(fixture["contexts"].clone())
+    .expect("contexts should deserialize");
+    let expected = serde_json::from_value::<NamedConformanceSuiteReportEnvelope>(
+        fixture["expected_report"].clone(),
+    )
+    .expect("expected report should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+    let report = report_named_conformance_suite_manifest(&manifest, &contexts, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        serde_json::from_value::<ConformanceCaseExecution>(
+            executions.get(&key).cloned().unwrap_or_else(
+                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+            ),
+        )
+        .expect("execution should deserialize")
+    });
+
+    assert_eq!(report, expected);
 }

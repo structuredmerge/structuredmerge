@@ -187,6 +187,12 @@ pub struct NamedConformanceSuiteResults {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NamedConformanceSuiteReportEnvelope {
+    pub entries: Vec<NamedConformanceSuiteReport>,
+    pub summary: ConformanceSuiteSummary,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ConformanceSuiteSummary {
     pub total: usize,
     pub passed: usize,
@@ -466,6 +472,41 @@ pub fn report_planned_named_conformance_suites(
             report: report_planned_conformance_suite(&entry.plan, execute),
         })
         .collect()
+}
+
+pub fn summarize_named_conformance_suite_reports(
+    entries: &[NamedConformanceSuiteReport],
+) -> ConformanceSuiteSummary {
+    entries.iter().fold(
+        ConformanceSuiteSummary { total: 0, passed: 0, failed: 0, skipped: 0 },
+        |summary, entry| ConformanceSuiteSummary {
+            total: summary.total + entry.report.summary.total,
+            passed: summary.passed + entry.report.summary.passed,
+            failed: summary.failed + entry.report.summary.failed,
+            skipped: summary.skipped + entry.report.summary.skipped,
+        },
+    )
+}
+
+pub fn report_named_conformance_suite_envelope(
+    entries: &[NamedConformanceSuiteReport],
+) -> NamedConformanceSuiteReportEnvelope {
+    NamedConformanceSuiteReportEnvelope {
+        entries: entries.to_vec(),
+        summary: summarize_named_conformance_suite_reports(entries),
+    }
+}
+
+pub fn report_named_conformance_suite_manifest(
+    manifest: &ConformanceManifest,
+    contexts: &HashMap<String, ConformanceFamilyPlanContext>,
+    execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
+) -> NamedConformanceSuiteReportEnvelope {
+    let entries = report_planned_named_conformance_suites(
+        &plan_named_conformance_suites(manifest, contexts),
+        execute,
+    );
+    report_named_conformance_suite_envelope(&entries)
 }
 
 pub fn report_conformance_suite(results: &[ConformanceCaseResult]) -> ConformanceSuiteReport {
