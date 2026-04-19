@@ -23,21 +23,17 @@ fn read_fixture(parts: &[&str]) -> Value {
     serde_json::from_str(&source).expect("fixture should be valid json")
 }
 
-fn decode_fixture_string(value: &Value) -> String {
-    let raw = value.as_str().expect("fixture string should be present");
-    serde_json::from_str::<String>(&format!("\"{}\"", raw))
-        .expect("fixture string should decode escape sequences")
-}
-
 #[test]
 fn conforms_to_slice_03_analysis_fixture() {
     let fixture = read_fixture(&["text", "slice-03-analysis", "whitespace-and-blocks.json"]);
-    let source = decode_fixture_string(&fixture["source"]);
-    let analysis = analyze_text(&source);
+    let source = fixture["source"].as_str().expect("fixture source should be present");
+    let analysis = analyze_text(source);
 
     assert_eq!(
         analysis.normalized_source,
-        decode_fixture_string(&fixture["expected"]["normalized_source"])
+        fixture["expected"]["normalized_source"]
+            .as_str()
+            .expect("expected normalized source should be present")
     );
 
     let blocks = analysis
