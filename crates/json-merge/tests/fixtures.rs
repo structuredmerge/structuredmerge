@@ -1,7 +1,8 @@
 use std::{fs, path::PathBuf};
 
 use json_merge::{
-    JsonDialect, JsonOwnerKind, JsonRootKind, match_json_owners, merge_json, parse_json,
+    JsonDialect, JsonOwnerKind, JsonRootKind, json_feature_profile, match_json_owners, merge_json,
+    parse_json,
 };
 use serde_json::Value;
 
@@ -388,4 +389,34 @@ fn conforms_to_slice_16_array_policy_fixture() {
     );
     assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
     assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn conforms_to_slice_21_family_feature_profile_fixture() {
+    let fixture = read_fixture(&[
+        "diagnostics",
+        "slice-21-family-feature-profile",
+        "json-feature-profile.json",
+    ]);
+    let profile = json_feature_profile();
+
+    assert_eq!(
+        serde_json::json!({
+            "family": profile.family,
+            "supported_dialects": profile.supported_dialects.iter().map(|dialect| match dialect {
+                JsonDialect::Json => "json",
+                JsonDialect::Jsonc => "jsonc",
+            }).collect::<Vec<_>>(),
+            "supported_policies": profile.supported_policies.iter().map(|policy| {
+                serde_json::json!({
+                    "surface": match policy.surface {
+                        ast_merge::PolicySurface::Fallback => "fallback",
+                        ast_merge::PolicySurface::Array => "array",
+                    },
+                    "name": policy.name
+                })
+            }).collect::<Vec<_>>(),
+        }),
+        fixture["feature_profile"]
+    );
 }

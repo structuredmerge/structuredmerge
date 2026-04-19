@@ -88,6 +88,13 @@ pub struct JsonMergeResolution {
     pub output: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct JsonFeatureProfile {
+    pub family: &'static str,
+    pub supported_dialects: Vec<JsonDialect>,
+    pub supported_policies: Vec<PolicyReference>,
+}
+
 pub fn json_parse_request(source: &str, dialect: JsonDialect) -> ParserRequest {
     ParserRequest {
         source: source.to_string(),
@@ -107,6 +114,14 @@ fn trailing_comma_fallback_policy() -> PolicyReference {
     PolicyReference {
         surface: PolicySurface::Fallback,
         name: "trailing_comma_destination_fallback".to_string(),
+    }
+}
+
+pub fn json_feature_profile() -> JsonFeatureProfile {
+    JsonFeatureProfile {
+        family: "json",
+        supported_dialects: vec![JsonDialect::Json, JsonDialect::Jsonc],
+        supported_policies: vec![destination_wins_array_policy(), trailing_comma_fallback_policy()],
     }
 }
 
