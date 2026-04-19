@@ -73,7 +73,11 @@ pub trait JsonStructureAnalyzer {
 }
 
 pub trait JsonOwnerMatcher {
-    fn match_owners(&self, template: &JsonAnalysis, destination: &JsonAnalysis) -> JsonOwnerMatchResult;
+    fn match_owners(
+        &self,
+        template: &JsonAnalysis,
+        destination: &JsonAnalysis,
+    ) -> JsonOwnerMatchResult;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -345,11 +349,20 @@ pub fn parse_json(source: &str, dialect: JsonDialect) -> ParseResult<JsonAnalysi
     }
 }
 
-pub fn match_json_owners(template: &JsonAnalysis, destination: &JsonAnalysis) -> JsonOwnerMatchResult {
-    let destination_paths: std::collections::BTreeSet<&str> =
-        destination.owners.iter().map(|owner| owner.path.as_str()).collect();
-    let template_paths: std::collections::BTreeSet<&str> =
-        template.owners.iter().map(|owner| owner.path.as_str()).collect();
+pub fn match_json_owners(
+    template: &JsonAnalysis,
+    destination: &JsonAnalysis,
+) -> JsonOwnerMatchResult {
+    let destination_paths: std::collections::BTreeSet<&str> = destination
+        .owners
+        .iter()
+        .map(|owner| owner.path.as_str())
+        .collect();
+    let template_paths: std::collections::BTreeSet<&str> = template
+        .owners
+        .iter()
+        .map(|owner| owner.path.as_str())
+        .collect();
 
     let matched = template
         .owners
@@ -395,8 +408,11 @@ fn parse_normalized_json(source: &str, dialect: JsonDialect) -> Result<Value, Di
             .unwrap_or_else(|| parse_error("JSON parse failed.")));
     }
 
-    let analysis = result.analysis.expect("successful parse should include analysis");
-    serde_json::from_str::<Value>(&analysis.normalized_source).map_err(|_| parse_error("JSON parse failed."))
+    let analysis = result
+        .analysis
+        .expect("successful parse should include analysis");
+    serde_json::from_str::<Value>(&analysis.normalized_source)
+        .map_err(|_| parse_error("JSON parse failed."))
 }
 
 fn merge_values(template: Value, destination: Value) -> Value {
@@ -439,10 +455,16 @@ fn canonical_json(value: &Value) -> String {
         Value::Null => "null".to_string(),
         Value::Bool(boolean) => boolean.to_string(),
         Value::Number(number) => number.to_string(),
-        Value::String(string) => serde_json::to_string(string).expect("string serialization should succeed"),
+        Value::String(string) => {
+            serde_json::to_string(string).expect("string serialization should succeed")
+        }
         Value::Array(items) => format!(
             "[{}]",
-            items.iter().map(canonical_json).collect::<Vec<_>>().join(",")
+            items
+                .iter()
+                .map(canonical_json)
+                .collect::<Vec<_>>()
+                .join(",")
         ),
         Value::Object(map) => {
             let keys: std::collections::BTreeSet<&String> = map.keys().collect();
@@ -462,7 +484,11 @@ fn canonical_json(value: &Value) -> String {
     }
 }
 
-pub fn merge_json(template_source: &str, destination_source: &str, dialect: JsonDialect) -> MergeResult<String> {
+pub fn merge_json(
+    template_source: &str,
+    destination_source: &str,
+    dialect: JsonDialect,
+) -> MergeResult<String> {
     let template = match parse_normalized_json(template_source, dialect) {
         Ok(value) => value,
         Err(diagnostic) => {
@@ -470,7 +496,7 @@ pub fn merge_json(template_source: &str, destination_source: &str, dialect: Json
                 ok: false,
                 diagnostics: vec![diagnostic],
                 output: None,
-            }
+            };
         }
     };
     let destination = match parse_normalized_json(destination_source, dialect) {
@@ -480,7 +506,7 @@ pub fn merge_json(template_source: &str, destination_source: &str, dialect: Json
                 ok: false,
                 diagnostics: vec![diagnostic],
                 output: None,
-            }
+            };
         }
     };
 
@@ -495,8 +521,8 @@ pub fn merge_json(template_source: &str, destination_source: &str, dialect: Json
 #[cfg(test)]
 mod tests {
     use super::{
-        match_json_owners, merge_json, parse_json, JsonDialect, JsonOwner, JsonOwnerKind,
-        JsonOwnerMatch, JsonRootKind,
+        JsonDialect, JsonOwner, JsonOwnerKind, JsonOwnerMatch, JsonRootKind, match_json_owners,
+        merge_json, parse_json,
     };
     use ast_merge::DiagnosticCategory;
 
@@ -516,7 +542,10 @@ mod tests {
         let result = parse_json(source, JsonDialect::Jsonc);
 
         assert!(!result.ok);
-        assert_eq!(result.diagnostics[0].category, DiagnosticCategory::ParseError);
+        assert_eq!(
+            result.diagnostics[0].category,
+            DiagnosticCategory::ParseError
+        );
     }
 
     #[test]
