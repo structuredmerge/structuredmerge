@@ -20,6 +20,13 @@ pub struct AdapterInfo {
     pub supported_policies: Vec<PolicyReference>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeatureProfile {
+    pub backend: String,
+    pub supports_dialects: bool,
+    pub supported_policies: Vec<PolicyReference>,
+}
+
 pub trait ParserAdapter<TAnalysis: AnalysisHandle> {
     fn info(&self) -> AdapterInfo;
     fn parse(&self, request: &ParserRequest) -> ParseResult<TAnalysis>;
