@@ -6,9 +6,10 @@ use ast_merge::{
     ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuitePlan, ConformanceSuiteReport,
     ConformanceSuiteSummary, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile,
     PolicySurface, conformance_family_feature_profile_path, conformance_fixture_path,
-    plan_conformance_suite, report_conformance_suite, report_planned_conformance_suite,
-    run_conformance_case, run_conformance_suite, run_planned_conformance_suite,
-    select_conformance_case, summarize_conformance_results,
+    conformance_suite_definition, plan_conformance_suite, plan_named_conformance_suite,
+    report_conformance_suite, report_planned_conformance_suite, run_conformance_case,
+    run_conformance_suite, run_planned_conformance_suite, select_conformance_case,
+    summarize_conformance_results,
 };
 use serde_json::Value;
 
@@ -516,4 +517,41 @@ fn conforms_to_slice_42_manifest_case_requirements_fixture() {
         .collect::<std::collections::HashMap<_, _>>();
 
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn conforms_to_slice_43_conformance_suite_definitions_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("suite_definitions"));
+    let manifest = read_manifest();
+    let suite_name = fixture["suite_name"].as_str().expect("suite name should be a string");
+    let expected = serde_json::from_value::<ast_merge::ConformanceSuiteDefinition>(
+        fixture["expected"].clone(),
+    )
+    .expect("expected definition should deserialize");
+    let family_profile = FamilyFeatureProfile {
+        family: "json".to_string(),
+        supported_dialects: vec!["json".to_string(), "jsonc".to_string()],
+        supported_policies: vec![
+            ast_merge::PolicyReference {
+                surface: PolicySurface::Array,
+                name: "destination_wins_array".to_string(),
+            },
+            ast_merge::PolicyReference {
+                surface: PolicySurface::Fallback,
+                name: "trailing_comma_destination_fallback".to_string(),
+            },
+        ],
+    };
+
+    assert_eq!(conformance_suite_definition(&manifest, suite_name), Some(&expected));
+    assert_eq!(
+        plan_named_conformance_suite(&manifest, suite_name, &family_profile, None),
+        Some(plan_conformance_suite(
+            &manifest,
+            &expected.family,
+            &expected.roles,
+            &family_profile,
+            None,
+        )),
+    );
 }

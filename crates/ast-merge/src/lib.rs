@@ -151,7 +151,15 @@ pub struct ConformanceFamilyFeatureProfileEntry {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ConformanceManifest {
     pub family_feature_profiles: Vec<ConformanceFamilyFeatureProfileEntry>,
+    #[serde(default)]
+    pub suites: HashMap<String, ConformanceSuiteDefinition>,
     pub families: HashMap<String, Vec<ConformanceManifestEntry>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceSuiteDefinition {
+    pub family: String,
+    pub roles: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -218,6 +226,13 @@ pub fn conformance_family_feature_profile_path<'a>(
         .iter()
         .find(|entry| entry.family == family)
         .map(|entry| entry.path.as_slice())
+}
+
+pub fn conformance_suite_definition<'a>(
+    manifest: &'a ConformanceManifest,
+    suite_name: &str,
+) -> Option<&'a ConformanceSuiteDefinition> {
+    manifest.suites.get(suite_name)
 }
 
 pub fn summarize_conformance_results(results: &[ConformanceCaseResult]) -> ConformanceSuiteSummary {
@@ -388,4 +403,20 @@ pub fn plan_conformance_suite(
     }
 
     ConformanceSuitePlan { family: family.to_string(), entries, missing_roles }
+}
+
+pub fn plan_named_conformance_suite(
+    manifest: &ConformanceManifest,
+    suite_name: &str,
+    family_profile: &FamilyFeatureProfile,
+    feature_profile: Option<&ConformanceFeatureProfileView>,
+) -> Option<ConformanceSuitePlan> {
+    let definition = conformance_suite_definition(manifest, suite_name)?;
+    Some(plan_conformance_suite(
+        manifest,
+        &definition.family,
+        &definition.roles,
+        family_profile,
+        feature_profile,
+    ))
 }
