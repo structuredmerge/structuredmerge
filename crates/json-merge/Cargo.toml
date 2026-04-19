@@ -3,5 +3,9 @@ name = "json-merge"
 version = "0.0.0"
 edition = "2024"
 
+[dependencies]
+ast-merge = { path = "../ast-merge" }
+tree-haver = { path = "../tree-haver" }
+
 [lib]
 path = "src/lib.rs"

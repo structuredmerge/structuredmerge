@@ -3,5 +3,8 @@ name = "tree-haver"
 version = "0.0.0"
 edition = "2024"
 
+[dependencies]
+ast-merge = { path = "../ast-merge" }
+
 [lib]
 path = "src/lib.rs"
