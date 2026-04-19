@@ -168,13 +168,17 @@ pub fn is_similar(left_source: &str, right_source: &str, threshold: f64) -> Text
 pub fn merge_text(template_source: &str, destination_source: &str) -> MergeResult<String> {
     let template = analyze_text(template_source);
     let destination = analyze_text(destination_source);
-    let total = template.blocks.len().max(destination.blocks.len());
+    let matches = match_text_blocks(template_source, destination_source);
+    let matched_template: std::collections::BTreeSet<usize> =
+        matches.matched.iter().map(|entry| entry.template_index).collect();
     let mut merged_blocks = Vec::new();
 
-    for index in 0..total {
-        if let Some(destination_block) = destination.blocks.get(index) {
-            merged_blocks.push(destination_block.normalized.clone());
-        } else if let Some(template_block) = template.blocks.get(index) {
+    for destination_block in &destination.blocks {
+        merged_blocks.push(destination_block.normalized.clone());
+    }
+
+    for (index, template_block) in template.blocks.iter().enumerate() {
+        if !matched_template.contains(&index) {
             merged_blocks.push(template_block.normalized.clone());
         }
     }
@@ -276,14 +280,14 @@ mod tests {
     #[test]
     fn resolves_text_merge() {
         let result = merge_text(
-            "Alpha\n\nBeta\n\nTemplate tail",
-            "Alpha revised\n\nBeta\n\nDestination tail\n\nDestination extra",
+            "Alpha\n\nBeta\n\nAlpha\n\nTemplate only",
+            "Beta\n\nAlpha revised\n\nAlpha\n\nDestination only",
         );
 
         assert!(result.ok);
         assert_eq!(
             result.output,
-            Some("Alpha revised\n\nBeta\n\nDestination tail\n\nDestination extra".to_string())
+            Some("Beta\n\nAlpha revised\n\nAlpha\n\nDestination only\n\nAlpha\n\nTemplate only".to_string())
         );
     }
 
