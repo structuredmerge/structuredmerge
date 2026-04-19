@@ -19,10 +19,10 @@ use ast_merge::{
     report_named_conformance_suite_manifest, report_planned_conformance_suite,
     report_planned_named_conformance_suites, resolve_conformance_family_context,
     review_conformance_family_context, review_conformance_manifest,
-    review_request_id_for_family_context, run_conformance_case, run_conformance_suite,
-    run_named_conformance_suite, run_named_conformance_suite_entry, run_planned_conformance_suite,
-    run_planned_named_conformance_suites, select_conformance_case, summarize_conformance_results,
-    summarize_named_conformance_suite_reports,
+    review_replay_context_compatible, review_request_id_for_family_context, run_conformance_case,
+    run_conformance_suite, run_named_conformance_suite, run_named_conformance_suite_entry,
+    run_planned_conformance_suite, run_planned_named_conformance_suites, select_conformance_case,
+    summarize_conformance_results, summarize_named_conformance_suite_reports,
 };
 use serde_json::Value;
 
@@ -68,6 +68,19 @@ fn read_fixture_from_path(path: PathBuf) -> Value {
     serde_json::from_str(&source).expect("fixture should be valid json")
 }
 
+fn diagnostic_category_name(category: DiagnosticCategory) -> &'static str {
+    match category {
+        DiagnosticCategory::ParseError => "parse_error",
+        DiagnosticCategory::DestinationParseError => "destination_parse_error",
+        DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
+        DiagnosticCategory::FallbackApplied => "fallback_applied",
+        DiagnosticCategory::Ambiguity => "ambiguity",
+        DiagnosticCategory::AssumedDefault => "assumed_default",
+        DiagnosticCategory::ConfigurationError => "configuration_error",
+        DiagnosticCategory::ReplayRejected => "replay_rejected",
+    }
+}
+
 #[test]
 fn conforms_to_slice_02_diagnostic_vocabulary_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("diagnostic_vocabulary"));
@@ -91,69 +104,14 @@ fn conforms_to_slice_02_diagnostic_vocabulary_fixture() {
     ];
 
     let categories = vec![
-        match DiagnosticCategory::ParseError {
-            DiagnosticCategory::ParseError => "parse_error",
-            DiagnosticCategory::DestinationParseError => "destination_parse_error",
-            DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
-            DiagnosticCategory::FallbackApplied => "fallback_applied",
-            DiagnosticCategory::Ambiguity => "ambiguity",
-            DiagnosticCategory::AssumedDefault => "assumed_default",
-            DiagnosticCategory::ConfigurationError => "configuration_error",
-        },
-        match DiagnosticCategory::DestinationParseError {
-            DiagnosticCategory::ParseError => "parse_error",
-            DiagnosticCategory::DestinationParseError => "destination_parse_error",
-            DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
-            DiagnosticCategory::FallbackApplied => "fallback_applied",
-            DiagnosticCategory::Ambiguity => "ambiguity",
-            DiagnosticCategory::AssumedDefault => "assumed_default",
-            DiagnosticCategory::ConfigurationError => "configuration_error",
-        },
-        match DiagnosticCategory::UnsupportedFeature {
-            DiagnosticCategory::ParseError => "parse_error",
-            DiagnosticCategory::DestinationParseError => "destination_parse_error",
-            DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
-            DiagnosticCategory::FallbackApplied => "fallback_applied",
-            DiagnosticCategory::Ambiguity => "ambiguity",
-            DiagnosticCategory::AssumedDefault => "assumed_default",
-            DiagnosticCategory::ConfigurationError => "configuration_error",
-        },
-        match DiagnosticCategory::FallbackApplied {
-            DiagnosticCategory::ParseError => "parse_error",
-            DiagnosticCategory::DestinationParseError => "destination_parse_error",
-            DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
-            DiagnosticCategory::FallbackApplied => "fallback_applied",
-            DiagnosticCategory::Ambiguity => "ambiguity",
-            DiagnosticCategory::AssumedDefault => "assumed_default",
-            DiagnosticCategory::ConfigurationError => "configuration_error",
-        },
-        match DiagnosticCategory::Ambiguity {
-            DiagnosticCategory::ParseError => "parse_error",
-            DiagnosticCategory::DestinationParseError => "destination_parse_error",
-            DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
-            DiagnosticCategory::FallbackApplied => "fallback_applied",
-            DiagnosticCategory::Ambiguity => "ambiguity",
-            DiagnosticCategory::AssumedDefault => "assumed_default",
-            DiagnosticCategory::ConfigurationError => "configuration_error",
-        },
-        match DiagnosticCategory::AssumedDefault {
-            DiagnosticCategory::ParseError => "parse_error",
-            DiagnosticCategory::DestinationParseError => "destination_parse_error",
-            DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
-            DiagnosticCategory::FallbackApplied => "fallback_applied",
-            DiagnosticCategory::Ambiguity => "ambiguity",
-            DiagnosticCategory::AssumedDefault => "assumed_default",
-            DiagnosticCategory::ConfigurationError => "configuration_error",
-        },
-        match DiagnosticCategory::ConfigurationError {
-            DiagnosticCategory::ParseError => "parse_error",
-            DiagnosticCategory::DestinationParseError => "destination_parse_error",
-            DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
-            DiagnosticCategory::FallbackApplied => "fallback_applied",
-            DiagnosticCategory::Ambiguity => "ambiguity",
-            DiagnosticCategory::AssumedDefault => "assumed_default",
-            DiagnosticCategory::ConfigurationError => "configuration_error",
-        },
+        diagnostic_category_name(DiagnosticCategory::ParseError),
+        diagnostic_category_name(DiagnosticCategory::DestinationParseError),
+        diagnostic_category_name(DiagnosticCategory::UnsupportedFeature),
+        diagnostic_category_name(DiagnosticCategory::FallbackApplied),
+        diagnostic_category_name(DiagnosticCategory::Ambiguity),
+        diagnostic_category_name(DiagnosticCategory::AssumedDefault),
+        diagnostic_category_name(DiagnosticCategory::ConfigurationError),
+        diagnostic_category_name(DiagnosticCategory::ReplayRejected),
     ];
 
     assert_eq!(
@@ -1099,6 +1057,49 @@ fn conforms_to_slice_63_conformance_manifest_review_state_fixture() {
 #[test]
 fn conforms_to_slice_64_reviewed_default_context_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("reviewed_default_context"));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let options =
+        serde_json::from_value::<ConformanceManifestReviewOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected =
+        serde_json::from_value::<ConformanceManifestReviewState>(fixture["expected_state"].clone())
+            .expect("expected state should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+    let state = review_conformance_manifest(&manifest, &options, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        serde_json::from_value::<ConformanceCaseExecution>(
+            executions.get(&key).cloned().unwrap_or_else(
+                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+            ),
+        )
+        .expect("execution should deserialize")
+    });
+
+    assert_eq!(state, expected);
+}
+
+#[test]
+fn conforms_to_slice_65_review_replay_compatibility_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("review_replay_compatibility"));
+    let current = serde_json::from_value::<ReviewReplayContext>(fixture["current_context"].clone())
+        .expect("current context should deserialize");
+    let compatible =
+        serde_json::from_value::<ReviewReplayContext>(fixture["compatible_context"].clone())
+            .expect("compatible context should deserialize");
+    let incompatible =
+        serde_json::from_value::<ReviewReplayContext>(fixture["incompatible_context"].clone())
+            .expect("incompatible context should deserialize");
+
+    assert!(review_replay_context_compatible(&current, Some(&compatible)));
+    assert!(!review_replay_context_compatible(&current, Some(&incompatible)));
+    assert!(!review_replay_context_compatible(&current, None));
+}
+
+#[test]
+fn conforms_to_slice_66_review_replay_rejection_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("review_replay_rejection"));
     let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
         .expect("manifest should deserialize");
     let options =

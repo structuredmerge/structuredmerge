@@ -22,6 +22,7 @@ pub enum DiagnosticCategory {
     Ambiguity,
     AssumedDefault,
     ConfigurationError,
+    ReplayRejected,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -262,6 +263,7 @@ pub struct ConformanceManifestReviewOptions {
     pub require_explicit_contexts: bool,
     #[serde(default)]
     pub review_decisions: Vec<ReviewDecision>,
+    pub review_replay_context: Option<ReviewReplayContext>,
     #[serde(default)]
     pub interactive: bool,
 }
@@ -397,6 +399,19 @@ pub fn conformance_manifest_replay_context(
         families,
         require_explicit_contexts: options.require_explicit_contexts,
     }
+}
+
+pub fn review_replay_context_compatible(
+    current: &ReviewReplayContext,
+    candidate: Option<&ReviewReplayContext>,
+) -> bool {
+    let Some(candidate) = candidate else {
+        return false;
+    };
+
+    candidate.surface == current.surface
+        && candidate.require_explicit_contexts == current.require_explicit_contexts
+        && candidate.families == current.families
 }
 
 pub fn resolve_conformance_family_context(
@@ -790,10 +805,40 @@ pub fn review_conformance_manifest(
     options: &ConformanceManifestReviewOptions,
     execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
 ) -> ConformanceManifestReviewState {
+    let replay_context = conformance_manifest_replay_context(manifest, options);
     let mut entries = Vec::new();
     let mut diagnostics = Vec::new();
     let mut requests = Vec::new();
     let mut applied_decisions = Vec::new();
+    let effective_options = if options.review_decisions.is_empty() {
+        options.clone()
+    } else if options.review_replay_context.is_none() {
+        diagnostics.push(Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            category: DiagnosticCategory::ReplayRejected,
+            message: "review decisions were provided without replay context.".to_string(),
+            path: None,
+        });
+        let mut cloned = options.clone();
+        cloned.review_decisions.clear();
+        cloned
+    } else if !review_replay_context_compatible(
+        &replay_context,
+        options.review_replay_context.as_ref(),
+    ) {
+        diagnostics.push(Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            category: DiagnosticCategory::ReplayRejected,
+            message: "review replay context does not match the current conformance manifest state."
+                .to_string(),
+            path: None,
+        });
+        let mut cloned = options.clone();
+        cloned.review_decisions.clear();
+        cloned
+    } else {
+        options.clone()
+    };
     let mut resolved_contexts: HashMap<String, Option<ConformanceFamilyPlanContext>> =
         HashMap::new();
 
@@ -806,7 +851,7 @@ pub fn review_conformance_manifest(
             context.clone()
         } else {
             let (context, mut context_diagnostics, mut context_requests, mut context_decisions) =
-                review_conformance_family_context(&definition.family, options);
+                review_conformance_family_context(&definition.family, &effective_options);
             diagnostics.append(&mut context_diagnostics);
             requests.append(&mut context_requests);
             applied_decisions.append(&mut context_decisions);
@@ -848,7 +893,7 @@ pub fn review_conformance_manifest(
         requests,
         applied_decisions,
         host_hints: conformance_review_host_hints(options),
-        replay_context: conformance_manifest_replay_context(manifest, options),
+        replay_context,
     }
 }
 

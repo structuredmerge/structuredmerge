@@ -79,6 +79,7 @@ fn diagnostic_category_name(category: ast_merge::DiagnosticCategory) -> &'static
         ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
         ast_merge::DiagnosticCategory::AssumedDefault => "assumed_default",
         ast_merge::DiagnosticCategory::ConfigurationError => "configuration_error",
+        ast_merge::DiagnosticCategory::ReplayRejected => "replay_rejected",
     }
 }
 
