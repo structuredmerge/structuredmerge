@@ -53,6 +53,11 @@ pub struct TextSimilarity {
     pub matched: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TextMergeResolution {
+    pub output: String,
+}
+
 pub fn normalize_text(source: &str) -> String {
     source
         .replace("\r\n", "\n")
@@ -143,9 +148,33 @@ pub fn is_similar(left_source: &str, right_source: &str, threshold: f64) -> Text
     }
 }
 
+pub fn merge_text(template_source: &str, destination_source: &str) -> MergeResult<String> {
+    let template = analyze_text(template_source);
+    let destination = analyze_text(destination_source);
+    let total = template.blocks.len().max(destination.blocks.len());
+    let mut merged_blocks = Vec::new();
+
+    for index in 0..total {
+        if let Some(destination_block) = destination.blocks.get(index) {
+            merged_blocks.push(destination_block.normalized.clone());
+        } else if let Some(template_block) = template.blocks.get(index) {
+            merged_blocks.push(template_block.normalized.clone());
+        }
+    }
+
+    MergeResult {
+        ok: true,
+        diagnostics: vec![],
+        output: Some(merged_blocks.join("\n\n")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{analyze_text, is_similar, normalize_text, similarity_score, TextBlock, TextSpan};
+    use super::{
+        analyze_text, is_similar, merge_text, normalize_text, similarity_score, TextBlock,
+        TextSpan,
+    };
 
     #[test]
     fn normalizes_and_segments_text_blocks() {
@@ -188,5 +217,19 @@ mod tests {
 
         let similarity = is_similar("Alpha beta\n\nGamma delta", "Alpha beta\n\nGamma epsilon", 0.6);
         assert!(similarity.matched);
+    }
+
+    #[test]
+    fn resolves_text_merge() {
+        let result = merge_text(
+            "Alpha\n\nBeta\n\nTemplate tail",
+            "Alpha revised\n\nBeta\n\nDestination tail\n\nDestination extra",
+        );
+
+        assert!(result.ok);
+        assert_eq!(
+            result.output,
+            Some("Alpha revised\n\nBeta\n\nDestination tail\n\nDestination extra".to_string())
+        );
     }
 }
