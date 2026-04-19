@@ -36,11 +36,7 @@ pub trait TextMerger {
 pub trait TextParserAdapter: ParserAdapter<TextAnalysis> {}
 
 pub fn text_parse_request(source: &str) -> ParserRequest {
-    ParserRequest {
-        source: source.to_string(),
-        language: "text".to_string(),
-        dialect: None,
-    }
+    ParserRequest { source: source.to_string(), language: "text".to_string(), dialect: None }
 }
 
 pub trait TextAnalyzer {
@@ -61,11 +57,8 @@ pub struct TextRefinementWeights {
     pub position: f64,
 }
 
-pub const DEFAULT_TEXT_REFINEMENT_WEIGHTS: TextRefinementWeights = TextRefinementWeights {
-    content: 0.7,
-    length: 0.15,
-    position: 0.15,
-};
+pub const DEFAULT_TEXT_REFINEMENT_WEIGHTS: TextRefinementWeights =
+    TextRefinementWeights { content: 0.7, length: 0.15, position: 0.15 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TextMatchPhase {
@@ -136,17 +129,11 @@ pub fn analyze_text(source: &str) -> TextAnalysis {
             .collect()
     };
 
-    TextAnalysis {
-        normalized_source,
-        blocks,
-    }
+    TextAnalysis { normalized_source, blocks }
 }
 
 fn token_set(normalized: &str) -> std::collections::BTreeSet<&str> {
-    normalized
-        .split_whitespace()
-        .filter(|token| !token.is_empty())
-        .collect()
+    normalized.split_whitespace().filter(|token| !token.is_empty()).collect()
 }
 
 fn levenshtein_distance(left: &str, right: &str) -> usize {
@@ -214,11 +201,7 @@ fn length_similarity(left: &str, right: &str) -> f64 {
 }
 
 fn relative_position(index: usize, total: usize) -> f64 {
-    if total > 1 {
-        index as f64 / (total - 1) as f64
-    } else {
-        0.5
-    }
+    if total > 1 { index as f64 / (total - 1) as f64 } else { 0.5 }
 }
 
 fn position_similarity(
@@ -243,11 +226,7 @@ fn jaccard(left: &str, right: &str) -> f64 {
     let intersection = left_tokens.intersection(&right_tokens).count() as f64;
     let union = left_tokens.union(&right_tokens).count() as f64;
 
-    if union == 0.0 {
-        1.0
-    } else {
-        intersection / union
-    }
+    if union == 0.0 { 1.0 } else { intersection / union }
 }
 
 pub fn similarity_score(left_source: &str, right_source: &str) -> f64 {
@@ -292,22 +271,15 @@ pub fn refined_text_similarity(
 
 pub fn is_similar(left_source: &str, right_source: &str, threshold: f64) -> TextSimilarity {
     let score = similarity_score(left_source, right_source);
-    TextSimilarity {
-        score,
-        threshold,
-        matched: score >= threshold,
-    }
+    TextSimilarity { score, threshold, matched: score >= threshold }
 }
 
 pub fn merge_text(template_source: &str, destination_source: &str) -> MergeResult<String> {
     let template = analyze_text(template_source);
     let destination = analyze_text(destination_source);
     let matches = match_text_blocks(template_source, destination_source);
-    let matched_template: std::collections::BTreeSet<usize> = matches
-        .matched
-        .iter()
-        .map(|entry| entry.template_index)
-        .collect();
+    let matched_template: std::collections::BTreeSet<usize> =
+        matches.matched.iter().map(|entry| entry.template_index).collect();
     let mut merged_blocks = Vec::new();
 
     for destination_block in &destination.blocks {
@@ -320,11 +292,7 @@ pub fn merge_text(template_source: &str, destination_source: &str) -> MergeResul
         }
     }
 
-    MergeResult {
-        ok: true,
-        diagnostics: vec![],
-        output: Some(merged_blocks.join("\n\n")),
-    }
+    MergeResult { ok: true, diagnostics: vec![], output: Some(merged_blocks.join("\n\n")) }
 }
 
 pub fn match_text_blocks(template_source: &str, destination_source: &str) -> TextBlockMatchResult {
@@ -336,14 +304,10 @@ pub fn match_text_blocks(template_source: &str, destination_source: &str) -> Tex
 
     for (destination_index, destination_block) in destination.blocks.iter().enumerate() {
         if let Some((template_index, _)) =
-            template
-                .blocks
-                .iter()
-                .enumerate()
-                .find(|(candidate_index, template_block)| {
-                    !matched_template.contains(candidate_index)
-                        && template_block.normalized == destination_block.normalized
-                })
+            template.blocks.iter().enumerate().find(|(candidate_index, template_block)| {
+                !matched_template.contains(candidate_index)
+                    && template_block.normalized == destination_block.normalized
+            })
         {
             matched_template.insert(template_index);
             matched_destination.insert(destination_index);
@@ -420,10 +384,7 @@ mod tests {
     fn normalizes_and_segments_text_blocks() {
         let source = "  Alpha   beta\r\n\r\nGamma\n   delta\n\n\nEpsilon  \n";
 
-        assert_eq!(
-            normalize_text(source),
-            "Alpha beta\n\nGamma delta\n\nEpsilon"
-        );
+        assert_eq!(normalize_text(source), "Alpha beta\n\nGamma delta\n\nEpsilon");
         assert_eq!(
             analyze_text(source).blocks,
             vec![
@@ -448,21 +409,15 @@ mod tests {
 
     #[test]
     fn scores_text_similarity() {
-        assert_eq!(
-            similarity_score("Alpha   beta\n\nGamma", "  Alpha beta  \r\n\r\nGamma  "),
-            1.0
-        );
+        assert_eq!(similarity_score("Alpha   beta\n\nGamma", "  Alpha beta  \r\n\r\nGamma  "), 1.0);
         assert_eq!(
             similarity_score("Alpha beta\n\nGamma delta", "Alpha beta\n\nGamma epsilon"),
             0.6666666666666666
         );
         assert_eq!(similarity_score("Alpha beta", "Zeta theta"), 0.0);
 
-        let similarity = is_similar(
-            "Alpha beta\n\nGamma delta",
-            "Alpha beta\n\nGamma epsilon",
-            0.6,
-        );
+        let similarity =
+            is_similar("Alpha beta\n\nGamma delta", "Alpha beta\n\nGamma epsilon", 0.6);
         assert!(similarity.matched);
     }
 
