@@ -1,4 +1,7 @@
-use ast_merge::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, MergeResult, ParseResult};
+use ast_merge::{
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, MergeResult, ParseResult, PolicyReference,
+    PolicySurface,
+};
 use serde_json::Value;
 use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest};
 
@@ -93,6 +96,17 @@ pub fn json_parse_request(source: &str, dialect: JsonDialect) -> ParserRequest {
             JsonDialect::Json => "json".to_string(),
             JsonDialect::Jsonc => "jsonc".to_string(),
         }),
+    }
+}
+
+fn destination_wins_array_policy() -> PolicyReference {
+    PolicyReference { surface: PolicySurface::Array, name: "destination_wins_array".to_string() }
+}
+
+fn trailing_comma_fallback_policy() -> PolicyReference {
+    PolicyReference {
+        surface: PolicySurface::Fallback,
+        name: "trailing_comma_destination_fallback".to_string(),
     }
 }
 
@@ -418,6 +432,7 @@ pub fn parse_json(source: &str, dialect: JsonDialect) -> ParseResult<JsonAnalysi
             ok: false,
             diagnostics: vec![parse_error("Trailing commas are not supported.")],
             analysis: None,
+            policies: vec![],
         };
     }
 
@@ -429,6 +444,7 @@ pub fn parse_json(source: &str, dialect: JsonDialect) -> ParseResult<JsonAnalysi
                     ok: false,
                     diagnostics: vec![parse_error("Comments are not supported in strict JSON.")],
                     analysis: None,
+                    policies: vec![],
                 };
             }
             source.to_string()
@@ -443,6 +459,7 @@ pub fn parse_json(source: &str, dialect: JsonDialect) -> ParseResult<JsonAnalysi
                 ok: false,
                 diagnostics: vec![parse_error("JSON parse failed.")],
                 analysis: None,
+                policies: vec![],
             };
         }
     };
@@ -458,6 +475,7 @@ pub fn parse_json(source: &str, dialect: JsonDialect) -> ParseResult<JsonAnalysi
             root_kind,
             owners,
         }),
+        policies: vec![],
     }
 }
 
@@ -595,10 +613,16 @@ pub fn merge_json(
     let template = match parse_normalized_json(template_source, dialect, parse_error) {
         Ok(value) => value,
         Err(diagnostic) => {
-            return MergeResult { ok: false, diagnostics: vec![diagnostic], output: None };
+            return MergeResult {
+                ok: false,
+                diagnostics: vec![diagnostic],
+                output: None,
+                policies: vec![],
+            };
         }
     };
     let mut diagnostics = Vec::new();
+    let mut policies = vec![destination_wins_array_policy()];
     let destination =
         match parse_normalized_json(destination_source, dialect, destination_parse_error) {
             Ok(value) => value,
@@ -612,6 +636,7 @@ pub fn merge_json(
                             ok: false,
                             diagnostics: vec![diagnostic],
                             output: None,
+                            policies: vec![],
                         };
                     }
 
@@ -624,6 +649,7 @@ pub fn merge_json(
                             diagnostics.push(fallback_applied(
                                 "Applied destination trailing-comma fallback during merge.",
                             ));
+                            policies.push(trailing_comma_fallback_policy());
                             value
                         }
                         Err(retry_diagnostic) => {
@@ -631,24 +657,31 @@ pub fn merge_json(
                                 ok: false,
                                 diagnostics: vec![retry_diagnostic],
                                 output: None,
+                                policies: vec![],
                             };
                         }
                     }
                 } else {
-                    return MergeResult { ok: false, diagnostics: vec![diagnostic], output: None };
+                    return MergeResult {
+                        ok: false,
+                        diagnostics: vec![diagnostic],
+                        output: None,
+                        policies: vec![],
+                    };
                 }
             }
         };
 
     let merged = merge_values(template, destination);
-    MergeResult { ok: true, diagnostics, output: Some(canonical_json(&merged)) }
+    MergeResult { ok: true, diagnostics, output: Some(canonical_json(&merged)), policies }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        JsonDialect, JsonOwner, JsonOwnerKind, JsonOwnerMatch, JsonRootKind, match_json_owners,
-        merge_json, parse_json,
+        JsonDialect, JsonOwner, JsonOwnerKind, JsonOwnerMatch, JsonRootKind,
+        destination_wins_array_policy, match_json_owners, merge_json, parse_json,
+        trailing_comma_fallback_policy,
     };
     use ast_merge::{DiagnosticCategory, DiagnosticSeverity};
 
@@ -793,6 +826,10 @@ mod tests {
         assert_eq!(result.diagnostics.len(), 1);
         assert_eq!(result.diagnostics[0].severity, DiagnosticSeverity::Warning);
         assert_eq!(result.diagnostics[0].category, DiagnosticCategory::FallbackApplied);
+        assert_eq!(
+            result.policies,
+            vec![destination_wins_array_policy(), trailing_comma_fallback_policy()]
+        );
     }
 
     #[test]
@@ -808,6 +845,7 @@ mod tests {
             result.output.as_deref(),
             Some("{\"items\":[9],\"meta\":{\"mode\":\"template\",\"tags\":[\"destination\"]}}")
         );
+        assert_eq!(result.policies, vec![destination_wins_array_policy()]);
     }
 
     #[test]

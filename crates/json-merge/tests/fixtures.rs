@@ -276,6 +276,19 @@ fn conforms_to_slice_14_fallback_fixture() {
         })
         .collect::<Vec<_>>();
     assert_eq!(Value::Array(diagnostics), fixture["expected"]["diagnostics"]);
+    assert_eq!(
+        result.policies,
+        vec![
+            ast_merge::PolicyReference {
+                surface: ast_merge::PolicySurface::Array,
+                name: "destination_wins_array".to_string()
+            },
+            ast_merge::PolicyReference {
+                surface: ast_merge::PolicySurface::Fallback,
+                name: "trailing_comma_destination_fallback".to_string()
+            }
+        ]
+    );
     assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
 }
 
@@ -366,6 +379,13 @@ fn conforms_to_slice_16_array_policy_fixture() {
     );
 
     assert_eq!(result.ok, fixture["expected"]["ok"].as_bool().unwrap_or(false));
+    assert_eq!(
+        result.policies,
+        vec![ast_merge::PolicyReference {
+            surface: ast_merge::PolicySurface::Array,
+            name: "destination_wins_array".to_string()
+        }]
+    );
     assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
     assert!(result.diagnostics.is_empty());
 }

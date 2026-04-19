@@ -132,3 +132,22 @@ fn conforms_to_slice_17_policy_vocabulary_fixture() {
     );
     assert_eq!(policies, fixture["policies"]);
 }
+
+#[test]
+fn conforms_to_slice_18_policy_reporting_fixture() {
+    let fixture =
+        read_fixture(&["diagnostics", "slice-18-policy-reporting", "result-policies.json"]);
+
+    let merge_policies = serde_json::json!([
+        {
+            "surface": "array",
+            "name": "destination_wins_array"
+        },
+        {
+            "surface": "fallback",
+            "name": "trailing_comma_destination_fallback"
+        }
+    ]);
+
+    assert_eq!(merge_policies, fixture["merge_policies"]);
+}

@@ -292,7 +292,12 @@ pub fn merge_text(template_source: &str, destination_source: &str) -> MergeResul
         }
     }
 
-    MergeResult { ok: true, diagnostics: vec![], output: Some(merged_blocks.join("\n\n")) }
+    MergeResult {
+        ok: true,
+        diagnostics: vec![],
+        output: Some(merged_blocks.join("\n\n")),
+        policies: vec![],
+    }
 }
 
 pub fn match_text_blocks(template_source: &str, destination_source: &str) -> TextBlockMatchResult {
