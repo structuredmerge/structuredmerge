@@ -210,6 +210,72 @@ pub struct ConformanceManifestReport {
     pub diagnostics: Vec<Diagnostic>,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewRequestKind {
+    FamilyContext,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewDecisionAction {
+    AcceptDefaultContext,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReviewRequest {
+    pub id: String,
+    pub kind: ReviewRequestKind,
+    pub family: String,
+    pub message: String,
+    pub blocking: bool,
+    pub available_actions: Vec<ReviewDecisionAction>,
+    pub default_action: Option<ReviewDecisionAction>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReviewDecision {
+    pub request_id: String,
+    pub action: ReviewDecisionAction,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReviewHostHints {
+    pub interactive: bool,
+    pub require_explicit_contexts: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReviewReplayContext {
+    pub surface: String,
+    pub families: Vec<String>,
+    pub require_explicit_contexts: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceManifestReviewOptions {
+    #[serde(default)]
+    pub contexts: HashMap<String, ConformanceFamilyPlanContext>,
+    #[serde(default)]
+    pub family_profiles: HashMap<String, FamilyFeatureProfile>,
+    #[serde(default)]
+    pub require_explicit_contexts: bool,
+    #[serde(default)]
+    pub review_decisions: Vec<ReviewDecision>,
+    #[serde(default)]
+    pub interactive: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceManifestReviewState {
+    pub report: NamedConformanceSuiteReportEnvelope,
+    pub diagnostics: Vec<Diagnostic>,
+    pub requests: Vec<ReviewRequest>,
+    pub applied_decisions: Vec<ReviewDecision>,
+    pub host_hints: ReviewHostHints,
+    pub replay_context: ReviewReplayContext,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ConformanceManifestPlan {
     pub entries: Vec<NamedConformanceSuitePlan>,
@@ -301,6 +367,38 @@ pub fn default_conformance_family_context(
     ConformanceFamilyPlanContext { family_profile: family_profile.clone(), feature_profile: None }
 }
 
+pub fn review_request_id_for_family_context(family: &str) -> String {
+    format!("family_context:{family}")
+}
+
+pub fn conformance_review_host_hints(
+    options: &ConformanceManifestReviewOptions,
+) -> ReviewHostHints {
+    ReviewHostHints {
+        interactive: options.interactive,
+        require_explicit_contexts: options.require_explicit_contexts,
+    }
+}
+
+pub fn conformance_manifest_replay_context(
+    manifest: &ConformanceManifest,
+    options: &ConformanceManifestReviewOptions,
+) -> ReviewReplayContext {
+    let mut families: Vec<String> = conformance_suite_names(manifest)
+        .into_iter()
+        .filter_map(|suite_name| conformance_suite_definition(manifest, &suite_name))
+        .map(|definition| definition.family.clone())
+        .collect();
+    families.sort();
+    families.dedup();
+
+    ReviewReplayContext {
+        surface: "conformance_manifest".to_string(),
+        families,
+        require_explicit_contexts: options.require_explicit_contexts,
+    }
+}
+
 pub fn resolve_conformance_family_context(
     family: &str,
     options: &ConformanceManifestPlanningOptions,
@@ -344,6 +442,93 @@ pub fn resolve_conformance_family_context(
             ),
             path: None,
         }],
+    )
+}
+
+fn review_decision_for_family_context(
+    family: &str,
+    options: &ConformanceManifestReviewOptions,
+) -> Option<ReviewDecision> {
+    let request_id = review_request_id_for_family_context(family);
+    options
+        .review_decisions
+        .iter()
+        .find(|decision| {
+            decision.request_id == request_id
+                && decision.action == ReviewDecisionAction::AcceptDefaultContext
+        })
+        .cloned()
+}
+
+pub fn review_conformance_family_context(
+    family: &str,
+    options: &ConformanceManifestReviewOptions,
+) -> (Option<ConformanceFamilyPlanContext>, Vec<Diagnostic>, Vec<ReviewRequest>, Vec<ReviewDecision>)
+{
+    if let Some(context) = options.contexts.get(family) {
+        return (Some(context.clone()), Vec::new(), Vec::new(), Vec::new());
+    }
+
+    if !options.require_explicit_contexts {
+        let planning_options = ConformanceManifestPlanningOptions {
+            contexts: options.contexts.clone(),
+            family_profiles: options.family_profiles.clone(),
+            require_explicit_contexts: false,
+        };
+        let (context, diagnostics) = resolve_conformance_family_context(family, &planning_options);
+        return (context, diagnostics, Vec::new(), Vec::new());
+    }
+
+    let Some(family_profile) = options.family_profiles.get(family) else {
+        return (
+            None,
+            vec![Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::ConfigurationError,
+                message: format!(
+                    "missing family context for {family} and no default family profile is available."
+                ),
+                path: None,
+            }],
+            Vec::new(),
+            Vec::new(),
+        );
+    };
+
+    if let Some(decision) = review_decision_for_family_context(family, options) {
+        return (
+            Some(default_conformance_family_context(family_profile)),
+            vec![Diagnostic {
+                severity: DiagnosticSeverity::Warning,
+                category: DiagnosticCategory::AssumedDefault,
+                message: format!("using default family context for {family}."),
+                path: None,
+            }],
+            Vec::new(),
+            vec![decision],
+        );
+    }
+
+    (
+        None,
+        vec![Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            category: DiagnosticCategory::ConfigurationError,
+            message: format!("missing explicit family context for {family}."),
+            path: None,
+        }],
+        vec![ReviewRequest {
+            id: review_request_id_for_family_context(family),
+            kind: ReviewRequestKind::FamilyContext,
+            family: family.to_string(),
+            message: format!(
+                "explicit family context is required for {family}; a synthesized default may be accepted by review."
+            ),
+            blocking: true,
+            available_actions: vec![ReviewDecisionAction::AcceptDefaultContext],
+            default_action: Some(ReviewDecisionAction::AcceptDefaultContext),
+        }],
+        Vec::new(),
     )
 }
 
@@ -597,6 +782,73 @@ pub fn report_conformance_manifest(
             execute,
         )),
         diagnostics: planned.diagnostics,
+    }
+}
+
+pub fn review_conformance_manifest(
+    manifest: &ConformanceManifest,
+    options: &ConformanceManifestReviewOptions,
+    execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
+) -> ConformanceManifestReviewState {
+    let mut entries = Vec::new();
+    let mut diagnostics = Vec::new();
+    let mut requests = Vec::new();
+    let mut applied_decisions = Vec::new();
+    let mut resolved_contexts: HashMap<String, Option<ConformanceFamilyPlanContext>> =
+        HashMap::new();
+
+    for suite_name in conformance_suite_names(manifest) {
+        let Some(definition) = conformance_suite_definition(manifest, &suite_name) else {
+            continue;
+        };
+
+        let context = if let Some(context) = resolved_contexts.get(&definition.family) {
+            context.clone()
+        } else {
+            let (context, mut context_diagnostics, mut context_requests, mut context_decisions) =
+                review_conformance_family_context(&definition.family, options);
+            diagnostics.append(&mut context_diagnostics);
+            requests.append(&mut context_requests);
+            applied_decisions.append(&mut context_decisions);
+            resolved_contexts.insert(definition.family.clone(), context.clone());
+            context
+        };
+
+        let Some(context) = context else {
+            continue;
+        };
+
+        let Some(entry) = plan_named_conformance_suite_entry(manifest, &suite_name, &context)
+        else {
+            continue;
+        };
+
+        if !entry.plan.missing_roles.is_empty() {
+            diagnostics.push(Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::ConfigurationError,
+                message: format!(
+                    "suite {} declares missing roles: {}.",
+                    suite_name,
+                    entry.plan.missing_roles.join(", ")
+                ),
+                path: None,
+            });
+            continue;
+        }
+
+        entries.push(entry);
+    }
+
+    ConformanceManifestReviewState {
+        report: report_named_conformance_suite_envelope(&report_planned_named_conformance_suites(
+            &entries, execute,
+        )),
+        diagnostics,
+        requests,
+        applied_decisions,
+        host_hints: conformance_review_host_hints(options),
+        replay_context: conformance_manifest_replay_context(manifest, options),
     }
 }
 
