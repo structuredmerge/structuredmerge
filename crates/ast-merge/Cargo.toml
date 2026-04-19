@@ -3,5 +3,8 @@ name = "ast-merge"
 version = "0.0.0"
 edition = "2024"
 
+[dev-dependencies]
+serde_json = "1.0"
+
 [lib]
 path = "src/lib.rs"
