@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use ast_merge::{DiagnosticCategory, DiagnosticSeverity, PolicySurface};
+use ast_merge::{DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile, PolicySurface};
 use serde_json::Value;
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -150,4 +150,38 @@ fn conforms_to_slice_18_policy_reporting_fixture() {
     ]);
 
     assert_eq!(merge_policies, fixture["merge_policies"]);
+}
+
+#[test]
+fn conforms_to_slice_22_shared_family_feature_profile_fixture() {
+    let fixture = read_fixture(&[
+        "diagnostics",
+        "slice-22-shared-family-feature-profile",
+        "family-feature-profile.json",
+    ]);
+
+    let feature_profile = FamilyFeatureProfile {
+        family: "example".to_string(),
+        supported_dialects: vec!["alpha".to_string(), "beta".to_string()],
+        supported_policies: vec![ast_merge::PolicyReference {
+            surface: PolicySurface::Array,
+            name: "destination_wins_array".to_string(),
+        }],
+    };
+
+    let rendered = serde_json::json!({
+        "family": feature_profile.family,
+        "supported_dialects": feature_profile.supported_dialects,
+        "supported_policies": feature_profile.supported_policies.iter().map(|policy| {
+            serde_json::json!({
+                "surface": match policy.surface {
+                    PolicySurface::Fallback => "fallback",
+                    PolicySurface::Array => "array",
+                },
+                "name": policy.name,
+            })
+        }).collect::<Vec<_>>()
+    });
+
+    assert_eq!(rendered, fixture["feature_profile"]);
 }

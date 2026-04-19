@@ -51,3 +51,10 @@ pub struct PolicyReference {
     pub surface: PolicySurface,
     pub name: String,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FamilyFeatureProfile {
+    pub family: String,
+    pub supported_dialects: Vec<String>,
+    pub supported_policies: Vec<PolicyReference>,
+}

@@ -1,4 +1,4 @@
-use ast_merge::MergeResult;
+use ast_merge::{FamilyFeatureProfile, MergeResult, PolicyReference};
 use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest};
 
 pub const PACKAGE_NAME: &str = "text-merge";
@@ -86,12 +86,33 @@ pub struct TextMergeResolution {
     pub output: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TextFeatureProfile {
+    pub family: &'static str,
+    pub supported_dialects: Vec<String>,
+    pub supported_policies: Vec<PolicyReference>,
+}
+
 pub trait TextBlockMatcher {
     fn match_blocks(
         &self,
         template: &TextAnalysis,
         destination: &TextAnalysis,
     ) -> TextBlockMatchResult;
+}
+
+pub fn text_feature_profile() -> TextFeatureProfile {
+    let shared = FamilyFeatureProfile {
+        family: "text".to_string(),
+        supported_dialects: vec![],
+        supported_policies: vec![],
+    };
+
+    TextFeatureProfile {
+        family: "text",
+        supported_dialects: shared.supported_dialects,
+        supported_policies: shared.supported_policies,
+    }
 }
 
 pub fn normalize_text(source: &str) -> String {

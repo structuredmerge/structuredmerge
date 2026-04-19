@@ -3,6 +3,7 @@ use std::{fs, path::PathBuf};
 use serde_json::Value;
 use text_merge::{
     TextMatchPhase, analyze_text, is_similar, match_text_blocks, merge_text, similarity_score,
+    text_feature_profile,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -21,6 +22,30 @@ fn fixture_path(parts: &[&str]) -> PathBuf {
 
 fn read_fixture(parts: &[&str]) -> Value {
     let path = fixture_path(parts);
+    let source = fs::read_to_string(path).expect("fixture should be readable");
+    serde_json::from_str(&source).expect("fixture should be valid json")
+}
+
+fn family_feature_profile_fixture_path(family: &str) -> PathBuf {
+    let manifest =
+        read_fixture(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
+    let entries = manifest["family_feature_profiles"]
+        .as_array()
+        .expect("family_feature_profiles should be an array");
+    let entry = entries
+        .iter()
+        .find(|candidate| candidate["family"].as_str() == Some(family))
+        .expect("family feature profile entry should be present");
+
+    let mut path = fixture_path(&[]);
+    for segment in entry["path"].as_array().expect("path should be an array") {
+        path.push(segment.as_str().expect("path segment should be a string"));
+    }
+
+    path
+}
+
+fn read_fixture_from_path(path: PathBuf) -> Value {
     let source = fs::read_to_string(path).expect("fixture should be readable");
     serde_json::from_str(&source).expect("fixture should be valid json")
 }
@@ -138,4 +163,26 @@ fn conforms_to_slice_13_refined_matching_fixture() {
 
     let merged = merge_text(template, destination);
     assert_eq!(merged.output, fixture["expected"]["output"].as_str().map(str::to_string));
+}
+
+#[test]
+fn conforms_to_slice_23_text_family_feature_profile_fixture_via_the_conformance_manifest() {
+    let fixture = read_fixture_from_path(family_feature_profile_fixture_path("text"));
+    let profile = text_feature_profile();
+
+    let rendered = serde_json::json!({
+        "family": profile.family,
+        "supported_dialects": profile.supported_dialects,
+        "supported_policies": profile.supported_policies.iter().map(|policy| {
+            serde_json::json!({
+                "surface": match policy.surface {
+                    ast_merge::PolicySurface::Fallback => "fallback",
+                    ast_merge::PolicySurface::Array => "array",
+                },
+                "name": policy.name,
+            })
+        }).collect::<Vec<_>>()
+    });
+
+    assert_eq!(rendered, fixture["feature_profile"]);
 }

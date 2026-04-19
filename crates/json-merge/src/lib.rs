@@ -1,6 +1,6 @@
 use ast_merge::{
-    Diagnostic, DiagnosticCategory, DiagnosticSeverity, MergeResult, ParseResult, PolicyReference,
-    PolicySurface,
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile, MergeResult,
+    ParseResult, PolicyReference, PolicySurface,
 };
 use serde_json::Value;
 use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest};
@@ -118,10 +118,23 @@ fn trailing_comma_fallback_policy() -> PolicyReference {
 }
 
 pub fn json_feature_profile() -> JsonFeatureProfile {
+    let shared = FamilyFeatureProfile {
+        family: "json".to_string(),
+        supported_dialects: vec!["json".to_string(), "jsonc".to_string()],
+        supported_policies: vec![destination_wins_array_policy(), trailing_comma_fallback_policy()],
+    };
+
     JsonFeatureProfile {
         family: "json",
-        supported_dialects: vec![JsonDialect::Json, JsonDialect::Jsonc],
-        supported_policies: vec![destination_wins_array_policy(), trailing_comma_fallback_policy()],
+        supported_dialects: shared
+            .supported_dialects
+            .into_iter()
+            .map(|dialect| match dialect.as_str() {
+                "jsonc" => JsonDialect::Jsonc,
+                _ => JsonDialect::Json,
+            })
+            .collect(),
+        supported_policies: shared.supported_policies,
     }
 }
 

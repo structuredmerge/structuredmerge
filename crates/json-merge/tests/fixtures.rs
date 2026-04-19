@@ -26,6 +26,30 @@ fn read_fixture(parts: &[&str]) -> Value {
     serde_json::from_str(&source).expect("fixture should be valid json")
 }
 
+fn family_feature_profile_fixture_path(family: &str) -> PathBuf {
+    let manifest =
+        read_fixture(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
+    let entries = manifest["family_feature_profiles"]
+        .as_array()
+        .expect("family_feature_profiles should be an array");
+    let entry = entries
+        .iter()
+        .find(|candidate| candidate["family"].as_str() == Some(family))
+        .expect("family feature profile entry should be present");
+
+    let mut path = fixture_path(&[]);
+    for segment in entry["path"].as_array().expect("path should be an array") {
+        path.push(segment.as_str().expect("path segment should be a string"));
+    }
+
+    path
+}
+
+fn read_fixture_from_path(path: PathBuf) -> Value {
+    let source = fs::read_to_string(path).expect("fixture should be readable");
+    serde_json::from_str(&source).expect("fixture should be valid json")
+}
+
 #[test]
 fn conforms_to_jsonc_comments_accepted_fixture() {
     let fixture = read_fixture(&["jsonc", "slice-04-parse", "comments-accepted.json"]);
@@ -392,12 +416,8 @@ fn conforms_to_slice_16_array_policy_fixture() {
 }
 
 #[test]
-fn conforms_to_slice_21_family_feature_profile_fixture() {
-    let fixture = read_fixture(&[
-        "diagnostics",
-        "slice-21-family-feature-profile",
-        "json-feature-profile.json",
-    ]);
+fn conforms_to_slice_21_family_feature_profile_fixture_via_the_conformance_manifest() {
+    let fixture = read_fixture_from_path(family_feature_profile_fixture_path("json"));
     let profile = json_feature_profile();
 
     assert_eq!(
