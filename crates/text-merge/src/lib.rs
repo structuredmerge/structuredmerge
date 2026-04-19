@@ -38,6 +38,13 @@ pub trait TextAnalyzer {
     fn analyze(&self, source: &str) -> TextAnalysis;
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextSimilarity {
+    pub score: f64,
+    pub threshold: f64,
+    pub matched: bool,
+}
+
 pub fn normalize_text(source: &str) -> String {
     source
         .replace("\r\n", "\n")
@@ -79,9 +86,58 @@ pub fn analyze_text(source: &str) -> TextAnalysis {
     }
 }
 
+fn token_set(normalized: &str) -> std::collections::BTreeSet<&str> {
+    normalized
+        .split_whitespace()
+        .filter(|token| !token.is_empty())
+        .collect()
+}
+
+fn jaccard(left: &str, right: &str) -> f64 {
+    let left_tokens = token_set(left);
+    let right_tokens = token_set(right);
+
+    if left_tokens.is_empty() && right_tokens.is_empty() {
+        return 1.0;
+    }
+
+    let intersection = left_tokens.intersection(&right_tokens).count() as f64;
+    let union = left_tokens.union(&right_tokens).count() as f64;
+
+    if union == 0.0 { 1.0 } else { intersection / union }
+}
+
+pub fn similarity_score(left_source: &str, right_source: &str) -> f64 {
+    let left = analyze_text(left_source);
+    let right = analyze_text(right_source);
+    let total = left.blocks.len().max(right.blocks.len());
+
+    if total == 0 {
+        return 1.0;
+    }
+
+    let mut sum = 0.0;
+    for index in 0..total {
+        if let (Some(left_block), Some(right_block)) = (left.blocks.get(index), right.blocks.get(index)) {
+            sum += jaccard(&left_block.normalized, &right_block.normalized);
+        }
+    }
+
+    sum / total as f64
+}
+
+pub fn is_similar(left_source: &str, right_source: &str, threshold: f64) -> TextSimilarity {
+    let score = similarity_score(left_source, right_source);
+    TextSimilarity {
+        score,
+        threshold,
+        matched: score >= threshold,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{analyze_text, normalize_text, TextBlock, TextSpan};
+    use super::{analyze_text, is_similar, normalize_text, similarity_score, TextBlock, TextSpan};
 
     #[test]
     fn normalizes_and_segments_text_blocks() {
@@ -108,5 +164,21 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn scores_text_similarity() {
+        assert_eq!(
+            similarity_score("Alpha   beta\n\nGamma", "  Alpha beta  \r\n\r\nGamma  "),
+            1.0
+        );
+        assert_eq!(
+            similarity_score("Alpha beta\n\nGamma delta", "Alpha beta\n\nGamma epsilon"),
+            0.6666666666666666
+        );
+        assert_eq!(similarity_score("Alpha beta", "Zeta theta"), 0.0);
+
+        let similarity = is_similar("Alpha beta\n\nGamma delta", "Alpha beta\n\nGamma epsilon", 0.6);
+        assert!(similarity.matched);
     }
 }
