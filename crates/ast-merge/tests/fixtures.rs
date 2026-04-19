@@ -6,14 +6,15 @@ use ast_merge::{
     ConformanceFeatureProfileView, ConformanceManifest, ConformanceOutcome,
     ConformanceSelectionStatus, ConformanceSuitePlan, ConformanceSuiteReport,
     ConformanceSuiteSummary, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile,
-    NamedConformanceSuitePlan, NamedConformanceSuiteReport, PolicySurface,
-    conformance_family_feature_profile_path, conformance_fixture_path,
+    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteResults,
+    PolicySurface, conformance_family_feature_profile_path, conformance_fixture_path,
     conformance_suite_definition, conformance_suite_names, plan_conformance_suite,
     plan_named_conformance_suite, plan_named_conformance_suite_entry,
     plan_named_conformance_suites, report_conformance_suite, report_named_conformance_suite,
-    report_named_conformance_suite_entry, report_planned_conformance_suite, run_conformance_case,
-    run_conformance_suite, run_named_conformance_suite, run_planned_conformance_suite,
-    select_conformance_case, summarize_conformance_results,
+    report_named_conformance_suite_entry, report_planned_conformance_suite,
+    report_planned_named_conformance_suites, run_conformance_case, run_conformance_suite,
+    run_named_conformance_suite, run_named_conformance_suite_entry, run_planned_conformance_suite,
+    run_planned_named_conformance_suites, select_conformance_case, summarize_conformance_results,
 };
 use serde_json::Value;
 
@@ -759,4 +760,100 @@ fn conforms_to_slice_50_named_conformance_suite_plans_fixture() {
     .expect("expected entries should deserialize");
 
     assert_eq!(plan_named_conformance_suites(&manifest, &contexts), expected);
+}
+
+#[test]
+fn conforms_to_slice_51_named_conformance_suite_results_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_results"));
+    let manifest = read_manifest();
+    let suite_name = fixture["suite_name"].as_str().expect("suite name should be a string");
+    let family_profile =
+        serde_json::from_value::<FamilyFeatureProfile>(fixture["family_profile"].clone())
+            .expect("family profile should deserialize");
+    let expected =
+        serde_json::from_value::<NamedConformanceSuiteResults>(fixture["expected_entry"].clone())
+            .expect("expected entry should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+    let feature_profile = ConformanceFeatureProfileView {
+        backend: "kreuzberg-language-pack".to_string(),
+        supports_dialects: false,
+        supported_policies: vec![ast_merge::PolicyReference {
+            surface: PolicySurface::Array,
+            name: "destination_wins_array".to_string(),
+        }],
+    };
+
+    let entry = run_named_conformance_suite_entry(
+        &manifest,
+        suite_name,
+        &family_profile,
+        |run| {
+            let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+            serde_json::from_value::<ConformanceCaseExecution>(
+                executions.get(&key).cloned().unwrap_or_else(
+                    || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+                ),
+            )
+            .expect("execution should deserialize")
+        },
+        Some(&feature_profile),
+    );
+
+    assert_eq!(entry, Some(expected));
+}
+
+#[test]
+fn conforms_to_slice_52_planned_named_conformance_suite_runner_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_runner_entries"));
+    let manifest = read_manifest();
+    let contexts = serde_json::from_value::<
+        std::collections::HashMap<String, ConformanceFamilyPlanContext>,
+    >(fixture["contexts"].clone())
+    .expect("contexts should deserialize");
+    let expected = serde_json::from_value::<Vec<NamedConformanceSuiteResults>>(
+        fixture["expected_entries"].clone(),
+    )
+    .expect("expected entries should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+    let plans = plan_named_conformance_suites(&manifest, &contexts);
+
+    let entries = run_planned_named_conformance_suites(&plans, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        serde_json::from_value::<ConformanceCaseExecution>(
+            executions.get(&key).cloned().unwrap_or_else(
+                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+            ),
+        )
+        .expect("execution should deserialize")
+    });
+
+    assert_eq!(entries, expected);
+}
+
+#[test]
+fn conforms_to_slice_53_planned_named_conformance_suite_reports_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_report_entries"));
+    let manifest = read_manifest();
+    let contexts = serde_json::from_value::<
+        std::collections::HashMap<String, ConformanceFamilyPlanContext>,
+    >(fixture["contexts"].clone())
+    .expect("contexts should deserialize");
+    let expected = serde_json::from_value::<Vec<NamedConformanceSuiteReport>>(
+        fixture["expected_entries"].clone(),
+    )
+    .expect("expected entries should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+    let plans = plan_named_conformance_suites(&manifest, &contexts);
+
+    let entries = report_planned_named_conformance_suites(&plans, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        serde_json::from_value::<ConformanceCaseExecution>(
+            executions.get(&key).cloned().unwrap_or_else(
+                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+            ),
+        )
+        .expect("execution should deserialize")
+    });
+
+    assert_eq!(entries, expected);
 }

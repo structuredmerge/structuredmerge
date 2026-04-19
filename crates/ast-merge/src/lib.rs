@@ -181,6 +181,12 @@ pub struct NamedConformanceSuitePlan {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NamedConformanceSuiteResults {
+    pub suite: String,
+    pub results: Vec<ConformanceCaseResult>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ConformanceSuiteSummary {
     pub total: usize,
     pub passed: usize,
@@ -384,6 +390,36 @@ pub fn run_named_conformance_suite(
     Some(run_planned_conformance_suite(&plan, execute))
 }
 
+pub fn run_named_conformance_suite_entry(
+    manifest: &ConformanceManifest,
+    suite_name: &str,
+    family_profile: &FamilyFeatureProfile,
+    execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
+    feature_profile: Option<&ConformanceFeatureProfileView>,
+) -> Option<NamedConformanceSuiteResults> {
+    let results = run_named_conformance_suite(
+        manifest,
+        suite_name,
+        family_profile,
+        execute,
+        feature_profile,
+    )?;
+    Some(NamedConformanceSuiteResults { suite: suite_name.to_string(), results })
+}
+
+pub fn run_planned_named_conformance_suites(
+    entries: &[NamedConformanceSuitePlan],
+    execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
+) -> Vec<NamedConformanceSuiteResults> {
+    entries
+        .iter()
+        .map(|entry| NamedConformanceSuiteResults {
+            suite: entry.suite.clone(),
+            results: run_planned_conformance_suite(&entry.plan, execute),
+        })
+        .collect()
+}
+
 pub fn report_planned_conformance_suite(
     plan: &ConformanceSuitePlan,
     execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
@@ -417,6 +453,19 @@ pub fn report_named_conformance_suite_entry(
         feature_profile,
     )?;
     Some(NamedConformanceSuiteReport { suite: suite_name.to_string(), report })
+}
+
+pub fn report_planned_named_conformance_suites(
+    entries: &[NamedConformanceSuitePlan],
+    execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
+) -> Vec<NamedConformanceSuiteReport> {
+    entries
+        .iter()
+        .map(|entry| NamedConformanceSuiteReport {
+            suite: entry.suite.clone(),
+            report: report_planned_conformance_suite(&entry.plan, execute),
+        })
+        .collect()
 }
 
 pub fn report_conformance_suite(results: &[ConformanceCaseResult]) -> ConformanceSuiteReport {
