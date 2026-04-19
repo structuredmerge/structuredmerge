@@ -278,3 +278,80 @@ fn conforms_to_slice_14_fallback_fixture() {
     assert_eq!(Value::Array(diagnostics), fixture["expected"]["diagnostics"]);
     assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
 }
+
+#[test]
+fn conforms_to_slice_15_fallback_boundary_fixtures() {
+    let template_fixture = read_fixture(&[
+        "json",
+        "slice-15-fallback-boundaries",
+        "template-trailing-comma-not-recovered.json",
+    ]);
+    let template_result = merge_json(
+        template_fixture["template"].as_str().expect("template should be present"),
+        template_fixture["destination"].as_str().expect("destination should be present"),
+        JsonDialect::Json,
+    );
+
+    assert_eq!(template_result.ok, template_fixture["expected"]["ok"].as_bool().unwrap_or(false));
+    let template_diagnostics = template_result
+        .diagnostics
+        .iter()
+        .map(|diagnostic| {
+            serde_json::json!({
+                "severity": match diagnostic.severity {
+                    ast_merge::DiagnosticSeverity::Info => "info",
+                    ast_merge::DiagnosticSeverity::Warning => "warning",
+                    ast_merge::DiagnosticSeverity::Error => "error",
+                },
+                "category": match diagnostic.category {
+                    ast_merge::DiagnosticCategory::ParseError => "parse_error",
+                    ast_merge::DiagnosticCategory::DestinationParseError => {
+                        "destination_parse_error"
+                    }
+                    ast_merge::DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
+                    ast_merge::DiagnosticCategory::FallbackApplied => "fallback_applied",
+                    ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(Value::Array(template_diagnostics), template_fixture["expected"]["diagnostics"]);
+    assert!(template_result.output.is_none());
+
+    let comments_fixture = read_fixture(&[
+        "json",
+        "slice-15-fallback-boundaries",
+        "strict-json-comments-not-recovered.json",
+    ]);
+    let comments_result = merge_json(
+        comments_fixture["template"].as_str().expect("template should be present"),
+        comments_fixture["destination"].as_str().expect("destination should be present"),
+        JsonDialect::Json,
+    );
+
+    assert_eq!(comments_result.ok, comments_fixture["expected"]["ok"].as_bool().unwrap_or(false));
+    let comments_diagnostics = comments_result
+        .diagnostics
+        .iter()
+        .map(|diagnostic| {
+            serde_json::json!({
+                "severity": match diagnostic.severity {
+                    ast_merge::DiagnosticSeverity::Info => "info",
+                    ast_merge::DiagnosticSeverity::Warning => "warning",
+                    ast_merge::DiagnosticSeverity::Error => "error",
+                },
+                "category": match diagnostic.category {
+                    ast_merge::DiagnosticCategory::ParseError => "parse_error",
+                    ast_merge::DiagnosticCategory::DestinationParseError => {
+                        "destination_parse_error"
+                    }
+                    ast_merge::DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
+                    ast_merge::DiagnosticCategory::FallbackApplied => "fallback_applied",
+                    ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(Value::Array(comments_diagnostics), comments_fixture["expected"]["diagnostics"]);
+    assert!(comments_result.output.is_none());
+}

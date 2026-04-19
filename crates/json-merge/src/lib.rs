@@ -794,4 +794,21 @@ mod tests {
         assert_eq!(result.diagnostics[0].severity, DiagnosticSeverity::Warning);
         assert_eq!(result.diagnostics[0].category, DiagnosticCategory::FallbackApplied);
     }
+
+    #[test]
+    fn does_not_apply_fallback_to_template_trailing_comma_input() {
+        let result = merge_json("{\"alpha\":1,}", "{\"beta\":2}", JsonDialect::Json);
+
+        assert!(!result.ok);
+        assert_eq!(result.diagnostics[0].category, DiagnosticCategory::ParseError);
+    }
+
+    #[test]
+    fn does_not_apply_fallback_to_strict_json_comment_violations() {
+        let result =
+            merge_json("{\"alpha\":1}", "{\n  // note\n  \"beta\":2\n}", JsonDialect::Json);
+
+        assert!(!result.ok);
+        assert_eq!(result.diagnostics[0].category, DiagnosticCategory::DestinationParseError);
+    }
 }
