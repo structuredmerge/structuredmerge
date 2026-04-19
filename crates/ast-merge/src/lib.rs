@@ -333,6 +333,13 @@ pub fn run_planned_conformance_suite(
     plan.entries.iter().map(|entry| run_conformance_case(&entry.run, execute)).collect()
 }
 
+pub fn report_planned_conformance_suite(
+    plan: &ConformanceSuitePlan,
+    execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
+) -> ConformanceSuiteReport {
+    report_conformance_suite(&run_planned_conformance_suite(plan, execute))
+}
+
 pub fn report_conformance_suite(results: &[ConformanceCaseResult]) -> ConformanceSuiteReport {
     ConformanceSuiteReport {
         results: results.to_vec(),

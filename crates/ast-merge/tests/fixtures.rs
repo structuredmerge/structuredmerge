@@ -6,8 +6,9 @@ use ast_merge::{
     ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuitePlan, ConformanceSuiteReport,
     ConformanceSuiteSummary, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile,
     PolicySurface, conformance_family_feature_profile_path, conformance_fixture_path,
-    plan_conformance_suite, report_conformance_suite, run_conformance_case, run_conformance_suite,
-    run_planned_conformance_suite, select_conformance_case, summarize_conformance_results,
+    plan_conformance_suite, report_conformance_suite, report_planned_conformance_suite,
+    run_conformance_case, run_conformance_suite, run_planned_conformance_suite,
+    select_conformance_case, summarize_conformance_results,
 };
 use serde_json::Value;
 
@@ -458,4 +459,27 @@ fn conforms_to_slice_40_planned_conformance_suite_runner_fixture() {
     });
 
     assert_eq!(results, expected);
+}
+
+#[test]
+fn conforms_to_slice_41_planned_conformance_suite_report_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("planned_suite_report"));
+    let plan = serde_json::from_value::<ConformanceSuitePlan>(fixture["plan"].clone())
+        .expect("plan should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+    let expected =
+        serde_json::from_value::<ConformanceSuiteReport>(fixture["expected_report"].clone())
+            .expect("expected report should deserialize");
+
+    let report = report_planned_conformance_suite(&plan, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        serde_json::from_value::<ConformanceCaseExecution>(
+            executions.get(&key).cloned().unwrap_or_else(
+                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+            ),
+        )
+        .expect("execution should deserialize")
+    });
+
+    assert_eq!(report, expected);
 }
