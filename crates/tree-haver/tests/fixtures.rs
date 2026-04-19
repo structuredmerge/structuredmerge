@@ -23,9 +23,31 @@ fn read_fixture(parts: &[&str]) -> Value {
     serde_json::from_str(&source).expect("fixture should be valid json")
 }
 
+fn diagnostics_fixture_path(role: &str) -> PathBuf {
+    let manifest =
+        read_fixture(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
+    let entries = manifest["diagnostics"].as_array().expect("diagnostics should be an array");
+    let entry = entries
+        .iter()
+        .find(|candidate| candidate["role"].as_str() == Some(role))
+        .expect("diagnostics fixture entry should be present");
+
+    let mut path = fixture_path(&[]);
+    for segment in entry["path"].as_array().expect("path should be an array") {
+        path.push(segment.as_str().expect("path segment should be a string"));
+    }
+
+    path
+}
+
+fn read_fixture_from_path(path: PathBuf) -> Value {
+    let source = fs::read_to_string(path).expect("fixture should be readable");
+    serde_json::from_str(&source).expect("fixture should be valid json")
+}
+
 #[test]
 fn conforms_to_slice_06_parser_request_fixture() {
-    let fixture = read_fixture(&["diagnostics", "slice-06-parser-adapters", "parser-request.json"]);
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("parser_request"));
 
     let request = ParserRequest {
         source: fixture["request"]["source"]
@@ -70,8 +92,7 @@ fn conforms_to_slice_06_parser_request_fixture() {
 
 #[test]
 fn conforms_to_slice_19_adapter_policy_support_fixture() {
-    let fixture =
-        read_fixture(&["diagnostics", "slice-19-adapter-policy-support", "adapter-info.json"]);
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("adapter_policy_support"));
 
     let adapter_info = AdapterInfo {
         backend: fixture["adapter_info"]["backend"]
@@ -114,8 +135,7 @@ fn conforms_to_slice_19_adapter_policy_support_fixture() {
 
 #[test]
 fn conforms_to_slice_20_adapter_feature_profile_fixture() {
-    let fixture =
-        read_fixture(&["diagnostics", "slice-20-adapter-feature-profile", "feature-profile.json"]);
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("adapter_feature_profile"));
 
     let profile = FeatureProfile {
         backend: fixture["feature_profile"]["backend"]
@@ -158,8 +178,7 @@ fn conforms_to_slice_20_adapter_feature_profile_fixture() {
 
 #[test]
 fn conforms_to_slice_25_backend_registry_fixture() {
-    let fixture =
-        read_fixture(&["diagnostics", "slice-25-backend-registry", "backend-identities.json"]);
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("backend_registry"));
 
     let backends = [
         BackendReference { id: "native".to_string(), family: "builtin".to_string() },

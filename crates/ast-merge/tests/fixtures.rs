@@ -23,9 +23,31 @@ fn read_fixture(parts: &[&str]) -> Value {
     serde_json::from_str(&source).expect("fixture should be valid json")
 }
 
+fn diagnostics_fixture_path(role: &str) -> PathBuf {
+    let manifest =
+        read_fixture(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
+    let entries = manifest["diagnostics"].as_array().expect("diagnostics should be an array");
+    let entry = entries
+        .iter()
+        .find(|candidate| candidate["role"].as_str() == Some(role))
+        .expect("diagnostics fixture entry should be present");
+
+    let mut path = fixture_path(&[]);
+    for segment in entry["path"].as_array().expect("path should be an array") {
+        path.push(segment.as_str().expect("path segment should be a string"));
+    }
+
+    path
+}
+
+fn read_fixture_from_path(path: PathBuf) -> Value {
+    let source = fs::read_to_string(path).expect("fixture should be readable");
+    serde_json::from_str(&source).expect("fixture should be valid json")
+}
+
 #[test]
 fn conforms_to_slice_02_diagnostic_vocabulary_fixture() {
-    let fixture = read_fixture(&["diagnostics", "slice-02-core", "diagnostic-categories.json"]);
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("diagnostic_vocabulary"));
 
     let severities = vec![
         match DiagnosticSeverity::Info {
@@ -99,8 +121,7 @@ fn conforms_to_slice_02_diagnostic_vocabulary_fixture() {
 
 #[test]
 fn conforms_to_slice_17_policy_vocabulary_fixture() {
-    let fixture =
-        read_fixture(&["diagnostics", "slice-17-policy-vocabulary", "policy-references.json"]);
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("policy_vocabulary"));
 
     let surfaces = vec![
         match PolicySurface::Fallback {
@@ -135,8 +156,7 @@ fn conforms_to_slice_17_policy_vocabulary_fixture() {
 
 #[test]
 fn conforms_to_slice_18_policy_reporting_fixture() {
-    let fixture =
-        read_fixture(&["diagnostics", "slice-18-policy-reporting", "result-policies.json"]);
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("policy_reporting"));
 
     let merge_policies = serde_json::json!([
         {
@@ -154,11 +174,7 @@ fn conforms_to_slice_18_policy_reporting_fixture() {
 
 #[test]
 fn conforms_to_slice_22_shared_family_feature_profile_fixture() {
-    let fixture = read_fixture(&[
-        "diagnostics",
-        "slice-22-shared-family-feature-profile",
-        "family-feature-profile.json",
-    ]);
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("shared_family_feature_profile"));
 
     let feature_profile = FamilyFeatureProfile {
         family: "example".to_string(),
