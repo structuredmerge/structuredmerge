@@ -161,6 +161,12 @@ pub struct ConformanceSuiteSummary {
     pub skipped: usize,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceSuiteReport {
+    pub results: Vec<ConformanceCaseResult>,
+    pub summary: ConformanceSuiteSummary,
+}
+
 fn includes_policy(supported_policies: &[PolicyReference], policy: &PolicyReference) -> bool {
     supported_policies.iter().any(|supported_policy| supported_policy == policy)
 }
@@ -303,4 +309,11 @@ pub fn run_conformance_suite(
     execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
 ) -> Vec<ConformanceCaseResult> {
     runs.iter().map(|run| run_conformance_case(run, execute)).collect()
+}
+
+pub fn report_conformance_suite(results: &[ConformanceCaseResult]) -> ConformanceSuiteReport {
+    ConformanceSuiteReport {
+        results: results.to_vec(),
+        summary: summarize_conformance_results(results),
+    }
 }

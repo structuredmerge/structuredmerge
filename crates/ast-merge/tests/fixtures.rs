@@ -3,10 +3,11 @@ use std::{fs, path::PathBuf};
 use ast_merge::{
     ConformanceCaseExecution, ConformanceCaseRef, ConformanceCaseRequirements,
     ConformanceCaseResult, ConformanceCaseRun, ConformanceFeatureProfileView, ConformanceManifest,
-    ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuiteSummary, DiagnosticCategory,
-    DiagnosticSeverity, FamilyFeatureProfile, PolicySurface,
-    conformance_family_feature_profile_path, conformance_fixture_path, run_conformance_case,
-    run_conformance_suite, select_conformance_case, summarize_conformance_results,
+    ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuiteReport,
+    ConformanceSuiteSummary, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile,
+    PolicySurface, conformance_family_feature_profile_path, conformance_fixture_path,
+    report_conformance_suite, run_conformance_case, run_conformance_suite, select_conformance_case,
+    summarize_conformance_results,
 };
 use serde_json::Value;
 
@@ -393,4 +394,15 @@ fn conforms_to_slice_35_conformance_suite_runner_fixture() {
     });
 
     assert_eq!(results, expected);
+}
+
+#[test]
+fn conforms_to_slice_36_conformance_suite_report_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("suite_report"));
+    let results = serde_json::from_value::<Vec<ConformanceCaseResult>>(fixture["results"].clone())
+        .expect("results should deserialize");
+    let report = serde_json::from_value::<ConformanceSuiteReport>(fixture["report"].clone())
+        .expect("report should deserialize");
+
+    assert_eq!(report_conformance_suite(&results), report);
 }
