@@ -1,5 +1,8 @@
 use std::{fs, path::PathBuf};
 
+use ast_merge::{
+    ConformanceManifest, conformance_family_feature_profile_path, conformance_fixture_path,
+};
 use json_merge::{
     JsonDialect, JsonOwner, JsonOwnerKind, JsonRootKind, json_feature_profile, match_json_owners,
     merge_json, parse_json, parse_json_with_language_pack,
@@ -20,29 +23,27 @@ fn fixture_path(parts: &[&str]) -> PathBuf {
     path
 }
 
-fn read_fixture(parts: &[&str]) -> Value {
-    let path = fixture_path(parts);
-    let source = fs::read_to_string(path).expect("fixture should be readable");
-    serde_json::from_str(&source).expect("fixture should be valid json")
+fn read_manifest() -> ConformanceManifest {
+    let path = fixture_path(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
+    let source = fs::read_to_string(path).expect("manifest should be readable");
+    serde_json::from_str(&source).expect("manifest should be valid json")
 }
 
-fn family_feature_profile_fixture_path(family: &str) -> PathBuf {
-    let manifest =
-        read_fixture(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
-    let entries = manifest["family_feature_profiles"]
-        .as_array()
-        .expect("family_feature_profiles should be an array");
-    let entry = entries
-        .iter()
-        .find(|candidate| candidate["family"].as_str() == Some(family))
-        .expect("family feature profile entry should be present");
-
+fn path_buf_from_segments(segments: &[String]) -> PathBuf {
     let mut path = fixture_path(&[]);
-    for segment in entry["path"].as_array().expect("path should be an array") {
-        path.push(segment.as_str().expect("path segment should be a string"));
+    for segment in segments {
+        path.push(segment);
     }
 
     path
+}
+
+fn family_feature_profile_fixture_path(family: &str) -> PathBuf {
+    let manifest = read_manifest();
+    let path = conformance_family_feature_profile_path(&manifest, family)
+        .expect("family feature profile entry should be present");
+
+    path_buf_from_segments(path)
 }
 
 fn read_fixture_from_path(path: PathBuf) -> Value {
@@ -51,20 +52,11 @@ fn read_fixture_from_path(path: PathBuf) -> Value {
 }
 
 fn json_fixture_path(role: &str) -> PathBuf {
-    let manifest =
-        read_fixture(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
-    let entries = manifest["json"].as_array().expect("json should be an array");
-    let entry = entries
-        .iter()
-        .find(|candidate| candidate["role"].as_str() == Some(role))
+    let manifest = read_manifest();
+    let path = conformance_fixture_path(&manifest, "json", role)
         .expect("json fixture entry should be present");
 
-    let mut path = fixture_path(&[]);
-    for segment in entry["path"].as_array().expect("path should be an array") {
-        path.push(segment.as_str().expect("path segment should be a string"));
-    }
-
-    path
+    path_buf_from_segments(path)
 }
 
 #[test]

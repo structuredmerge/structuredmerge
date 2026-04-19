@@ -1,8 +1,10 @@
 use std::{fs, path::PathBuf};
 
 use ast_merge::{
-    ConformanceCaseRef, ConformanceCaseResult, ConformanceOutcome, DiagnosticCategory,
-    DiagnosticSeverity, FamilyFeatureProfile, PolicySurface,
+    ConformanceCaseRef, ConformanceCaseResult, ConformanceManifest, ConformanceOutcome,
+    ConformanceSuiteSummary, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile,
+    PolicySurface, conformance_family_feature_profile_path, conformance_fixture_path,
+    summarize_conformance_results,
 };
 use serde_json::Value;
 
@@ -20,27 +22,27 @@ fn fixture_path(parts: &[&str]) -> PathBuf {
     path
 }
 
-fn read_fixture(parts: &[&str]) -> Value {
-    let path = fixture_path(parts);
-    let source = fs::read_to_string(path).expect("fixture should be readable");
-    serde_json::from_str(&source).expect("fixture should be valid json")
+fn read_manifest() -> ConformanceManifest {
+    let path = fixture_path(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
+    let source = fs::read_to_string(path).expect("manifest should be readable");
+    serde_json::from_str(&source).expect("manifest should be valid json")
 }
 
-fn diagnostics_fixture_path(role: &str) -> PathBuf {
-    let manifest =
-        read_fixture(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
-    let entries = manifest["diagnostics"].as_array().expect("diagnostics should be an array");
-    let entry = entries
-        .iter()
-        .find(|candidate| candidate["role"].as_str() == Some(role))
-        .expect("diagnostics fixture entry should be present");
-
+fn path_buf_from_segments(segments: &[String]) -> PathBuf {
     let mut path = fixture_path(&[]);
-    for segment in entry["path"].as_array().expect("path should be an array") {
-        path.push(segment.as_str().expect("path segment should be a string"));
+    for segment in segments {
+        path.push(segment);
     }
 
     path
+}
+
+fn diagnostics_fixture_path(role: &str) -> PathBuf {
+    let manifest = read_manifest();
+    let path = conformance_fixture_path(&manifest, "diagnostics", role)
+        .expect("diagnostics fixture entry should be present");
+
+    path_buf_from_segments(path)
 }
 
 fn read_fixture_from_path(path: PathBuf) -> Value {
@@ -244,4 +246,51 @@ fn conforms_to_slice_28_conformance_runner_shape_fixture() {
         }),
         fixture["result"]
     );
+}
+
+#[test]
+fn conforms_to_slice_30_normalized_manifest_contract() {
+    let manifest = read_manifest();
+
+    assert_eq!(
+        conformance_family_feature_profile_path(&manifest, "json"),
+        Some(
+            &[
+                "diagnostics".to_string(),
+                "slice-21-family-feature-profile".to_string(),
+                "json-feature-profile.json".to_string(),
+            ][..],
+        )
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "text", "analysis"),
+        Some(
+            &[
+                "text".to_string(),
+                "slice-03-analysis".to_string(),
+                "whitespace-and-blocks.json".to_string(),
+            ][..],
+        )
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "diagnostics", "runner_shape"),
+        Some(
+            &[
+                "diagnostics".to_string(),
+                "slice-28-conformance-runner".to_string(),
+                "runner-shape.json".to_string(),
+            ][..],
+        )
+    );
+}
+
+#[test]
+fn conforms_to_slice_32_conformance_suite_summary_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("runner_summary"));
+    let results: Vec<ConformanceCaseResult> =
+        serde_json::from_value(fixture["results"].clone()).expect("results should deserialize");
+    let summary: ConformanceSuiteSummary =
+        serde_json::from_value(fixture["summary"].clone()).expect("summary should deserialize");
+
+    assert_eq!(summarize_conformance_results(&results), summary);
 }
