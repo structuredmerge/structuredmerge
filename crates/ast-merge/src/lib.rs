@@ -58,3 +58,24 @@ pub struct FamilyFeatureProfile {
     pub supported_dialects: Vec<String>,
     pub supported_policies: Vec<PolicyReference>,
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ConformanceOutcome {
+    Passed,
+    Failed,
+    Skipped,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConformanceCaseRef {
+    pub family: String,
+    pub role: String,
+    pub case: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConformanceCaseResult {
+    pub ref_: ConformanceCaseRef,
+    pub outcome: ConformanceOutcome,
+    pub messages: Vec<String>,
+}

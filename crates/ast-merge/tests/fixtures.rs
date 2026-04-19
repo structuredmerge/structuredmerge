@@ -1,6 +1,9 @@
 use std::{fs, path::PathBuf};
 
-use ast_merge::{DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile, PolicySurface};
+use ast_merge::{
+    ConformanceCaseRef, ConformanceCaseResult, ConformanceOutcome, DiagnosticCategory,
+    DiagnosticSeverity, FamilyFeatureProfile, PolicySurface,
+};
 use serde_json::Value;
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -200,4 +203,45 @@ fn conforms_to_slice_22_shared_family_feature_profile_fixture() {
     });
 
     assert_eq!(rendered, fixture["feature_profile"]);
+}
+
+#[test]
+fn conforms_to_slice_28_conformance_runner_shape_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("runner_shape"));
+
+    let case_ref = ConformanceCaseRef {
+        family: "json".to_string(),
+        role: "tree_sitter_adapter".to_string(),
+        case: "valid_strict_json".to_string(),
+    };
+    let result = ConformanceCaseResult {
+        ref_: case_ref.clone(),
+        outcome: ConformanceOutcome::Passed,
+        messages: vec![],
+    };
+
+    assert_eq!(
+        serde_json::json!({
+            "family": case_ref.family,
+            "role": case_ref.role,
+            "case": case_ref.case,
+        }),
+        fixture["case_ref"]
+    );
+    assert_eq!(
+        serde_json::json!({
+            "ref": {
+                "family": result.ref_.family,
+                "role": result.ref_.role,
+                "case": result.ref_.case,
+            },
+            "outcome": match result.outcome {
+                ConformanceOutcome::Passed => "passed",
+                ConformanceOutcome::Failed => "failed",
+                ConformanceOutcome::Skipped => "skipped",
+            },
+            "messages": result.messages,
+        }),
+        fixture["result"]
+    );
 }
