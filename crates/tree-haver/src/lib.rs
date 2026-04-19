@@ -1,5 +1,10 @@
+use std::{
+    collections::HashSet,
+    sync::{Mutex, OnceLock},
+};
+
 use ast_merge::{Diagnostic, ParseResult, PolicyReference};
-use tree_sitter_language_pack::{parse_string, tree_has_error_nodes};
+use tree_sitter_language_pack::{PackConfig, init, parse_string, tree_has_error_nodes};
 
 pub const PACKAGE_NAME: &str = "tree-haver";
 
@@ -79,7 +84,43 @@ pub fn language_pack_adapter_info() -> AdapterInfo {
     }
 }
 
+fn ensure_language_pack_language(language: &str) -> Result<(), String> {
+    static INITIALIZED_LANGUAGES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    let initialized_languages = INITIALIZED_LANGUAGES.get_or_init(|| Mutex::new(HashSet::new()));
+    let mut initialized_languages = initialized_languages
+        .lock()
+        .map_err(|_| "language-pack initialization lock poisoned".to_string())?;
+
+    if initialized_languages.contains(language) {
+        return Ok(());
+    }
+
+    init(&PackConfig {
+        cache_dir: None,
+        languages: Some(vec![language.to_string()]),
+        groups: None,
+    })
+    .map_err(|error| error.to_string())?;
+
+    initialized_languages.insert(language.to_string());
+    Ok(())
+}
+
 pub fn parse_with_language_pack(request: &ParserRequest) -> ParseResult<LanguagePackAnalysis> {
+    if let Err(error) = ensure_language_pack_language(&request.language) {
+        return ParseResult {
+            ok: false,
+            diagnostics: vec![Diagnostic {
+                severity: ast_merge::DiagnosticSeverity::Error,
+                category: ast_merge::DiagnosticCategory::UnsupportedFeature,
+                message: error,
+                path: None,
+            }],
+            analysis: None,
+            policies: vec![],
+        };
+    }
+
     match parse_string(&request.language, request.source.as_bytes()) {
         Ok(tree) => {
             let has_error = tree_has_error_nodes(&tree);
