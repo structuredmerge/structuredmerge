@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 ast-merge = { path = "../ast-merge" }
+tree-sitter-language-pack = "1.6.2"
 
 [dev-dependencies]
 serde_json = "1.0"

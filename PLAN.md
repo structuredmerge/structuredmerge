@@ -70,6 +70,8 @@ MVP parity target:
 Primary backend:
 
 - Rust tree-sitter crates and generated grammar bindings
+- currently viable practical backend: published `tree-sitter-language-pack`
+  crate for early backend adoption
 
 Requirements:
 

@@ -3,7 +3,7 @@ use ast_merge::{
     ParseResult, PolicyReference, PolicySurface,
 };
 use serde_json::Value;
-use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest};
+use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest, parse_with_language_pack};
 
 pub const PACKAGE_NAME: &str = "json-merge";
 
@@ -136,6 +136,38 @@ pub fn json_feature_profile() -> JsonFeatureProfile {
             .collect(),
         supported_policies: shared.supported_policies,
     }
+}
+
+pub fn parse_json_with_language_pack(
+    source: &str,
+    dialect: JsonDialect,
+) -> ParseResult<JsonAnalysis> {
+    if dialect != JsonDialect::Json {
+        return ParseResult {
+            ok: false,
+            diagnostics: vec![Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::UnsupportedFeature,
+                message: "tree-sitter-language-pack json parsing currently supports only the json dialect."
+                    .to_string(),
+                path: None,
+            }],
+            analysis: None,
+            policies: vec![],
+        };
+    }
+
+    let backend_result = parse_with_language_pack(&json_parse_request(source, dialect));
+    if !backend_result.ok {
+        return ParseResult {
+            ok: false,
+            diagnostics: backend_result.diagnostics,
+            analysis: None,
+            policies: vec![],
+        };
+    }
+
+    parse_json(source, dialect)
 }
 
 fn parse_error(message: &str) -> Diagnostic {

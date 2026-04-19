@@ -1,8 +1,8 @@
 use std::{fs, path::PathBuf};
 
 use json_merge::{
-    JsonDialect, JsonOwnerKind, JsonRootKind, json_feature_profile, match_json_owners, merge_json,
-    parse_json,
+    JsonDialect, JsonOwner, JsonOwnerKind, JsonRootKind, json_feature_profile, match_json_owners,
+    merge_json, parse_json, parse_json_with_language_pack,
 };
 use serde_json::Value;
 
@@ -447,5 +447,54 @@ fn conforms_to_slice_21_family_feature_profile_fixture_via_the_conformance_manif
             }).collect::<Vec<_>>(),
         }),
         fixture["feature_profile"]
+    );
+}
+
+#[test]
+fn parses_strict_json_through_language_pack_and_preserves_analysis() {
+    let result = parse_json_with_language_pack("{\"alpha\":{\"beta\":1}}", JsonDialect::Json);
+
+    assert!(result.ok);
+    assert_eq!(
+        result.analysis.as_ref().map(|analysis| analysis.root_kind),
+        Some(JsonRootKind::Object)
+    );
+    assert_eq!(
+        result.analysis.as_ref().map(|analysis| analysis.owners.clone()),
+        Some(vec![
+            JsonOwner {
+                path: "/alpha".to_string(),
+                owner_kind: JsonOwnerKind::Member,
+                match_key: Some("alpha".to_string()),
+            },
+            JsonOwner {
+                path: "/alpha/beta".to_string(),
+                owner_kind: JsonOwnerKind::Member,
+                match_key: Some("beta".to_string()),
+            },
+        ])
+    );
+}
+
+#[test]
+fn reports_strict_json_syntax_errors_through_language_pack() {
+    let result = parse_json_with_language_pack("{\"alpha\":1,}", JsonDialect::Json);
+
+    assert!(!result.ok);
+    assert_eq!(
+        result.diagnostics[0].message,
+        "tree-sitter-language-pack reported syntax errors for json."
+    );
+}
+
+#[test]
+fn rejects_jsonc_through_language_pack_for_now() {
+    let result =
+        parse_json_with_language_pack("{\n  // note\n  \"alpha\":1\n}", JsonDialect::Jsonc);
+
+    assert!(!result.ok);
+    assert_eq!(
+        result.diagnostics[0].message,
+        "tree-sitter-language-pack json parsing currently supports only the json dialect."
     );
 }
