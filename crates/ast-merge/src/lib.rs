@@ -138,6 +138,7 @@ pub struct ConformanceCaseExecution {
 pub struct ConformanceManifestEntry {
     pub role: String,
     pub path: Vec<String>,
+    pub requirements: Option<ConformanceCaseRequirements>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -358,7 +359,9 @@ pub fn plan_conformance_suite(
     let mut missing_roles = Vec::new();
 
     for role in roles {
-        let Some(path) = conformance_fixture_path(manifest, family, role) else {
+        let Some(entry) =
+            conformance_family_entries(manifest, family).iter().find(|entry| entry.role == *role)
+        else {
             missing_roles.push(role.clone());
             continue;
         };
@@ -371,10 +374,13 @@ pub fn plan_conformance_suite(
 
         entries.push(ConformanceSuitePlanEntry {
             ref_: ref_.clone(),
-            path: path.to_vec(),
+            path: entry.path.clone(),
             run: ConformanceCaseRun {
                 ref_,
-                requirements: ConformanceCaseRequirements { dialect: None, policies: Vec::new() },
+                requirements: entry
+                    .requirements
+                    .clone()
+                    .unwrap_or(ConformanceCaseRequirements { dialect: None, policies: Vec::new() }),
                 family_profile: family_profile.clone(),
                 feature_profile: feature_profile.cloned(),
             },

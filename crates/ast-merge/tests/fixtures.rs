@@ -483,3 +483,37 @@ fn conforms_to_slice_41_planned_conformance_suite_report_fixture() {
 
     assert_eq!(report, expected);
 }
+
+#[test]
+fn conforms_to_slice_42_manifest_case_requirements_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("manifest_requirements"));
+    let manifest = read_manifest();
+    let roles = fixture["roles"]
+        .as_array()
+        .expect("roles should be present")
+        .iter()
+        .map(|value| value.as_str().expect("role should be a string").to_string())
+        .collect::<Vec<_>>();
+    let family_profile =
+        serde_json::from_value::<FamilyFeatureProfile>(fixture["family_profile"].clone())
+            .expect("family profile should deserialize");
+    let expected = serde_json::from_value::<
+        std::collections::HashMap<String, ConformanceCaseRequirements>,
+    >(fixture["expected_requirements"].clone())
+    .expect("expected requirements should deserialize");
+
+    let plan = plan_conformance_suite(
+        &manifest,
+        fixture["family"].as_str().expect("family should be a string"),
+        &roles,
+        &family_profile,
+        None,
+    );
+    let actual = plan
+        .entries
+        .iter()
+        .map(|entry| (entry.ref_.role.clone(), entry.run.requirements.clone()))
+        .collect::<std::collections::HashMap<_, _>>();
+
+    assert_eq!(actual, expected);
+}
