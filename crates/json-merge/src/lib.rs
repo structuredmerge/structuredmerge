@@ -1,6 +1,6 @@
 use ast_merge::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, MergeResult, ParseResult};
 use serde_json::Value;
-use tree_haver::{AnalysisHandle, ParserAdapter};
+use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest};
 
 pub const PACKAGE_NAME: &str = "json-merge";
 
@@ -31,6 +31,17 @@ pub trait JsonParserAdapter: ParserAdapter<JsonAnalysis> {}
 
 pub trait JsonAnalyzer {
     fn parse(&self, source: &str, dialect: JsonDialect) -> ParseResult<JsonAnalysis>;
+}
+
+pub fn json_parse_request(source: &str, dialect: JsonDialect) -> ParserRequest {
+    ParserRequest {
+        source: source.to_string(),
+        language: "json".to_string(),
+        dialect: Some(match dialect {
+            JsonDialect::Json => "json".to_string(),
+            JsonDialect::Jsonc => "jsonc".to_string(),
+        }),
+    }
 }
 
 fn parse_error(message: &str) -> Diagnostic {

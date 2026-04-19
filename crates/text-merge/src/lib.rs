@@ -1,5 +1,5 @@
 use ast_merge::MergeResult;
-use tree_haver::{AnalysisHandle, ParserAdapter};
+use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest};
 
 pub const PACKAGE_NAME: &str = "text-merge";
 
@@ -33,6 +33,14 @@ pub trait TextMerger {
 }
 
 pub trait TextParserAdapter: ParserAdapter<TextAnalysis> {}
+
+pub fn text_parse_request(source: &str) -> ParserRequest {
+    ParserRequest {
+        source: source.to_string(),
+        language: "text".to_string(),
+        dialect: None,
+    }
+}
 
 pub trait TextAnalyzer {
     fn analyze(&self, source: &str) -> TextAnalysis;
