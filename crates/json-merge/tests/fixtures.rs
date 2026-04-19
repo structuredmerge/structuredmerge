@@ -62,6 +62,26 @@ fn json_fixture_path(role: &str) -> PathBuf {
     path_buf_from_segments(path)
 }
 
+fn diagnostic_severity_name(severity: ast_merge::DiagnosticSeverity) -> &'static str {
+    match severity {
+        ast_merge::DiagnosticSeverity::Info => "info",
+        ast_merge::DiagnosticSeverity::Warning => "warning",
+        ast_merge::DiagnosticSeverity::Error => "error",
+    }
+}
+
+fn diagnostic_category_name(category: ast_merge::DiagnosticCategory) -> &'static str {
+    match category {
+        ast_merge::DiagnosticCategory::ParseError => "parse_error",
+        ast_merge::DiagnosticCategory::DestinationParseError => "destination_parse_error",
+        ast_merge::DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
+        ast_merge::DiagnosticCategory::FallbackApplied => "fallback_applied",
+        ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
+        ast_merge::DiagnosticCategory::AssumedDefault => "assumed_default",
+        ast_merge::DiagnosticCategory::ConfigurationError => "configuration_error",
+    }
+}
+
 #[test]
 fn conforms_to_jsonc_comments_accepted_fixture() {
     let fixture = read_fixture_from_path(json_fixture_path("parse_comments"));
@@ -220,20 +240,8 @@ fn conforms_to_slice_09_invalid_merge_fixtures() {
         .iter()
         .map(|diagnostic| {
             serde_json::json!({
-                "severity": match diagnostic.severity {
-                    ast_merge::DiagnosticSeverity::Info => "info",
-                    ast_merge::DiagnosticSeverity::Warning => "warning",
-                    ast_merge::DiagnosticSeverity::Error => "error",
-                },
-                "category": match diagnostic.category {
-                    ast_merge::DiagnosticCategory::ParseError => "parse_error",
-                    ast_merge::DiagnosticCategory::DestinationParseError => {
-                        "destination_parse_error"
-                    }
-                    ast_merge::DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
-                    ast_merge::DiagnosticCategory::FallbackApplied => "fallback_applied",
-                    ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
-                }
+                "severity": diagnostic_severity_name(diagnostic.severity),
+                "category": diagnostic_category_name(diagnostic.category)
             })
         })
         .collect::<Vec<_>>();
@@ -257,20 +265,8 @@ fn conforms_to_slice_09_invalid_merge_fixtures() {
         .iter()
         .map(|diagnostic| {
             serde_json::json!({
-                "severity": match diagnostic.severity {
-                    ast_merge::DiagnosticSeverity::Info => "info",
-                    ast_merge::DiagnosticSeverity::Warning => "warning",
-                    ast_merge::DiagnosticSeverity::Error => "error",
-                },
-                "category": match diagnostic.category {
-                    ast_merge::DiagnosticCategory::ParseError => "parse_error",
-                    ast_merge::DiagnosticCategory::DestinationParseError => {
-                        "destination_parse_error"
-                    }
-                    ast_merge::DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
-                    ast_merge::DiagnosticCategory::FallbackApplied => "fallback_applied",
-                    ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
-                }
+                "severity": diagnostic_severity_name(diagnostic.severity),
+                "category": diagnostic_category_name(diagnostic.category)
             })
         })
         .collect::<Vec<_>>();
@@ -295,20 +291,8 @@ fn conforms_to_slice_14_fallback_fixture() {
         .iter()
         .map(|diagnostic| {
             serde_json::json!({
-                "severity": match diagnostic.severity {
-                    ast_merge::DiagnosticSeverity::Info => "info",
-                    ast_merge::DiagnosticSeverity::Warning => "warning",
-                    ast_merge::DiagnosticSeverity::Error => "error",
-                },
-                "category": match diagnostic.category {
-                    ast_merge::DiagnosticCategory::ParseError => "parse_error",
-                    ast_merge::DiagnosticCategory::DestinationParseError => {
-                        "destination_parse_error"
-                    }
-                    ast_merge::DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
-                    ast_merge::DiagnosticCategory::FallbackApplied => "fallback_applied",
-                    ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
-                }
+                "severity": diagnostic_severity_name(diagnostic.severity),
+                "category": diagnostic_category_name(diagnostic.category)
             })
         })
         .collect::<Vec<_>>();
@@ -344,20 +328,8 @@ fn conforms_to_slice_15_fallback_boundary_fixtures() {
         .iter()
         .map(|diagnostic| {
             serde_json::json!({
-                "severity": match diagnostic.severity {
-                    ast_merge::DiagnosticSeverity::Info => "info",
-                    ast_merge::DiagnosticSeverity::Warning => "warning",
-                    ast_merge::DiagnosticSeverity::Error => "error",
-                },
-                "category": match diagnostic.category {
-                    ast_merge::DiagnosticCategory::ParseError => "parse_error",
-                    ast_merge::DiagnosticCategory::DestinationParseError => {
-                        "destination_parse_error"
-                    }
-                    ast_merge::DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
-                    ast_merge::DiagnosticCategory::FallbackApplied => "fallback_applied",
-                    ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
-                }
+                "severity": diagnostic_severity_name(diagnostic.severity),
+                "category": diagnostic_category_name(diagnostic.category)
             })
         })
         .collect::<Vec<_>>();
@@ -377,20 +349,8 @@ fn conforms_to_slice_15_fallback_boundary_fixtures() {
         .iter()
         .map(|diagnostic| {
             serde_json::json!({
-                "severity": match diagnostic.severity {
-                    ast_merge::DiagnosticSeverity::Info => "info",
-                    ast_merge::DiagnosticSeverity::Warning => "warning",
-                    ast_merge::DiagnosticSeverity::Error => "error",
-                },
-                "category": match diagnostic.category {
-                    ast_merge::DiagnosticCategory::ParseError => "parse_error",
-                    ast_merge::DiagnosticCategory::DestinationParseError => {
-                        "destination_parse_error"
-                    }
-                    ast_merge::DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
-                    ast_merge::DiagnosticCategory::FallbackApplied => "fallback_applied",
-                    ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
-                }
+                "severity": diagnostic_severity_name(diagnostic.severity),
+                "category": diagnostic_category_name(diagnostic.category)
             })
         })
         .collect::<Vec<_>>();
@@ -466,24 +426,8 @@ fn conforms_to_slice_26_tree_sitter_adapter_fixture() {
                     .iter()
                     .map(|diagnostic| {
                         let mut value = serde_json::json!({
-                            "severity": match diagnostic.severity {
-                                ast_merge::DiagnosticSeverity::Info => "info",
-                                ast_merge::DiagnosticSeverity::Warning => "warning",
-                                ast_merge::DiagnosticSeverity::Error => "error",
-                            },
-                            "category": match diagnostic.category {
-                                ast_merge::DiagnosticCategory::ParseError => "parse_error",
-                                ast_merge::DiagnosticCategory::DestinationParseError => {
-                                    "destination_parse_error"
-                                }
-                                ast_merge::DiagnosticCategory::UnsupportedFeature => {
-                                    "unsupported_feature"
-                                }
-                                ast_merge::DiagnosticCategory::FallbackApplied => {
-                                    "fallback_applied"
-                                }
-                                ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
-                            }
+                            "severity": diagnostic_severity_name(diagnostic.severity),
+                            "category": diagnostic_category_name(diagnostic.category)
                         });
                         if !diagnostic.message.is_empty() {
                             value["message"] = serde_json::json!(diagnostic.message);

@@ -20,6 +20,8 @@ pub enum DiagnosticCategory {
     UnsupportedFeature,
     FallbackApplied,
     Ambiguity,
+    AssumedDefault,
+    ConfigurationError,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -193,6 +195,28 @@ pub struct NamedConformanceSuiteReportEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceManifestPlanningOptions {
+    #[serde(default)]
+    pub contexts: HashMap<String, ConformanceFamilyPlanContext>,
+    #[serde(default)]
+    pub family_profiles: HashMap<String, FamilyFeatureProfile>,
+    #[serde(default)]
+    pub require_explicit_contexts: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceManifestReport {
+    pub report: NamedConformanceSuiteReportEnvelope,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceManifestPlan {
+    pub entries: Vec<NamedConformanceSuitePlan>,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ConformanceSuiteSummary {
     pub total: usize,
     pub passed: usize,
@@ -269,6 +293,58 @@ pub fn conformance_suite_names(manifest: &ConformanceManifest) -> Vec<String> {
     let mut names = manifest.suites.keys().cloned().collect::<Vec<_>>();
     names.sort();
     names
+}
+
+pub fn default_conformance_family_context(
+    family_profile: &FamilyFeatureProfile,
+) -> ConformanceFamilyPlanContext {
+    ConformanceFamilyPlanContext { family_profile: family_profile.clone(), feature_profile: None }
+}
+
+pub fn resolve_conformance_family_context(
+    family: &str,
+    options: &ConformanceManifestPlanningOptions,
+) -> (Option<ConformanceFamilyPlanContext>, Vec<Diagnostic>) {
+    if let Some(context) = options.contexts.get(family) {
+        return (Some(context.clone()), Vec::new());
+    }
+
+    if options.require_explicit_contexts {
+        return (
+            None,
+            vec![Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::ConfigurationError,
+                message: format!("missing explicit family context for {}.", family),
+                path: None,
+            }],
+        );
+    }
+
+    if let Some(family_profile) = options.family_profiles.get(family) {
+        return (
+            Some(default_conformance_family_context(family_profile)),
+            vec![Diagnostic {
+                severity: DiagnosticSeverity::Warning,
+                category: DiagnosticCategory::AssumedDefault,
+                message: format!("using default family context for {}.", family),
+                path: None,
+            }],
+        );
+    }
+
+    (
+        None,
+        vec![Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            category: DiagnosticCategory::ConfigurationError,
+            message: format!(
+                "missing family context for {} and no default family profile is available.",
+                family
+            ),
+            path: None,
+        }],
+    )
 }
 
 pub fn summarize_conformance_results(results: &[ConformanceCaseResult]) -> ConformanceSuiteSummary {
@@ -509,6 +585,21 @@ pub fn report_named_conformance_suite_manifest(
     report_named_conformance_suite_envelope(&entries)
 }
 
+pub fn report_conformance_manifest(
+    manifest: &ConformanceManifest,
+    options: &ConformanceManifestPlanningOptions,
+    execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
+) -> ConformanceManifestReport {
+    let planned = plan_named_conformance_suites_with_diagnostics(manifest, options);
+    ConformanceManifestReport {
+        report: report_named_conformance_suite_envelope(&report_planned_named_conformance_suites(
+            &planned.entries,
+            execute,
+        )),
+        diagnostics: planned.diagnostics,
+    }
+}
+
 pub fn report_conformance_suite(results: &[ConformanceCaseResult]) -> ConformanceSuiteReport {
     ConformanceSuiteReport {
         results: results.to_vec(),
@@ -600,4 +691,57 @@ pub fn plan_named_conformance_suites(
             plan_named_conformance_suite_entry(manifest, &suite_name, context)
         })
         .collect()
+}
+
+pub fn plan_named_conformance_suites_with_diagnostics(
+    manifest: &ConformanceManifest,
+    options: &ConformanceManifestPlanningOptions,
+) -> ConformanceManifestPlan {
+    let mut entries = Vec::new();
+    let mut diagnostics = Vec::new();
+    let mut resolved_contexts: HashMap<String, Option<ConformanceFamilyPlanContext>> =
+        HashMap::new();
+
+    for suite_name in conformance_suite_names(manifest) {
+        let Some(definition) = conformance_suite_definition(manifest, &suite_name) else {
+            continue;
+        };
+
+        let context = if let Some(context) = resolved_contexts.get(&definition.family) {
+            context.clone()
+        } else {
+            let (context, mut context_diagnostics) =
+                resolve_conformance_family_context(&definition.family, options);
+            diagnostics.append(&mut context_diagnostics);
+            resolved_contexts.insert(definition.family.clone(), context.clone());
+            context
+        };
+
+        let Some(context) = context else {
+            continue;
+        };
+
+        let Some(entry) = plan_named_conformance_suite_entry(manifest, &suite_name, &context)
+        else {
+            continue;
+        };
+
+        if !entry.plan.missing_roles.is_empty() {
+            diagnostics.push(Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::ConfigurationError,
+                message: format!(
+                    "suite {} declares missing roles: {}.",
+                    suite_name,
+                    entry.plan.missing_roles.join(", ")
+                ),
+                path: None,
+            });
+            continue;
+        }
+
+        entries.push(entry);
+    }
+
+    ConformanceManifestPlan { entries, diagnostics }
 }

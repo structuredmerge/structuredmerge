@@ -3,18 +3,21 @@ use std::{fs, path::PathBuf};
 use ast_merge::{
     ConformanceCaseExecution, ConformanceCaseRef, ConformanceCaseRequirements,
     ConformanceCaseResult, ConformanceCaseRun, ConformanceFamilyPlanContext,
-    ConformanceFeatureProfileView, ConformanceManifest, ConformanceOutcome,
-    ConformanceSelectionStatus, ConformanceSuitePlan, ConformanceSuiteReport,
-    ConformanceSuiteSummary, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile,
-    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
-    NamedConformanceSuiteResults, PolicySurface, conformance_family_feature_profile_path,
-    conformance_fixture_path, conformance_suite_definition, conformance_suite_names,
+    ConformanceFeatureProfileView, ConformanceManifest, ConformanceManifestPlanningOptions,
+    ConformanceManifestReport, ConformanceOutcome, ConformanceSelectionStatus,
+    ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSummary, DiagnosticCategory,
+    DiagnosticSeverity, FamilyFeatureProfile, NamedConformanceSuitePlan,
+    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
+    PolicySurface, conformance_family_feature_profile_path, conformance_fixture_path,
+    conformance_suite_definition, conformance_suite_names, default_conformance_family_context,
     plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
-    plan_named_conformance_suites, report_conformance_suite, report_named_conformance_suite,
+    plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
+    report_conformance_manifest, report_conformance_suite, report_named_conformance_suite,
     report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
     report_named_conformance_suite_manifest, report_planned_conformance_suite,
-    report_planned_named_conformance_suites, run_conformance_case, run_conformance_suite,
-    run_named_conformance_suite, run_named_conformance_suite_entry, run_planned_conformance_suite,
+    report_planned_named_conformance_suites, resolve_conformance_family_context,
+    run_conformance_case, run_conformance_suite, run_named_conformance_suite,
+    run_named_conformance_suite_entry, run_planned_conformance_suite,
     run_planned_named_conformance_suites, select_conformance_case, summarize_conformance_results,
     summarize_named_conformance_suite_reports,
 };
@@ -91,6 +94,8 @@ fn conforms_to_slice_02_diagnostic_vocabulary_fixture() {
             DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
             DiagnosticCategory::FallbackApplied => "fallback_applied",
             DiagnosticCategory::Ambiguity => "ambiguity",
+            DiagnosticCategory::AssumedDefault => "assumed_default",
+            DiagnosticCategory::ConfigurationError => "configuration_error",
         },
         match DiagnosticCategory::DestinationParseError {
             DiagnosticCategory::ParseError => "parse_error",
@@ -98,6 +103,8 @@ fn conforms_to_slice_02_diagnostic_vocabulary_fixture() {
             DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
             DiagnosticCategory::FallbackApplied => "fallback_applied",
             DiagnosticCategory::Ambiguity => "ambiguity",
+            DiagnosticCategory::AssumedDefault => "assumed_default",
+            DiagnosticCategory::ConfigurationError => "configuration_error",
         },
         match DiagnosticCategory::UnsupportedFeature {
             DiagnosticCategory::ParseError => "parse_error",
@@ -105,6 +112,8 @@ fn conforms_to_slice_02_diagnostic_vocabulary_fixture() {
             DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
             DiagnosticCategory::FallbackApplied => "fallback_applied",
             DiagnosticCategory::Ambiguity => "ambiguity",
+            DiagnosticCategory::AssumedDefault => "assumed_default",
+            DiagnosticCategory::ConfigurationError => "configuration_error",
         },
         match DiagnosticCategory::FallbackApplied {
             DiagnosticCategory::ParseError => "parse_error",
@@ -112,6 +121,8 @@ fn conforms_to_slice_02_diagnostic_vocabulary_fixture() {
             DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
             DiagnosticCategory::FallbackApplied => "fallback_applied",
             DiagnosticCategory::Ambiguity => "ambiguity",
+            DiagnosticCategory::AssumedDefault => "assumed_default",
+            DiagnosticCategory::ConfigurationError => "configuration_error",
         },
         match DiagnosticCategory::Ambiguity {
             DiagnosticCategory::ParseError => "parse_error",
@@ -119,6 +130,26 @@ fn conforms_to_slice_02_diagnostic_vocabulary_fixture() {
             DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
             DiagnosticCategory::FallbackApplied => "fallback_applied",
             DiagnosticCategory::Ambiguity => "ambiguity",
+            DiagnosticCategory::AssumedDefault => "assumed_default",
+            DiagnosticCategory::ConfigurationError => "configuration_error",
+        },
+        match DiagnosticCategory::AssumedDefault {
+            DiagnosticCategory::ParseError => "parse_error",
+            DiagnosticCategory::DestinationParseError => "destination_parse_error",
+            DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
+            DiagnosticCategory::FallbackApplied => "fallback_applied",
+            DiagnosticCategory::Ambiguity => "ambiguity",
+            DiagnosticCategory::AssumedDefault => "assumed_default",
+            DiagnosticCategory::ConfigurationError => "configuration_error",
+        },
+        match DiagnosticCategory::ConfigurationError {
+            DiagnosticCategory::ParseError => "parse_error",
+            DiagnosticCategory::DestinationParseError => "destination_parse_error",
+            DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
+            DiagnosticCategory::FallbackApplied => "fallback_applied",
+            DiagnosticCategory::Ambiguity => "ambiguity",
+            DiagnosticCategory::AssumedDefault => "assumed_default",
+            DiagnosticCategory::ConfigurationError => "configuration_error",
         },
     ];
 
@@ -902,6 +933,88 @@ fn conforms_to_slice_56_named_conformance_suite_report_manifest_fixture() {
     let executions = fixture["executions"].as_object().expect("executions should be an object");
 
     let report = report_named_conformance_suite_manifest(&manifest, &contexts, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        serde_json::from_value::<ConformanceCaseExecution>(
+            executions.get(&key).cloned().unwrap_or_else(
+                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+            ),
+        )
+        .expect("execution should deserialize")
+    });
+
+    assert_eq!(report, expected);
+}
+
+#[test]
+fn conforms_to_slice_57_default_family_context_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("default_family_context"));
+    let family = fixture["family"].as_str().expect("family should be a string");
+    let family_profile =
+        serde_json::from_value::<FamilyFeatureProfile>(fixture["family_profile"].clone())
+            .expect("family profile should deserialize");
+    let expected_context =
+        serde_json::from_value::<ConformanceFamilyPlanContext>(fixture["expected_context"].clone())
+            .expect("expected context should deserialize");
+    let expected_diagnostic =
+        serde_json::from_value::<ast_merge::Diagnostic>(fixture["expected_diagnostic"].clone())
+            .expect("expected diagnostic should deserialize");
+
+    assert_eq!(default_conformance_family_context(&family_profile), expected_context);
+    let options = ConformanceManifestPlanningOptions {
+        contexts: std::collections::HashMap::new(),
+        family_profiles: std::collections::HashMap::from([(family.to_string(), family_profile)]),
+        require_explicit_contexts: false,
+    };
+    let (context, diagnostics) = resolve_conformance_family_context(family, &options);
+    assert_eq!(context, Some(expected_context));
+    assert_eq!(diagnostics, vec![expected_diagnostic]);
+}
+
+#[test]
+fn conforms_to_slice_58_explicit_family_context_mode_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("explicit_family_context_mode"));
+    let options =
+        serde_json::from_value::<ConformanceManifestPlanningOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected_diagnostic =
+        serde_json::from_value::<ast_merge::Diagnostic>(fixture["expected_diagnostic"].clone())
+            .expect("expected diagnostic should deserialize");
+
+    let (_, diagnostics) = resolve_conformance_family_context("text", &options);
+    assert_eq!(diagnostics, vec![expected_diagnostic]);
+}
+
+#[test]
+fn conforms_to_slice_59_missing_suite_roles_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("missing_suite_roles"));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let options =
+        serde_json::from_value::<ConformanceManifestPlanningOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected_diagnostic =
+        serde_json::from_value::<ast_merge::Diagnostic>(fixture["expected_diagnostic"].clone())
+            .expect("expected diagnostic should deserialize");
+
+    let planned = plan_named_conformance_suites_with_diagnostics(&manifest, &options);
+    assert!(planned.entries.is_empty());
+    assert!(planned.diagnostics.contains(&expected_diagnostic));
+}
+
+#[test]
+fn conforms_to_slice_60_conformance_manifest_report_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("conformance_manifest_report"));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let options =
+        serde_json::from_value::<ConformanceManifestPlanningOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected =
+        serde_json::from_value::<ConformanceManifestReport>(fixture["expected_report"].clone())
+            .expect("expected report should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+    let report = report_conformance_manifest(&manifest, &options, |run| {
         let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
         serde_json::from_value::<ConformanceCaseExecution>(
             executions.get(&key).cloned().unwrap_or_else(
