@@ -165,3 +165,80 @@ fn conforms_to_slice_09_object_merge_fixture() {
     assert!(result.ok);
     assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
 }
+
+#[test]
+fn conforms_to_slice_09_invalid_merge_fixtures() {
+    let invalid_template_fixture =
+        read_fixture(&["json", "slice-09-merge", "invalid-template.json"]);
+    let invalid_template_result = merge_json(
+        invalid_template_fixture["template"].as_str().expect("template should be present"),
+        invalid_template_fixture["destination"].as_str().expect("destination should be present"),
+        JsonDialect::Json,
+    );
+
+    assert!(!invalid_template_result.ok);
+    assert!(invalid_template_result.output.is_none());
+    let invalid_template_diagnostics = invalid_template_result
+        .diagnostics
+        .iter()
+        .map(|diagnostic| {
+            serde_json::json!({
+                "severity": match diagnostic.severity {
+                    ast_merge::DiagnosticSeverity::Info => "info",
+                    ast_merge::DiagnosticSeverity::Warning => "warning",
+                    ast_merge::DiagnosticSeverity::Error => "error",
+                },
+                "category": match diagnostic.category {
+                    ast_merge::DiagnosticCategory::ParseError => "parse_error",
+                    ast_merge::DiagnosticCategory::DestinationParseError => {
+                        "destination_parse_error"
+                    }
+                    ast_merge::DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
+                    ast_merge::DiagnosticCategory::FallbackApplied => "fallback_applied",
+                    ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        Value::Array(invalid_template_diagnostics),
+        invalid_template_fixture["expected"]["diagnostics"]
+    );
+
+    let invalid_destination_fixture =
+        read_fixture(&["json", "slice-09-merge", "invalid-destination.json"]);
+    let invalid_destination_result = merge_json(
+        invalid_destination_fixture["template"].as_str().expect("template should be present"),
+        invalid_destination_fixture["destination"].as_str().expect("destination should be present"),
+        JsonDialect::Json,
+    );
+
+    assert!(!invalid_destination_result.ok);
+    assert!(invalid_destination_result.output.is_none());
+    let invalid_destination_diagnostics = invalid_destination_result
+        .diagnostics
+        .iter()
+        .map(|diagnostic| {
+            serde_json::json!({
+                "severity": match diagnostic.severity {
+                    ast_merge::DiagnosticSeverity::Info => "info",
+                    ast_merge::DiagnosticSeverity::Warning => "warning",
+                    ast_merge::DiagnosticSeverity::Error => "error",
+                },
+                "category": match diagnostic.category {
+                    ast_merge::DiagnosticCategory::ParseError => "parse_error",
+                    ast_merge::DiagnosticCategory::DestinationParseError => {
+                        "destination_parse_error"
+                    }
+                    ast_merge::DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
+                    ast_merge::DiagnosticCategory::FallbackApplied => "fallback_applied",
+                    ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        Value::Array(invalid_destination_diagnostics),
+        invalid_destination_fixture["expected"]["diagnostics"]
+    );
+}

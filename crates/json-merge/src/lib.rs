@@ -105,6 +105,15 @@ fn parse_error(message: &str) -> Diagnostic {
     }
 }
 
+fn destination_parse_error(message: &str) -> Diagnostic {
+    Diagnostic {
+        severity: DiagnosticSeverity::Error,
+        category: DiagnosticCategory::DestinationParseError,
+        message: message.to_string(),
+        path: None,
+    }
+}
+
 fn detect_trailing_comma(source: &str) -> bool {
     let chars: Vec<char> = source.chars().collect();
     let mut in_string = false;
@@ -388,19 +397,30 @@ pub fn match_json_owners(
     JsonOwnerMatchResult { matched, unmatched_template, unmatched_destination }
 }
 
-fn parse_normalized_json(source: &str, dialect: JsonDialect) -> Result<Value, Diagnostic> {
+fn parse_normalized_json(
+    source: &str,
+    dialect: JsonDialect,
+    diagnostic_factory: fn(&str) -> Diagnostic,
+) -> Result<Value, Diagnostic> {
     let result = parse_json(source, dialect);
     if !result.ok {
-        return Err(result
+        let diagnostic = result
             .diagnostics
             .into_iter()
             .next()
-            .unwrap_or_else(|| parse_error("JSON parse failed.")));
+            .map(|diagnostic| Diagnostic {
+                severity: diagnostic.severity,
+                category: diagnostic_factory(&diagnostic.message).category,
+                message: diagnostic.message,
+                path: diagnostic.path,
+            })
+            .unwrap_or_else(|| diagnostic_factory("JSON parse failed."));
+        return Err(diagnostic);
     }
 
     let analysis = result.analysis.expect("successful parse should include analysis");
     serde_json::from_str::<Value>(&analysis.normalized_source)
-        .map_err(|_| parse_error("JSON parse failed."))
+        .map_err(|_| diagnostic_factory("JSON parse failed."))
 }
 
 fn merge_values(template: Value, destination: Value) -> Value {
@@ -469,18 +489,19 @@ pub fn merge_json(
     destination_source: &str,
     dialect: JsonDialect,
 ) -> MergeResult<String> {
-    let template = match parse_normalized_json(template_source, dialect) {
+    let template = match parse_normalized_json(template_source, dialect, parse_error) {
         Ok(value) => value,
         Err(diagnostic) => {
             return MergeResult { ok: false, diagnostics: vec![diagnostic], output: None };
         }
     };
-    let destination = match parse_normalized_json(destination_source, dialect) {
-        Ok(value) => value,
-        Err(diagnostic) => {
-            return MergeResult { ok: false, diagnostics: vec![diagnostic], output: None };
-        }
-    };
+    let destination =
+        match parse_normalized_json(destination_source, dialect, destination_parse_error) {
+            Ok(value) => value,
+            Err(diagnostic) => {
+                return MergeResult { ok: false, diagnostics: vec![diagnostic], output: None };
+            }
+        };
 
     let merged = merge_values(template, destination);
     MergeResult { ok: true, diagnostics: vec![], output: Some(canonical_json(&merged)) }
@@ -616,5 +637,13 @@ mod tests {
             result.output,
             Some("{\"destination_only\":2,\"meta\":{\"enabled\":true,\"mode\":\"template\"},\"name\":\"structuredmerge\",\"tags\":[\"destination\"],\"template_only\":1}".to_string())
         );
+    }
+
+    #[test]
+    fn reports_destination_parse_error_during_merge() {
+        let result = merge_json("{\"alpha\":1}", "{\"alpha\":", JsonDialect::Json);
+
+        assert!(!result.ok);
+        assert_eq!(result.diagnostics[0].category, DiagnosticCategory::DestinationParseError);
     }
 }
