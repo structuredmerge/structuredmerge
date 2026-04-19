@@ -54,8 +54,25 @@ pub struct TextSimilarity {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TextBlockMatch {
+    pub template_index: usize,
+    pub destination_index: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TextBlockMatchResult {
+    pub matched: Vec<TextBlockMatch>,
+    pub unmatched_template: Vec<usize>,
+    pub unmatched_destination: Vec<usize>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TextMergeResolution {
     pub output: String,
+}
+
+pub trait TextBlockMatcher {
+    fn match_blocks(&self, template: &TextAnalysis, destination: &TextAnalysis) -> TextBlockMatchResult;
 }
 
 pub fn normalize_text(source: &str) -> String {
@@ -169,11 +186,48 @@ pub fn merge_text(template_source: &str, destination_source: &str) -> MergeResul
     }
 }
 
+pub fn match_text_blocks(template_source: &str, destination_source: &str) -> TextBlockMatchResult {
+    let template = analyze_text(template_source);
+    let destination = analyze_text(destination_source);
+    let mut matched_template = std::collections::BTreeSet::new();
+    let mut matched_destination = std::collections::BTreeSet::new();
+    let mut matched = Vec::new();
+
+    for (destination_index, destination_block) in destination.blocks.iter().enumerate() {
+        if let Some((template_index, _)) = template
+            .blocks
+            .iter()
+            .enumerate()
+            .find(|(candidate_index, template_block)| {
+                !matched_template.contains(candidate_index) &&
+                    template_block.normalized == destination_block.normalized
+            })
+        {
+            matched_template.insert(template_index);
+            matched_destination.insert(destination_index);
+            matched.push(TextBlockMatch {
+                template_index,
+                destination_index,
+            });
+        }
+    }
+
+    TextBlockMatchResult {
+        matched,
+        unmatched_template: (0..template.blocks.len())
+            .filter(|index| !matched_template.contains(index))
+            .collect(),
+        unmatched_destination: (0..destination.blocks.len())
+            .filter(|index| !matched_destination.contains(index))
+            .collect(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        analyze_text, is_similar, merge_text, normalize_text, similarity_score, TextBlock,
-        TextSpan,
+        analyze_text, is_similar, match_text_blocks, merge_text, normalize_text,
+        similarity_score, TextBlock, TextBlockMatch, TextSpan,
     };
 
     #[test]
@@ -231,5 +285,33 @@ mod tests {
             result.output,
             Some("Alpha revised\n\nBeta\n\nDestination tail\n\nDestination extra".to_string())
         );
+    }
+
+    #[test]
+    fn matches_text_blocks_by_content() {
+        let result = match_text_blocks(
+            "Alpha\n\nBeta\n\nAlpha\n\nTemplate only",
+            "Beta\n\nAlpha\n\nAlpha\n\nDestination only",
+        );
+
+        assert_eq!(
+            result.matched,
+            vec![
+                TextBlockMatch {
+                    template_index: 1,
+                    destination_index: 0,
+                },
+                TextBlockMatch {
+                    template_index: 0,
+                    destination_index: 1,
+                },
+                TextBlockMatch {
+                    template_index: 2,
+                    destination_index: 2,
+                },
+            ]
+        );
+        assert_eq!(result.unmatched_template, vec![3]);
+        assert_eq!(result.unmatched_destination, vec![3]);
     }
 }
