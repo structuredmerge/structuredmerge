@@ -355,3 +355,17 @@ fn conforms_to_slice_15_fallback_boundary_fixtures() {
     assert_eq!(Value::Array(comments_diagnostics), comments_fixture["expected"]["diagnostics"]);
     assert!(comments_result.output.is_none());
 }
+
+#[test]
+fn conforms_to_slice_16_array_policy_fixture() {
+    let fixture = read_fixture(&["json", "slice-16-array-policy", "destination-wins-array.json"]);
+    let result = merge_json(
+        fixture["template"].as_str().expect("template should be present"),
+        fixture["destination"].as_str().expect("destination should be present"),
+        JsonDialect::Json,
+    );
+
+    assert_eq!(result.ok, fixture["expected"]["ok"].as_bool().unwrap_or(false));
+    assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
+    assert!(result.diagnostics.is_empty());
+}

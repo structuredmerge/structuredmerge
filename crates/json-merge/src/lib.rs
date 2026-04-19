@@ -796,6 +796,21 @@ mod tests {
     }
 
     #[test]
+    fn preserves_destination_array_as_baseline_array_policy() {
+        let result = merge_json(
+            "{\"items\":[1,2,3],\"meta\":{\"tags\":[\"template\"],\"mode\":\"template\"}}",
+            "{\"items\":[9],\"meta\":{\"tags\":[\"destination\"]}}",
+            JsonDialect::Json,
+        );
+
+        assert!(result.ok);
+        assert_eq!(
+            result.output.as_deref(),
+            Some("{\"items\":[9],\"meta\":{\"mode\":\"template\",\"tags\":[\"destination\"]}}")
+        );
+    }
+
+    #[test]
     fn does_not_apply_fallback_to_template_trailing_comma_input() {
         let result = merge_json("{\"alpha\":1,}", "{\"beta\":2}", JsonDialect::Json);
 
