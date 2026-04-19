@@ -451,6 +451,92 @@ fn conforms_to_slice_21_family_feature_profile_fixture_via_the_conformance_manif
 }
 
 #[test]
+fn conforms_to_slice_26_tree_sitter_adapter_fixture() {
+    let fixture = read_fixture_from_path(json_fixture_path("tree_sitter_adapter"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let dialect = match case["dialect"].as_str().expect("dialect should be present") {
+            "jsonc" => JsonDialect::Jsonc,
+            _ => JsonDialect::Json,
+        };
+        let source = case["source"].as_str().expect("source should be present");
+        let result = parse_json_with_language_pack(source, dialect);
+
+        assert_eq!(result.ok, case["expected"]["ok"].as_bool().unwrap_or(false));
+        assert_eq!(
+            Value::Array(
+                result
+                    .diagnostics
+                    .iter()
+                    .map(|diagnostic| {
+                        let mut value = serde_json::json!({
+                            "severity": match diagnostic.severity {
+                                ast_merge::DiagnosticSeverity::Info => "info",
+                                ast_merge::DiagnosticSeverity::Warning => "warning",
+                                ast_merge::DiagnosticSeverity::Error => "error",
+                            },
+                            "category": match diagnostic.category {
+                                ast_merge::DiagnosticCategory::ParseError => "parse_error",
+                                ast_merge::DiagnosticCategory::DestinationParseError => {
+                                    "destination_parse_error"
+                                }
+                                ast_merge::DiagnosticCategory::UnsupportedFeature => {
+                                    "unsupported_feature"
+                                }
+                                ast_merge::DiagnosticCategory::FallbackApplied => {
+                                    "fallback_applied"
+                                }
+                                ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
+                            }
+                        });
+                        if !diagnostic.message.is_empty() {
+                            value["message"] = serde_json::json!(diagnostic.message);
+                        }
+                        value
+                    })
+                    .collect::<Vec<_>>()
+            ),
+            case["expected"]["diagnostics"]
+        );
+
+        if result.ok {
+            assert_eq!(
+                result.analysis.as_ref().map(|analysis| match analysis.root_kind {
+                    JsonRootKind::Object => "object",
+                    JsonRootKind::Array => "array",
+                    JsonRootKind::Scalar => "scalar",
+                }),
+                case["expected"]["root_kind"].as_str()
+            );
+            let owners = result
+                .analysis
+                .as_ref()
+                .expect("analysis should be present")
+                .owners
+                .iter()
+                .map(|owner| {
+                    let mut value = serde_json::json!({
+                        "path": owner.path,
+                        "owner_kind": match owner.owner_kind {
+                            JsonOwnerKind::Member => "member",
+                            JsonOwnerKind::Element => "element",
+                        }
+                    });
+                    if let Some(match_key) = &owner.match_key {
+                        value["match_key"] = serde_json::json!(match_key);
+                    }
+                    value
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(Value::Array(owners), case["expected"]["owners"]);
+        } else {
+            assert!(result.analysis.is_none());
+        }
+    }
+}
+
+#[test]
 fn parses_strict_json_through_language_pack_and_preserves_analysis() {
     let result = parse_json_with_language_pack("{\"alpha\":{\"beta\":1}}", JsonDialect::Json);
 
