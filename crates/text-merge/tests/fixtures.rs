@@ -1,7 +1,9 @@
 use std::{fs, path::PathBuf};
 
 use serde_json::Value;
-use text_merge::{TextMatchPhase, analyze_text, match_text_blocks, merge_text};
+use text_merge::{
+    TextMatchPhase, analyze_text, is_similar, match_text_blocks, merge_text, similarity_score,
+};
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -82,6 +84,29 @@ fn conforms_to_slice_11_exact_matching_fixture() {
             .map(|value| value.as_u64().expect("indices should be numeric") as usize)
             .collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn conforms_to_slice_05_similarity_fixture() {
+    let fixture = read_fixture(&["text", "slice-05-similarity", "similarity-cases.json"]);
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let left = case["left"].as_str().expect("left should be present");
+        let right = case["right"].as_str().expect("right should be present");
+        let threshold = case["threshold"].as_f64().expect("threshold should be numeric");
+        let expected_score =
+            case["expected_score"].as_f64().expect("expected_score should be numeric");
+        let expected_match =
+            case["expected_match"].as_bool().expect("expected_match should be boolean");
+
+        assert_eq!(similarity_score(left, right), expected_score);
+
+        let similarity = is_similar(left, right, threshold);
+        assert_eq!(similarity.score, expected_score);
+        assert_eq!(similarity.threshold, threshold);
+        assert_eq!(similarity.matched, expected_match);
+    }
 }
 
 #[test]
