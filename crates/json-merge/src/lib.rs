@@ -151,6 +151,8 @@ pub fn parse_json_with_language_pack(
                 message: "tree-sitter-language-pack json parsing currently supports only the json dialect."
                     .to_string(),
                 path: None,
+                request_id: None,
+                action: None,
             }],
             analysis: None,
             policies: vec![],
@@ -176,6 +178,8 @@ fn parse_error(message: &str) -> Diagnostic {
         category: DiagnosticCategory::ParseError,
         message: message.to_string(),
         path: None,
+        request_id: None,
+        action: None,
     }
 }
 
@@ -185,6 +189,8 @@ fn destination_parse_error(message: &str) -> Diagnostic {
         category: DiagnosticCategory::DestinationParseError,
         message: message.to_string(),
         path: None,
+        request_id: None,
+        action: None,
     }
 }
 
@@ -194,6 +200,8 @@ fn fallback_applied(message: &str) -> Diagnostic {
         category: DiagnosticCategory::FallbackApplied,
         message: message.to_string(),
         path: None,
+        request_id: None,
+        action: None,
     }
 }
 
@@ -594,6 +602,8 @@ fn parse_normalized_json(
                 category: diagnostic_factory(&diagnostic.message).category,
                 message: diagnostic.message,
                 path: diagnostic.path,
+                request_id: None,
+                action: None,
             })
             .unwrap_or_else(|| diagnostic_factory("JSON parse failed."));
         return Err(diagnostic);
