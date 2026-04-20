@@ -503,7 +503,11 @@ fn selects_backend_limited_tree_sitter_cases_through_the_slice_33_capability_con
             role: "tree_sitter_adapter".to_string(),
             case: "valid_strict_json".to_string(),
         },
-        &ConformanceCaseRequirements { dialect: Some("json".to_string()), policies: vec![] },
+        &ConformanceCaseRequirements {
+            backend: None,
+            dialect: Some("json".to_string()),
+            policies: vec![],
+        },
         &family_profile,
         Some(&feature_profile),
     );
@@ -516,7 +520,11 @@ fn selects_backend_limited_tree_sitter_cases_through_the_slice_33_capability_con
             role: "tree_sitter_adapter".to_string(),
             case: "jsonc_unsupported".to_string(),
         },
-        &ConformanceCaseRequirements { dialect: Some("jsonc".to_string()), policies: vec![] },
+        &ConformanceCaseRequirements {
+            backend: None,
+            dialect: Some("jsonc".to_string()),
+            policies: vec![],
+        },
         &family_profile,
         Some(&feature_profile),
     );

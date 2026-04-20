@@ -361,6 +361,62 @@ fn conforms_to_slice_33_capability_aware_selection_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_119_backend_aware_selection_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("backend_selection"));
+    let cases = fixture["cases"].as_array().expect("cases should be present");
+
+    for case in cases {
+        let ref_ = serde_json::from_value::<ConformanceCaseRef>(case["ref"].clone())
+            .expect("ref should deserialize");
+        let requirements =
+            serde_json::from_value::<ConformanceCaseRequirements>(case["requirements"].clone())
+                .expect("requirements should deserialize");
+        let family_profile =
+            serde_json::from_value::<FamilyFeatureProfile>(case["family_profile"].clone())
+                .expect("family_profile should deserialize");
+        let feature_profile =
+            serde_json::from_value::<serde_json::Value>(case["feature_profile"].clone())
+                .expect("feature_profile should deserialize");
+        let backend = feature_profile["backend"].as_str().expect("backend should be present");
+        let supports_dialects = feature_profile["supports_dialects"]
+            .as_bool()
+            .expect("supports_dialects should be present");
+        let supported_policies = serde_json::from_value::<Vec<ast_merge::PolicyReference>>(
+            case["feature_profile"]["supported_policies"].clone(),
+        )
+        .expect("supported_policies should deserialize");
+
+        let selection = select_conformance_case(
+            ref_.clone(),
+            &requirements,
+            &family_profile,
+            Some(&ConformanceFeatureProfileView {
+                backend: backend.to_string(),
+                supports_dialects,
+                supported_policies,
+            }),
+        );
+
+        let expected_status =
+            match case["expected"]["status"].as_str().expect("status should be present") {
+                "selected" => ConformanceSelectionStatus::Selected,
+                "skipped" => ConformanceSelectionStatus::Skipped,
+                other => panic!("unexpected status: {other}"),
+            };
+        let expected_messages = case["expected"]["messages"]
+            .as_array()
+            .expect("messages should be present")
+            .iter()
+            .map(|message| message.as_str().expect("message should be a string").to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(selection.ref_, ref_);
+        assert_eq!(selection.status, expected_status);
+        assert_eq!(selection.messages, expected_messages);
+    }
+}
+
+#[test]
 fn conforms_to_slice_34_conformance_case_runner_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("case_runner"));
     let cases = fixture["cases"].as_array().expect("cases should be present");

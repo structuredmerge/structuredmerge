@@ -113,6 +113,7 @@ pub struct ConformanceCaseResult {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ConformanceCaseRequirements {
+    pub backend: Option<String>,
     pub dialect: Option<String>,
     #[serde(default)]
     pub policies: Vec<PolicyReference>,
@@ -826,6 +827,24 @@ pub fn select_conformance_case(
 ) -> ConformanceCaseSelection {
     let mut messages = Vec::new();
 
+    if let Some(required_backend) = &requirements.backend {
+        match feature_profile {
+            Some(feature_profile) if &feature_profile.backend != required_backend => {
+                messages.push(format!(
+                    "case requires backend {} but backend {} is active for family {}.",
+                    required_backend, feature_profile.backend, family_profile.family
+                ));
+            }
+            None => {
+                messages.push(format!(
+                    "case requires backend {} but no backend feature profile is available for family {}.",
+                    required_backend, family_profile.family
+                ));
+            }
+            _ => {}
+        }
+    }
+
     if let Some(dialect) = &requirements.dialect {
         if !family_profile
             .supported_dialects
@@ -1224,10 +1243,11 @@ pub fn plan_conformance_suite(
             path: entry.path.clone(),
             run: ConformanceCaseRun {
                 ref_,
-                requirements: entry
-                    .requirements
-                    .clone()
-                    .unwrap_or(ConformanceCaseRequirements { dialect: None, policies: Vec::new() }),
+                requirements: entry.requirements.clone().unwrap_or(ConformanceCaseRequirements {
+                    backend: None,
+                    dialect: None,
+                    policies: Vec::new(),
+                }),
                 family_profile: family_profile.clone(),
                 feature_profile: feature_profile.cloned(),
             },
