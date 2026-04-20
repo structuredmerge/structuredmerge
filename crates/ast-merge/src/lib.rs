@@ -241,6 +241,12 @@ pub struct ReviewDecision {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReviewReplayBundle {
+    pub replay_context: ReviewReplayContext,
+    pub decisions: Vec<ReviewDecision>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReviewHostHints {
     pub interactive: bool,
     pub require_explicit_contexts: bool,
@@ -264,6 +270,7 @@ pub struct ConformanceManifestReviewOptions {
     #[serde(default)]
     pub review_decisions: Vec<ReviewDecision>,
     pub review_replay_context: Option<ReviewReplayContext>,
+    pub review_replay_bundle: Option<ReviewReplayBundle>,
     #[serde(default)]
     pub interactive: bool,
 }
@@ -432,6 +439,16 @@ pub fn conformance_manifest_review_request_ids(
     request_ids.sort();
     request_ids.dedup();
     request_ids
+}
+
+pub fn review_replay_bundle_inputs(
+    options: &ConformanceManifestReviewOptions,
+) -> (Option<ReviewReplayContext>, Vec<ReviewDecision>) {
+    if let Some(bundle) = &options.review_replay_bundle {
+        return (Some(bundle.replay_context.clone()), bundle.decisions.clone());
+    }
+
+    (options.review_replay_context.clone(), options.review_decisions.clone())
 }
 
 pub fn resolve_conformance_family_context(
@@ -831,19 +848,19 @@ pub fn review_conformance_manifest(
     let mut requests = Vec::new();
     let mut applied_decisions = Vec::new();
     let mut effective_options = options.clone();
-    if !options.review_decisions.is_empty() && options.review_replay_context.is_none() {
+    let (replay_input_context, replay_input_decisions) = review_replay_bundle_inputs(options);
+    if !replay_input_decisions.is_empty() && replay_input_context.is_none() {
         diagnostics.push(Diagnostic {
             severity: DiagnosticSeverity::Error,
             category: DiagnosticCategory::ReplayRejected,
             message: "review decisions were provided without replay context.".to_string(),
             path: None,
         });
+        effective_options.review_replay_bundle = None;
+        effective_options.review_replay_context = None;
         effective_options.review_decisions.clear();
-    } else if !options.review_decisions.is_empty()
-        && !review_replay_context_compatible(
-            &replay_context,
-            options.review_replay_context.as_ref(),
-        )
+    } else if !replay_input_decisions.is_empty()
+        && !review_replay_context_compatible(&replay_context, replay_input_context.as_ref())
     {
         diagnostics.push(Diagnostic {
             severity: DiagnosticSeverity::Error,
@@ -852,15 +869,18 @@ pub fn review_conformance_manifest(
                 .to_string(),
             path: None,
         });
+        effective_options.review_replay_bundle = None;
+        effective_options.review_replay_context = None;
         effective_options.review_decisions.clear();
-    } else if !options.review_decisions.is_empty() {
+    } else if !replay_input_decisions.is_empty() {
         let allowed_request_ids: HashMap<String, bool> =
             conformance_manifest_review_request_ids(manifest, options)
                 .into_iter()
                 .map(|request_id| (request_id, true))
                 .collect();
-        effective_options.review_decisions = options
-            .review_decisions
+        effective_options.review_replay_bundle = None;
+        effective_options.review_replay_context = replay_input_context;
+        effective_options.review_decisions = replay_input_decisions
             .iter()
             .filter_map(|decision| {
                 if allowed_request_ids.contains_key(&decision.request_id) {
