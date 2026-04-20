@@ -1,5 +1,8 @@
 use std::{fs, path::PathBuf};
 
+use ast_merge::{
+    ConformanceManifest, conformance_family_feature_profile_path, conformance_fixture_path,
+};
 use rust_merge::{
     RustBackend, RustDialect, match_rust_owners, merge_rust, merge_rust_with_backend, parse_rust,
     parse_rust_with_backend, rust_backend_feature_profile, rust_backends, rust_feature_profile,
@@ -22,6 +25,11 @@ fn fixture_path(parts: &[&str]) -> PathBuf {
 fn read_fixture(parts: &[&str]) -> Value {
     let source = fs::read_to_string(fixture_path(parts)).expect("fixture should be readable");
     serde_json::from_str(&source).expect("fixture should be valid json")
+}
+
+fn read_manifest(parts: &[&str]) -> ConformanceManifest {
+    let source = fs::read_to_string(fixture_path(parts)).expect("manifest should be readable");
+    serde_json::from_str(&source).expect("manifest should be valid json")
 }
 
 fn diagnostic_shape(diagnostics: &[ast_merge::Diagnostic]) -> Value {
@@ -287,5 +295,52 @@ fn conforms_to_rust_backend_fixtures() {
             }
         }),
         plan_contexts["native"]
+    );
+}
+
+#[test]
+fn conforms_to_slice_124_source_family_manifest_fixture() {
+    let manifest = read_manifest(&[
+        "conformance",
+        "slice-124-source-family-manifest",
+        "source-family-manifest.json",
+    ]);
+
+    assert_eq!(
+        conformance_family_feature_profile_path(&manifest, "rust"),
+        Some(
+            &[
+                "diagnostics".to_string(),
+                "slice-105-rust-family-feature-profile".to_string(),
+                "rust-feature-profile.json".to_string(),
+            ][..],
+        )
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "rust", "analysis"),
+        Some(
+            &[
+                "rust".to_string(),
+                "slice-106-analysis".to_string(),
+                "module-owners.json".to_string(),
+            ][..],
+        )
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "rust", "matching"),
+        Some(
+            &[
+                "rust".to_string(),
+                "slice-107-matching".to_string(),
+                "path-equality.json".to_string(),
+            ][..],
+        )
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "rust", "merge"),
+        Some(
+            &["rust".to_string(), "slice-108-merge".to_string(), "module-merge.json".to_string(),]
+                [..],
+        )
     );
 }

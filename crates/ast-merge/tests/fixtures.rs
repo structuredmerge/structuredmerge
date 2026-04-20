@@ -685,6 +685,33 @@ fn conforms_to_slice_43_conformance_suite_definitions_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_125_source_family_suite_definitions_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-125-source-family-suite-definitions",
+        "source-suite-definitions.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let suite_names = fixture["suite_names"]
+        .as_array()
+        .expect("suite_names should be an array")
+        .iter()
+        .map(|value| value.as_str().expect("suite name should be a string").to_string())
+        .collect::<Vec<_>>();
+
+    assert_eq!(conformance_suite_names(&manifest), suite_names);
+
+    let definitions = fixture["definitions"].as_object().expect("definitions should be an object");
+    for (suite_name, definition) in definitions {
+        let expected =
+            serde_json::from_value::<ast_merge::ConformanceSuiteDefinition>(definition.clone())
+                .expect("expected definition should deserialize");
+        assert_eq!(conformance_suite_definition(&manifest, suite_name), Some(&expected));
+    }
+}
+
+#[test]
 fn conforms_to_slice_44_named_conformance_suite_report_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_report"));
     let manifest = read_manifest();
@@ -873,6 +900,27 @@ fn conforms_to_slice_49_conformance_family_plan_context_fixture() {
 fn conforms_to_slice_50_named_conformance_suite_plans_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_plans"));
     let manifest = read_manifest();
+    let contexts = serde_json::from_value::<
+        std::collections::HashMap<String, ConformanceFamilyPlanContext>,
+    >(fixture["contexts"].clone())
+    .expect("contexts should deserialize");
+    let expected = serde_json::from_value::<Vec<NamedConformanceSuitePlan>>(
+        fixture["expected_entries"].clone(),
+    )
+    .expect("expected entries should deserialize");
+
+    assert_eq!(plan_named_conformance_suites(&manifest, &contexts), expected);
+}
+
+#[test]
+fn conforms_to_slice_126_source_family_named_suite_plans_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-126-source-family-named-suite-plans",
+        "source-named-suite-plans.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
     let contexts = serde_json::from_value::<
         std::collections::HashMap<String, ConformanceFamilyPlanContext>,
     >(fixture["contexts"].clone())
