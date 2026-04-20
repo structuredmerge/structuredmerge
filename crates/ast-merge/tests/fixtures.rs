@@ -1071,6 +1071,56 @@ fn conforms_to_slice_78_family_context_explicit_review_decision_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_80_explicit_review_decision_payload_validation_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "explicit_review_decision_missing_context",
+    ));
+    let family = fixture["family"].as_str().expect("family should be a string");
+    let options =
+        serde_json::from_value::<ConformanceManifestReviewOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected_diagnostic =
+        serde_json::from_value::<ast_merge::Diagnostic>(fixture["expected_diagnostic"].clone())
+            .expect("expected diagnostic should deserialize");
+    let expected_request =
+        serde_json::from_value::<ReviewRequest>(fixture["expected_request"].clone())
+            .expect("expected request should deserialize");
+
+    let (context, diagnostics, requests, applied_decisions) =
+        review_conformance_family_context(family, &options);
+
+    assert_eq!(context, None);
+    assert_eq!(diagnostics, vec![expected_diagnostic]);
+    assert_eq!(requests, vec![expected_request]);
+    assert_eq!(applied_decisions, Vec::<ast_merge::ReviewDecision>::new());
+}
+
+#[test]
+fn conforms_to_slice_81_explicit_review_decision_family_validation_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "explicit_review_decision_family_mismatch",
+    ));
+    let family = fixture["family"].as_str().expect("family should be a string");
+    let options =
+        serde_json::from_value::<ConformanceManifestReviewOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected_diagnostic =
+        serde_json::from_value::<ast_merge::Diagnostic>(fixture["expected_diagnostic"].clone())
+            .expect("expected diagnostic should deserialize");
+    let expected_request =
+        serde_json::from_value::<ReviewRequest>(fixture["expected_request"].clone())
+            .expect("expected request should deserialize");
+
+    let (context, diagnostics, requests, applied_decisions) =
+        review_conformance_family_context(family, &options);
+
+    assert_eq!(context, None);
+    assert_eq!(diagnostics, vec![expected_diagnostic]);
+    assert_eq!(requests, vec![expected_request]);
+    assert_eq!(applied_decisions, Vec::<ast_merge::ReviewDecision>::new());
+}
+
+#[test]
 fn conforms_to_slice_63_conformance_manifest_review_state_fixture() {
     let fixture =
         read_fixture_from_path(diagnostics_fixture_path("conformance_manifest_review_state"));

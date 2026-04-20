@@ -596,7 +596,7 @@ pub fn resolve_conformance_family_context(
 fn review_decision_for_family_context(
     family: &str,
     options: &ConformanceManifestReviewOptions,
-) -> Option<(ConformanceFamilyPlanContext, ReviewDecision, bool)> {
+) -> (Option<ConformanceFamilyPlanContext>, Option<ReviewDecision>, bool, Vec<Diagnostic>) {
     let request_id = review_request_id_for_family_context(family);
     let family_profile = options.family_profiles.get(family);
 
@@ -611,21 +611,54 @@ fn review_decision_for_family_context(
                     continue;
                 };
 
-                return Some((
-                    default_conformance_family_context(family_profile),
-                    decision.clone(),
+                return (
+                    Some(default_conformance_family_context(family_profile)),
+                    Some(decision.clone()),
                     true,
-                ));
+                    Vec::new(),
+                );
             }
             ReviewDecisionAction::ProvideExplicitContext => {
-                if let Some(context) = &decision.context {
-                    return Some((context.clone(), decision.clone(), false));
+                let Some(context) = &decision.context else {
+                    return (
+                        None,
+                        None,
+                        false,
+                        vec![Diagnostic {
+                            severity: DiagnosticSeverity::Error,
+                            category: DiagnosticCategory::ConfigurationError,
+                            message: format!(
+                                "review decision {} requires explicit context payload.",
+                                request_id
+                            ),
+                            path: None,
+                        }],
+                    );
+                };
+
+                if context.family_profile.family != family {
+                    return (
+                        None,
+                        None,
+                        false,
+                        vec![Diagnostic {
+                            severity: DiagnosticSeverity::Error,
+                            category: DiagnosticCategory::ConfigurationError,
+                            message: format!(
+                                "review decision {} provided context for {}, expected {}.",
+                                request_id, context.family_profile.family, family
+                            ),
+                            path: None,
+                        }],
+                    );
                 }
+
+                return (Some(context.clone()), Some(decision.clone()), false, Vec::new());
             }
         }
     }
 
-    None
+    (None, None, false, Vec::new())
 }
 
 pub fn review_conformance_family_context(
@@ -663,9 +696,9 @@ pub fn review_conformance_family_context(
         );
     };
 
-    if let Some((context, decision, assumed_default)) =
-        review_decision_for_family_context(family, options)
-    {
+    let (decision_context, decision, assumed_default, decision_diagnostics) =
+        review_decision_for_family_context(family, options);
+    if let (Some(context), Some(decision)) = (decision_context, decision) {
         return (
             Some(context),
             if assumed_default {
@@ -685,12 +718,16 @@ pub fn review_conformance_family_context(
 
     (
         None,
-        vec![Diagnostic {
-            severity: DiagnosticSeverity::Error,
-            category: DiagnosticCategory::ConfigurationError,
-            message: format!("missing explicit family context for {family}."),
-            path: None,
-        }],
+        if decision_diagnostics.is_empty() {
+            vec![Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::ConfigurationError,
+                message: format!("missing explicit family context for {family}."),
+                path: None,
+            }]
+        } else {
+            decision_diagnostics
+        },
         vec![ReviewRequest {
             id: review_request_id_for_family_context(family),
             kind: ReviewRequestKind::FamilyContext,
