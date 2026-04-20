@@ -4,6 +4,7 @@ use ast_merge::{
     PolicySurface,
 };
 use serde_json::{Map, Value};
+use tree_haver::{ParserRequest, current_backend_id, parse_with_language_pack};
 
 pub const PACKAGE_NAME: &str = "yaml-merge";
 
@@ -16,6 +17,7 @@ pub enum YamlDialect {
 pub enum YamlBackend {
     SerdeYaml,
     YamlSerde,
+    KreuzbergLanguagePack,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -122,7 +124,7 @@ pub fn yaml_feature_profile() -> YamlFeatureProfile {
 }
 
 pub fn available_yaml_backends() -> Vec<YamlBackend> {
-    vec![YamlBackend::SerdeYaml, YamlBackend::YamlSerde]
+    vec![YamlBackend::SerdeYaml, YamlBackend::YamlSerde, YamlBackend::KreuzbergLanguagePack]
 }
 
 pub fn yaml_backend_feature_profile(backend: YamlBackend) -> YamlBackendFeatureProfile {
@@ -133,6 +135,7 @@ pub fn yaml_backend_feature_profile(backend: YamlBackend) -> YamlBackendFeatureP
         backend: match backend {
             YamlBackend::SerdeYaml => "serde_yaml".to_string(),
             YamlBackend::YamlSerde => "yaml_serde".to_string(),
+            YamlBackend::KreuzbergLanguagePack => "kreuzberg-language-pack".to_string(),
         },
     }
 }
@@ -151,9 +154,20 @@ pub fn yaml_plan_context_with_backend(backend: YamlBackend) -> ConformanceFamily
         },
         feature_profile: Some(ConformanceFeatureProfileView {
             backend: backend_profile.backend,
-            supports_dialects: true,
+            supports_dialects: backend != YamlBackend::KreuzbergLanguagePack,
             supported_policies: backend_profile.supported_policies,
         }),
+    }
+}
+
+fn resolve_backend(backend: Option<YamlBackend>) -> YamlBackend {
+    if let Some(backend) = backend {
+        return backend;
+    }
+
+    match current_backend_id().as_deref() {
+        Some("kreuzberg-language-pack") => YamlBackend::KreuzbergLanguagePack,
+        _ => YamlBackend::SerdeYaml,
     }
 }
 
@@ -306,11 +320,14 @@ fn parse_yaml_value(source: &str, backend: YamlBackend) -> Result<Value, Diagnos
         YamlBackend::YamlSerde => {
             yaml_serde::from_str::<Value>(source).map_err(|error| parse_error(&error.to_string()))
         }
+        YamlBackend::KreuzbergLanguagePack => {
+            serde_yaml::from_str::<Value>(source).map_err(|error| parse_error(&error.to_string()))
+        }
     }
 }
 
 pub fn parse_yaml(source: &str, dialect: YamlDialect) -> ParseResult<YamlAnalysis> {
-    parse_yaml_with_backend(source, dialect, YamlBackend::SerdeYaml)
+    parse_yaml_with_backend(source, dialect, resolve_backend(None))
 }
 
 pub fn parse_yaml_with_backend(
@@ -325,6 +342,22 @@ pub fn parse_yaml_with_backend(
             analysis: None,
             policies: vec![],
         };
+    }
+
+    if backend == YamlBackend::KreuzbergLanguagePack {
+        let backend_result = parse_with_language_pack(&ParserRequest {
+            source: source.to_string(),
+            language: "yaml".to_string(),
+            dialect: Some("yaml".to_string()),
+        });
+        if !backend_result.ok {
+            return ParseResult {
+                ok: false,
+                diagnostics: backend_result.diagnostics,
+                analysis: None,
+                policies: vec![],
+            };
+        }
     }
 
     match parse_yaml_value(source, backend) {
