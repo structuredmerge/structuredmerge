@@ -32,6 +32,7 @@ Deferred:
 - project templating/scaffolding
 - broad backend parity beyond MVP
 - language-native parser experiments beyond tree-sitter
+- PEG-backend parity beyond the first tree-sitter and native adapter slices
 
 ## Proposed Crate Family
 
@@ -72,6 +73,7 @@ Primary backend:
 - Rust tree-sitter crates and generated grammar bindings
 - currently viable practical backend: published `tree-sitter-language-pack`
   crate for early backend adoption
+- first PEG candidate for a second backend path: `pest`
 
 Requirements:
 
