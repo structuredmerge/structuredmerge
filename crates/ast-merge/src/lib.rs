@@ -110,6 +110,16 @@ pub struct ProjectedChildReviewCase {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProjectedChildReviewGroup {
+    pub delegated_apply_group: String,
+    pub parent_operation_id: String,
+    pub child_operation_id: String,
+    pub delegated_runtime_surface_path: String,
+    pub case_ids: Vec<String>,
+    pub delegated_case_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ParseResult<TAnalysis> {
     pub ok: bool,
     pub diagnostics: Vec<Diagnostic>,
@@ -494,6 +504,34 @@ pub fn default_conformance_family_context(
 
 pub fn review_request_id_for_family_context(family: &str) -> String {
     format!("family_context:{family}")
+}
+
+pub fn group_projected_child_review_cases(
+    cases: &[ProjectedChildReviewCase],
+) -> Vec<ProjectedChildReviewGroup> {
+    let mut groups: Vec<ProjectedChildReviewGroup> = Vec::new();
+
+    for case in cases {
+        if let Some(existing) = groups
+            .iter_mut()
+            .find(|group| group.delegated_apply_group == case.delegated_apply_group)
+        {
+            existing.case_ids.push(case.case_id.clone());
+            existing.delegated_case_ids.push(case.delegated_case_id.clone());
+            continue;
+        }
+
+        groups.push(ProjectedChildReviewGroup {
+            delegated_apply_group: case.delegated_apply_group.clone(),
+            parent_operation_id: case.parent_operation_id.clone(),
+            child_operation_id: case.child_operation_id.clone(),
+            delegated_runtime_surface_path: case.delegated_runtime_surface_path.clone(),
+            case_ids: vec![case.case_id.clone()],
+            delegated_case_ids: vec![case.delegated_case_id.clone()],
+        });
+    }
+
+    groups
 }
 
 pub fn conformance_review_host_hints(

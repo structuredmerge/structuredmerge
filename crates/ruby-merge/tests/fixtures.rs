@@ -1,5 +1,8 @@
 use std::{fs, path::PathBuf};
 
+use ast_merge::{
+    ProjectedChildReviewCase, ProjectedChildReviewGroup, group_projected_child_review_cases,
+};
 use ruby_merge::{
     RubyDialect, RubyOwnerKind, match_ruby_owners, parse_ruby, ruby_delegated_child_operations,
     ruby_discovered_surfaces, ruby_feature_profile,
@@ -110,4 +113,18 @@ fn conforms_to_ruby_fixtures() {
         .expect("child operations should serialize"),
         child_fixture["expected"]
     );
+
+    let grouped_fixture = read_fixture(&[
+        "ruby",
+        "slice-229-projected-child-review-groups",
+        "yard-example-review-groups.json",
+    ]);
+    let grouped_cases =
+        serde_json::from_value::<Vec<ProjectedChildReviewCase>>(grouped_fixture["cases"].clone())
+            .expect("projected cases should deserialize");
+    let expected_groups = serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(
+        grouped_fixture["expected_groups"].clone(),
+    )
+    .expect("projected groups should deserialize");
+    assert_eq!(group_projected_child_review_cases(&grouped_cases), expected_groups);
 }

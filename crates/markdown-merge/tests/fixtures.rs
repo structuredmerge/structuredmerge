@@ -1,7 +1,9 @@
 use std::{fs, path::PathBuf};
 
 use ast_merge::{
-    ConformanceManifest, conformance_family_feature_profile_path, conformance_fixture_path,
+    ConformanceManifest, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    conformance_family_feature_profile_path, conformance_fixture_path,
+    group_projected_child_review_cases,
 };
 use markdown_merge::{
     MarkdownBackend, MarkdownDialect, MarkdownOwnerKind, available_markdown_backends,
@@ -276,4 +278,21 @@ fn conforms_to_slice_213_markdown_delegated_child_operations() {
         .unwrap(),
         fixture["expected"]
     );
+}
+
+#[test]
+fn conforms_to_slice_228_markdown_projected_child_review_groups() {
+    let fixture = read_fixture(&[
+        "markdown",
+        "slice-228-projected-child-review-groups",
+        "fenced-code-review-groups.json",
+    ]);
+    let cases = serde_json::from_value::<Vec<ProjectedChildReviewCase>>(fixture["cases"].clone())
+        .expect("projected cases should deserialize");
+    let expected = serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(
+        fixture["expected_groups"].clone(),
+    )
+    .expect("projected groups should deserialize");
+
+    assert_eq!(group_projected_child_review_cases(&cases), expected);
 }

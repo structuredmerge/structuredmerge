@@ -10,25 +10,25 @@ use ast_merge::{
     ConformanceSuiteSummary, DelegatedChildOperation, DiagnosticCategory, DiagnosticSeverity,
     DiscoveredSurface, FamilyFeatureProfile, NamedConformanceSuitePlan,
     NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
-    PolicySurface, ProjectedChildReviewCase, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
-    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
-    conformance_family_feature_profile_path, conformance_fixture_path,
+    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup, REVIEW_TRANSPORT_VERSION,
+    ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
+    ReviewRequest, conformance_family_feature_profile_path, conformance_fixture_path,
     conformance_manifest_replay_context, conformance_manifest_review_request_ids,
     conformance_manifest_review_state_envelope, conformance_review_host_hints,
     conformance_suite_definition, conformance_suite_names, default_conformance_family_context,
-    import_conformance_manifest_review_state_envelope, import_review_replay_bundle_envelope,
-    plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
-    plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
-    report_conformance_manifest, report_conformance_suite, report_named_conformance_suite,
-    report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
-    report_named_conformance_suite_manifest, report_planned_conformance_suite,
-    report_planned_named_conformance_suites, resolve_conformance_family_context,
-    review_conformance_family_context, review_conformance_manifest, review_replay_bundle_envelope,
-    review_replay_bundle_inputs, review_replay_context_compatible,
-    review_request_id_for_family_context, run_conformance_case, run_conformance_suite,
-    run_named_conformance_suite, run_named_conformance_suite_entry, run_planned_conformance_suite,
-    run_planned_named_conformance_suites, select_conformance_case, summarize_conformance_results,
-    summarize_named_conformance_suite_reports,
+    group_projected_child_review_cases, import_conformance_manifest_review_state_envelope,
+    import_review_replay_bundle_envelope, plan_conformance_suite, plan_named_conformance_suite,
+    plan_named_conformance_suite_entry, plan_named_conformance_suites,
+    plan_named_conformance_suites_with_diagnostics, report_conformance_manifest,
+    report_conformance_suite, report_named_conformance_suite, report_named_conformance_suite_entry,
+    report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
+    report_planned_conformance_suite, report_planned_named_conformance_suites,
+    resolve_conformance_family_context, review_conformance_family_context,
+    review_conformance_manifest, review_replay_bundle_envelope, review_replay_bundle_inputs,
+    review_replay_context_compatible, review_request_id_for_family_context, run_conformance_case,
+    run_conformance_suite, run_named_conformance_suite, run_named_conformance_suite_entry,
+    run_planned_conformance_suite, run_planned_named_conformance_suites, select_conformance_case,
+    summarize_conformance_results, summarize_named_conformance_suite_reports,
 };
 use serde_json::Value;
 
@@ -2609,6 +2609,19 @@ fn conforms_to_slice_211_projected_child_review_cases_fixture() {
     .expect("cases should deserialize after roundtrip");
 
     assert_eq!(round_tripped, cases);
+}
+
+#[test]
+fn conforms_to_slice_227_projected_child_review_groups_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("projected_child_review_groups"));
+    let cases = serde_json::from_value::<Vec<ProjectedChildReviewCase>>(fixture["cases"].clone())
+        .expect("projected child review cases should deserialize");
+    let expected = serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(
+        fixture["expected_groups"].clone(),
+    )
+    .expect("projected child review groups should deserialize");
+
+    assert_eq!(group_projected_child_review_cases(&cases), expected);
 }
 
 #[test]
