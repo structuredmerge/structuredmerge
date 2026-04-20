@@ -230,6 +230,7 @@ pub struct ReviewRequest {
     pub family: String,
     pub message: String,
     pub blocking: bool,
+    pub proposed_context: Option<ConformanceFamilyPlanContext>,
     pub available_actions: Vec<ReviewDecisionAction>,
     pub default_action: Option<ReviewDecisionAction>,
 }
@@ -670,6 +671,7 @@ pub fn review_conformance_family_context(
                 "explicit family context is required for {family}; a synthesized default may be accepted by review."
             ),
             blocking: true,
+            proposed_context: Some(default_conformance_family_context(family_profile)),
             available_actions: vec![ReviewDecisionAction::AcceptDefaultContext],
             default_action: Some(ReviewDecisionAction::AcceptDefaultContext),
         }],

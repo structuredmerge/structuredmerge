@@ -1028,6 +1028,24 @@ fn conforms_to_slice_62_family_context_review_request_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_77_family_context_review_proposal_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("family_context_review_proposal"));
+    let family = fixture["family"].as_str().expect("family should be a string");
+    let options =
+        serde_json::from_value::<ConformanceManifestReviewOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected_request =
+        serde_json::from_value::<ReviewRequest>(fixture["expected_request"].clone())
+            .expect("expected request should deserialize");
+
+    let (_context, _diagnostics, requests, _applied_decisions) =
+        review_conformance_family_context(family, &options);
+
+    assert_eq!(requests, vec![expected_request]);
+}
+
+#[test]
 fn conforms_to_slice_63_conformance_manifest_review_state_fixture() {
     let fixture =
         read_fixture_from_path(diagnostics_fixture_path("conformance_manifest_review_state"));
