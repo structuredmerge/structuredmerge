@@ -108,3 +108,9 @@ pub fn match_markdown_owners(
 ) -> markdown_merge::MarkdownOwnerMatchResult {
     match_markdown_owners_with_substrate(template, destination)
 }
+
+pub fn markdown_embedded_families(
+    analysis: &MarkdownAnalysis,
+) -> Vec<markdown_merge::MarkdownEmbeddedFamilyCandidate> {
+    markdown_merge::markdown_embedded_families(analysis)
+}

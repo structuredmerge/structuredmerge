@@ -7,8 +7,9 @@ use ast_merge::{
 };
 use markdown_merge::MarkdownDialect;
 use pulldown_cmark_merge::{
-    available_markdown_backends, markdown_backend_feature_profile, markdown_plan_context,
-    match_markdown_owners, parse_markdown, provider_markdown_feature_profile,
+    available_markdown_backends, markdown_backend_feature_profile, markdown_embedded_families,
+    markdown_plan_context, match_markdown_owners, parse_markdown,
+    provider_markdown_feature_profile,
 };
 use serde_json::Value;
 
@@ -107,6 +108,21 @@ fn conforms_to_shared_markdown_analysis_and_matching_fixtures() {
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn conforms_to_slice_208_embedded_family_fixture() {
+    let fixture =
+        read_fixture(&["markdown", "slice-208-embedded-families", "code-fence-families.json"]);
+    let analysis =
+        parse_markdown(fixture["source"].as_str().unwrap(), MarkdownDialect::Markdown, None)
+            .analysis
+            .expect("analysis should exist");
+
+    assert_eq!(
+        serde_json::to_value(markdown_embedded_families(&analysis)).unwrap(),
+        fixture["expected"]
     );
 }
 

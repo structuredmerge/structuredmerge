@@ -59,6 +59,14 @@ pub struct MarkdownAnalysis {
     pub owners: Vec<MarkdownOwner>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct MarkdownEmbeddedFamilyCandidate {
+    pub path: String,
+    pub language: String,
+    pub family: String,
+    pub dialect: String,
+}
+
 impl tree_haver::AnalysisHandle for MarkdownAnalysis {
     fn kind(&self) -> &'static str {
         "markdown"
@@ -364,4 +372,53 @@ pub fn match_markdown_owners(
             .filter(|path| !template_paths.contains(path))
             .collect(),
     }
+}
+
+fn code_fence_family(info_string: Option<&str>) -> Option<&'static str> {
+    match info_string.unwrap_or_default().to_lowercase().as_str() {
+        "ts" | "typescript" => Some("typescript"),
+        "rust" | "rs" => Some("rust"),
+        "go" => Some("go"),
+        "json" | "jsonc" => Some("json"),
+        "yaml" | "yml" => Some("yaml"),
+        "toml" => Some("toml"),
+        _ => None,
+    }
+}
+
+fn code_fence_dialect(info_string: Option<&str>, family: Option<&str>) -> Option<String> {
+    let language = info_string.unwrap_or_default().to_lowercase();
+    match family {
+        Some("typescript") => Some("typescript".to_string()),
+        Some("rust") => Some("rust".to_string()),
+        Some("go") => Some("go".to_string()),
+        Some("json") => Some(if language == "jsonc" { "jsonc" } else { "json" }.to_string()),
+        Some("yaml") => Some("yaml".to_string()),
+        Some("toml") => Some("toml".to_string()),
+        _ => None,
+    }
+}
+
+pub fn markdown_embedded_families(
+    analysis: &MarkdownAnalysis,
+) -> Vec<MarkdownEmbeddedFamilyCandidate> {
+    analysis
+        .owners
+        .iter()
+        .filter_map(|owner| {
+            if owner.owner_kind != MarkdownOwnerKind::CodeFence {
+                return None;
+            }
+
+            let language = owner.info_string.clone()?;
+            let family = code_fence_family(Some(&language))?;
+            let dialect = code_fence_dialect(Some(&language), Some(family))?;
+            Some(MarkdownEmbeddedFamilyCandidate {
+                path: owner.path.clone(),
+                language,
+                family: family.to_string(),
+                dialect,
+            })
+        })
+        .collect()
 }
