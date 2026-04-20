@@ -1,9 +1,13 @@
 use std::{fs, path::PathBuf};
 
+use ast_merge::{
+    ConformanceManifest, conformance_family_feature_profile_path, conformance_fixture_path,
+};
 use serde_json::Value;
 use toml_merge::{
     TomlBackend, TomlDialect, TomlOwnerKind, TomlRootKind, available_toml_backends,
     match_toml_owners, merge_toml, parse_toml, toml_backend_feature_profile, toml_feature_profile,
+    toml_plan_context,
 };
 use tree_haver::with_backend;
 
@@ -68,6 +72,56 @@ fn conforms_to_slice_90_toml_feature_profile_fixture() {
     assert_eq!(available_toml_backends(), vec![TomlBackend::Native, TomlBackend::Pest]);
     assert_eq!(toml_backend_feature_profile(Some(TomlBackend::Pest)).backend, "pest");
     assert_eq!(toml_backend_feature_profile(Some(TomlBackend::Pest)).backend_ref.id, "pest");
+}
+
+#[test]
+fn conforms_to_slice_135_toml_backend_feature_profiles() {
+    let fixture = read_fixture(&[
+        "diagnostics",
+        "slice-135-toml-family-backend-feature-profiles",
+        "rust-toml-backend-feature-profiles.json",
+    ]);
+
+    let native = toml_backend_feature_profile(Some(TomlBackend::Native));
+    assert_eq!(native.backend, fixture["native"]["backend"].as_str().unwrap());
+    assert_eq!(
+        native.supported_policies,
+        vec![ast_merge::PolicyReference {
+            surface: ast_merge::PolicySurface::Array,
+            name: "destination_wins_array".to_string()
+        }]
+    );
+
+    let pest = toml_backend_feature_profile(Some(TomlBackend::Pest));
+    assert_eq!(pest.backend, fixture["pest"]["backend"].as_str().unwrap());
+    assert_eq!(pest.backend_ref.id, "pest");
+}
+
+#[test]
+fn conforms_to_slice_136_toml_plan_contexts() {
+    let fixture = read_fixture(&[
+        "diagnostics",
+        "slice-136-toml-family-plan-contexts",
+        "rust-toml-plan-contexts.json",
+    ]);
+
+    let native = toml_plan_context(Some(TomlBackend::Native));
+    assert_eq!(native.family_profile.family, fixture["native"]["family_profile"]["family"]);
+    let native_feature = native.feature_profile.expect("native feature profile should be present");
+    assert_eq!(native_feature.backend, fixture["native"]["feature_profile"]["backend"]);
+    assert_eq!(
+        native_feature.supports_dialects,
+        fixture["native"]["feature_profile"]["supports_dialects"]
+    );
+
+    let pest = toml_plan_context(Some(TomlBackend::Pest));
+    assert_eq!(pest.family_profile.family, fixture["pest"]["family_profile"]["family"]);
+    let pest_feature = pest.feature_profile.expect("pest feature profile should be present");
+    assert_eq!(pest_feature.backend, fixture["pest"]["feature_profile"]["backend"]);
+    assert_eq!(
+        pest_feature.supports_dialects,
+        fixture["pest"]["feature_profile"]["supports_dialects"]
+    );
 }
 
 #[test]
@@ -262,5 +316,47 @@ fn uses_tree_haver_backend_context_when_no_explicit_toml_backend_is_given() {
     assert_eq!(
         merge_result.output,
         merge_fixture["expected"]["output"].as_str().map(str::to_string)
+    );
+}
+
+#[test]
+fn conforms_to_slice_137_toml_family_manifest_fixture() {
+    let manifest_value = read_fixture(&[
+        "conformance",
+        "slice-137-toml-family-manifest",
+        "toml-family-manifest.json",
+    ]);
+    let manifest: ConformanceManifest =
+        serde_json::from_value(manifest_value.clone()).expect("manifest should decode");
+    let expected_profile_path = vec![
+        "diagnostics".to_string(),
+        "slice-90-toml-family-feature-profile".to_string(),
+        "toml-feature-profile.json".to_string(),
+    ];
+    let expected_analysis_path = vec![
+        "toml".to_string(),
+        "slice-92-structure".to_string(),
+        "table-and-array.json".to_string(),
+    ];
+    let expected_matching_path =
+        vec!["toml".to_string(), "slice-93-matching".to_string(), "path-equality.json".to_string()];
+    let expected_merge_path =
+        vec!["toml".to_string(), "slice-94-merge".to_string(), "table-merge.json".to_string()];
+
+    assert_eq!(
+        conformance_family_feature_profile_path(&manifest, "toml"),
+        Some(expected_profile_path.as_slice())
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "toml", "analysis"),
+        Some(expected_analysis_path.as_slice())
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "toml", "matching"),
+        Some(expected_matching_path.as_slice())
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "toml", "merge"),
+        Some(expected_merge_path.as_slice())
     );
 }

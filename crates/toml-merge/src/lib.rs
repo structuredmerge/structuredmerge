@@ -1,6 +1,7 @@
 use ast_merge::{
-    Diagnostic, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile, MergeResult,
-    ParseResult, PolicyReference, PolicySurface,
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference,
+    PolicySurface,
 };
 use pest::Parser;
 use pest_grammars::toml::{Rule as PestTomlRule, TomlParser as PestTomlParser};
@@ -149,6 +150,23 @@ pub fn toml_backend_feature_profile(backend: Option<TomlBackend>) -> TomlBackend
         backend_ref,
         supported_dialects: vec![TomlDialect::Toml],
         supported_policies: vec![destination_wins_array_policy()],
+    }
+}
+
+pub fn toml_plan_context(backend: Option<TomlBackend>) -> ConformanceFamilyPlanContext {
+    let backend_profile = toml_backend_feature_profile(backend);
+    let supports_dialects = backend_profile.backend != "pest";
+    ConformanceFamilyPlanContext {
+        family_profile: FamilyFeatureProfile {
+            family: toml_feature_profile().family.to_string(),
+            supported_dialects: vec!["toml".to_string()],
+            supported_policies: toml_feature_profile().supported_policies,
+        },
+        feature_profile: Some(ConformanceFeatureProfileView {
+            backend: backend_profile.backend,
+            supports_dialects,
+            supported_policies: backend_profile.supported_policies,
+        }),
     }
 }
 
