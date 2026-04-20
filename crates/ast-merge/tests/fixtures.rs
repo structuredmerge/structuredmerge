@@ -25,8 +25,8 @@ use ast_merge::{
     report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
     report_named_conformance_suite_manifest, report_planned_conformance_suite,
     report_planned_named_conformance_suites, resolve_conformance_family_context,
-    review_conformance_family_context, review_conformance_manifest, review_replay_bundle_envelope,
-    review_replay_bundle_inputs, review_replay_context_compatible,
+    review_conformance_family_context, review_conformance_manifest, review_projected_child_groups,
+    review_replay_bundle_envelope, review_replay_bundle_inputs, review_replay_context_compatible,
     review_request_id_for_family_context, review_request_id_for_projected_child_group,
     run_conformance_case, run_conformance_suite, run_named_conformance_suite,
     run_named_conformance_suite_entry, run_planned_conformance_suite,
@@ -2707,6 +2707,25 @@ fn conforms_to_slice_237_delegated_child_groups_accepted_for_apply_fixture() {
         select_projected_child_review_groups_accepted_for_apply(&groups, family, &decisions),
         expected
     );
+}
+
+#[test]
+fn conforms_to_slice_240_delegated_child_group_review_state_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("delegated_child_group_review_state"));
+    let family = fixture["family"].as_str().expect("family should be a string");
+    let groups =
+        serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(fixture["groups"].clone())
+            .expect("groups should deserialize");
+    let decisions =
+        serde_json::from_value::<Vec<ast_merge::ReviewDecision>>(fixture["decisions"].clone())
+            .expect("decisions should deserialize");
+    let expected = serde_json::from_value::<ast_merge::DelegatedChildGroupReviewState>(
+        fixture["expected_state"].clone(),
+    )
+    .expect("expected state should deserialize");
+
+    assert_eq!(review_projected_child_groups(&groups, family, &decisions), expected);
 }
 
 #[test]

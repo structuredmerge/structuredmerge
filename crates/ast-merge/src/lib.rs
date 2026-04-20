@@ -352,6 +352,14 @@ pub struct ReviewDecision {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedChildGroupReviewState {
+    pub requests: Vec<ReviewRequest>,
+    pub accepted_groups: Vec<ProjectedChildReviewGroup>,
+    pub applied_decisions: Vec<ReviewDecision>,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReviewReplayBundle {
     pub replay_context: ReviewReplayContext,
     pub decisions: Vec<ReviewDecision>,
@@ -638,6 +646,59 @@ pub fn select_projected_child_review_groups_accepted_for_apply(
         })
         .cloned()
         .collect()
+}
+
+pub fn review_projected_child_groups(
+    groups: &[ProjectedChildReviewGroup],
+    family: &str,
+    decisions: &[ReviewDecision],
+) -> DelegatedChildGroupReviewState {
+    let request_ids: Vec<String> =
+        groups.iter().map(review_request_id_for_projected_child_group).collect();
+    let mut applied_decisions = Vec::new();
+    let mut diagnostics = Vec::new();
+
+    for decision in decisions {
+        if decision.action != ReviewDecisionAction::ApplyDelegatedChildGroup {
+            continue;
+        }
+
+        if request_ids.contains(&decision.request_id) {
+            applied_decisions.push(decision.clone());
+        } else {
+            diagnostics.push(Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::ReplayRejected,
+                message: format!(
+                    "review decision {} does not match any current delegated child review request.",
+                    decision.request_id
+                ),
+                path: None,
+                review: Some(Box::new(ReviewDiagnosticDetail {
+                    request_id: Some(decision.request_id.clone()),
+                    action: Some(decision.action),
+                    reason: Some(ReviewDiagnosticReason::RequestNotFound),
+                    payload_kind: None,
+                    expected_family: None,
+                    provided_family: None,
+                })),
+            });
+        }
+    }
+
+    let accepted_groups =
+        select_projected_child_review_groups_accepted_for_apply(groups, family, &applied_decisions);
+    let accepted_request_ids: Vec<String> =
+        accepted_groups.iter().map(review_request_id_for_projected_child_group).collect();
+    let requests = groups
+        .iter()
+        .filter(|group| {
+            !accepted_request_ids.contains(&review_request_id_for_projected_child_group(group))
+        })
+        .map(|group| projected_child_group_review_request(group, family))
+        .collect();
+
+    DelegatedChildGroupReviewState { requests, accepted_groups, applied_decisions, diagnostics }
 }
 
 pub fn conformance_review_host_hints(

@@ -4,7 +4,8 @@ use ast_merge::{
     ConformanceManifest, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, conformance_family_feature_profile_path,
     conformance_fixture_path, group_projected_child_review_cases,
-    projected_child_group_review_request, select_projected_child_review_groups_accepted_for_apply,
+    projected_child_group_review_request, review_projected_child_groups,
+    select_projected_child_review_groups_accepted_for_apply,
     select_projected_child_review_groups_ready_for_apply,
     summarize_projected_child_review_group_progress,
 };
@@ -377,4 +378,26 @@ fn conforms_to_slice_238_markdown_delegated_child_review_transport() {
         select_projected_child_review_groups_accepted_for_apply(&groups, family, &decisions),
         expected
     );
+}
+
+#[test]
+fn conforms_to_slice_241_markdown_delegated_child_review_state() {
+    let fixture = read_fixture(&[
+        "markdown",
+        "slice-241-delegated-child-review-state",
+        "fenced-code-review-state.json",
+    ]);
+    let family = fixture["family"].as_str().expect("family should be a string");
+    let groups =
+        serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(fixture["groups"].clone())
+            .expect("groups should deserialize");
+    let decisions =
+        serde_json::from_value::<Vec<ast_merge::ReviewDecision>>(fixture["decisions"].clone())
+            .expect("decisions should deserialize");
+    let expected = serde_json::from_value::<ast_merge::DelegatedChildGroupReviewState>(
+        fixture["expected_state"].clone(),
+    )
+    .expect("expected state should deserialize");
+
+    assert_eq!(review_projected_child_groups(&groups, family, &decisions), expected);
 }

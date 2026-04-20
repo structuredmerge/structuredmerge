@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf};
 use ast_merge::{
     ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
     group_projected_child_review_cases, projected_child_group_review_request,
-    select_projected_child_review_groups_accepted_for_apply,
+    review_projected_child_groups, select_projected_child_review_groups_accepted_for_apply,
     select_projected_child_review_groups_ready_for_apply,
     summarize_projected_child_review_group_progress,
 };
@@ -209,5 +209,27 @@ fn conforms_to_ruby_fixtures() {
             &transport_decisions,
         ),
         expected_transport_groups
+    );
+
+    let state_fixture = read_fixture(&[
+        "ruby",
+        "slice-242-delegated-child-review-state",
+        "yard-example-review-state.json",
+    ]);
+    let state_family = state_fixture["family"].as_str().expect("family should be a string");
+    let state_groups =
+        serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(state_fixture["groups"].clone())
+            .expect("groups should deserialize");
+    let state_decisions = serde_json::from_value::<Vec<ast_merge::ReviewDecision>>(
+        state_fixture["decisions"].clone(),
+    )
+    .expect("decisions should deserialize");
+    let expected_state = serde_json::from_value::<ast_merge::DelegatedChildGroupReviewState>(
+        state_fixture["expected_state"].clone(),
+    )
+    .expect("expected state should deserialize");
+    assert_eq!(
+        review_projected_child_groups(&state_groups, state_family, &state_decisions),
+        expected_state
     );
 }
