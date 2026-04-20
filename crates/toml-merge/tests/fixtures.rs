@@ -360,3 +360,42 @@ fn conforms_to_slice_137_toml_family_manifest_fixture() {
         Some(expected_merge_path.as_slice())
     );
 }
+
+#[test]
+fn resolves_toml_paths_through_the_canonical_manifest() {
+    let manifest_value =
+        read_fixture(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
+    let manifest: ConformanceManifest =
+        serde_json::from_value(manifest_value.clone()).expect("manifest should decode");
+    let expected_profile_path = vec![
+        "diagnostics".to_string(),
+        "slice-90-toml-family-feature-profile".to_string(),
+        "toml-feature-profile.json".to_string(),
+    ];
+    let expected_analysis_path = vec![
+        "toml".to_string(),
+        "slice-92-structure".to_string(),
+        "table-and-array.json".to_string(),
+    ];
+    let expected_matching_path =
+        vec!["toml".to_string(), "slice-93-matching".to_string(), "path-equality.json".to_string()];
+    let expected_merge_path =
+        vec!["toml".to_string(), "slice-94-merge".to_string(), "table-merge.json".to_string()];
+
+    assert_eq!(
+        conformance_family_feature_profile_path(&manifest, "toml"),
+        Some(expected_profile_path.as_slice())
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "toml", "analysis"),
+        Some(expected_analysis_path.as_slice())
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "toml", "matching"),
+        Some(expected_matching_path.as_slice())
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "toml", "merge"),
+        Some(expected_merge_path.as_slice())
+    );
+}
