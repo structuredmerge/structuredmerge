@@ -1489,13 +1489,16 @@ fn conforms_to_canonical_stable_suite_planning_and_review_fixtures() {
         "slice-156-canonical-stable-suite-report",
         "canonical-stable-suite-report.json",
     ]));
-    let report_options =
-        serde_json::from_value::<ConformanceManifestPlanningOptions>(report_fixture["options"].clone())
-            .expect("options should deserialize");
-    let expected_report =
-        serde_json::from_value::<ConformanceManifestReport>(report_fixture["expected_report"].clone())
-            .expect("expected report should deserialize");
-    let report_executions = report_fixture["executions"].as_object().expect("executions should be an object");
+    let report_options = serde_json::from_value::<ConformanceManifestPlanningOptions>(
+        report_fixture["options"].clone(),
+    )
+    .expect("options should deserialize");
+    let expected_report = serde_json::from_value::<ConformanceManifestReport>(
+        report_fixture["expected_report"].clone(),
+    )
+    .expect("expected report should deserialize");
+    let report_executions =
+        report_fixture["executions"].as_object().expect("executions should be an object");
     let report = report_conformance_manifest(&manifest, &report_options, |run| {
         let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
         serde_json::from_value::<ConformanceCaseExecution>(
@@ -1512,13 +1515,16 @@ fn conforms_to_canonical_stable_suite_planning_and_review_fixtures() {
         "slice-157-canonical-stable-suite-review-state",
         "canonical-stable-suite-review-state.json",
     ]));
-    let review_options =
-        serde_json::from_value::<ConformanceManifestReviewOptions>(review_fixture["options"].clone())
-            .expect("options should deserialize");
-    let expected_state =
-        serde_json::from_value::<ConformanceManifestReviewState>(review_fixture["expected_state"].clone())
-            .expect("expected state should deserialize");
-    let review_executions = review_fixture["executions"].as_object().expect("executions should be an object");
+    let review_options = serde_json::from_value::<ConformanceManifestReviewOptions>(
+        review_fixture["options"].clone(),
+    )
+    .expect("options should deserialize");
+    let expected_state = serde_json::from_value::<ConformanceManifestReviewState>(
+        review_fixture["expected_state"].clone(),
+    )
+    .expect("expected state should deserialize");
+    let review_executions =
+        review_fixture["executions"].as_object().expect("executions should be an object");
     let review_state = review_conformance_manifest(&manifest, &review_options, |run| {
         let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
         serde_json::from_value::<ConformanceCaseExecution>(
@@ -1642,6 +1648,48 @@ fn conforms_to_slice_131_canonical_manifest_source_family_paths() {
             &["go".to_string(), "slice-112-merge".to_string(), "module-merge.json".to_string(),][..],
         )
     );
+}
+
+#[test]
+fn conforms_to_source_family_review_state_fixtures() {
+    for path in [
+        &["diagnostics", "slice-158-source-family-review-state", "source-family-review-state.json"]
+            [..],
+        &[
+            "diagnostics",
+            "slice-159-source-family-reviewed-default",
+            "source-family-reviewed-default.json",
+        ][..],
+        &[
+            "diagnostics",
+            "slice-160-source-family-replay-application",
+            "source-family-replay-application.json",
+        ][..],
+    ] {
+        let fixture = read_fixture_from_path(fixture_path(path));
+        let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+            .expect("manifest should deserialize");
+        let options =
+            serde_json::from_value::<ConformanceManifestReviewOptions>(fixture["options"].clone())
+                .expect("options should deserialize");
+        let expected_state = serde_json::from_value::<ConformanceManifestReviewState>(
+            fixture["expected_state"].clone(),
+        )
+        .expect("expected state should deserialize");
+        let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+        let state = review_conformance_manifest(&manifest, &options, |run| {
+            let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+            serde_json::from_value::<ConformanceCaseExecution>(
+                executions.get(&key).cloned().unwrap_or_else(
+                    || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+                ),
+            )
+            .expect("execution should deserialize")
+        });
+
+        assert_eq!(state, expected_state);
+    }
 }
 
 #[test]
