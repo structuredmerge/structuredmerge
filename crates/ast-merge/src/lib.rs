@@ -228,6 +228,7 @@ pub enum ReviewDecisionAction {
 pub struct ReviewActionOffer {
     pub action: ReviewDecisionAction,
     pub requires_context: bool,
+    pub payload_kind: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -747,10 +748,12 @@ pub fn review_conformance_family_context(
                 ReviewActionOffer {
                     action: ReviewDecisionAction::AcceptDefaultContext,
                     requires_context: false,
+                    payload_kind: None,
                 },
                 ReviewActionOffer {
                     action: ReviewDecisionAction::ProvideExplicitContext,
                     requires_context: true,
+                    payload_kind: Some("conformance_family_context".to_string()),
                 },
             ],
             default_action: Some(ReviewDecisionAction::AcceptDefaultContext),
