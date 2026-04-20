@@ -313,6 +313,7 @@ pub struct ConformanceManifestReport {
 #[serde(rename_all = "snake_case")]
 pub enum ReviewRequestKind {
     FamilyContext,
+    DelegatedChildGroup,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -320,6 +321,7 @@ pub enum ReviewRequestKind {
 pub enum ReviewDecisionAction {
     AcceptDefaultContext,
     ProvideExplicitContext,
+    ApplyDelegatedChildGroup,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -337,6 +339,7 @@ pub struct ReviewRequest {
     pub message: String,
     pub blocking: bool,
     pub proposed_context: Option<ConformanceFamilyPlanContext>,
+    pub delegated_group: Option<ProjectedChildReviewGroup>,
     pub action_offers: Vec<ReviewActionOffer>,
     pub default_action: Option<ReviewDecisionAction>,
 }
@@ -585,6 +588,54 @@ pub fn select_projected_child_review_groups_ready_for_apply(
     groups
         .iter()
         .filter(|group| group.case_ids.iter().all(|case_id| resolved_case_ids.contains(case_id)))
+        .cloned()
+        .collect()
+}
+
+pub fn review_request_id_for_projected_child_group(group: &ProjectedChildReviewGroup) -> String {
+    format!("projected_child_group:{}", group.delegated_apply_group)
+}
+
+pub fn projected_child_group_review_request(
+    group: &ProjectedChildReviewGroup,
+    family: &str,
+) -> ReviewRequest {
+    ReviewRequest {
+        id: review_request_id_for_projected_child_group(group),
+        kind: ReviewRequestKind::DelegatedChildGroup,
+        family: family.to_string(),
+        message: format!(
+            "delegated child group {} is ready to apply for {}.",
+            group.delegated_apply_group, family
+        ),
+        blocking: true,
+        proposed_context: None,
+        delegated_group: Some(group.clone()),
+        action_offers: vec![ReviewActionOffer {
+            action: ReviewDecisionAction::ApplyDelegatedChildGroup,
+            requires_context: false,
+            payload_kind: None,
+        }],
+        default_action: Some(ReviewDecisionAction::ApplyDelegatedChildGroup),
+    }
+}
+
+pub fn select_projected_child_review_groups_accepted_for_apply(
+    groups: &[ProjectedChildReviewGroup],
+    _family: &str,
+    decisions: &[ReviewDecision],
+) -> Vec<ProjectedChildReviewGroup> {
+    let accepted_request_ids: Vec<String> = decisions
+        .iter()
+        .filter(|decision| decision.action == ReviewDecisionAction::ApplyDelegatedChildGroup)
+        .map(|decision| decision.request_id.clone())
+        .collect();
+
+    groups
+        .iter()
+        .filter(|group| {
+            accepted_request_ids.contains(&review_request_id_for_projected_child_group(group))
+        })
         .cloned()
         .collect()
 }
@@ -851,6 +902,7 @@ fn review_decision_for_family_context(
 
                 return (Some(context.clone()), Some(decision.clone()), false, Vec::new());
             }
+            ReviewDecisionAction::ApplyDelegatedChildGroup => continue,
         }
     }
 
@@ -936,6 +988,7 @@ pub fn review_conformance_family_context(
             ),
             blocking: true,
             proposed_context: Some(default_conformance_family_context(family_profile)),
+            delegated_group: None,
             action_offers: vec![
                 ReviewActionOffer {
                     action: ReviewDecisionAction::AcceptDefaultContext,

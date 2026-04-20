@@ -4,6 +4,7 @@ use ast_merge::{
     ConformanceManifest, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, conformance_family_feature_profile_path,
     conformance_fixture_path, group_projected_child_review_cases,
+    projected_child_group_review_request, select_projected_child_review_groups_accepted_for_apply,
     select_projected_child_review_groups_ready_for_apply,
     summarize_projected_child_review_group_progress,
 };
@@ -343,6 +344,37 @@ fn conforms_to_slice_234_markdown_projected_child_review_groups_ready_for_apply(
 
     assert_eq!(
         select_projected_child_review_groups_ready_for_apply(&groups, &resolved_case_ids),
+        expected
+    );
+}
+
+#[test]
+fn conforms_to_slice_238_markdown_delegated_child_review_transport() {
+    let fixture = read_fixture(&[
+        "markdown",
+        "slice-238-delegated-child-review-transport",
+        "fenced-code-review-transport.json",
+    ]);
+    let family = fixture["family"].as_str().expect("family should be a string");
+    let group = serde_json::from_value::<ProjectedChildReviewGroup>(fixture["group"].clone())
+        .expect("group should deserialize");
+    let expected_request =
+        serde_json::from_value::<ast_merge::ReviewRequest>(fixture["expected_request"].clone())
+            .expect("expected request should deserialize");
+    let groups =
+        serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(fixture["groups"].clone())
+            .expect("groups should deserialize");
+    let decisions =
+        serde_json::from_value::<Vec<ast_merge::ReviewDecision>>(fixture["decisions"].clone())
+            .expect("decisions should deserialize");
+    let expected = serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(
+        fixture["expected_accepted_groups"].clone(),
+    )
+    .expect("expected accepted groups should deserialize");
+
+    assert_eq!(projected_child_group_review_request(&group, family), expected_request);
+    assert_eq!(
+        select_projected_child_review_groups_accepted_for_apply(&groups, family, &decisions),
         expected
     );
 }

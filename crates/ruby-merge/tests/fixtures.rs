@@ -2,7 +2,9 @@ use std::{fs, path::PathBuf};
 
 use ast_merge::{
     ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
-    group_projected_child_review_cases, select_projected_child_review_groups_ready_for_apply,
+    group_projected_child_review_cases, projected_child_group_review_request,
+    select_projected_child_review_groups_accepted_for_apply,
+    select_projected_child_review_groups_ready_for_apply,
     summarize_projected_child_review_group_progress,
 };
 use ruby_merge::{
@@ -172,5 +174,40 @@ fn conforms_to_ruby_fixtures() {
             &ready_resolved_case_ids,
         ),
         expected_ready_groups
+    );
+
+    let transport_fixture = read_fixture(&[
+        "ruby",
+        "slice-239-delegated-child-review-transport",
+        "yard-example-review-transport.json",
+    ]);
+    let family = transport_fixture["family"].as_str().expect("family should be a string");
+    let transport_group =
+        serde_json::from_value::<ProjectedChildReviewGroup>(transport_fixture["group"].clone())
+            .expect("group should deserialize");
+    let expected_request = serde_json::from_value::<ast_merge::ReviewRequest>(
+        transport_fixture["expected_request"].clone(),
+    )
+    .expect("expected request should deserialize");
+    let transport_groups = serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(
+        transport_fixture["groups"].clone(),
+    )
+    .expect("groups should deserialize");
+    let transport_decisions = serde_json::from_value::<Vec<ast_merge::ReviewDecision>>(
+        transport_fixture["decisions"].clone(),
+    )
+    .expect("decisions should deserialize");
+    let expected_transport_groups = serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(
+        transport_fixture["expected_accepted_groups"].clone(),
+    )
+    .expect("expected accepted groups should deserialize");
+    assert_eq!(projected_child_group_review_request(&transport_group, family), expected_request);
+    assert_eq!(
+        select_projected_child_review_groups_accepted_for_apply(
+            &transport_groups,
+            family,
+            &transport_decisions,
+        ),
+        expected_transport_groups
     );
 }

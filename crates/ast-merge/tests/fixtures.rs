@@ -20,15 +20,18 @@ use ast_merge::{
     group_projected_child_review_cases, import_conformance_manifest_review_state_envelope,
     import_review_replay_bundle_envelope, plan_conformance_suite, plan_named_conformance_suite,
     plan_named_conformance_suite_entry, plan_named_conformance_suites,
-    plan_named_conformance_suites_with_diagnostics, report_conformance_manifest,
-    report_conformance_suite, report_named_conformance_suite, report_named_conformance_suite_entry,
-    report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
-    report_planned_conformance_suite, report_planned_named_conformance_suites,
-    resolve_conformance_family_context, review_conformance_family_context,
-    review_conformance_manifest, review_replay_bundle_envelope, review_replay_bundle_inputs,
-    review_replay_context_compatible, review_request_id_for_family_context, run_conformance_case,
-    run_conformance_suite, run_named_conformance_suite, run_named_conformance_suite_entry,
-    run_planned_conformance_suite, run_planned_named_conformance_suites, select_conformance_case,
+    plan_named_conformance_suites_with_diagnostics, projected_child_group_review_request,
+    report_conformance_manifest, report_conformance_suite, report_named_conformance_suite,
+    report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
+    report_named_conformance_suite_manifest, report_planned_conformance_suite,
+    report_planned_named_conformance_suites, resolve_conformance_family_context,
+    review_conformance_family_context, review_conformance_manifest, review_replay_bundle_envelope,
+    review_replay_bundle_inputs, review_replay_context_compatible,
+    review_request_id_for_family_context, review_request_id_for_projected_child_group,
+    run_conformance_case, run_conformance_suite, run_named_conformance_suite,
+    run_named_conformance_suite_entry, run_planned_conformance_suite,
+    run_planned_named_conformance_suites, select_conformance_case,
+    select_projected_child_review_groups_accepted_for_apply,
     select_projected_child_review_groups_ready_for_apply, summarize_conformance_results,
     summarize_named_conformance_suite_reports, summarize_projected_child_review_group_progress,
 };
@@ -2665,6 +2668,43 @@ fn conforms_to_slice_233_projected_child_review_groups_ready_for_apply_fixture()
 
     assert_eq!(
         select_projected_child_review_groups_ready_for_apply(&groups, &resolved_case_ids),
+        expected
+    );
+}
+
+#[test]
+fn conforms_to_slice_236_delegated_child_group_review_request_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("delegated_child_group_review_request"));
+    let family = fixture["family"].as_str().expect("family should be a string");
+    let group = serde_json::from_value::<ProjectedChildReviewGroup>(fixture["group"].clone())
+        .expect("group should deserialize");
+    let expected = serde_json::from_value::<ReviewRequest>(fixture["expected_request"].clone())
+        .expect("expected request should deserialize");
+
+    assert_eq!(review_request_id_for_projected_child_group(&group), expected.id);
+    assert_eq!(projected_child_group_review_request(&group, family), expected);
+}
+
+#[test]
+fn conforms_to_slice_237_delegated_child_groups_accepted_for_apply_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "delegated_child_groups_accepted_for_apply",
+    ));
+    let family = fixture["family"].as_str().expect("family should be a string");
+    let groups =
+        serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(fixture["groups"].clone())
+            .expect("groups should deserialize");
+    let decisions =
+        serde_json::from_value::<Vec<ast_merge::ReviewDecision>>(fixture["decisions"].clone())
+            .expect("decisions should deserialize");
+    let expected = serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(
+        fixture["expected_accepted_groups"].clone(),
+    )
+    .expect("expected accepted groups should deserialize");
+
+    assert_eq!(
+        select_projected_child_review_groups_accepted_for_apply(&groups, family, &decisions),
         expected
     );
 }
