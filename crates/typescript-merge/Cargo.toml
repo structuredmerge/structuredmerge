@@ -1,0 +1,11 @@
+[package]
+name = "typescript-merge"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+ast-merge = { path = "../ast-merge" }
+tree-haver = { path = "../tree-haver" }
+
+[dev-dependencies]
+serde_json = "1"

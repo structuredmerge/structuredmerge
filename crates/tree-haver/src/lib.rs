@@ -4,7 +4,9 @@ use std::{
 };
 
 use ast_merge::{Diagnostic, ParseResult, PolicyReference};
-use tree_sitter_language_pack::{PackConfig, init, parse_string, tree_has_error_nodes};
+use tree_sitter_language_pack::{
+    PackConfig, ProcessConfig, init, parse_string, process, tree_has_error_nodes,
+};
 
 pub const PACKAGE_NAME: &str = "tree-haver";
 
@@ -54,6 +56,42 @@ pub struct ParserDiagnostics {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProcessRequest {
+    pub source: String,
+    pub language: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProcessSpan {
+    pub start_byte: usize,
+    pub end_byte: usize,
+    pub start_row: usize,
+    pub start_col: usize,
+    pub end_row: usize,
+    pub end_col: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProcessStructureItem {
+    pub kind: String,
+    pub name: Option<String>,
+    pub span: ProcessSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProcessImportInfo {
+    pub source: String,
+    pub items: Vec<String>,
+    pub span: ProcessSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProcessDiagnostic {
+    pub message: String,
+    pub severity: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LanguagePackAnalysis {
     pub language: String,
     pub dialect: Option<String>,
@@ -62,9 +100,24 @@ pub struct LanguagePackAnalysis {
     pub backend_ref: BackendReference,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LanguagePackProcessAnalysis {
+    pub language: String,
+    pub structure: Vec<ProcessStructureItem>,
+    pub imports: Vec<ProcessImportInfo>,
+    pub diagnostics: Vec<ProcessDiagnostic>,
+    pub backend_ref: BackendReference,
+}
+
 impl AnalysisHandle for LanguagePackAnalysis {
     fn kind(&self) -> &'static str {
         "tree-sitter"
+    }
+}
+
+impl AnalysisHandle for LanguagePackProcessAnalysis {
+    fn kind(&self) -> &'static str {
+        "tree-sitter-process"
     }
 }
 
@@ -156,6 +209,155 @@ pub fn parse_with_language_pack(request: &ParserRequest) -> ParseResult<Language
                 }
             }
         }
+        Err(error) => ParseResult {
+            ok: false,
+            diagnostics: vec![Diagnostic {
+                severity: ast_merge::DiagnosticSeverity::Error,
+                category: ast_merge::DiagnosticCategory::UnsupportedFeature,
+                message: error.to_string(),
+                path: None,
+                review: None,
+            }],
+            analysis: None,
+            policies: vec![],
+        },
+    }
+}
+
+fn structure_kind_name(kind: &tree_sitter_language_pack::StructureKind) -> String {
+    match kind {
+        tree_sitter_language_pack::StructureKind::Function => "function".to_string(),
+        tree_sitter_language_pack::StructureKind::Method => "method".to_string(),
+        tree_sitter_language_pack::StructureKind::Class => "class".to_string(),
+        tree_sitter_language_pack::StructureKind::Struct => "struct".to_string(),
+        tree_sitter_language_pack::StructureKind::Interface => "interface".to_string(),
+        tree_sitter_language_pack::StructureKind::Enum => "enum".to_string(),
+        tree_sitter_language_pack::StructureKind::Module => "module".to_string(),
+        tree_sitter_language_pack::StructureKind::Trait => "trait".to_string(),
+        tree_sitter_language_pack::StructureKind::Impl => "impl".to_string(),
+        tree_sitter_language_pack::StructureKind::Namespace => "namespace".to_string(),
+        tree_sitter_language_pack::StructureKind::Other(other) => other.clone(),
+    }
+}
+
+fn normalize_typescript_import(item: &tree_sitter_language_pack::ImportInfo) -> ProcessImportInfo {
+    let source_match = item
+        .source
+        .split("from")
+        .nth(1)
+        .and_then(|tail| tail.split(['"', '\'']).nth(1))
+        .or_else(|| item.source.split(['"', '\'']).nth(1))
+        .unwrap_or(item.source.as_str())
+        .to_string();
+    let items = item
+        .source
+        .split('{')
+        .nth(1)
+        .and_then(|tail| tail.split('}').next())
+        .map(|raw| {
+            raw.split(',')
+                .map(|part| part.replace("type", "").trim().to_string())
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    ProcessImportInfo {
+        source: source_match,
+        items,
+        span: ProcessSpan {
+            start_byte: item.span.start_byte,
+            end_byte: item.span.end_byte,
+            start_row: item.span.start_line,
+            start_col: item.span.start_column,
+            end_row: item.span.end_line,
+            end_col: item.span.end_column,
+        },
+    }
+}
+
+fn diagnostic_severity_name(severity: &tree_sitter_language_pack::DiagnosticSeverity) -> String {
+    match severity {
+        tree_sitter_language_pack::DiagnosticSeverity::Error => "error".to_string(),
+        tree_sitter_language_pack::DiagnosticSeverity::Warning => "warning".to_string(),
+        tree_sitter_language_pack::DiagnosticSeverity::Info => "info".to_string(),
+    }
+}
+
+pub fn process_with_language_pack(
+    request: &ProcessRequest,
+) -> ParseResult<LanguagePackProcessAnalysis> {
+    if let Err(error) = ensure_language_pack_language(&request.language) {
+        return ParseResult {
+            ok: false,
+            diagnostics: vec![Diagnostic {
+                severity: ast_merge::DiagnosticSeverity::Error,
+                category: ast_merge::DiagnosticCategory::UnsupportedFeature,
+                message: error,
+                path: None,
+                review: None,
+            }],
+            analysis: None,
+            policies: vec![],
+        };
+    }
+
+    match process(&request.source, &ProcessConfig::new(&request.language).all()) {
+        Ok(result) => ParseResult {
+            ok: true,
+            diagnostics: vec![],
+            analysis: Some(LanguagePackProcessAnalysis {
+                language: result.language,
+                structure: result
+                    .structure
+                    .iter()
+                    .map(|item| ProcessStructureItem {
+                        kind: structure_kind_name(&item.kind),
+                        name: item.name.clone(),
+                        span: ProcessSpan {
+                            start_byte: item.span.start_byte,
+                            end_byte: item.span.end_byte,
+                            start_row: item.span.start_line,
+                            start_col: item.span.start_column,
+                            end_row: item.span.end_line,
+                            end_col: item.span.end_column,
+                        },
+                    })
+                    .collect(),
+                imports: result
+                    .imports
+                    .iter()
+                    .map(|item| {
+                        if request.language == "typescript" {
+                            normalize_typescript_import(item)
+                        } else {
+                            ProcessImportInfo {
+                                source: item.source.clone(),
+                                items: item.items.clone(),
+                                span: ProcessSpan {
+                                    start_byte: item.span.start_byte,
+                                    end_byte: item.span.end_byte,
+                                    start_row: item.span.start_line,
+                                    start_col: item.span.start_column,
+                                    end_row: item.span.end_line,
+                                    end_col: item.span.end_column,
+                                },
+                            }
+                        }
+                    })
+                    .collect(),
+                diagnostics: result
+                    .diagnostics
+                    .iter()
+                    .map(|diagnostic| ProcessDiagnostic {
+                        message: diagnostic.message.clone(),
+                        severity: diagnostic_severity_name(&diagnostic.severity),
+                    })
+                    .collect(),
+                backend_ref: kreuzberg_language_pack_backend(),
+            }),
+            policies: vec![],
+        },
         Err(error) => ParseResult {
             ok: false,
             diagnostics: vec![Diagnostic {

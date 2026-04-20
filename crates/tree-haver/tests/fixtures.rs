@@ -2,7 +2,10 @@ use std::{fs, path::PathBuf};
 
 use ast_merge::{ConformanceManifest, conformance_fixture_path};
 use serde_json::Value;
-use tree_haver::{AdapterInfo, BackendReference, FeatureProfile, ParserRequest};
+use tree_haver::{
+    AdapterInfo, BackendReference, FeatureProfile, ParserRequest, ProcessRequest,
+    process_with_language_pack,
+};
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -210,5 +213,51 @@ fn conforms_to_slice_25_backend_registry_fixture() {
             "id": "tree-sitter",
             "family": "tree-sitter",
         })
+    );
+}
+
+#[test]
+fn conforms_to_slice_100_process_baseline_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("process_baseline"));
+
+    let result = process_with_language_pack(&ProcessRequest {
+        source: fixture["request"]["source"]
+            .as_str()
+            .expect("source should be present")
+            .to_string(),
+        language: fixture["request"]["language"]
+            .as_str()
+            .expect("language should be present")
+            .to_string(),
+    });
+
+    assert!(result.ok);
+    let analysis = result.analysis.expect("analysis should be present");
+    assert_eq!(analysis.language, fixture["expected"]["language"].as_str().unwrap());
+    assert_eq!(
+        serde_json::json!(
+            analysis
+                .structure
+                .iter()
+                .map(|item| {
+                    let mut value = serde_json::json!({ "kind": item.kind });
+                    if let Some(name) = &item.name {
+                        value["name"] = serde_json::json!(name);
+                    }
+                    value
+                })
+                .collect::<Vec<_>>()
+        ),
+        fixture["expected"]["structure"]
+    );
+    assert_eq!(
+        serde_json::json!(
+            analysis
+                .imports
+                .iter()
+                .map(|item| serde_json::json!({ "source": item.source, "items": item.items }))
+                .collect::<Vec<_>>()
+        ),
+        fixture["expected"]["imports"]
     );
 }
