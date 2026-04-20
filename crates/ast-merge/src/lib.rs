@@ -42,6 +42,7 @@ pub struct Diagnostic {
     pub request_id: Option<String>,
     pub action: Option<ReviewDecisionAction>,
     pub reason: Option<ReviewDiagnosticReason>,
+    pub payload_kind: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -584,6 +585,7 @@ pub fn resolve_conformance_family_context(
                 request_id: None,
                 action: None,
                 reason: None,
+                payload_kind: None,
             }],
         );
     }
@@ -599,6 +601,7 @@ pub fn resolve_conformance_family_context(
                 request_id: None,
                 action: None,
                 reason: None,
+                payload_kind: None,
             }],
         );
     }
@@ -616,6 +619,7 @@ pub fn resolve_conformance_family_context(
             request_id: None,
             action: None,
             reason: None,
+            payload_kind: None,
         }],
     )
 }
@@ -662,6 +666,7 @@ fn review_decision_for_family_context(
                             request_id: Some(request_id.clone()),
                             action: Some(ReviewDecisionAction::ProvideExplicitContext),
                             reason: Some(ReviewDiagnosticReason::MissingRequiredPayload),
+                            payload_kind: Some("conformance_family_context".to_string()),
                         }],
                     );
                 };
@@ -682,6 +687,7 @@ fn review_decision_for_family_context(
                             request_id: Some(request_id.clone()),
                             action: Some(ReviewDecisionAction::ProvideExplicitContext),
                             reason: Some(ReviewDiagnosticReason::FamilyMismatch),
+                            payload_kind: None,
                         }],
                     );
                 }
@@ -726,6 +732,7 @@ pub fn review_conformance_family_context(
                 request_id: None,
                 action: None,
                 reason: None,
+                payload_kind: None,
             }],
             Vec::new(),
             Vec::new(),
@@ -746,6 +753,7 @@ pub fn review_conformance_family_context(
                     request_id: None,
                     action: None,
                     reason: None,
+                    payload_kind: None,
                 }]
             } else {
                 Vec::new()
@@ -766,6 +774,7 @@ pub fn review_conformance_family_context(
                 request_id: None,
                 action: None,
                 reason: None,
+                payload_kind: None,
             }]
         } else {
             decision_diagnostics
@@ -1071,6 +1080,7 @@ pub fn review_conformance_manifest(
             request_id: None,
             action: None,
             reason: None,
+            payload_kind: None,
         });
         effective_options.review_replay_bundle = None;
         effective_options.review_replay_context = None;
@@ -1087,6 +1097,7 @@ pub fn review_conformance_manifest(
             request_id: None,
             action: None,
             reason: None,
+            payload_kind: None,
         });
         effective_options.review_replay_bundle = None;
         effective_options.review_replay_context = None;
@@ -1116,6 +1127,7 @@ pub fn review_conformance_manifest(
                         request_id: Some(decision.request_id.clone()),
                         action: Some(decision.action),
                         reason: Some(ReviewDiagnosticReason::RequestNotFound),
+                        payload_kind: None,
                     });
                     None
                 }
@@ -1164,6 +1176,7 @@ pub fn review_conformance_manifest(
                 request_id: None,
                 action: None,
                 reason: None,
+                payload_kind: None,
             });
             continue;
         }
@@ -1322,6 +1335,7 @@ pub fn plan_named_conformance_suites_with_diagnostics(
                 request_id: None,
                 action: None,
                 reason: None,
+                payload_kind: None,
             });
             continue;
         }
