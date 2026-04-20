@@ -1,5 +1,10 @@
 use std::{fs, path::PathBuf};
 
+use ast_merge::{
+    ConformanceCaseExecution, ConformanceManifest, ConformanceOutcome,
+    plan_named_conformance_suites, report_named_conformance_suite_envelope,
+    report_planned_named_conformance_suites,
+};
 use markdown_merge::MarkdownDialect;
 use pulldown_cmark_merge::{
     available_markdown_backends, markdown_backend_feature_profile, markdown_plan_context,
@@ -102,5 +107,85 @@ fn conforms_to_shared_markdown_analysis_and_matching_fixtures() {
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn conforms_to_provider_named_suite_plan_fixture() {
+    let fixture = read_fixture(&[
+        "diagnostics",
+        "slice-206-markdown-provider-named-suite-plans",
+        "rust-markdown-provider-named-suite-plans.json",
+    ]);
+
+    let manifest: ConformanceManifest =
+        serde_json::from_value(fixture["manifest"].clone()).expect("valid manifest");
+    let contexts =
+        serde_json::from_value(fixture["contexts"].clone()).expect("valid provider contexts");
+
+    let projected = plan_named_conformance_suites(&manifest, &contexts)
+        .into_iter()
+        .map(|entry| {
+            serde_json::json!({
+                "suite": entry.suite,
+                "plan": {
+                    "family": entry.plan.family,
+                    "entries": entry.plan.entries.into_iter().map(|plan_entry| {
+                        serde_json::json!({
+                            "ref": plan_entry.ref_,
+                            "path": plan_entry.path,
+                            "run": {
+                                "ref": plan_entry.run.ref_,
+                                "requirements": {},
+                                "family_profile": plan_entry.run.family_profile,
+                                "feature_profile": plan_entry.run.feature_profile
+                            }
+                        })
+                    }).collect::<Vec<_>>(),
+                    "missing_roles": entry.plan.missing_roles
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(serde_json::to_value(projected).unwrap(), fixture["expected_entries"]);
+}
+
+#[test]
+fn conforms_to_provider_manifest_report_fixture() {
+    let fixture = read_fixture(&[
+        "diagnostics",
+        "slice-207-markdown-provider-manifest-report",
+        "rust-markdown-provider-manifest-report.json",
+    ]);
+
+    let manifest: ConformanceManifest =
+        serde_json::from_value(fixture["manifest"].clone()).expect("valid manifest");
+    let contexts = serde_json::from_value(fixture["options"]["contexts"].clone())
+        .expect("valid provider contexts");
+    let executions =
+        fixture["executions"].as_object().expect("executions should be an object").clone();
+
+    let entries = report_planned_named_conformance_suites(
+        &plan_named_conformance_suites(&manifest, &contexts),
+        |run| {
+            let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+            executions
+                .get(&key)
+                .cloned()
+                .map(|value| {
+                    serde_json::from_value::<ConformanceCaseExecution>(value)
+                        .expect("valid execution")
+                })
+                .unwrap_or(ConformanceCaseExecution {
+                    outcome: ConformanceOutcome::Failed,
+                    messages: vec!["missing execution".to_string()],
+                })
+        },
+    );
+
+    assert_eq!(
+        serde_json::to_value(report_named_conformance_suite_envelope(&entries)).unwrap(),
+        fixture["expected_report"]
     );
 }
