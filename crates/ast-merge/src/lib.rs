@@ -221,6 +221,7 @@ pub enum ReviewRequestKind {
 #[serde(rename_all = "snake_case")]
 pub enum ReviewDecisionAction {
     AcceptDefaultContext,
+    ProvideExplicitContext,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -239,6 +240,7 @@ pub struct ReviewRequest {
 pub struct ReviewDecision {
     pub request_id: String,
     pub action: ReviewDecisionAction,
+    pub context: Option<ConformanceFamilyPlanContext>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -594,16 +596,36 @@ pub fn resolve_conformance_family_context(
 fn review_decision_for_family_context(
     family: &str,
     options: &ConformanceManifestReviewOptions,
-) -> Option<ReviewDecision> {
+) -> Option<(ConformanceFamilyPlanContext, ReviewDecision, bool)> {
     let request_id = review_request_id_for_family_context(family);
-    options
-        .review_decisions
-        .iter()
-        .find(|decision| {
-            decision.request_id == request_id
-                && decision.action == ReviewDecisionAction::AcceptDefaultContext
-        })
-        .cloned()
+    let family_profile = options.family_profiles.get(family);
+
+    for decision in &options.review_decisions {
+        if decision.request_id != request_id {
+            continue;
+        }
+
+        match decision.action {
+            ReviewDecisionAction::AcceptDefaultContext => {
+                let Some(family_profile) = family_profile else {
+                    continue;
+                };
+
+                return Some((
+                    default_conformance_family_context(family_profile),
+                    decision.clone(),
+                    true,
+                ));
+            }
+            ReviewDecisionAction::ProvideExplicitContext => {
+                if let Some(context) = &decision.context {
+                    return Some((context.clone(), decision.clone(), false));
+                }
+            }
+        }
+    }
+
+    None
 }
 
 pub fn review_conformance_family_context(
@@ -641,15 +663,21 @@ pub fn review_conformance_family_context(
         );
     };
 
-    if let Some(decision) = review_decision_for_family_context(family, options) {
+    if let Some((context, decision, assumed_default)) =
+        review_decision_for_family_context(family, options)
+    {
         return (
-            Some(default_conformance_family_context(family_profile)),
-            vec![Diagnostic {
-                severity: DiagnosticSeverity::Warning,
-                category: DiagnosticCategory::AssumedDefault,
-                message: format!("using default family context for {family}."),
-                path: None,
-            }],
+            Some(context),
+            if assumed_default {
+                vec![Diagnostic {
+                    severity: DiagnosticSeverity::Warning,
+                    category: DiagnosticCategory::AssumedDefault,
+                    message: format!("using default family context for {family}."),
+                    path: None,
+                }]
+            } else {
+                Vec::new()
+            },
             Vec::new(),
             vec![decision],
         );
@@ -672,7 +700,10 @@ pub fn review_conformance_family_context(
             ),
             blocking: true,
             proposed_context: Some(default_conformance_family_context(family_profile)),
-            available_actions: vec![ReviewDecisionAction::AcceptDefaultContext],
+            available_actions: vec![
+                ReviewDecisionAction::AcceptDefaultContext,
+                ReviewDecisionAction::ProvideExplicitContext,
+            ],
             default_action: Some(ReviewDecisionAction::AcceptDefaultContext),
         }],
         Vec::new(),
