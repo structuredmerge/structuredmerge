@@ -130,6 +130,10 @@ Requirements:
 ## Decisions
 
 - Use one Cargo workspace monorepo with multiple publishable crates.
+- Keep `tree-haver` focused on reusable parser frameworks such as tree-sitter
+  and `pest`.
+- Keep one-trick parser integrations such as `syn` inside merge-family crates,
+  not in `tree-haver`.
 
 ## First Implementation Sequence
 

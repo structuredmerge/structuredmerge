@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     collections::HashSet,
     sync::{Mutex, OnceLock},
 };
@@ -126,6 +127,56 @@ pub fn kreuzberg_language_pack_backend() -> BackendReference {
         id: "kreuzberg-language-pack".to_string(),
         family: "tree-sitter".to_string(),
     }
+}
+
+pub fn pest_backend() -> BackendReference {
+    BackendReference { id: "pest".to_string(), family: "peg".to_string() }
+}
+
+pub fn backend_reference(id: &str) -> Option<BackendReference> {
+    match id {
+        "kreuzberg-language-pack" => Some(kreuzberg_language_pack_backend()),
+        "pest" => Some(pest_backend()),
+        _ => None,
+    }
+}
+
+pub fn pest_adapter_info() -> AdapterInfo {
+    AdapterInfo {
+        backend: "pest".to_string(),
+        backend_ref: Some(pest_backend()),
+        supports_dialects: false,
+        supported_policies: vec![],
+    }
+}
+
+pub fn pest_feature_profile() -> FeatureProfile {
+    FeatureProfile {
+        backend: "pest".to_string(),
+        backend_ref: Some(pest_backend()),
+        supports_dialects: false,
+        supported_policies: vec![],
+    }
+}
+
+thread_local! {
+    static CURRENT_BACKEND_ID: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+pub fn current_backend_id() -> Option<String> {
+    CURRENT_BACKEND_ID.with(|current| current.borrow().clone())
+}
+
+pub fn with_backend<T>(backend_id: &str, f: impl FnOnce() -> T) -> Result<T, String> {
+    let backend = backend_reference(backend_id)
+        .ok_or_else(|| format!("Unknown tree-haver backend {backend_id}."))?;
+
+    Ok(CURRENT_BACKEND_ID.with(|current| {
+        let previous_backend = current.replace(Some(backend.id));
+        let result = f();
+        current.replace(previous_backend);
+        result
+    }))
 }
 
 pub fn language_pack_adapter_info() -> AdapterInfo {

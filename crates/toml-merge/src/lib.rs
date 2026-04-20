@@ -2,7 +2,10 @@ use ast_merge::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile, MergeResult,
     ParseResult, PolicyReference, PolicySurface,
 };
+use pest::Parser;
+use pest_grammars::toml::{Rule as PestTomlRule, TomlParser as PestTomlParser};
 use toml::Value;
+use tree_haver::{BackendReference, current_backend_id, pest_backend};
 
 pub const PACKAGE_NAME: &str = "toml-merge";
 
@@ -63,6 +66,21 @@ pub struct TomlFeatureProfile {
     pub supported_policies: Vec<PolicyReference>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TomlBackend {
+    Native,
+    Pest,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TomlBackendFeatureProfile {
+    pub family: &'static str,
+    pub backend: String,
+    pub backend_ref: BackendReference,
+    pub supported_dialects: Vec<TomlDialect>,
+    pub supported_policies: Vec<PolicyReference>,
+}
+
 fn destination_wins_array_policy() -> PolicyReference {
     PolicyReference { surface: PolicySurface::Array, name: "destination_wins_array".to_string() }
 }
@@ -111,6 +129,29 @@ pub fn toml_feature_profile() -> TomlFeatureProfile {
     }
 }
 
+pub fn available_toml_backends() -> Vec<TomlBackend> {
+    vec![TomlBackend::Native, TomlBackend::Pest]
+}
+
+pub fn toml_backend_feature_profile(backend: Option<TomlBackend>) -> TomlBackendFeatureProfile {
+    let backend = resolve_backend(backend);
+    let (backend_name, backend_ref) = match backend {
+        TomlBackend::Native => (
+            "native".to_string(),
+            BackendReference { id: "native".to_string(), family: "builtin".to_string() },
+        ),
+        TomlBackend::Pest => ("pest".to_string(), pest_backend()),
+    };
+
+    TomlBackendFeatureProfile {
+        family: "toml",
+        backend: backend_name,
+        backend_ref,
+        supported_dialects: vec![TomlDialect::Toml],
+        supported_policies: vec![destination_wins_array_policy()],
+    }
+}
+
 fn validate_scalar_array(items: &[Value], path: &str) -> Result<(), Diagnostic> {
     if items.iter().all(|item| {
         matches!(item, Value::String(_) | Value::Integer(_) | Value::Float(_) | Value::Boolean(_))
@@ -126,6 +167,22 @@ fn validate_scalar_array(items: &[Value], path: &str) -> Result<(), Diagnostic> 
 
 fn display_path(path: &str) -> &str {
     if path.is_empty() { "/" } else { path }
+}
+
+fn resolve_backend(backend: Option<TomlBackend>) -> TomlBackend {
+    match backend {
+        Some(backend) => backend,
+        None => match current_backend_id().as_deref() {
+            Some("pest") => TomlBackend::Pest,
+            _ => TomlBackend::Native,
+        },
+    }
+}
+
+fn parse_with_pest(source: &str) -> Result<(), Diagnostic> {
+    PestTomlParser::parse(PestTomlRule::toml, source)
+        .map(|_| ())
+        .map_err(|error| parse_error(&error.to_string()))
 }
 
 fn validate_toml_node(value: &Value, path: &str) -> Result<(), Diagnostic> {
@@ -294,7 +351,18 @@ fn merge_toml_tables(
     merged
 }
 
-fn analyze_toml_document(source: &str) -> ParseResult<TomlAnalysis> {
+fn analyze_toml_document(source: &str, backend: TomlBackend) -> ParseResult<TomlAnalysis> {
+    if backend == TomlBackend::Pest
+        && let Err(diagnostic) = parse_with_pest(source)
+    {
+        return ParseResult {
+            ok: false,
+            diagnostics: vec![diagnostic],
+            analysis: None,
+            policies: vec![],
+        };
+    }
+
     match toml::from_str::<toml::map::Map<String, Value>>(source) {
         Ok(table) => {
             if let Err(diagnostic) = validate_toml_node(&Value::Table(table.clone()), "") {
@@ -327,7 +395,11 @@ fn analyze_toml_document(source: &str) -> ParseResult<TomlAnalysis> {
     }
 }
 
-pub fn parse_toml(source: &str, dialect: TomlDialect) -> ParseResult<TomlAnalysis> {
+pub fn parse_toml(
+    source: &str,
+    dialect: TomlDialect,
+    backend: Option<TomlBackend>,
+) -> ParseResult<TomlAnalysis> {
     if dialect != TomlDialect::Toml {
         return ParseResult {
             ok: false,
@@ -337,7 +409,7 @@ pub fn parse_toml(source: &str, dialect: TomlDialect) -> ParseResult<TomlAnalysi
         };
     }
 
-    analyze_toml_document(source)
+    analyze_toml_document(source, resolve_backend(backend))
 }
 
 pub fn match_toml_owners(
@@ -384,8 +456,10 @@ pub fn merge_toml(
     template_source: &str,
     destination_source: &str,
     dialect: TomlDialect,
+    backend: Option<TomlBackend>,
 ) -> MergeResult<String> {
-    let template = parse_toml(template_source, dialect);
+    let backend = resolve_backend(backend);
+    let template = parse_toml(template_source, dialect, Some(backend));
     if !template.ok {
         return MergeResult {
             ok: false,
@@ -395,7 +469,7 @@ pub fn merge_toml(
         };
     }
 
-    let destination = parse_toml(destination_source, dialect);
+    let destination = parse_toml(destination_source, dialect, Some(backend));
     if !destination.ok {
         return MergeResult {
             ok: false,

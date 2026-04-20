@@ -4,7 +4,8 @@ use ast_merge::{ConformanceManifest, conformance_fixture_path};
 use serde_json::Value;
 use tree_haver::{
     AdapterInfo, BackendReference, FeatureProfile, ParserRequest, ProcessRequest,
-    process_with_language_pack,
+    current_backend_id, pest_adapter_info, pest_backend, pest_feature_profile,
+    process_with_language_pack, with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -260,4 +261,43 @@ fn conforms_to_slice_100_process_baseline_fixture() {
         ),
         fixture["expected"]["imports"]
     );
+}
+
+#[test]
+fn exposes_peg_backend_references_for_plurality_slices() {
+    assert_eq!(
+        serde_json::json!({ "id": pest_backend().id, "family": pest_backend().family }),
+        serde_json::json!({ "id": "pest", "family": "peg" })
+    );
+    assert_eq!(
+        serde_json::json!({
+            "id": pest_adapter_info().backend_ref.as_ref().map(|backend| backend.id.clone()),
+            "family": pest_adapter_info().backend_ref.as_ref().map(|backend| backend.family.clone()),
+        }),
+        serde_json::json!({ "id": "pest", "family": "peg" })
+    );
+    assert_eq!(
+        serde_json::json!({
+            "id": pest_feature_profile().backend_ref.as_ref().map(|backend| backend.id.clone()),
+            "family": pest_feature_profile().backend_ref.as_ref().map(|backend| backend.family.clone()),
+        }),
+        serde_json::json!({ "id": "pest", "family": "peg" })
+    );
+}
+
+#[test]
+fn supports_temporary_backend_context_selection() {
+    assert_eq!(current_backend_id(), None);
+
+    with_backend("pest", || {
+        assert_eq!(current_backend_id(), Some("pest".to_string()));
+        with_backend("kreuzberg-language-pack", || {
+            assert_eq!(current_backend_id(), Some("kreuzberg-language-pack".to_string()));
+        })
+        .expect("nested backend context should be valid");
+        assert_eq!(current_backend_id(), Some("pest".to_string()));
+    })
+    .expect("pest backend should be valid");
+
+    assert_eq!(current_backend_id(), None);
 }
