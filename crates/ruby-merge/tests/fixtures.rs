@@ -1,0 +1,113 @@
+use std::{fs, path::PathBuf};
+
+use ruby_merge::{
+    RubyDialect, RubyOwnerKind, match_ruby_owners, parse_ruby, ruby_delegated_child_operations,
+    ruby_discovered_surfaces, ruby_feature_profile,
+};
+use serde_json::Value;
+
+fn fixture_path(parts: &[&str]) -> PathBuf {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("..");
+    path.push("..");
+    path.push("..");
+    path.push("fixtures");
+    for part in parts {
+        path.push(part);
+    }
+    path
+}
+
+fn read_fixture(parts: &[&str]) -> Value {
+    let source = fs::read_to_string(fixture_path(parts)).expect("fixture should be readable");
+    serde_json::from_str(&source).expect("fixture should be valid json")
+}
+
+#[test]
+fn conforms_to_ruby_fixtures() {
+    let profile_fixture = read_fixture(&[
+        "diagnostics",
+        "slice-214-ruby-family-feature-profile",
+        "ruby-feature-profile.json",
+    ]);
+    let profile = ruby_feature_profile();
+    assert_eq!(profile.family, profile_fixture["feature_profile"]["family"].as_str().unwrap());
+
+    let analysis_fixture = read_fixture(&["ruby", "slice-218-analysis", "module-owners.json"]);
+    let analysis = parse_ruby(analysis_fixture["source"].as_str().unwrap(), RubyDialect::Ruby);
+    assert!(analysis.ok);
+    let owners = analysis
+        .analysis
+        .as_ref()
+        .unwrap()
+        .owners
+        .iter()
+        .map(|owner| {
+            serde_json::json!({
+                "path": owner.path,
+                "owner_kind": match owner.owner_kind {
+                    RubyOwnerKind::Require => "require",
+                    RubyOwnerKind::Declaration => "declaration",
+                },
+                "match_key": owner.match_key,
+            })
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(Value::Array(owners), analysis_fixture["expected"]["owners"]);
+
+    let matching_fixture = read_fixture(&["ruby", "slice-219-matching", "path-equality.json"]);
+    let template = parse_ruby(matching_fixture["template"].as_str().unwrap(), RubyDialect::Ruby);
+    let destination =
+        parse_ruby(matching_fixture["destination"].as_str().unwrap(), RubyDialect::Ruby);
+    let matched = match_ruby_owners(
+        template.analysis.as_ref().unwrap(),
+        destination.analysis.as_ref().unwrap(),
+    );
+    assert_eq!(
+        Value::Array(
+            matched
+                .matched
+                .iter()
+                .map(|entry| serde_json::json!([entry.template_path, entry.destination_path]))
+                .collect(),
+        ),
+        matching_fixture["expected"]["matched"]
+    );
+    assert_eq!(
+        Value::Array(
+            matched.unmatched_template.iter().map(|path| Value::String(path.clone())).collect(),
+        ),
+        matching_fixture["expected"]["unmatched_template"]
+    );
+    assert_eq!(
+        Value::Array(
+            matched.unmatched_destination.iter().map(|path| Value::String(path.clone())).collect(),
+        ),
+        matching_fixture["expected"]["unmatched_destination"]
+    );
+
+    let surfaces_fixture =
+        read_fixture(&["ruby", "slice-220-discovered-surfaces", "doc-comment-surfaces.json"]);
+    let surface_analysis =
+        parse_ruby(surfaces_fixture["source"].as_str().unwrap(), RubyDialect::Ruby);
+    assert_eq!(
+        serde_json::to_value(ruby_discovered_surfaces(surface_analysis.analysis.as_ref().unwrap()))
+            .expect("surfaces should serialize"),
+        surfaces_fixture["expected"]
+    );
+
+    let child_fixture = read_fixture(&[
+        "ruby",
+        "slice-221-delegated-child-operations",
+        "yard-example-child-operations.json",
+    ]);
+    let child_analysis = parse_ruby(child_fixture["source"].as_str().unwrap(), RubyDialect::Ruby);
+    assert_eq!(
+        serde_json::to_value(ruby_delegated_child_operations(
+            child_analysis.analysis.as_ref().unwrap(),
+            child_fixture["parent_operation_id"].as_str().unwrap(),
+        ))
+        .expect("child operations should serialize"),
+        child_fixture["expected"]
+    );
+}

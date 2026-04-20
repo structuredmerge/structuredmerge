@@ -1,6 +1,7 @@
 use ast_merge::{
-    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, FamilyFeatureProfile, ParseResult,
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, DelegatedChildOperation,
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile,
+    ParseResult, SurfaceOwnerKind, SurfaceOwnerRef,
 };
 use pulldown_cmark::Parser;
 use tree_haver::{ParserRequest, current_backend_id, parse_with_language_pack};
@@ -419,6 +420,47 @@ pub fn markdown_embedded_families(
                 family: family.to_string(),
                 dialect,
             })
+        })
+        .collect()
+}
+
+pub fn markdown_discovered_surfaces(analysis: &MarkdownAnalysis) -> Vec<DiscoveredSurface> {
+    markdown_embedded_families(analysis)
+        .into_iter()
+        .map(|candidate| DiscoveredSurface {
+            surface_kind: "markdown_fenced_code_block".to_string(),
+            declared_language: Some(candidate.language.clone()),
+            effective_language: candidate.dialect.clone(),
+            address: format!("document[0] > fenced_code_block[{}]", candidate.path),
+            parent_address: Some("document[0]".to_string()),
+            span: None,
+            owner: SurfaceOwnerRef {
+                kind: SurfaceOwnerKind::StructuralOwner,
+                address: candidate.path.clone(),
+            },
+            reconstruction_strategy: "portable_write".to_string(),
+            metadata: std::collections::HashMap::from([
+                ("family".to_string(), serde_json::Value::String(candidate.family)),
+                ("dialect".to_string(), serde_json::Value::String(candidate.dialect)),
+                ("path".to_string(), serde_json::Value::String(candidate.path)),
+            ]),
+        })
+        .collect()
+}
+
+pub fn markdown_delegated_child_operations(
+    analysis: &MarkdownAnalysis,
+    parent_operation_id: &str,
+) -> Vec<DelegatedChildOperation> {
+    markdown_discovered_surfaces(analysis)
+        .into_iter()
+        .enumerate()
+        .map(|(index, surface)| DelegatedChildOperation {
+            operation_id: format!("markdown-fence-{index}"),
+            parent_operation_id: parent_operation_id.to_string(),
+            requested_strategy: "delegate_child_surface".to_string(),
+            language_chain: vec!["markdown".to_string(), surface.effective_language.clone()],
+            surface,
         })
         .collect()
 }

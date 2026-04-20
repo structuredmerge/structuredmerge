@@ -7,9 +7,10 @@ use ast_merge::{
     ConformanceManifestReport, ConformanceManifestReviewOptions, ConformanceManifestReviewState,
     ConformanceManifestReviewStateEnvelope, ConformanceOutcome, ConformanceSelectionStatus,
     ConformanceSuiteDefinition, ConformanceSuitePlan, ConformanceSuiteReport,
-    ConformanceSuiteSummary, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile,
-    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
-    NamedConformanceSuiteResults, PolicySurface, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
+    ConformanceSuiteSummary, DelegatedChildOperation, DiagnosticCategory, DiagnosticSeverity,
+    DiscoveredSurface, FamilyFeatureProfile, NamedConformanceSuitePlan,
+    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
+    PolicySurface, ProjectedChildReviewCase, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
     conformance_family_feature_profile_path, conformance_fixture_path,
     conformance_manifest_replay_context, conformance_manifest_review_request_ids,
@@ -2569,6 +2570,45 @@ fn conforms_to_slice_79_explicit_review_replay_bundle_application_fixture() {
     });
 
     assert_eq!(state, expected);
+}
+
+#[test]
+fn conforms_to_slice_209_surface_ownership_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("surface_ownership"));
+    let surface = serde_json::from_value::<DiscoveredSurface>(fixture["surface"].clone())
+        .expect("surface should deserialize");
+    let round_tripped = serde_json::from_value::<DiscoveredSurface>(
+        serde_json::to_value(&surface).expect("surface should serialize"),
+    )
+    .expect("surface should deserialize after roundtrip");
+
+    assert_eq!(round_tripped, surface);
+}
+
+#[test]
+fn conforms_to_slice_210_delegated_child_operation_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("delegated_child_operation"));
+    let operation = serde_json::from_value::<DelegatedChildOperation>(fixture["operation"].clone())
+        .expect("operation should deserialize");
+    let round_tripped = serde_json::from_value::<DelegatedChildOperation>(
+        serde_json::to_value(&operation).expect("operation should serialize"),
+    )
+    .expect("operation should deserialize after roundtrip");
+
+    assert_eq!(round_tripped, operation);
+}
+
+#[test]
+fn conforms_to_slice_211_projected_child_review_cases_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("projected_child_review_cases"));
+    let cases = serde_json::from_value::<Vec<ProjectedChildReviewCase>>(fixture["cases"].clone())
+        .expect("projected child review cases should deserialize");
+    let round_tripped = serde_json::from_value::<Vec<ProjectedChildReviewCase>>(
+        serde_json::to_value(&cases).expect("cases should serialize"),
+    )
+    .expect("cases should deserialize after roundtrip");
+
+    assert_eq!(round_tripped, cases);
 }
 
 #[test]

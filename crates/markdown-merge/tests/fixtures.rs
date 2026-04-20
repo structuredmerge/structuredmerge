@@ -5,7 +5,8 @@ use ast_merge::{
 };
 use markdown_merge::{
     MarkdownBackend, MarkdownDialect, MarkdownOwnerKind, available_markdown_backends,
-    markdown_backend_feature_profile, markdown_embedded_families, markdown_feature_profile,
+    markdown_backend_feature_profile, markdown_delegated_child_operations,
+    markdown_discovered_surfaces, markdown_embedded_families, markdown_feature_profile,
     markdown_plan_context_with_backend, match_markdown_owners, parse_markdown_with_backend,
 };
 use serde_json::Value;
@@ -230,4 +231,49 @@ fn conforms_to_slice_208_markdown_embedded_families() {
             fixture["expected"]
         );
     }
+}
+
+#[test]
+fn conforms_to_slice_212_markdown_discovered_surfaces() {
+    let fixture =
+        read_fixture(&["markdown", "slice-212-discovered-surfaces", "fenced-code-surfaces.json"]);
+
+    let analysis = parse_markdown_with_backend(
+        fixture["source"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        MarkdownBackend::PulldownCmark,
+    )
+    .analysis
+    .expect("analysis should exist");
+
+    assert_eq!(
+        serde_json::to_value(markdown_discovered_surfaces(&analysis)).unwrap(),
+        fixture["expected"]
+    );
+}
+
+#[test]
+fn conforms_to_slice_213_markdown_delegated_child_operations() {
+    let fixture = read_fixture(&[
+        "markdown",
+        "slice-213-delegated-child-operations",
+        "fenced-code-child-operations.json",
+    ]);
+
+    let analysis = parse_markdown_with_backend(
+        fixture["source"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        MarkdownBackend::PulldownCmark,
+    )
+    .analysis
+    .expect("analysis should exist");
+
+    assert_eq!(
+        serde_json::to_value(markdown_delegated_child_operations(
+            &analysis,
+            fixture["parent_operation_id"].as_str().unwrap(),
+        ))
+        .unwrap(),
+        fixture["expected"]
+    );
 }

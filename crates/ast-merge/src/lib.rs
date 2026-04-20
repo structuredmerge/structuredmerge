@@ -52,6 +52,63 @@ pub struct Diagnostic {
     pub review: Option<Box<ReviewDiagnosticDetail>>,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SurfaceOwnerKind {
+    StructuralOwner,
+    OwnedRegion,
+    ParentSurface,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SurfaceOwnerRef {
+    pub kind: SurfaceOwnerKind,
+    pub address: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SurfaceSpan {
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DiscoveredSurface {
+    pub surface_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub declared_language: Option<String>,
+    pub effective_language: String,
+    pub address: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span: Option<SurfaceSpan>,
+    pub owner: SurfaceOwnerRef,
+    pub reconstruction_strategy: String,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedChildOperation {
+    pub operation_id: String,
+    pub parent_operation_id: String,
+    pub requested_strategy: String,
+    pub language_chain: Vec<String>,
+    pub surface: DiscoveredSurface,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProjectedChildReviewCase {
+    pub case_id: String,
+    pub parent_operation_id: String,
+    pub child_operation_id: String,
+    pub surface_path: String,
+    pub delegated_case_id: String,
+    pub delegated_apply_group: String,
+    pub delegated_runtime_surface_path: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ParseResult<TAnalysis> {
     pub ok: bool,
