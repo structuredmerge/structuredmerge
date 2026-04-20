@@ -6,11 +6,11 @@ use ast_merge::{
     ConformanceFeatureProfileView, ConformanceManifest, ConformanceManifestPlanningOptions,
     ConformanceManifestReport, ConformanceManifestReviewOptions, ConformanceManifestReviewState,
     ConformanceManifestReviewStateEnvelope, ConformanceOutcome, ConformanceSelectionStatus,
-    ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSummary, DiagnosticCategory,
-    DiagnosticSeverity, FamilyFeatureProfile, NamedConformanceSuitePlan,
-    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
-    PolicySurface, REVIEW_TRANSPORT_VERSION, ReviewHostHints, ReviewReplayBundle,
-    ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
+    ConformanceSuiteDefinition, ConformanceSuitePlan, ConformanceSuiteReport,
+    ConformanceSuiteSummary, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile,
+    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
+    NamedConformanceSuiteResults, PolicySurface, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
+    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
     conformance_family_feature_profile_path, conformance_fixture_path,
     conformance_manifest_replay_context, conformance_manifest_review_request_ids,
     conformance_manifest_review_state_envelope, conformance_review_host_hints,
@@ -955,6 +955,48 @@ fn conforms_to_slice_127_source_family_native_suite_plans_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_138_toml_family_suite_definitions_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-138-toml-family-suite-definitions",
+        "toml-suite-definitions.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+
+    assert_eq!(conformance_suite_names(&manifest), vec!["toml_portable".to_string()]);
+    let expected_definition = ConformanceSuiteDefinition {
+        family: "toml".to_string(),
+        roles: vec!["analysis".to_string(), "matching".to_string(), "merge".to_string()],
+    };
+    assert_eq!(
+        conformance_suite_definition(&manifest, "toml_portable"),
+        Some(&expected_definition)
+    );
+}
+
+#[test]
+fn conforms_to_slice_139_toml_family_named_suite_plans_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-139-toml-family-named-suite-plans",
+        "rust-toml-named-suite-plans.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let contexts = serde_json::from_value::<
+        std::collections::HashMap<String, ConformanceFamilyPlanContext>,
+    >(fixture["contexts"].clone())
+    .expect("contexts should deserialize");
+    let expected = serde_json::from_value::<Vec<NamedConformanceSuitePlan>>(
+        fixture["expected_entries"].clone(),
+    )
+    .expect("expected entries should deserialize");
+
+    assert_eq!(plan_named_conformance_suites(&manifest, &contexts), expected);
+}
+
+#[test]
 fn conforms_to_slice_51_named_conformance_suite_results_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_results"));
     let manifest = read_manifest();
@@ -1192,6 +1234,36 @@ fn conforms_to_slice_128_source_family_manifest_report_fixture() {
         "diagnostics",
         "slice-128-source-family-manifest-report",
         "source-manifest-report.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let options =
+        serde_json::from_value::<ConformanceManifestPlanningOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected =
+        serde_json::from_value::<ConformanceManifestReport>(fixture["expected_report"].clone())
+            .expect("expected report should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+    let report = report_conformance_manifest(&manifest, &options, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        serde_json::from_value::<ConformanceCaseExecution>(
+            executions.get(&key).cloned().unwrap_or_else(
+                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+            ),
+        )
+        .expect("execution should deserialize")
+    });
+
+    assert_eq!(report, expected);
+}
+
+#[test]
+fn conforms_to_slice_140_toml_family_manifest_report_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-140-toml-family-manifest-report",
+        "rust-toml-manifest-report.json",
     ]));
     let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
         .expect("manifest should deserialize");
