@@ -88,7 +88,7 @@ fn unsupported_feature(message: &str) -> Diagnostic {
     }
 }
 
-fn normalize_source(source: &str) -> String {
+pub fn normalize_markdown_source(source: &str) -> String {
     source.replace("\r\n", "\n").replace('\r', "\n")
 }
 
@@ -112,8 +112,8 @@ fn slugify(value: &str) -> String {
     if slug.is_empty() { "section".to_string() } else { slug }
 }
 
-fn collect_markdown_owners(source: &str) -> Vec<MarkdownOwner> {
-    let normalized = normalize_source(source);
+pub fn collect_markdown_owners(source: &str) -> Vec<MarkdownOwner> {
+    let normalized = normalize_markdown_source(source);
     let lines = normalized.split('\n').collect::<Vec<_>>();
     let mut owners = Vec::new();
     let mut heading_index = 0usize;
@@ -312,7 +312,7 @@ pub fn parse_markdown_with_backend(
         }
     }
 
-    let normalized_source = normalize_source(source);
+    let normalized_source = normalize_markdown_source(source);
     ParseResult {
         ok: true,
         diagnostics: vec![],
