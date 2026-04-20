@@ -934,6 +934,27 @@ fn conforms_to_slice_126_source_family_named_suite_plans_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_127_source_family_native_suite_plans_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-127-source-family-native-suite-plans",
+        "source-native-named-suite-plans.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let contexts = serde_json::from_value::<
+        std::collections::HashMap<String, ConformanceFamilyPlanContext>,
+    >(fixture["contexts"].clone())
+    .expect("contexts should deserialize");
+    let expected = serde_json::from_value::<Vec<NamedConformanceSuitePlan>>(
+        fixture["expected_entries"].clone(),
+    )
+    .expect("expected entries should deserialize");
+
+    assert_eq!(plan_named_conformance_suites(&manifest, &contexts), expected);
+}
+
+#[test]
 fn conforms_to_slice_51_named_conformance_suite_results_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_results"));
     let manifest = read_manifest();
@@ -1142,6 +1163,36 @@ fn conforms_to_slice_59_missing_suite_roles_fixture() {
 #[test]
 fn conforms_to_slice_60_conformance_manifest_report_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("conformance_manifest_report"));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let options =
+        serde_json::from_value::<ConformanceManifestPlanningOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected =
+        serde_json::from_value::<ConformanceManifestReport>(fixture["expected_report"].clone())
+            .expect("expected report should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+    let report = report_conformance_manifest(&manifest, &options, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        serde_json::from_value::<ConformanceCaseExecution>(
+            executions.get(&key).cloned().unwrap_or_else(
+                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+            ),
+        )
+        .expect("execution should deserialize")
+    });
+
+    assert_eq!(report, expected);
+}
+
+#[test]
+fn conforms_to_slice_128_source_family_manifest_report_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-128-source-family-manifest-report",
+        "source-manifest-report.json",
+    ]));
     let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
         .expect("manifest should deserialize");
     let options =
