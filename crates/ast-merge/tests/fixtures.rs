@@ -1718,78 +1718,96 @@ fn conforms_to_canonical_stable_suite_backend_fixtures() {
 
 #[test]
 fn conforms_to_canonical_widened_suite_backend_fixtures() {
-    let plans_fixture = read_fixture_from_path(fixture_path(&[
-        "diagnostics",
-        "slice-178-canonical-widened-suite-backend-plans",
-        "rust-canonical-widened-suite-backend-plans.json",
-    ]));
-    let manifest = serde_json::from_value::<ConformanceManifest>(plans_fixture["manifest"].clone())
-        .expect("manifest should deserialize");
-    let contexts = serde_json::from_value::<
-        std::collections::HashMap<String, ConformanceFamilyPlanContext>,
-    >(plans_fixture["contexts"].clone())
-    .expect("contexts should deserialize");
-    let expected_plans = serde_json::from_value::<Vec<NamedConformanceSuitePlan>>(
-        plans_fixture["expected_entries"].clone(),
-    )
-    .expect("expected entries should deserialize");
-
-    assert_eq!(plan_named_conformance_suites(&manifest, &contexts), expected_plans);
-
-    let report_fixture = read_fixture_from_path(fixture_path(&[
-        "diagnostics",
-        "slice-179-canonical-widened-suite-backend-report",
-        "rust-canonical-widened-suite-backend-report.json",
-    ]));
-    let report_options = serde_json::from_value::<ConformanceManifestPlanningOptions>(
-        report_fixture["options"].clone(),
-    )
-    .expect("options should deserialize");
-    let expected_report = serde_json::from_value::<ConformanceManifestReport>(
-        report_fixture["expected_report"].clone(),
-    )
-    .expect("expected report should deserialize");
-    let report_executions =
-        report_fixture["executions"].as_object().expect("executions should be an object");
-
-    let report = report_conformance_manifest(&manifest, &report_options, |run| {
-        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
-        serde_json::from_value::<ConformanceCaseExecution>(
-            report_executions.get(&key).cloned().unwrap_or_else(
-                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
-            ),
-        )
-        .expect("execution should deserialize")
-    });
-
-    assert_eq!(report, expected_report);
-
-    for fixture_name in [
-        "slice-180-canonical-widened-suite-backend-review-state/rust-canonical-widened-suite-backend-review-state.json",
-        "slice-181-canonical-widened-suite-backend-reviewed-default/rust-canonical-widened-suite-backend-reviewed-default.json",
-        "slice-182-canonical-widened-suite-backend-replay-application/rust-canonical-widened-suite-backend-replay-application.json",
+    for (plans_slice, plans_file, report_slice, report_file, review_fixtures) in [
+        (
+            "slice-178-canonical-widened-suite-backend-plans",
+            "rust-canonical-widened-suite-backend-plans.json",
+            "slice-179-canonical-widened-suite-backend-report",
+            "rust-canonical-widened-suite-backend-report.json",
+            [
+                "slice-180-canonical-widened-suite-backend-review-state/rust-canonical-widened-suite-backend-review-state.json",
+                "slice-181-canonical-widened-suite-backend-reviewed-default/rust-canonical-widened-suite-backend-reviewed-default.json",
+                "slice-182-canonical-widened-suite-backend-replay-application/rust-canonical-widened-suite-backend-replay-application.json",
+            ],
+        ),
+        (
+            "slice-187-canonical-widened-suite-polyglot-backend-plans",
+            "rust-canonical-widened-suite-polyglot-backend-plans.json",
+            "slice-188-canonical-widened-suite-polyglot-backend-report",
+            "rust-canonical-widened-suite-polyglot-backend-report.json",
+            [
+                "slice-189-canonical-widened-suite-polyglot-backend-review-state/rust-canonical-widened-suite-polyglot-backend-review-state.json",
+                "slice-190-canonical-widened-suite-polyglot-backend-reviewed-default/rust-canonical-widened-suite-polyglot-backend-reviewed-default.json",
+                "slice-191-canonical-widened-suite-polyglot-backend-replay-application/rust-canonical-widened-suite-polyglot-backend-replay-application.json",
+            ],
+        ),
     ] {
-        let fixture = read_fixture_from_path(fixture_path(&["diagnostics"]).join(fixture_name));
-        let options =
-            serde_json::from_value::<ConformanceManifestReviewOptions>(fixture["options"].clone())
-                .expect("options should deserialize");
-        let expected = serde_json::from_value::<ConformanceManifestReviewState>(
-            fixture["expected_state"].clone(),
+        let plans_fixture =
+            read_fixture_from_path(fixture_path(&["diagnostics", plans_slice, plans_file]));
+        let manifest =
+            serde_json::from_value::<ConformanceManifest>(plans_fixture["manifest"].clone())
+                .expect("manifest should deserialize");
+        let contexts = serde_json::from_value::<
+            std::collections::HashMap<String, ConformanceFamilyPlanContext>,
+        >(plans_fixture["contexts"].clone())
+        .expect("contexts should deserialize");
+        let expected_plans = serde_json::from_value::<Vec<NamedConformanceSuitePlan>>(
+            plans_fixture["expected_entries"].clone(),
         )
-        .expect("expected state should deserialize");
-        let executions = fixture["executions"].as_object().expect("executions should be an object");
+        .expect("expected entries should deserialize");
 
-        let state = review_conformance_manifest(&manifest, &options, |run| {
+        assert_eq!(plan_named_conformance_suites(&manifest, &contexts), expected_plans);
+
+        let report_fixture =
+            read_fixture_from_path(fixture_path(&["diagnostics", report_slice, report_file]));
+        let report_options = serde_json::from_value::<ConformanceManifestPlanningOptions>(
+            report_fixture["options"].clone(),
+        )
+        .expect("options should deserialize");
+        let expected_report = serde_json::from_value::<ConformanceManifestReport>(
+            report_fixture["expected_report"].clone(),
+        )
+        .expect("expected report should deserialize");
+        let report_executions =
+            report_fixture["executions"].as_object().expect("executions should be an object");
+
+        let report = report_conformance_manifest(&manifest, &report_options, |run| {
             let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
             serde_json::from_value::<ConformanceCaseExecution>(
-                executions.get(&key).cloned().unwrap_or_else(
+                report_executions.get(&key).cloned().unwrap_or_else(
                     || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
                 ),
             )
             .expect("execution should deserialize")
         });
 
-        assert_eq!(state, expected);
+        assert_eq!(report, expected_report);
+
+        for fixture_name in review_fixtures {
+            let fixture = read_fixture_from_path(fixture_path(&["diagnostics"]).join(fixture_name));
+            let options = serde_json::from_value::<ConformanceManifestReviewOptions>(
+                fixture["options"].clone(),
+            )
+            .expect("options should deserialize");
+            let expected = serde_json::from_value::<ConformanceManifestReviewState>(
+                fixture["expected_state"].clone(),
+            )
+            .expect("expected state should deserialize");
+            let executions =
+                fixture["executions"].as_object().expect("executions should be an object");
+
+            let state = review_conformance_manifest(&manifest, &options, |run| {
+                let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+                serde_json::from_value::<ConformanceCaseExecution>(
+                    executions.get(&key).cloned().unwrap_or_else(
+                        || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+                    ),
+                )
+                .expect("execution should deserialize")
+            });
+
+            assert_eq!(state, expected);
+        }
     }
 }
 
