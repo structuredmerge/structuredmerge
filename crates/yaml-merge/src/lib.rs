@@ -3,13 +3,19 @@ use ast_merge::{
     DiagnosticSeverity, FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference,
     PolicySurface,
 };
-use serde_yaml::{Mapping, Number, Value};
+use serde_json::{Map, Value};
 
 pub const PACKAGE_NAME: &str = "yaml-merge";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum YamlDialect {
     Yaml,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum YamlBackend {
+    SerdeYaml,
+    YamlSerde,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -57,6 +63,14 @@ pub struct YamlFeatureProfile {
     pub family: &'static str,
     pub supported_dialects: Vec<YamlDialect>,
     pub supported_policies: Vec<PolicyReference>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct YamlBackendFeatureProfile {
+    pub family: &'static str,
+    pub supported_dialects: Vec<YamlDialect>,
+    pub supported_policies: Vec<PolicyReference>,
+    pub backend: String,
 }
 
 fn destination_wins_array_policy() -> PolicyReference {
@@ -107,27 +121,44 @@ pub fn yaml_feature_profile() -> YamlFeatureProfile {
     }
 }
 
+pub fn available_yaml_backends() -> Vec<YamlBackend> {
+    vec![YamlBackend::SerdeYaml, YamlBackend::YamlSerde]
+}
+
+pub fn yaml_backend_feature_profile(backend: YamlBackend) -> YamlBackendFeatureProfile {
+    YamlBackendFeatureProfile {
+        family: "yaml",
+        supported_dialects: vec![YamlDialect::Yaml],
+        supported_policies: vec![destination_wins_array_policy()],
+        backend: match backend {
+            YamlBackend::SerdeYaml => "serde_yaml".to_string(),
+            YamlBackend::YamlSerde => "yaml_serde".to_string(),
+        },
+    }
+}
+
 pub fn yaml_plan_context() -> ConformanceFamilyPlanContext {
+    yaml_plan_context_with_backend(YamlBackend::SerdeYaml)
+}
+
+pub fn yaml_plan_context_with_backend(backend: YamlBackend) -> ConformanceFamilyPlanContext {
+    let backend_profile = yaml_backend_feature_profile(backend);
     ConformanceFamilyPlanContext {
         family_profile: FamilyFeatureProfile {
-            family: yaml_feature_profile().family.to_string(),
+            family: backend_profile.family.to_string(),
             supported_dialects: vec!["yaml".to_string()],
-            supported_policies: yaml_feature_profile().supported_policies,
+            supported_policies: backend_profile.supported_policies.clone(),
         },
         feature_profile: Some(ConformanceFeatureProfileView {
-            backend: "serde_yaml".to_string(),
+            backend: backend_profile.backend,
             supports_dialects: true,
-            supported_policies: vec![destination_wins_array_policy()],
+            supported_policies: backend_profile.supported_policies,
         }),
     }
 }
 
 fn display_path(path: &str) -> &str {
     if path.is_empty() { "/" } else { path }
-}
-
-fn number_to_string(number: &Number) -> String {
-    serde_yaml::to_string(number).unwrap_or_default().trim().to_string()
 }
 
 fn render_yaml_scalar(value: &Value) -> String {
@@ -143,7 +174,7 @@ fn render_yaml_scalar(value: &Value) -> String {
             }
         }
         Value::Bool(boolean) => boolean.to_string(),
-        Value::Number(number) => number_to_string(number),
+        Value::Number(number) => number.to_string(),
         _ => unreachable!("render_yaml_scalar only supports YAML scalars"),
     }
 }
@@ -151,7 +182,7 @@ fn render_yaml_scalar(value: &Value) -> String {
 fn validate_yaml_node(value: &Value, path: &str) -> Result<(), Diagnostic> {
     match value {
         Value::String(_) | Value::Bool(_) | Value::Number(_) => Ok(()),
-        Value::Sequence(items) => {
+        Value::Array(items) => {
             if items
                 .iter()
                 .all(|item| matches!(item, Value::String(_) | Value::Bool(_) | Value::Number(_)))
@@ -164,22 +195,13 @@ fn validate_yaml_node(value: &Value, path: &str) -> Result<(), Diagnostic> {
                 )))
             }
         }
-        Value::Mapping(mapping) => {
-            let mut keys = mapping
-                .keys()
-                .map(|key| match key {
-                    Value::String(text) => Ok(text.clone()),
-                    _ => Err(unsupported_feature(&format!(
-                        "Unsupported YAML mapping key at {}. Only string keys are supported.",
-                        display_path(path)
-                    ))),
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+        Value::Object(mapping) => {
+            let mut keys = mapping.keys().cloned().collect::<Vec<_>>();
             keys.sort();
 
             for key in keys {
                 let next_path = format!("{path}/{key}");
-                if let Some(value) = mapping.get(Value::String(key)) {
+                if let Some(value) = mapping.get(&key) {
                     validate_yaml_node(value, &next_path)?;
                 }
             }
@@ -196,7 +218,7 @@ fn render_yaml_node(key: &str, value: &Value, indent: usize) -> Vec<String> {
     let prefix = " ".repeat(indent);
 
     match value {
-        Value::Sequence(items) => {
+        Value::Array(items) => {
             let mut lines = vec![format!("{prefix}{key}:")];
             lines.extend(
                 items.iter().map(|item| {
@@ -205,7 +227,7 @@ fn render_yaml_node(key: &str, value: &Value, indent: usize) -> Vec<String> {
             );
             lines
         }
-        Value::Mapping(mapping) => {
+        Value::Object(mapping) => {
             let mut lines = vec![format!("{prefix}{key}:")];
             lines.extend(render_yaml_mapping(mapping, indent + 2));
             lines
@@ -214,19 +236,13 @@ fn render_yaml_node(key: &str, value: &Value, indent: usize) -> Vec<String> {
     }
 }
 
-fn render_yaml_mapping(mapping: &Mapping, indent: usize) -> Vec<String> {
-    let mut keys = mapping
-        .keys()
-        .filter_map(|key| match key {
-            Value::String(text) => Some(text.clone()),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
+fn render_yaml_mapping(mapping: &Map<String, Value>, indent: usize) -> Vec<String> {
+    let mut keys = mapping.keys().cloned().collect::<Vec<_>>();
     keys.sort();
 
     let mut lines = Vec::new();
     for key in keys {
-        if let Some(value) = mapping.get(Value::String(key.clone())) {
+        if let Some(value) = mapping.get(&key) {
             lines.extend(render_yaml_node(&key, value, indent));
         }
     }
@@ -234,37 +250,33 @@ fn render_yaml_mapping(mapping: &Mapping, indent: usize) -> Vec<String> {
     lines
 }
 
-fn canonical_yaml(mapping: &Mapping) -> String {
+fn canonical_yaml(mapping: &Map<String, Value>) -> String {
     format!("{}\n", render_yaml_mapping(mapping, 0).join("\n"))
 }
 
-fn collect_yaml_owners(mapping: &Mapping, prefix: &str) -> Vec<YamlOwner> {
-    let mut keys = mapping
-        .keys()
-        .filter_map(|key| match key {
-            Value::String(text) => Some(text.clone()),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
+fn collect_yaml_owners(mapping: &Map<String, Value>, prefix: &str) -> Vec<YamlOwner> {
+    let mut keys = mapping.keys().cloned().collect::<Vec<_>>();
     keys.sort();
 
     let mut owners = Vec::new();
     for key in keys {
         let path = format!("{prefix}/{key}");
-        match mapping.get(Value::String(key.clone())) {
-            Some(Value::Sequence(items)) => {
+        match mapping.get(&key) {
+            Some(Value::Array(items)) => {
                 owners.push(YamlOwner {
                     path: path.clone(),
                     owner_kind: YamlOwnerKind::KeyValue,
                     match_key: Some(key.clone()),
                 });
-                owners.extend(items.iter().enumerate().map(|(index, _)| YamlOwner {
-                    path: format!("{path}/{index}"),
-                    owner_kind: YamlOwnerKind::SequenceItem,
-                    match_key: None,
-                }));
+                for index in 0..items.len() {
+                    owners.push(YamlOwner {
+                        path: format!("{path}/{index}"),
+                        owner_kind: YamlOwnerKind::SequenceItem,
+                        match_key: None,
+                    });
+                }
             }
-            Some(Value::Mapping(nested)) => {
+            Some(Value::Object(nested)) => {
                 owners.push(YamlOwner {
                     path: path.clone(),
                     owner_kind: YamlOwnerKind::Mapping,
@@ -272,11 +284,13 @@ fn collect_yaml_owners(mapping: &Mapping, prefix: &str) -> Vec<YamlOwner> {
                 });
                 owners.extend(collect_yaml_owners(nested, &path));
             }
-            Some(_) => owners.push(YamlOwner {
-                path,
-                owner_kind: YamlOwnerKind::KeyValue,
-                match_key: Some(key),
-            }),
+            Some(_) => {
+                owners.push(YamlOwner {
+                    path,
+                    owner_kind: YamlOwnerKind::KeyValue,
+                    match_key: Some(key),
+                });
+            }
             None => {}
         }
     }
@@ -284,50 +298,38 @@ fn collect_yaml_owners(mapping: &Mapping, prefix: &str) -> Vec<YamlOwner> {
     owners
 }
 
-fn merge_yaml_mappings(template: &Mapping, destination: &Mapping) -> Mapping {
-    let mut merged = Mapping::new();
-    let mut keys = template
-        .keys()
-        .chain(destination.keys())
-        .filter_map(|key| match key {
-            Value::String(text) => Some(text.clone()),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    keys.sort();
-    keys.dedup();
-
-    for key in keys {
-        match (
-            template.get(Value::String(key.clone())),
-            destination.get(Value::String(key.clone())),
-        ) {
-            (None, Some(destination_value)) => {
-                merged.insert(Value::String(key), destination_value.clone());
-            }
-            (Some(template_value), None) => {
-                merged.insert(Value::String(key), template_value.clone());
-            }
-            (Some(Value::Mapping(template_mapping)), Some(Value::Mapping(destination_mapping))) => {
-                merged.insert(
-                    Value::String(key),
-                    Value::Mapping(merge_yaml_mappings(template_mapping, destination_mapping)),
-                );
-            }
-            (_, Some(destination_value)) => {
-                merged.insert(Value::String(key), destination_value.clone());
-            }
-            _ => {}
+fn parse_yaml_value(source: &str, backend: YamlBackend) -> Result<Value, Diagnostic> {
+    match backend {
+        YamlBackend::SerdeYaml => {
+            serde_yaml::from_str::<Value>(source).map_err(|error| parse_error(&error.to_string()))
+        }
+        YamlBackend::YamlSerde => {
+            yaml_serde::from_str::<Value>(source).map_err(|error| parse_error(&error.to_string()))
         }
     }
-
-    merged
 }
 
-fn analyze_yaml_document(source: &str) -> ParseResult<YamlAnalysis> {
-    match serde_yaml::from_str::<Value>(source) {
-        Ok(Value::Mapping(mapping)) => {
-            if let Err(diagnostic) = validate_yaml_node(&Value::Mapping(mapping.clone()), "") {
+pub fn parse_yaml(source: &str, dialect: YamlDialect) -> ParseResult<YamlAnalysis> {
+    parse_yaml_with_backend(source, dialect, YamlBackend::SerdeYaml)
+}
+
+pub fn parse_yaml_with_backend(
+    source: &str,
+    dialect: YamlDialect,
+    backend: YamlBackend,
+) -> ParseResult<YamlAnalysis> {
+    if dialect != YamlDialect::Yaml {
+        return ParseResult {
+            ok: false,
+            diagnostics: vec![unsupported_feature("Unsupported YAML dialect.")],
+            analysis: None,
+            policies: vec![],
+        };
+    }
+
+    match parse_yaml_value(source, backend) {
+        Ok(Value::Object(mapping)) => {
+            if let Err(diagnostic) = validate_yaml_node(&Value::Object(mapping.clone()), "") {
                 return ParseResult {
                     ok: false,
                     diagnostics: vec![diagnostic],
@@ -354,26 +356,13 @@ fn analyze_yaml_document(source: &str) -> ParseResult<YamlAnalysis> {
             analysis: None,
             policies: vec![],
         },
-        Err(error) => ParseResult {
+        Err(diagnostic) => ParseResult {
             ok: false,
-            diagnostics: vec![parse_error(&error.to_string())],
+            diagnostics: vec![diagnostic],
             analysis: None,
             policies: vec![],
         },
     }
-}
-
-pub fn parse_yaml(source: &str, dialect: YamlDialect) -> ParseResult<YamlAnalysis> {
-    if dialect != YamlDialect::Yaml {
-        return ParseResult {
-            ok: false,
-            diagnostics: vec![unsupported_feature("Unsupported YAML dialect.")],
-            analysis: None,
-            policies: vec![],
-        };
-    }
-
-    analyze_yaml_document(source)
 }
 
 pub fn match_yaml_owners(
@@ -416,12 +405,57 @@ pub fn match_yaml_owners(
     }
 }
 
+fn merge_yaml_mappings(
+    template: &Map<String, Value>,
+    destination: &Map<String, Value>,
+) -> Map<String, Value> {
+    let mut merged = Map::new();
+    let mut keys = template.keys().chain(destination.keys()).cloned().collect::<Vec<_>>();
+    keys.sort();
+    keys.dedup();
+
+    for key in keys {
+        let template_value = template.get(&key);
+        let destination_value = destination.get(&key);
+
+        match (template_value, destination_value) {
+            (None, Some(destination)) => {
+                merged.insert(key, destination.clone());
+            }
+            (Some(template), None) => {
+                merged.insert(key, template.clone());
+            }
+            (Some(Value::Object(template_mapping)), Some(Value::Object(destination_mapping))) => {
+                merged.insert(
+                    key,
+                    Value::Object(merge_yaml_mappings(template_mapping, destination_mapping)),
+                );
+            }
+            (_, Some(destination)) => {
+                merged.insert(key, destination.clone());
+            }
+            _ => {}
+        }
+    }
+
+    merged
+}
+
 pub fn merge_yaml(
     template_source: &str,
     destination_source: &str,
     dialect: YamlDialect,
 ) -> MergeResult<String> {
-    let template = parse_yaml(template_source, dialect);
+    merge_yaml_with_backend(template_source, destination_source, dialect, YamlBackend::SerdeYaml)
+}
+
+pub fn merge_yaml_with_backend(
+    template_source: &str,
+    destination_source: &str,
+    dialect: YamlDialect,
+    backend: YamlBackend,
+) -> MergeResult<String> {
+    let template = parse_yaml_with_backend(template_source, dialect, backend);
     if !template.ok {
         return MergeResult {
             ok: false,
@@ -431,20 +465,19 @@ pub fn merge_yaml(
         };
     }
 
-    let destination = parse_yaml(destination_source, dialect);
+    let destination = parse_yaml_with_backend(destination_source, dialect, backend);
     if !destination.ok {
         return MergeResult {
             ok: false,
             diagnostics: destination
                 .diagnostics
                 .into_iter()
-                .map(|diagnostic| Diagnostic {
-                    category: if diagnostic.category == DiagnosticCategory::ParseError {
-                        DiagnosticCategory::DestinationParseError
+                .map(|diagnostic| {
+                    if diagnostic.category == DiagnosticCategory::ParseError {
+                        destination_parse_error(&diagnostic.message)
                     } else {
-                        diagnostic.category
-                    },
-                    ..diagnostic
+                        diagnostic
+                    }
                 })
                 .collect(),
             output: None,
@@ -452,45 +485,42 @@ pub fn merge_yaml(
         };
     }
 
-    let template_mapping = match template
-        .analysis
-        .as_ref()
-        .and_then(|analysis| serde_yaml::from_str::<Value>(&analysis.normalized_source).ok())
-    {
-        Some(Value::Mapping(mapping)) => mapping,
-        _ => {
-            return MergeResult {
-                ok: false,
-                diagnostics: vec![parse_error("YAML merge requires a mapping-root template.")],
-                output: None,
-                policies: vec![],
-            };
-        }
-    };
+    let template_mapping = parse_yaml_value(
+        &template.analysis.as_ref().expect("template analysis").normalized_source,
+        backend,
+    );
+    let destination_mapping = parse_yaml_value(
+        &destination.analysis.as_ref().expect("destination analysis").normalized_source,
+        backend,
+    );
 
-    let destination_mapping = match destination
-        .analysis
-        .as_ref()
-        .and_then(|analysis| serde_yaml::from_str::<Value>(&analysis.normalized_source).ok())
-    {
-        Some(Value::Mapping(mapping)) => mapping,
-        _ => {
-            return MergeResult {
-                ok: false,
-                diagnostics: vec![destination_parse_error(
-                    "YAML merge requires a mapping-root destination.",
-                )],
-                output: None,
-                policies: vec![],
-            };
+    match (template_mapping, destination_mapping) {
+        (Ok(Value::Object(template_mapping)), Ok(Value::Object(destination_mapping))) => {
+            let merged = merge_yaml_mappings(&template_mapping, &destination_mapping);
+            MergeResult {
+                ok: true,
+                diagnostics: vec![],
+                output: Some(canonical_yaml(&merged)),
+                policies: vec![destination_wins_array_policy()],
+            }
         }
-    };
-
-    let merged = merge_yaml_mappings(&template_mapping, &destination_mapping);
-    MergeResult {
-        ok: true,
-        diagnostics: vec![],
-        output: Some(canonical_yaml(&merged)),
-        policies: vec![destination_wins_array_policy()],
+        (_, Err(error)) => MergeResult {
+            ok: false,
+            diagnostics: vec![destination_parse_error(&error.message)],
+            output: None,
+            policies: vec![],
+        },
+        (Err(error), _) => MergeResult {
+            ok: false,
+            diagnostics: vec![parse_error(&error.message)],
+            output: None,
+            policies: vec![],
+        },
+        _ => MergeResult {
+            ok: false,
+            diagnostics: vec![parse_error("YAML documents must parse to a mapping root.")],
+            output: None,
+            policies: vec![],
+        },
     }
 }

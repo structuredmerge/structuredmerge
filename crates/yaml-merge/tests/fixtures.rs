@@ -5,8 +5,9 @@ use ast_merge::{
 };
 use serde_json::Value;
 use yaml_merge::{
-    YamlDialect, YamlOwnerKind, YamlRootKind, match_yaml_owners, merge_yaml, parse_yaml,
-    yaml_feature_profile, yaml_plan_context,
+    YamlBackend, YamlDialect, YamlOwnerKind, YamlRootKind, available_yaml_backends,
+    match_yaml_owners, merge_yaml_with_backend, parse_yaml_with_backend,
+    yaml_backend_feature_profile, yaml_feature_profile, yaml_plan_context_with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -70,21 +71,37 @@ fn conforms_to_slice_95_yaml_feature_profile_fixture() {
 }
 
 #[test]
-fn conforms_to_slice_142_yaml_plan_context_fixture() {
+fn conforms_to_slice_171_yaml_backend_feature_profiles() {
     let fixture = read_fixture(&[
         "diagnostics",
-        "slice-142-yaml-family-plan-contexts",
+        "slice-171-yaml-family-backend-feature-profiles",
+        "rust-yaml-backend-feature-profiles.json",
+    ]);
+
+    assert_eq!(available_yaml_backends(), vec![YamlBackend::SerdeYaml, YamlBackend::YamlSerde]);
+    let serde_yaml = yaml_backend_feature_profile(YamlBackend::SerdeYaml);
+    assert_eq!(serde_yaml.backend, fixture["serde_yaml"]["backend"]);
+    let yaml_serde = yaml_backend_feature_profile(YamlBackend::YamlSerde);
+    assert_eq!(yaml_serde.backend, fixture["yaml_serde"]["backend"]);
+}
+
+#[test]
+fn conforms_to_slice_172_yaml_backend_plan_context_fixture() {
+    let fixture = read_fixture(&[
+        "diagnostics",
+        "slice-172-yaml-family-backend-plan-contexts",
         "rust-yaml-plan-contexts.json",
     ]);
 
-    let context = yaml_plan_context();
-    assert_eq!(context.family_profile.family, fixture["native"]["family_profile"]["family"]);
-    let feature = context.feature_profile.expect("feature profile should be present");
-    assert_eq!(feature.backend, fixture["native"]["feature_profile"]["backend"]);
-    assert_eq!(
-        feature.supports_dialects,
-        fixture["native"]["feature_profile"]["supports_dialects"]
-    );
+    let serde_yaml = yaml_plan_context_with_backend(YamlBackend::SerdeYaml);
+    assert_eq!(serde_yaml.family_profile.family, fixture["serde_yaml"]["family_profile"]["family"]);
+    let serde_feature = serde_yaml.feature_profile.expect("feature profile should be present");
+    assert_eq!(serde_feature.backend, fixture["serde_yaml"]["feature_profile"]["backend"]);
+
+    let yaml_serde = yaml_plan_context_with_backend(YamlBackend::YamlSerde);
+    assert_eq!(yaml_serde.family_profile.family, fixture["yaml_serde"]["family_profile"]["family"]);
+    let yaml_serde_feature = yaml_serde.feature_profile.expect("feature profile should be present");
+    assert_eq!(yaml_serde_feature.backend, fixture["yaml_serde"]["feature_profile"]["backend"]);
 }
 
 #[test]
@@ -155,155 +172,187 @@ fn resolves_yaml_paths_through_the_canonical_manifest() {
 #[test]
 fn conforms_to_slice_96_yaml_parse_fixtures() {
     let valid = read_fixture(&["yaml", "slice-96-parse", "valid-document.json"]);
-    let valid_result = parse_yaml(valid["source"].as_str().unwrap(), YamlDialect::Yaml);
-    assert!(valid_result.ok);
-    assert_eq!(
-        valid_result.analysis.as_ref().map(|analysis| analysis.root_kind),
-        Some(YamlRootKind::Mapping)
-    );
-    assert!(valid_result.diagnostics.is_empty());
-
     let invalid = read_fixture(&["yaml", "slice-96-parse", "invalid-document.json"]);
-    let invalid_result = parse_yaml(invalid["source"].as_str().unwrap(), YamlDialect::Yaml);
-    assert!(!invalid_result.ok);
-    let diagnostics = invalid_result
-        .diagnostics
-        .iter()
-        .map(|diagnostic| {
-            serde_json::json!({
-                "severity": diagnostic_severity_name(diagnostic.severity),
-                "category": diagnostic_category_name(diagnostic.category),
+
+    for backend in [YamlBackend::SerdeYaml, YamlBackend::YamlSerde] {
+        let valid_result =
+            parse_yaml_with_backend(valid["source"].as_str().unwrap(), YamlDialect::Yaml, backend);
+        assert!(valid_result.ok);
+        assert_eq!(
+            valid_result.analysis.as_ref().map(|analysis| analysis.root_kind),
+            Some(YamlRootKind::Mapping)
+        );
+        assert!(valid_result.diagnostics.is_empty());
+
+        let invalid_result = parse_yaml_with_backend(
+            invalid["source"].as_str().unwrap(),
+            YamlDialect::Yaml,
+            backend,
+        );
+        assert!(!invalid_result.ok);
+        let diagnostics = invalid_result
+            .diagnostics
+            .iter()
+            .map(|diagnostic| {
+                serde_json::json!({
+                    "severity": diagnostic_severity_name(diagnostic.severity),
+                    "category": diagnostic_category_name(diagnostic.category),
+                })
             })
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(Value::Array(diagnostics), invalid["expected"]["diagnostics"]);
+            .collect::<Vec<_>>();
+        assert_eq!(Value::Array(diagnostics), invalid["expected"]["diagnostics"]);
+    }
 }
 
 #[test]
 fn conforms_to_slice_97_yaml_structure_fixture() {
     let fixture = read_fixture(&["yaml", "slice-97-structure", "mapping-and-sequence.json"]);
-    let result = parse_yaml(fixture["source"].as_str().unwrap(), YamlDialect::Yaml);
 
-    assert!(result.ok);
-    assert_eq!(
-        result.analysis.as_ref().map(|analysis| analysis.root_kind),
-        Some(YamlRootKind::Mapping)
-    );
-    let owners = result
-        .analysis
-        .as_ref()
-        .unwrap()
-        .owners
-        .iter()
-        .map(|owner| {
-            let mut value = serde_json::json!({
-                "path": owner.path,
-                "owner_kind": match owner.owner_kind {
-                    YamlOwnerKind::Mapping => "mapping",
-                    YamlOwnerKind::KeyValue => "key_value",
-                    YamlOwnerKind::SequenceItem => "sequence_item",
+    for backend in [YamlBackend::SerdeYaml, YamlBackend::YamlSerde] {
+        let result = parse_yaml_with_backend(
+            fixture["source"].as_str().unwrap(),
+            YamlDialect::Yaml,
+            backend,
+        );
+
+        assert!(result.ok);
+        assert_eq!(
+            result.analysis.as_ref().map(|analysis| analysis.root_kind),
+            Some(YamlRootKind::Mapping)
+        );
+        let owners = result
+            .analysis
+            .as_ref()
+            .unwrap()
+            .owners
+            .iter()
+            .map(|owner| {
+                let mut value = serde_json::json!({
+                    "path": owner.path,
+                    "owner_kind": match owner.owner_kind {
+                        YamlOwnerKind::Mapping => "mapping",
+                        YamlOwnerKind::KeyValue => "key_value",
+                        YamlOwnerKind::SequenceItem => "sequence_item",
+                    }
+                });
+                if let Some(match_key) = &owner.match_key {
+                    value["match_key"] = serde_json::json!(match_key);
                 }
-            });
-            if let Some(match_key) = &owner.match_key {
-                value["match_key"] = serde_json::json!(match_key);
-            }
-            value
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(Value::Array(owners), fixture["expected"]["owners"]);
+                value
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(Value::Array(owners), fixture["expected"]["owners"]);
+    }
 }
 
 #[test]
 fn conforms_to_slice_98_yaml_matching_fixture() {
     let fixture = read_fixture(&["yaml", "slice-98-matching", "path-equality.json"]);
-    let template = parse_yaml(fixture["template"].as_str().unwrap(), YamlDialect::Yaml);
-    let destination = parse_yaml(fixture["destination"].as_str().unwrap(), YamlDialect::Yaml);
-    let result = match_yaml_owners(
-        template.analysis.as_ref().unwrap(),
-        destination.analysis.as_ref().unwrap(),
-    );
 
-    let matched = result
-        .matched
-        .iter()
-        .map(|entry| serde_json::json!([entry.template_path, entry.destination_path]))
-        .collect::<Vec<_>>();
-    assert_eq!(Value::Array(matched), fixture["expected"]["matched"]);
-    assert_eq!(
-        result.unmatched_template,
-        fixture["expected"]["unmatched_template"]
-            .as_array()
-            .unwrap()
+    for backend in [YamlBackend::SerdeYaml, YamlBackend::YamlSerde] {
+        let template = parse_yaml_with_backend(
+            fixture["template"].as_str().unwrap(),
+            YamlDialect::Yaml,
+            backend,
+        );
+        let destination = parse_yaml_with_backend(
+            fixture["destination"].as_str().unwrap(),
+            YamlDialect::Yaml,
+            backend,
+        );
+        let result = match_yaml_owners(
+            template.analysis.as_ref().unwrap(),
+            destination.analysis.as_ref().unwrap(),
+        );
+
+        let matched = result
+            .matched
             .iter()
-            .map(|value| value.as_str().unwrap().to_string())
-            .collect::<Vec<_>>()
-    );
-    assert_eq!(
-        result.unmatched_destination,
-        fixture["expected"]["unmatched_destination"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|value| value.as_str().unwrap().to_string())
-            .collect::<Vec<_>>()
-    );
+            .map(|entry| serde_json::json!([entry.template_path, entry.destination_path]))
+            .collect::<Vec<_>>();
+        assert_eq!(Value::Array(matched), fixture["expected"]["matched"]);
+        assert_eq!(
+            result.unmatched_template,
+            fixture["expected"]["unmatched_template"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|value| value.as_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            result.unmatched_destination,
+            fixture["expected"]["unmatched_destination"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|value| value.as_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+        );
+    }
 }
 
 #[test]
 fn conforms_to_slice_99_yaml_merge_fixtures() {
     let merge_fixture = read_fixture(&["yaml", "slice-99-merge", "mapping-merge.json"]);
-    let merge_result = merge_yaml(
-        merge_fixture["template"].as_str().unwrap(),
-        merge_fixture["destination"].as_str().unwrap(),
-        YamlDialect::Yaml,
-    );
-    assert!(merge_result.ok);
-    assert_eq!(
-        merge_result.output,
-        merge_fixture["expected"]["output"].as_str().map(str::to_string)
-    );
-
     let invalid_template = read_fixture(&["yaml", "slice-99-merge", "invalid-template.json"]);
-    let invalid_template_result = merge_yaml(
-        invalid_template["template"].as_str().unwrap(),
-        invalid_template["destination"].as_str().unwrap(),
-        YamlDialect::Yaml,
-    );
-    assert!(!invalid_template_result.ok);
-    let invalid_template_diagnostics = invalid_template_result
-        .diagnostics
-        .iter()
-        .map(|diagnostic| {
-            serde_json::json!({
-                "severity": diagnostic_severity_name(diagnostic.severity),
-                "category": diagnostic_category_name(diagnostic.category),
-            })
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(
-        Value::Array(invalid_template_diagnostics),
-        invalid_template["expected"]["diagnostics"]
-    );
-
     let invalid_destination = read_fixture(&["yaml", "slice-99-merge", "invalid-destination.json"]);
-    let invalid_destination_result = merge_yaml(
-        invalid_destination["template"].as_str().unwrap(),
-        invalid_destination["destination"].as_str().unwrap(),
-        YamlDialect::Yaml,
-    );
-    assert!(!invalid_destination_result.ok);
-    let invalid_destination_diagnostics = invalid_destination_result
-        .diagnostics
-        .iter()
-        .map(|diagnostic| {
-            serde_json::json!({
-                "severity": diagnostic_severity_name(diagnostic.severity),
-                "category": diagnostic_category_name(diagnostic.category),
+
+    for backend in [YamlBackend::SerdeYaml, YamlBackend::YamlSerde] {
+        let merge_result = merge_yaml_with_backend(
+            merge_fixture["template"].as_str().unwrap(),
+            merge_fixture["destination"].as_str().unwrap(),
+            YamlDialect::Yaml,
+            backend,
+        );
+        assert!(merge_result.ok);
+        assert_eq!(
+            merge_result.output,
+            merge_fixture["expected"]["output"].as_str().map(str::to_string)
+        );
+
+        let invalid_template_result = merge_yaml_with_backend(
+            invalid_template["template"].as_str().unwrap(),
+            invalid_template["destination"].as_str().unwrap(),
+            YamlDialect::Yaml,
+            backend,
+        );
+        assert!(!invalid_template_result.ok);
+        let invalid_template_diagnostics = invalid_template_result
+            .diagnostics
+            .iter()
+            .map(|diagnostic| {
+                serde_json::json!({
+                    "severity": diagnostic_severity_name(diagnostic.severity),
+                    "category": diagnostic_category_name(diagnostic.category),
+                })
             })
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(
-        Value::Array(invalid_destination_diagnostics),
-        invalid_destination["expected"]["diagnostics"]
-    );
+            .collect::<Vec<_>>();
+        assert_eq!(
+            Value::Array(invalid_template_diagnostics),
+            invalid_template["expected"]["diagnostics"]
+        );
+
+        let invalid_destination_result = merge_yaml_with_backend(
+            invalid_destination["template"].as_str().unwrap(),
+            invalid_destination["destination"].as_str().unwrap(),
+            YamlDialect::Yaml,
+            backend,
+        );
+        assert!(!invalid_destination_result.ok);
+        let invalid_destination_diagnostics = invalid_destination_result
+            .diagnostics
+            .iter()
+            .map(|diagnostic| {
+                serde_json::json!({
+                    "severity": diagnostic_severity_name(diagnostic.severity),
+                    "category": diagnostic_category_name(diagnostic.category),
+                })
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            Value::Array(invalid_destination_diagnostics),
+            invalid_destination["expected"]["diagnostics"]
+        );
+    }
 }
