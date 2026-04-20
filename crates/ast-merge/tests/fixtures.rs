@@ -500,6 +500,37 @@ fn conforms_to_slice_39_conformance_suite_plan_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_120_manifest_backend_requirements_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("manifest_backend_requirements"));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let roles = fixture["roles"]
+        .as_array()
+        .expect("roles should be an array")
+        .iter()
+        .map(|role| role.as_str().expect("role should be a string").to_string())
+        .collect::<Vec<_>>();
+    let family_profile =
+        serde_json::from_value::<FamilyFeatureProfile>(fixture["family_profile"].clone())
+            .expect("family profile should deserialize");
+    let feature_profile =
+        serde_json::from_value::<ConformanceFeatureProfileView>(fixture["feature_profile"].clone())
+            .expect("feature profile should deserialize");
+    let expected = serde_json::from_value::<ConformanceSuitePlan>(fixture["expected"].clone())
+        .expect("expected suite plan should deserialize");
+
+    let plan = plan_conformance_suite(
+        &manifest,
+        fixture["family"].as_str().expect("family should be a string"),
+        &roles,
+        &family_profile,
+        Some(&feature_profile),
+    );
+
+    assert_eq!(plan, expected);
+}
+
+#[test]
 fn conforms_to_slice_40_planned_conformance_suite_runner_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("planned_suite_runner"));
     let plan = serde_json::from_value::<ConformanceSuitePlan>(fixture["plan"].clone())
