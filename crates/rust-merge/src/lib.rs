@@ -1,6 +1,6 @@
 use ast_merge::{
-    ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference,
-    PolicySurface,
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult,
+    ParseResult, PolicyReference, PolicySurface,
 };
 use syn::{File, Item};
 use tree_haver::{
@@ -132,6 +132,17 @@ pub fn rust_backend_feature_profile(backend: RustBackend) -> ConformanceFeatureP
             supports_dialects: true,
             supported_policies: vec![destination_wins_array_policy()],
         },
+    }
+}
+
+pub fn rust_plan_context(backend: RustBackend) -> ConformanceFamilyPlanContext {
+    ConformanceFamilyPlanContext {
+        family_profile: FamilyFeatureProfile {
+            family: rust_feature_profile().family.to_string(),
+            supported_dialects: vec!["rust".to_string()],
+            supported_policies: rust_feature_profile().supported_policies,
+        },
+        feature_profile: Some(rust_backend_feature_profile(backend)),
     }
 }
 

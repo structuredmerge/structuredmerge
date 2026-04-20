@@ -3,6 +3,7 @@ use std::{fs, path::PathBuf};
 use rust_merge::{
     RustBackend, RustDialect, match_rust_owners, merge_rust, merge_rust_with_backend, parse_rust,
     parse_rust_with_backend, rust_backend_feature_profile, rust_backends, rust_feature_profile,
+    rust_plan_context,
 };
 use serde_json::Value;
 
@@ -226,5 +227,65 @@ fn conforms_to_rust_backend_fixtures() {
             })).collect::<Vec<_>>()
         }),
         backend_profiles["native"]
+    );
+
+    let plan_contexts = read_fixture(&[
+        "diagnostics",
+        "slice-123-source-family-plan-contexts",
+        "rust-plan-contexts.json",
+    ]);
+    assert_eq!(
+        serde_json::json!({
+            "family_profile": {
+                "family": rust_plan_context(RustBackend::TreeSitter).family_profile.family,
+                "supported_dialects": rust_plan_context(RustBackend::TreeSitter).family_profile.supported_dialects,
+                "supported_policies": rust_plan_context(RustBackend::TreeSitter).family_profile.supported_policies.iter().map(|policy| serde_json::json!({
+                    "surface": match policy.surface {
+                        ast_merge::PolicySurface::Fallback => "fallback",
+                        ast_merge::PolicySurface::Array => "array",
+                    },
+                    "name": policy.name
+                })).collect::<Vec<_>>()
+            },
+            "feature_profile": {
+                "backend": rust_plan_context(RustBackend::TreeSitter).feature_profile.as_ref().unwrap().backend,
+                "supports_dialects": rust_plan_context(RustBackend::TreeSitter).feature_profile.as_ref().unwrap().supports_dialects,
+                "supported_policies": rust_plan_context(RustBackend::TreeSitter).feature_profile.as_ref().unwrap().supported_policies.iter().map(|policy| serde_json::json!({
+                    "surface": match policy.surface {
+                        ast_merge::PolicySurface::Fallback => "fallback",
+                        ast_merge::PolicySurface::Array => "array",
+                    },
+                    "name": policy.name
+                })).collect::<Vec<_>>()
+            }
+        }),
+        plan_contexts["tree_sitter"]
+    );
+    assert_eq!(
+        serde_json::json!({
+            "family_profile": {
+                "family": rust_plan_context(RustBackend::Native).family_profile.family,
+                "supported_dialects": rust_plan_context(RustBackend::Native).family_profile.supported_dialects,
+                "supported_policies": rust_plan_context(RustBackend::Native).family_profile.supported_policies.iter().map(|policy| serde_json::json!({
+                    "surface": match policy.surface {
+                        ast_merge::PolicySurface::Fallback => "fallback",
+                        ast_merge::PolicySurface::Array => "array",
+                    },
+                    "name": policy.name
+                })).collect::<Vec<_>>()
+            },
+            "feature_profile": {
+                "backend": rust_plan_context(RustBackend::Native).feature_profile.as_ref().unwrap().backend,
+                "supports_dialects": rust_plan_context(RustBackend::Native).feature_profile.as_ref().unwrap().supports_dialects,
+                "supported_policies": rust_plan_context(RustBackend::Native).feature_profile.as_ref().unwrap().supported_policies.iter().map(|policy| serde_json::json!({
+                    "surface": match policy.surface {
+                        ast_merge::PolicySurface::Fallback => "fallback",
+                        ast_merge::PolicySurface::Array => "array",
+                    },
+                    "name": policy.name
+                })).collect::<Vec<_>>()
+            }
+        }),
+        plan_contexts["native"]
     );
 }
