@@ -246,6 +246,35 @@ pub struct ReviewReplayBundle {
     pub decisions: Vec<ReviewDecision>,
 }
 
+pub const REVIEW_TRANSPORT_VERSION: u32 = 1;
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewTransportImportErrorCategory {
+    KindMismatch,
+    UnsupportedVersion,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReviewTransportImportError {
+    pub category: ReviewTransportImportErrorCategory,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceManifestReviewStateEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub state: ConformanceManifestReviewState,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReviewReplayBundleEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub replay_bundle: ReviewReplayBundle,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReviewHostHints {
     pub interactive: bool,
@@ -449,6 +478,70 @@ pub fn review_replay_bundle_inputs(
     }
 
     (options.review_replay_context.clone(), options.review_decisions.clone())
+}
+
+pub fn conformance_manifest_review_state_envelope(
+    state: &ConformanceManifestReviewState,
+) -> ConformanceManifestReviewStateEnvelope {
+    ConformanceManifestReviewStateEnvelope {
+        kind: "conformance_manifest_review_state".to_string(),
+        version: REVIEW_TRANSPORT_VERSION,
+        state: state.clone(),
+    }
+}
+
+pub fn review_replay_bundle_envelope(bundle: &ReviewReplayBundle) -> ReviewReplayBundleEnvelope {
+    ReviewReplayBundleEnvelope {
+        kind: "review_replay_bundle".to_string(),
+        version: REVIEW_TRANSPORT_VERSION,
+        replay_bundle: bundle.clone(),
+    }
+}
+
+pub fn import_conformance_manifest_review_state_envelope(
+    envelope: &ConformanceManifestReviewStateEnvelope,
+) -> Result<ConformanceManifestReviewState, ReviewTransportImportError> {
+    if envelope.kind != "conformance_manifest_review_state" {
+        return Err(ReviewTransportImportError {
+            category: ReviewTransportImportErrorCategory::KindMismatch,
+            message: "expected conformance_manifest_review_state envelope kind.".to_string(),
+        });
+    }
+
+    if envelope.version != REVIEW_TRANSPORT_VERSION {
+        return Err(ReviewTransportImportError {
+            category: ReviewTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported conformance_manifest_review_state envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.state.clone())
+}
+
+pub fn import_review_replay_bundle_envelope(
+    envelope: &ReviewReplayBundleEnvelope,
+) -> Result<ReviewReplayBundle, ReviewTransportImportError> {
+    if envelope.kind != "review_replay_bundle" {
+        return Err(ReviewTransportImportError {
+            category: ReviewTransportImportErrorCategory::KindMismatch,
+            message: "expected review_replay_bundle envelope kind.".to_string(),
+        });
+    }
+
+    if envelope.version != REVIEW_TRANSPORT_VERSION {
+        return Err(ReviewTransportImportError {
+            category: ReviewTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported review_replay_bundle envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.replay_bundle.clone())
 }
 
 pub fn resolve_conformance_family_context(
