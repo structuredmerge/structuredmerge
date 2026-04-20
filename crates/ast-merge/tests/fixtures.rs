@@ -1076,6 +1076,171 @@ fn conforms_to_slice_202_markdown_family_manifest_report_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_246_markdown_nested_suite_definitions_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-246-markdown-nested-suite-definitions",
+        "markdown-nested-suite-definitions.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+
+    assert_eq!(conformance_suite_names(&manifest), vec!["markdown_nested_portable".to_string()]);
+    assert_eq!(
+        conformance_suite_definition(&manifest, "markdown_nested_portable")
+            .expect("definition should exist")
+            .roles,
+        vec![
+            "analysis".to_string(),
+            "matching".to_string(),
+            "embedded_families".to_string(),
+            "discovered_surfaces".to_string(),
+            "delegated_child_operations".to_string(),
+            "delegated_child_review_transport".to_string(),
+            "delegated_child_review_state".to_string(),
+            "delegated_child_apply_plan".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn conforms_to_slice_247_markdown_nested_named_suite_plans_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-247-markdown-nested-named-suite-plans",
+        "markdown-nested-named-suite-plans.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let contexts = serde_json::from_value::<
+        std::collections::HashMap<String, ConformanceFamilyPlanContext>,
+    >(fixture["contexts"].clone())
+    .expect("contexts should deserialize");
+    let expected = serde_json::from_value::<Vec<NamedConformanceSuitePlan>>(
+        fixture["expected_entries"].clone(),
+    )
+    .expect("expected entries should deserialize");
+
+    assert_eq!(plan_named_conformance_suites(&manifest, &contexts), expected);
+}
+
+#[test]
+fn conforms_to_slice_248_markdown_nested_manifest_report_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-248-markdown-nested-manifest-report",
+        "markdown-nested-manifest-report.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let options =
+        serde_json::from_value::<ConformanceManifestPlanningOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected =
+        serde_json::from_value::<ConformanceManifestReport>(fixture["expected_report"].clone())
+            .expect("expected report should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+    let report = report_conformance_manifest(&manifest, &options, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        executions
+            .get(&key)
+            .map(|value| {
+                serde_json::from_value::<ConformanceCaseExecution>(value.clone())
+                    .expect("execution should deserialize")
+            })
+            .unwrap_or_else(|| ConformanceCaseExecution {
+                outcome: ConformanceOutcome::Failed,
+                messages: vec!["missing execution".to_string()],
+            })
+    });
+
+    assert_eq!(report, expected);
+}
+
+#[test]
+fn conforms_to_slice_249_ruby_nested_suite_definitions_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-249-ruby-nested-suite-definitions",
+        "ruby-nested-suite-definitions.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+
+    assert_eq!(conformance_suite_names(&manifest), vec!["ruby_nested_portable".to_string()]);
+    assert_eq!(
+        conformance_suite_definition(&manifest, "ruby_nested_portable")
+            .expect("definition should exist")
+            .roles,
+        vec![
+            "analysis".to_string(),
+            "matching".to_string(),
+            "discovered_surfaces".to_string(),
+            "delegated_child_operations".to_string(),
+            "delegated_child_review_transport".to_string(),
+            "delegated_child_review_state".to_string(),
+            "delegated_child_apply_plan".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn conforms_to_slice_250_ruby_nested_named_suite_plans_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-250-ruby-nested-named-suite-plans",
+        "ruby-nested-named-suite-plans.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let contexts = serde_json::from_value::<
+        std::collections::HashMap<String, ConformanceFamilyPlanContext>,
+    >(fixture["contexts"].clone())
+    .expect("contexts should deserialize");
+    let expected = serde_json::from_value::<Vec<NamedConformanceSuitePlan>>(
+        fixture["expected_entries"].clone(),
+    )
+    .expect("expected entries should deserialize");
+
+    assert_eq!(plan_named_conformance_suites(&manifest, &contexts), expected);
+}
+
+#[test]
+fn conforms_to_slice_251_ruby_nested_manifest_report_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-251-ruby-nested-manifest-report",
+        "ruby-nested-manifest-report.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let options =
+        serde_json::from_value::<ConformanceManifestPlanningOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected =
+        serde_json::from_value::<ConformanceManifestReport>(fixture["expected_report"].clone())
+            .expect("expected report should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+    let report = report_conformance_manifest(&manifest, &options, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        executions
+            .get(&key)
+            .map(|value| {
+                serde_json::from_value::<ConformanceCaseExecution>(value.clone())
+                    .expect("execution should deserialize")
+            })
+            .unwrap_or_else(|| ConformanceCaseExecution {
+                outcome: ConformanceOutcome::Failed,
+                messages: vec!["missing execution".to_string()],
+            })
+    });
+
+    assert_eq!(report, expected);
+}
+
+#[test]
 fn conforms_to_slice_51_named_conformance_suite_results_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_results"));
     let manifest = read_manifest();
