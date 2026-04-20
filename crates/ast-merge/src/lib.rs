@@ -120,6 +120,17 @@ pub struct ProjectedChildReviewGroup {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProjectedChildReviewGroupProgress {
+    pub delegated_apply_group: String,
+    pub parent_operation_id: String,
+    pub child_operation_id: String,
+    pub delegated_runtime_surface_path: String,
+    pub resolved_case_ids: Vec<String>,
+    pub pending_case_ids: Vec<String>,
+    pub complete: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ParseResult<TAnalysis> {
     pub ok: bool,
     pub diagnostics: Vec<Diagnostic>,
@@ -532,6 +543,39 @@ pub fn group_projected_child_review_cases(
     }
 
     groups
+}
+
+pub fn summarize_projected_child_review_group_progress(
+    groups: &[ProjectedChildReviewGroup],
+    resolved_case_ids: &[String],
+) -> Vec<ProjectedChildReviewGroupProgress> {
+    groups
+        .iter()
+        .map(|group| {
+            let resolved = group
+                .case_ids
+                .iter()
+                .filter(|case_id| resolved_case_ids.contains(*case_id))
+                .cloned()
+                .collect::<Vec<_>>();
+            let pending = group
+                .case_ids
+                .iter()
+                .filter(|case_id| !resolved_case_ids.contains(*case_id))
+                .cloned()
+                .collect::<Vec<_>>();
+
+            ProjectedChildReviewGroupProgress {
+                delegated_apply_group: group.delegated_apply_group.clone(),
+                parent_operation_id: group.parent_operation_id.clone(),
+                child_operation_id: group.child_operation_id.clone(),
+                delegated_runtime_surface_path: group.delegated_runtime_surface_path.clone(),
+                resolved_case_ids: resolved,
+                pending_case_ids: pending.clone(),
+                complete: pending.is_empty(),
+            }
+        })
+        .collect()
 }
 
 pub fn conformance_review_host_hints(

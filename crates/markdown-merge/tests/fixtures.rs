@@ -2,8 +2,9 @@ use std::{fs, path::PathBuf};
 
 use ast_merge::{
     ConformanceManifest, ProjectedChildReviewCase, ProjectedChildReviewGroup,
-    conformance_family_feature_profile_path, conformance_fixture_path,
-    group_projected_child_review_cases,
+    ProjectedChildReviewGroupProgress, conformance_family_feature_profile_path,
+    conformance_fixture_path, group_projected_child_review_cases,
+    summarize_projected_child_review_group_progress,
 };
 use markdown_merge::{
     MarkdownBackend, MarkdownDialect, MarkdownOwnerKind, available_markdown_backends,
@@ -295,4 +296,28 @@ fn conforms_to_slice_228_markdown_projected_child_review_groups() {
     .expect("projected groups should deserialize");
 
     assert_eq!(group_projected_child_review_cases(&cases), expected);
+}
+
+#[test]
+fn conforms_to_slice_231_markdown_projected_child_review_group_progress() {
+    let fixture = read_fixture(&[
+        "markdown",
+        "slice-231-projected-child-review-group-progress",
+        "fenced-code-review-progress.json",
+    ]);
+    let groups =
+        serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(fixture["groups"].clone())
+            .expect("projected groups should deserialize");
+    let resolved_case_ids =
+        serde_json::from_value::<Vec<String>>(fixture["resolved_case_ids"].clone())
+            .expect("resolved case ids should deserialize");
+    let expected = serde_json::from_value::<Vec<ProjectedChildReviewGroupProgress>>(
+        fixture["expected_progress"].clone(),
+    )
+    .expect("projected group progress should deserialize");
+
+    assert_eq!(
+        summarize_projected_child_review_group_progress(&groups, &resolved_case_ids),
+        expected
+    );
 }

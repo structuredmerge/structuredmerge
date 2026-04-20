@@ -1,7 +1,8 @@
 use std::{fs, path::PathBuf};
 
 use ast_merge::{
-    ProjectedChildReviewCase, ProjectedChildReviewGroup, group_projected_child_review_cases,
+    ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
+    group_projected_child_review_cases, summarize_projected_child_review_group_progress,
 };
 use ruby_merge::{
     RubyDialect, RubyOwnerKind, match_ruby_owners, parse_ruby, ruby_delegated_child_operations,
@@ -127,4 +128,25 @@ fn conforms_to_ruby_fixtures() {
     )
     .expect("projected groups should deserialize");
     assert_eq!(group_projected_child_review_cases(&grouped_cases), expected_groups);
+
+    let progress_fixture = read_fixture(&[
+        "ruby",
+        "slice-232-projected-child-review-group-progress",
+        "yard-example-review-progress.json",
+    ]);
+    let progress_groups = serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(
+        progress_fixture["groups"].clone(),
+    )
+    .expect("projected groups should deserialize");
+    let resolved_case_ids =
+        serde_json::from_value::<Vec<String>>(progress_fixture["resolved_case_ids"].clone())
+            .expect("resolved case ids should deserialize");
+    let expected_progress = serde_json::from_value::<Vec<ProjectedChildReviewGroupProgress>>(
+        progress_fixture["expected_progress"].clone(),
+    )
+    .expect("projected group progress should deserialize");
+    assert_eq!(
+        summarize_projected_child_review_group_progress(&progress_groups, &resolved_case_ids),
+        expected_progress
+    );
 }
