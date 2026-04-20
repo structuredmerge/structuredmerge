@@ -1268,6 +1268,68 @@ fn conforms_to_slice_130_source_family_backend_restricted_report_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_131_canonical_manifest_source_family_paths() {
+    let manifest = read_manifest();
+
+    assert_eq!(
+        conformance_family_feature_profile_path(&manifest, "typescript"),
+        Some(
+            &[
+                "diagnostics".to_string(),
+                "slice-101-typescript-family-feature-profile".to_string(),
+                "typescript-feature-profile.json".to_string(),
+            ][..],
+        )
+    );
+    assert_eq!(
+        conformance_family_feature_profile_path(&manifest, "rust"),
+        Some(
+            &[
+                "diagnostics".to_string(),
+                "slice-105-rust-family-feature-profile".to_string(),
+                "rust-feature-profile.json".to_string(),
+            ][..],
+        )
+    );
+    assert_eq!(
+        conformance_family_feature_profile_path(&manifest, "go"),
+        Some(
+            &[
+                "diagnostics".to_string(),
+                "slice-109-go-family-feature-profile".to_string(),
+                "go-feature-profile.json".to_string(),
+            ][..],
+        )
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "typescript", "analysis"),
+        Some(
+            &[
+                "typescript".to_string(),
+                "slice-102-analysis".to_string(),
+                "module-owners.json".to_string(),
+            ][..],
+        )
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "rust", "matching"),
+        Some(
+            &[
+                "rust".to_string(),
+                "slice-107-matching".to_string(),
+                "path-equality.json".to_string(),
+            ][..],
+        )
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "go", "merge"),
+        Some(
+            &["go".to_string(), "slice-112-merge".to_string(), "module-merge.json".to_string(),][..],
+        )
+    );
+}
+
+#[test]
 fn conforms_to_slice_61_review_host_hints_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("review_host_hints"));
     let options =

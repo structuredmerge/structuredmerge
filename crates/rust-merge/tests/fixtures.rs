@@ -344,3 +344,47 @@ fn conforms_to_slice_124_source_family_manifest_fixture() {
         )
     );
 }
+
+#[test]
+fn conforms_to_slice_131_canonical_manifest_fixture() {
+    let manifest =
+        read_manifest(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
+
+    assert_eq!(
+        conformance_family_feature_profile_path(&manifest, "rust"),
+        Some(
+            &[
+                "diagnostics".to_string(),
+                "slice-105-rust-family-feature-profile".to_string(),
+                "rust-feature-profile.json".to_string(),
+            ][..],
+        )
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "rust", "analysis"),
+        Some(
+            &[
+                "rust".to_string(),
+                "slice-106-analysis".to_string(),
+                "module-owners.json".to_string(),
+            ][..],
+        )
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "rust", "matching"),
+        Some(
+            &[
+                "rust".to_string(),
+                "slice-107-matching".to_string(),
+                "path-equality.json".to_string(),
+            ][..],
+        )
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "rust", "merge"),
+        Some(
+            &["rust".to_string(), "slice-108-merge".to_string(), "module-merge.json".to_string(),]
+                [..],
+        )
+    );
+}
