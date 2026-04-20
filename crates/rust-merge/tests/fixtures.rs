@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf};
 
 use rust_merge::{
     RustBackend, RustDialect, match_rust_owners, merge_rust, merge_rust_with_backend, parse_rust,
-    parse_rust_with_backend, rust_backends, rust_feature_profile,
+    parse_rust_with_backend, rust_backend_feature_profile, rust_backends, rust_feature_profile,
 };
 use serde_json::Value;
 
@@ -192,5 +192,39 @@ fn conforms_to_rust_backend_fixtures() {
     assert_eq!(
         merge_result.output,
         parity_fixture["expected"]["output"].as_str().map(str::to_string)
+    );
+
+    let backend_profiles = read_fixture(&[
+        "diagnostics",
+        "slice-122-source-family-backend-feature-profiles",
+        "rust-backend-feature-profiles.json",
+    ]);
+    assert_eq!(
+        serde_json::json!({
+            "backend": rust_backend_feature_profile(RustBackend::TreeSitter).backend,
+            "supports_dialects": rust_backend_feature_profile(RustBackend::TreeSitter).supports_dialects,
+            "supported_policies": rust_backend_feature_profile(RustBackend::TreeSitter).supported_policies.iter().map(|policy| serde_json::json!({
+                "surface": match policy.surface {
+                    ast_merge::PolicySurface::Fallback => "fallback",
+                    ast_merge::PolicySurface::Array => "array",
+                },
+                "name": policy.name
+            })).collect::<Vec<_>>()
+        }),
+        backend_profiles["tree_sitter"]
+    );
+    assert_eq!(
+        serde_json::json!({
+            "backend": rust_backend_feature_profile(RustBackend::Native).backend,
+            "supports_dialects": rust_backend_feature_profile(RustBackend::Native).supports_dialects,
+            "supported_policies": rust_backend_feature_profile(RustBackend::Native).supported_policies.iter().map(|policy| serde_json::json!({
+                "surface": match policy.surface {
+                    ast_merge::PolicySurface::Fallback => "fallback",
+                    ast_merge::PolicySurface::Array => "array",
+                },
+                "name": policy.name
+            })).collect::<Vec<_>>()
+        }),
+        backend_profiles["native"]
     );
 }

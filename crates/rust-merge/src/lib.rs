@@ -1,7 +1,11 @@
-use ast_merge::{FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference, PolicySurface};
+use ast_merge::{
+    ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference,
+    PolicySurface,
+};
 use syn::{File, Item};
 use tree_haver::{
-    ParserRequest, ProcessRequest, parse_with_language_pack, process_with_language_pack,
+    ParserRequest, ProcessRequest, language_pack_adapter_info, parse_with_language_pack,
+    process_with_language_pack,
 };
 
 pub const PACKAGE_NAME: &str = "rust-merge";
@@ -113,6 +117,21 @@ pub fn rust_feature_profile() -> RustFeatureProfile {
         family: "rust",
         supported_dialects: shared.supported_dialects.iter().map(|_| RustDialect::Rust).collect(),
         supported_policies: shared.supported_policies,
+    }
+}
+
+pub fn rust_backend_feature_profile(backend: RustBackend) -> ConformanceFeatureProfileView {
+    match backend {
+        RustBackend::Native => ConformanceFeatureProfileView {
+            backend: "syn".to_string(),
+            supports_dialects: true,
+            supported_policies: vec![destination_wins_array_policy()],
+        },
+        RustBackend::TreeSitter => ConformanceFeatureProfileView {
+            backend: language_pack_adapter_info().backend,
+            supports_dialects: true,
+            supported_policies: vec![destination_wins_array_policy()],
+        },
     }
 }
 
