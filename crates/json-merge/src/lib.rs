@@ -153,6 +153,7 @@ pub fn parse_json_with_language_pack(
                 path: None,
                 request_id: None,
                 action: None,
+                reason: None,
             }],
             analysis: None,
             policies: vec![],
@@ -180,6 +181,7 @@ fn parse_error(message: &str) -> Diagnostic {
         path: None,
         request_id: None,
         action: None,
+        reason: None,
     }
 }
 
@@ -191,6 +193,7 @@ fn destination_parse_error(message: &str) -> Diagnostic {
         path: None,
         request_id: None,
         action: None,
+        reason: None,
     }
 }
 
@@ -202,6 +205,7 @@ fn fallback_applied(message: &str) -> Diagnostic {
         path: None,
         request_id: None,
         action: None,
+        reason: None,
     }
 }
 
@@ -604,6 +608,7 @@ fn parse_normalized_json(
                 path: diagnostic.path,
                 request_id: None,
                 action: None,
+                reason: None,
             })
             .unwrap_or_else(|| diagnostic_factory("JSON parse failed."));
         return Err(diagnostic);

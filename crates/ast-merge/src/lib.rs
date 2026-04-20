@@ -25,6 +25,14 @@ pub enum DiagnosticCategory {
     ReplayRejected,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewDiagnosticReason {
+    MissingRequiredPayload,
+    FamilyMismatch,
+    RequestNotFound,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Diagnostic {
     pub severity: DiagnosticSeverity,
@@ -33,6 +41,7 @@ pub struct Diagnostic {
     pub path: Option<String>,
     pub request_id: Option<String>,
     pub action: Option<ReviewDecisionAction>,
+    pub reason: Option<ReviewDiagnosticReason>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -574,6 +583,7 @@ pub fn resolve_conformance_family_context(
                 path: None,
                 request_id: None,
                 action: None,
+                reason: None,
             }],
         );
     }
@@ -588,6 +598,7 @@ pub fn resolve_conformance_family_context(
                 path: None,
                 request_id: None,
                 action: None,
+                reason: None,
             }],
         );
     }
@@ -604,6 +615,7 @@ pub fn resolve_conformance_family_context(
             path: None,
             request_id: None,
             action: None,
+            reason: None,
         }],
     )
 }
@@ -649,6 +661,7 @@ fn review_decision_for_family_context(
                             path: None,
                             request_id: Some(request_id.clone()),
                             action: Some(ReviewDecisionAction::ProvideExplicitContext),
+                            reason: Some(ReviewDiagnosticReason::MissingRequiredPayload),
                         }],
                     );
                 };
@@ -668,6 +681,7 @@ fn review_decision_for_family_context(
                             path: None,
                             request_id: Some(request_id.clone()),
                             action: Some(ReviewDecisionAction::ProvideExplicitContext),
+                            reason: Some(ReviewDiagnosticReason::FamilyMismatch),
                         }],
                     );
                 }
@@ -711,6 +725,7 @@ pub fn review_conformance_family_context(
                 path: None,
                 request_id: None,
                 action: None,
+                reason: None,
             }],
             Vec::new(),
             Vec::new(),
@@ -730,6 +745,7 @@ pub fn review_conformance_family_context(
                     path: None,
                     request_id: None,
                     action: None,
+                    reason: None,
                 }]
             } else {
                 Vec::new()
@@ -749,6 +765,7 @@ pub fn review_conformance_family_context(
                 path: None,
                 request_id: None,
                 action: None,
+                reason: None,
             }]
         } else {
             decision_diagnostics
@@ -1053,6 +1070,7 @@ pub fn review_conformance_manifest(
             path: None,
             request_id: None,
             action: None,
+            reason: None,
         });
         effective_options.review_replay_bundle = None;
         effective_options.review_replay_context = None;
@@ -1068,6 +1086,7 @@ pub fn review_conformance_manifest(
             path: None,
             request_id: None,
             action: None,
+            reason: None,
         });
         effective_options.review_replay_bundle = None;
         effective_options.review_replay_context = None;
@@ -1096,6 +1115,7 @@ pub fn review_conformance_manifest(
                         path: None,
                         request_id: Some(decision.request_id.clone()),
                         action: Some(decision.action),
+                        reason: Some(ReviewDiagnosticReason::RequestNotFound),
                     });
                     None
                 }
@@ -1143,6 +1163,7 @@ pub fn review_conformance_manifest(
                 path: None,
                 request_id: None,
                 action: None,
+                reason: None,
             });
             continue;
         }
@@ -1300,6 +1321,7 @@ pub fn plan_named_conformance_suites_with_diagnostics(
                 path: None,
                 request_id: None,
                 action: None,
+                reason: None,
             });
             continue;
         }
