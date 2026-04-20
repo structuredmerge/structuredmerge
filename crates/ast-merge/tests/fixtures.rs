@@ -1289,6 +1289,78 @@ fn conforms_to_slice_140_toml_family_manifest_report_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_144_yaml_family_suite_definitions_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-144-yaml-family-suite-definitions",
+        "yaml-suite-definitions.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+
+    assert_eq!(conformance_suite_names(&manifest), vec!["yaml_portable".to_string()]);
+    let expected_definition = ConformanceSuiteDefinition {
+        family: "yaml".to_string(),
+        roles: vec!["analysis".to_string(), "matching".to_string(), "merge".to_string()],
+    };
+    assert_eq!(
+        conformance_suite_definition(&manifest, "yaml_portable"),
+        Some(&expected_definition)
+    );
+}
+
+#[test]
+fn conforms_to_slice_145_yaml_family_named_suite_plans_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-145-yaml-family-named-suite-plans",
+        "rust-yaml-named-suite-plans.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let contexts = serde_json::from_value::<
+        std::collections::HashMap<String, ConformanceFamilyPlanContext>,
+    >(fixture["contexts"].clone())
+    .expect("contexts should deserialize");
+    let expected = serde_json::from_value::<Vec<NamedConformanceSuitePlan>>(
+        fixture["expected_entries"].clone(),
+    )
+    .expect("expected entries should deserialize");
+
+    assert_eq!(plan_named_conformance_suites(&manifest, &contexts), expected);
+}
+
+#[test]
+fn conforms_to_slice_146_yaml_family_manifest_report_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-146-yaml-family-manifest-report",
+        "rust-yaml-manifest-report.json",
+    ]));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let options =
+        serde_json::from_value::<ConformanceManifestPlanningOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected =
+        serde_json::from_value::<ConformanceManifestReport>(fixture["expected_report"].clone())
+            .expect("expected report should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+    let report = report_conformance_manifest(&manifest, &options, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        serde_json::from_value::<ConformanceCaseExecution>(
+            executions.get(&key).cloned().unwrap_or_else(
+                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+            ),
+        )
+        .expect("execution should deserialize")
+    });
+
+    assert_eq!(report, expected);
+}
+
+#[test]
 fn conforms_to_slice_129_source_family_backend_restricted_plans_fixture() {
     let fixture = read_fixture_from_path(fixture_path(&[
         "diagnostics",

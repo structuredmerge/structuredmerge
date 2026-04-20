@@ -1,9 +1,12 @@
 use std::{fs, path::PathBuf};
 
+use ast_merge::{
+    ConformanceManifest, conformance_family_feature_profile_path, conformance_fixture_path,
+};
 use serde_json::Value;
 use yaml_merge::{
     YamlDialect, YamlOwnerKind, YamlRootKind, match_yaml_owners, merge_yaml, parse_yaml,
-    yaml_feature_profile,
+    yaml_feature_profile, yaml_plan_context,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -63,6 +66,89 @@ fn conforms_to_slice_95_yaml_feature_profile_fixture() {
             surface: ast_merge::PolicySurface::Array,
             name: "destination_wins_array".to_string()
         }]
+    );
+}
+
+#[test]
+fn conforms_to_slice_142_yaml_plan_context_fixture() {
+    let fixture = read_fixture(&[
+        "diagnostics",
+        "slice-142-yaml-family-plan-contexts",
+        "rust-yaml-plan-contexts.json",
+    ]);
+
+    let context = yaml_plan_context();
+    assert_eq!(context.family_profile.family, fixture["native"]["family_profile"]["family"]);
+    let feature = context.feature_profile.expect("feature profile should be present");
+    assert_eq!(feature.backend, fixture["native"]["feature_profile"]["backend"]);
+    assert_eq!(
+        feature.supports_dialects,
+        fixture["native"]["feature_profile"]["supports_dialects"]
+    );
+}
+
+#[test]
+fn conforms_to_slice_143_yaml_family_manifest_fixture() {
+    let fixture = read_fixture(&[
+        "conformance",
+        "slice-143-yaml-family-manifest",
+        "yaml-family-manifest.json",
+    ]);
+    let manifest: ConformanceManifest = serde_json::from_value(fixture).expect("valid manifest");
+
+    assert_eq!(
+        conformance_family_feature_profile_path(&manifest, "yaml"),
+        Some(
+            &[
+                "diagnostics".to_string(),
+                "slice-95-yaml-family-feature-profile".to_string(),
+                "yaml-feature-profile.json".to_string()
+            ][..]
+        )
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "yaml", "analysis"),
+        Some(
+            &[
+                "yaml".to_string(),
+                "slice-97-structure".to_string(),
+                "mapping-and-sequence.json".to_string()
+            ][..]
+        )
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "yaml", "merge"),
+        Some(
+            &["yaml".to_string(), "slice-99-merge".to_string(), "mapping-merge.json".to_string()][..]
+        )
+    );
+}
+
+#[test]
+fn resolves_yaml_paths_through_the_canonical_manifest() {
+    let fixture =
+        read_fixture(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
+    let manifest: ConformanceManifest = serde_json::from_value(fixture).expect("valid manifest");
+
+    assert_eq!(
+        conformance_family_feature_profile_path(&manifest, "yaml"),
+        Some(
+            &[
+                "diagnostics".to_string(),
+                "slice-95-yaml-family-feature-profile".to_string(),
+                "yaml-feature-profile.json".to_string()
+            ][..]
+        )
+    );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "yaml", "matching"),
+        Some(
+            &[
+                "yaml".to_string(),
+                "slice-98-matching".to_string(),
+                "path-equality.json".to_string()
+            ][..]
+        )
     );
 }
 

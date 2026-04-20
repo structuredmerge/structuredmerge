@@ -1,6 +1,7 @@
 use ast_merge::{
-    Diagnostic, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile, MergeResult,
-    ParseResult, PolicyReference, PolicySurface,
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference,
+    PolicySurface,
 };
 use serde_yaml::{Mapping, Number, Value};
 
@@ -103,6 +104,21 @@ pub fn yaml_feature_profile() -> YamlFeatureProfile {
         family: "yaml",
         supported_dialects: shared.supported_dialects.iter().map(|_| YamlDialect::Yaml).collect(),
         supported_policies: shared.supported_policies,
+    }
+}
+
+pub fn yaml_plan_context() -> ConformanceFamilyPlanContext {
+    ConformanceFamilyPlanContext {
+        family_profile: FamilyFeatureProfile {
+            family: yaml_feature_profile().family.to_string(),
+            supported_dialects: vec!["yaml".to_string()],
+            supported_policies: yaml_feature_profile().supported_policies,
+        },
+        feature_profile: Some(ConformanceFeatureProfileView {
+            backend: "serde_yaml".to_string(),
+            supports_dialects: true,
+            supported_policies: vec![destination_wins_array_policy()],
+        }),
     }
 }
 
