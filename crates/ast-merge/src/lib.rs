@@ -578,6 +578,17 @@ pub fn summarize_projected_child_review_group_progress(
         .collect()
 }
 
+pub fn select_projected_child_review_groups_ready_for_apply(
+    groups: &[ProjectedChildReviewGroup],
+    resolved_case_ids: &[String],
+) -> Vec<ProjectedChildReviewGroup> {
+    groups
+        .iter()
+        .filter(|group| group.case_ids.iter().all(|case_id| resolved_case_ids.contains(case_id)))
+        .cloned()
+        .collect()
+}
+
 pub fn conformance_review_host_hints(
     options: &ConformanceManifestReviewOptions,
 ) -> ReviewHostHints {

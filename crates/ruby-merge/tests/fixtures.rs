@@ -2,7 +2,8 @@ use std::{fs, path::PathBuf};
 
 use ast_merge::{
     ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
-    group_projected_child_review_cases, summarize_projected_child_review_group_progress,
+    group_projected_child_review_cases, select_projected_child_review_groups_ready_for_apply,
+    summarize_projected_child_review_group_progress,
 };
 use ruby_merge::{
     RubyDialect, RubyOwnerKind, match_ruby_owners, parse_ruby, ruby_delegated_child_operations,
@@ -148,5 +149,28 @@ fn conforms_to_ruby_fixtures() {
     assert_eq!(
         summarize_projected_child_review_group_progress(&progress_groups, &resolved_case_ids),
         expected_progress
+    );
+
+    let ready_fixture = read_fixture(&[
+        "ruby",
+        "slice-235-projected-child-review-groups-ready-for-apply",
+        "yard-example-ready-groups.json",
+    ]);
+    let ready_groups =
+        serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(ready_fixture["groups"].clone())
+            .expect("projected groups should deserialize");
+    let ready_resolved_case_ids =
+        serde_json::from_value::<Vec<String>>(ready_fixture["resolved_case_ids"].clone())
+            .expect("resolved case ids should deserialize");
+    let expected_ready_groups = serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(
+        ready_fixture["expected_ready_groups"].clone(),
+    )
+    .expect("ready groups should deserialize");
+    assert_eq!(
+        select_projected_child_review_groups_ready_for_apply(
+            &ready_groups,
+            &ready_resolved_case_ids,
+        ),
+        expected_ready_groups
     );
 }

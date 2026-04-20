@@ -29,8 +29,8 @@ use ast_merge::{
     review_replay_context_compatible, review_request_id_for_family_context, run_conformance_case,
     run_conformance_suite, run_named_conformance_suite, run_named_conformance_suite_entry,
     run_planned_conformance_suite, run_planned_named_conformance_suites, select_conformance_case,
-    summarize_conformance_results, summarize_named_conformance_suite_reports,
-    summarize_projected_child_review_group_progress,
+    select_projected_child_review_groups_ready_for_apply, summarize_conformance_results,
+    summarize_named_conformance_suite_reports, summarize_projected_child_review_group_progress,
 };
 use serde_json::Value;
 
@@ -2643,6 +2643,28 @@ fn conforms_to_slice_230_projected_child_review_group_progress_fixture() {
 
     assert_eq!(
         summarize_projected_child_review_group_progress(&groups, &resolved_case_ids),
+        expected
+    );
+}
+
+#[test]
+fn conforms_to_slice_233_projected_child_review_groups_ready_for_apply_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "projected_child_review_groups_ready_for_apply",
+    ));
+    let groups =
+        serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(fixture["groups"].clone())
+            .expect("projected child review groups should deserialize");
+    let resolved_case_ids =
+        serde_json::from_value::<Vec<String>>(fixture["resolved_case_ids"].clone())
+            .expect("resolved case ids should deserialize");
+    let expected = serde_json::from_value::<Vec<ProjectedChildReviewGroup>>(
+        fixture["expected_ready_groups"].clone(),
+    )
+    .expect("ready projected child review groups should deserialize");
+
+    assert_eq!(
+        select_projected_child_review_groups_ready_for_apply(&groups, &resolved_case_ids),
         expected
     );
 }
