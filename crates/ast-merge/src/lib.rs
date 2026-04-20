@@ -34,17 +34,22 @@ pub enum ReviewDiagnosticReason {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Diagnostic {
-    pub severity: DiagnosticSeverity,
-    pub category: DiagnosticCategory,
-    pub message: String,
-    pub path: Option<String>,
+pub struct ReviewDiagnosticDetail {
     pub request_id: Option<String>,
     pub action: Option<ReviewDecisionAction>,
     pub reason: Option<ReviewDiagnosticReason>,
     pub payload_kind: Option<String>,
     pub expected_family: Option<String>,
     pub provided_family: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Diagnostic {
+    pub severity: DiagnosticSeverity,
+    pub category: DiagnosticCategory,
+    pub message: String,
+    pub path: Option<String>,
+    pub review: Option<Box<ReviewDiagnosticDetail>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -584,12 +589,7 @@ pub fn resolve_conformance_family_context(
                 category: DiagnosticCategory::ConfigurationError,
                 message: format!("missing explicit family context for {}.", family),
                 path: None,
-                request_id: None,
-                action: None,
-                reason: None,
-                payload_kind: None,
-                expected_family: None,
-                provided_family: None,
+                review: None,
             }],
         );
     }
@@ -602,12 +602,7 @@ pub fn resolve_conformance_family_context(
                 category: DiagnosticCategory::AssumedDefault,
                 message: format!("using default family context for {}.", family),
                 path: None,
-                request_id: None,
-                action: None,
-                reason: None,
-                payload_kind: None,
-                expected_family: None,
-                provided_family: None,
+                review: None,
             }],
         );
     }
@@ -622,12 +617,7 @@ pub fn resolve_conformance_family_context(
                 family
             ),
             path: None,
-            request_id: None,
-            action: None,
-            reason: None,
-            payload_kind: None,
-            expected_family: None,
-            provided_family: None,
+            review: None,
         }],
     )
 }
@@ -671,12 +661,14 @@ fn review_decision_for_family_context(
                                 request_id
                             ),
                             path: None,
-                            request_id: Some(request_id.clone()),
-                            action: Some(ReviewDecisionAction::ProvideExplicitContext),
-                            reason: Some(ReviewDiagnosticReason::MissingRequiredPayload),
-                            payload_kind: Some("conformance_family_context".to_string()),
-                            expected_family: None,
-                            provided_family: None,
+                            review: Some(Box::new(ReviewDiagnosticDetail {
+                                request_id: Some(request_id.clone()),
+                                action: Some(ReviewDecisionAction::ProvideExplicitContext),
+                                reason: Some(ReviewDiagnosticReason::MissingRequiredPayload),
+                                payload_kind: Some("conformance_family_context".to_string()),
+                                expected_family: None,
+                                provided_family: None,
+                            })),
                         }],
                     );
                 };
@@ -694,12 +686,14 @@ fn review_decision_for_family_context(
                                 request_id, context.family_profile.family, family
                             ),
                             path: None,
-                            request_id: Some(request_id.clone()),
-                            action: Some(ReviewDecisionAction::ProvideExplicitContext),
-                            reason: Some(ReviewDiagnosticReason::FamilyMismatch),
-                            payload_kind: None,
-                            expected_family: Some(family.to_string()),
-                            provided_family: Some(context.family_profile.family.clone()),
+                            review: Some(Box::new(ReviewDiagnosticDetail {
+                                request_id: Some(request_id.clone()),
+                                action: Some(ReviewDecisionAction::ProvideExplicitContext),
+                                reason: Some(ReviewDiagnosticReason::FamilyMismatch),
+                                payload_kind: None,
+                                expected_family: Some(family.to_string()),
+                                provided_family: Some(context.family_profile.family.clone()),
+                            })),
                         }],
                     );
                 }
@@ -741,12 +735,7 @@ pub fn review_conformance_family_context(
                     "missing family context for {family} and no default family profile is available."
                 ),
                 path: None,
-                request_id: None,
-                action: None,
-                reason: None,
-                payload_kind: None,
-                expected_family: None,
-                provided_family: None,
+                review: None,
             }],
             Vec::new(),
             Vec::new(),
@@ -764,12 +753,7 @@ pub fn review_conformance_family_context(
                     category: DiagnosticCategory::AssumedDefault,
                     message: format!("using default family context for {family}."),
                     path: None,
-                    request_id: None,
-                    action: None,
-                    reason: None,
-                    payload_kind: None,
-                    expected_family: None,
-                    provided_family: None,
+                    review: None,
                 }]
             } else {
                 Vec::new()
@@ -787,12 +771,7 @@ pub fn review_conformance_family_context(
                 category: DiagnosticCategory::ConfigurationError,
                 message: format!("missing explicit family context for {family}."),
                 path: None,
-                request_id: None,
-                action: None,
-                reason: None,
-                payload_kind: None,
-                expected_family: None,
-                provided_family: None,
+                review: None,
             }]
         } else {
             decision_diagnostics
@@ -1095,12 +1074,7 @@ pub fn review_conformance_manifest(
             category: DiagnosticCategory::ReplayRejected,
             message: "review decisions were provided without replay context.".to_string(),
             path: None,
-            request_id: None,
-            action: None,
-            reason: None,
-            payload_kind: None,
-            expected_family: None,
-            provided_family: None,
+            review: None,
         });
         effective_options.review_replay_bundle = None;
         effective_options.review_replay_context = None;
@@ -1114,12 +1088,7 @@ pub fn review_conformance_manifest(
             message: "review replay context does not match the current conformance manifest state."
                 .to_string(),
             path: None,
-            request_id: None,
-            action: None,
-            reason: None,
-            payload_kind: None,
-            expected_family: None,
-            provided_family: None,
+            review: None,
         });
         effective_options.review_replay_bundle = None;
         effective_options.review_replay_context = None;
@@ -1146,12 +1115,14 @@ pub fn review_conformance_manifest(
                             decision.request_id
                         ),
                         path: None,
-                        request_id: Some(decision.request_id.clone()),
-                        action: Some(decision.action),
-                        reason: Some(ReviewDiagnosticReason::RequestNotFound),
-                        payload_kind: None,
-                        expected_family: None,
-                        provided_family: None,
+                        review: Some(Box::new(ReviewDiagnosticDetail {
+                            request_id: Some(decision.request_id.clone()),
+                            action: Some(decision.action),
+                            reason: Some(ReviewDiagnosticReason::RequestNotFound),
+                            payload_kind: None,
+                            expected_family: None,
+                            provided_family: None,
+                        })),
                     });
                     None
                 }
@@ -1197,12 +1168,7 @@ pub fn review_conformance_manifest(
                     entry.plan.missing_roles.join(", ")
                 ),
                 path: None,
-                request_id: None,
-                action: None,
-                reason: None,
-                payload_kind: None,
-                expected_family: None,
-                provided_family: None,
+                review: None,
             });
             continue;
         }
@@ -1358,12 +1324,7 @@ pub fn plan_named_conformance_suites_with_diagnostics(
                     entry.plan.missing_roles.join(", ")
                 ),
                 path: None,
-                request_id: None,
-                action: None,
-                reason: None,
-                payload_kind: None,
-                expected_family: None,
-                provided_family: None,
+                review: None,
             });
             continue;
         }
