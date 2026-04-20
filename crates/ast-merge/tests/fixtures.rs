@@ -1212,3 +1212,31 @@ fn conforms_to_slice_70_review_replay_bundle_application_fixture() {
 
     assert_eq!(state, expected);
 }
+
+#[test]
+fn conforms_to_slice_71_review_state_json_roundtrip_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("review_state_json_roundtrip"));
+    let state = serde_json::from_value::<ConformanceManifestReviewState>(fixture["state"].clone())
+        .expect("state should deserialize");
+
+    let round_tripped: ConformanceManifestReviewState =
+        serde_json::from_str(&serde_json::to_string(&state).expect("state should serialize"))
+            .expect("state should deserialize after roundtrip");
+
+    assert_eq!(round_tripped, state);
+}
+
+#[test]
+fn conforms_to_slice_72_review_replay_bundle_json_roundtrip_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("review_replay_bundle_json_roundtrip"));
+    let bundle =
+        serde_json::from_value::<ast_merge::ReviewReplayBundle>(fixture["replay_bundle"].clone())
+            .expect("replay bundle should deserialize");
+
+    let round_tripped: ast_merge::ReviewReplayBundle =
+        serde_json::from_str(&serde_json::to_string(&bundle).expect("bundle should serialize"))
+            .expect("bundle should deserialize after roundtrip");
+
+    assert_eq!(round_tripped, bundle);
+}
