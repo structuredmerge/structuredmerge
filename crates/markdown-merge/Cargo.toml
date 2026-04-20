@@ -1,0 +1,12 @@
+[package]
+name = "markdown-merge"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+ast-merge = { path = "../ast-merge" }
+pulldown-cmark = "0.13"
+tree-haver = { path = "../tree-haver" }
+
+[dev-dependencies]
+serde_json = "1"
