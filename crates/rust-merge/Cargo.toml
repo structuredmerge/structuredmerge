@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 ast-merge = { path = "../ast-merge" }
 tree-haver = { path = "../tree-haver" }
+syn = { version = "2", features = ["full"] }
 
 [dev-dependencies]
 serde_json = "1"

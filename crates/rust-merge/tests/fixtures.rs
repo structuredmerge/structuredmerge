@@ -1,6 +1,9 @@
 use std::{fs, path::PathBuf};
 
-use rust_merge::{RustDialect, match_rust_owners, merge_rust, parse_rust, rust_feature_profile};
+use rust_merge::{
+    RustBackend, RustDialect, match_rust_owners, merge_rust, merge_rust_with_backend, parse_rust,
+    parse_rust_with_backend, rust_backends, rust_feature_profile,
+};
 use serde_json::Value;
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -133,5 +136,61 @@ fn conforms_to_rust_fixtures() {
     assert_eq!(
         diagnostic_shape(&invalid_destination_result.diagnostics),
         invalid_destination["expected"]["diagnostics"]
+    );
+}
+
+#[test]
+fn conforms_to_rust_backend_fixtures() {
+    let backends_fixture =
+        read_fixture(&["diagnostics", "slice-117-rust-family-backends", "rust-backends.json"]);
+    assert_eq!(
+        serde_json::json!(
+            rust_backends()
+                .iter()
+                .map(|backend| match backend {
+                    RustBackend::TreeSitter => "tree-sitter",
+                    RustBackend::Native => "native",
+                })
+                .collect::<Vec<_>>()
+        ),
+        backends_fixture["backends"]
+    );
+
+    let parity_fixture = read_fixture(&["rust", "slice-118-native", "module-parity.json"]);
+    let native_result = parse_rust_with_backend(
+        parity_fixture["source"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+    assert!(native_result.ok);
+    let owners = native_result
+        .analysis
+        .as_ref()
+        .unwrap()
+        .owners
+        .iter()
+        .map(|owner| {
+            serde_json::json!({
+                "path": owner.path,
+                "owner_kind": match owner.owner_kind {
+                    rust_merge::RustOwnerKind::Import => "import",
+                    rust_merge::RustOwnerKind::Declaration => "declaration",
+                },
+                "match_key": owner.match_key,
+            })
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(Value::Array(owners), parity_fixture["expected"]["owners"]);
+
+    let merge_result = merge_rust_with_backend(
+        parity_fixture["template"].as_str().unwrap(),
+        parity_fixture["destination"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+    assert!(merge_result.ok);
+    assert_eq!(
+        merge_result.output,
+        parity_fixture["expected"]["output"].as_str().map(str::to_string)
     );
 }
