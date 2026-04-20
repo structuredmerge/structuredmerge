@@ -43,6 +43,8 @@ pub struct Diagnostic {
     pub action: Option<ReviewDecisionAction>,
     pub reason: Option<ReviewDiagnosticReason>,
     pub payload_kind: Option<String>,
+    pub expected_family: Option<String>,
+    pub provided_family: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -586,6 +588,8 @@ pub fn resolve_conformance_family_context(
                 action: None,
                 reason: None,
                 payload_kind: None,
+                expected_family: None,
+                provided_family: None,
             }],
         );
     }
@@ -602,6 +606,8 @@ pub fn resolve_conformance_family_context(
                 action: None,
                 reason: None,
                 payload_kind: None,
+                expected_family: None,
+                provided_family: None,
             }],
         );
     }
@@ -620,6 +626,8 @@ pub fn resolve_conformance_family_context(
             action: None,
             reason: None,
             payload_kind: None,
+            expected_family: None,
+            provided_family: None,
         }],
     )
 }
@@ -667,6 +675,8 @@ fn review_decision_for_family_context(
                             action: Some(ReviewDecisionAction::ProvideExplicitContext),
                             reason: Some(ReviewDiagnosticReason::MissingRequiredPayload),
                             payload_kind: Some("conformance_family_context".to_string()),
+                            expected_family: None,
+                            provided_family: None,
                         }],
                     );
                 };
@@ -688,6 +698,8 @@ fn review_decision_for_family_context(
                             action: Some(ReviewDecisionAction::ProvideExplicitContext),
                             reason: Some(ReviewDiagnosticReason::FamilyMismatch),
                             payload_kind: None,
+                            expected_family: Some(family.to_string()),
+                            provided_family: Some(context.family_profile.family.clone()),
                         }],
                     );
                 }
@@ -733,6 +745,8 @@ pub fn review_conformance_family_context(
                 action: None,
                 reason: None,
                 payload_kind: None,
+                expected_family: None,
+                provided_family: None,
             }],
             Vec::new(),
             Vec::new(),
@@ -754,6 +768,8 @@ pub fn review_conformance_family_context(
                     action: None,
                     reason: None,
                     payload_kind: None,
+                    expected_family: None,
+                    provided_family: None,
                 }]
             } else {
                 Vec::new()
@@ -775,6 +791,8 @@ pub fn review_conformance_family_context(
                 action: None,
                 reason: None,
                 payload_kind: None,
+                expected_family: None,
+                provided_family: None,
             }]
         } else {
             decision_diagnostics
@@ -1081,6 +1099,8 @@ pub fn review_conformance_manifest(
             action: None,
             reason: None,
             payload_kind: None,
+            expected_family: None,
+            provided_family: None,
         });
         effective_options.review_replay_bundle = None;
         effective_options.review_replay_context = None;
@@ -1098,6 +1118,8 @@ pub fn review_conformance_manifest(
             action: None,
             reason: None,
             payload_kind: None,
+            expected_family: None,
+            provided_family: None,
         });
         effective_options.review_replay_bundle = None;
         effective_options.review_replay_context = None;
@@ -1128,6 +1150,8 @@ pub fn review_conformance_manifest(
                         action: Some(decision.action),
                         reason: Some(ReviewDiagnosticReason::RequestNotFound),
                         payload_kind: None,
+                        expected_family: None,
+                        provided_family: None,
                     });
                     None
                 }
@@ -1177,6 +1201,8 @@ pub fn review_conformance_manifest(
                 action: None,
                 reason: None,
                 payload_kind: None,
+                expected_family: None,
+                provided_family: None,
             });
             continue;
         }
@@ -1336,6 +1362,8 @@ pub fn plan_named_conformance_suites_with_diagnostics(
                 action: None,
                 reason: None,
                 payload_kind: None,
+                expected_family: None,
+                provided_family: None,
             });
             continue;
         }

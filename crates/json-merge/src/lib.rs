@@ -155,6 +155,8 @@ pub fn parse_json_with_language_pack(
                 action: None,
                 reason: None,
                 payload_kind: None,
+                expected_family: None,
+                provided_family: None,
             }],
             analysis: None,
             policies: vec![],
@@ -184,6 +186,8 @@ fn parse_error(message: &str) -> Diagnostic {
         action: None,
         reason: None,
         payload_kind: None,
+        expected_family: None,
+        provided_family: None,
     }
 }
 
@@ -197,6 +201,8 @@ fn destination_parse_error(message: &str) -> Diagnostic {
         action: None,
         reason: None,
         payload_kind: None,
+        expected_family: None,
+        provided_family: None,
     }
 }
 
@@ -210,6 +216,8 @@ fn fallback_applied(message: &str) -> Diagnostic {
         action: None,
         reason: None,
         payload_kind: None,
+        expected_family: None,
+        provided_family: None,
     }
 }
 
@@ -598,7 +606,7 @@ fn parse_normalized_json(
     source: &str,
     dialect: JsonDialect,
     diagnostic_factory: fn(&str) -> Diagnostic,
-) -> Result<Value, Diagnostic> {
+) -> Result<Value, Box<Diagnostic>> {
     let result = parse_json(source, dialect);
     if !result.ok {
         let diagnostic = result
@@ -614,14 +622,16 @@ fn parse_normalized_json(
                 action: None,
                 reason: None,
                 payload_kind: None,
+                expected_family: None,
+                provided_family: None,
             })
             .unwrap_or_else(|| diagnostic_factory("JSON parse failed."));
-        return Err(diagnostic);
+        return Err(Box::new(diagnostic));
     }
 
     let analysis = result.analysis.expect("successful parse should include analysis");
     serde_json::from_str::<Value>(&analysis.normalized_source)
-        .map_err(|_| diagnostic_factory("JSON parse failed."))
+        .map_err(|_| Box::new(diagnostic_factory("JSON parse failed.")))
 }
 
 fn merge_values(template: Value, destination: Value) -> Value {
@@ -695,7 +705,7 @@ pub fn merge_json(
         Err(diagnostic) => {
             return MergeResult {
                 ok: false,
-                diagnostics: vec![diagnostic],
+                diagnostics: vec![*diagnostic],
                 output: None,
                 policies: vec![],
             };
@@ -714,7 +724,7 @@ pub fn merge_json(
                     if sanitized_destination == destination_source {
                         return MergeResult {
                             ok: false,
-                            diagnostics: vec![diagnostic],
+                            diagnostics: vec![*diagnostic],
                             output: None,
                             policies: vec![],
                         };
@@ -735,7 +745,7 @@ pub fn merge_json(
                         Err(retry_diagnostic) => {
                             return MergeResult {
                                 ok: false,
-                                diagnostics: vec![retry_diagnostic],
+                                diagnostics: vec![*retry_diagnostic],
                                 output: None,
                                 policies: vec![],
                             };
@@ -744,7 +754,7 @@ pub fn merge_json(
                 } else {
                     return MergeResult {
                         ok: false,
-                        diagnostics: vec![diagnostic],
+                        diagnostics: vec![*diagnostic],
                         output: None,
                         policies: vec![],
                     };
