@@ -1433,6 +1433,39 @@ fn conforms_to_slice_150_config_family_aggregate_manifest_report_fixture() {
 }
 
 #[test]
+fn conforms_to_aggregate_config_family_review_state_fixtures() {
+    for fixture_name in [
+        "slice-151-config-family-aggregate-review-state/config-family-aggregate-review-state.json",
+        "slice-152-config-family-aggregate-reviewed-default/config-family-aggregate-reviewed-default.json",
+        "slice-153-config-family-aggregate-replay-application/config-family-aggregate-replay-application.json",
+    ] {
+        let fixture = read_fixture_from_path(fixture_path(&["diagnostics"]).join(fixture_name));
+        let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+            .expect("manifest should deserialize");
+        let options =
+            serde_json::from_value::<ConformanceManifestReviewOptions>(fixture["options"].clone())
+                .expect("options should deserialize");
+        let expected = serde_json::from_value::<ConformanceManifestReviewState>(
+            fixture["expected_state"].clone(),
+        )
+        .expect("expected state should deserialize");
+        let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+        let state = review_conformance_manifest(&manifest, &options, |run| {
+            let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+            serde_json::from_value::<ConformanceCaseExecution>(
+                executions.get(&key).cloned().unwrap_or_else(
+                    || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+                ),
+            )
+            .expect("execution should deserialize")
+        });
+
+        assert_eq!(state, expected);
+    }
+}
+
+#[test]
 fn conforms_to_slice_129_source_family_backend_restricted_plans_fixture() {
     let fixture = read_fixture_from_path(fixture_path(&[
         "diagnostics",
