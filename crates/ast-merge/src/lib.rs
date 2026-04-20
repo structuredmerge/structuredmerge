@@ -225,6 +225,12 @@ pub enum ReviewDecisionAction {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReviewActionOffer {
+    pub action: ReviewDecisionAction,
+    pub requires_context: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReviewRequest {
     pub id: String,
     pub kind: ReviewRequestKind,
@@ -232,7 +238,7 @@ pub struct ReviewRequest {
     pub message: String,
     pub blocking: bool,
     pub proposed_context: Option<ConformanceFamilyPlanContext>,
-    pub available_actions: Vec<ReviewDecisionAction>,
+    pub action_offers: Vec<ReviewActionOffer>,
     pub default_action: Option<ReviewDecisionAction>,
 }
 
@@ -737,9 +743,15 @@ pub fn review_conformance_family_context(
             ),
             blocking: true,
             proposed_context: Some(default_conformance_family_context(family_profile)),
-            available_actions: vec![
-                ReviewDecisionAction::AcceptDefaultContext,
-                ReviewDecisionAction::ProvideExplicitContext,
+            action_offers: vec![
+                ReviewActionOffer {
+                    action: ReviewDecisionAction::AcceptDefaultContext,
+                    requires_context: false,
+                },
+                ReviewActionOffer {
+                    action: ReviewDecisionAction::ProvideExplicitContext,
+                    requires_context: true,
+                },
             ],
             default_action: Some(ReviewDecisionAction::AcceptDefaultContext),
         }],
