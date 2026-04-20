@@ -2,8 +2,9 @@ use std::{fs, path::PathBuf};
 
 use ast_merge::{
     ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
-    group_projected_child_review_cases, projected_child_group_review_request,
-    review_projected_child_groups, select_projected_child_review_groups_accepted_for_apply,
+    delegated_child_apply_plan, group_projected_child_review_cases,
+    projected_child_group_review_request, review_projected_child_groups,
+    select_projected_child_review_groups_accepted_for_apply,
     select_projected_child_review_groups_ready_for_apply,
     summarize_projected_child_review_group_progress,
 };
@@ -231,5 +232,25 @@ fn conforms_to_ruby_fixtures() {
     assert_eq!(
         review_projected_child_groups(&state_groups, state_family, &state_decisions),
         expected_state
+    );
+
+    let apply_plan_fixture = read_fixture(&[
+        "ruby",
+        "slice-245-delegated-child-apply-plan",
+        "yard-example-apply-plan.json",
+    ]);
+    let apply_plan_family =
+        apply_plan_fixture["family"].as_str().expect("family should be a string");
+    let apply_plan_state = serde_json::from_value::<ast_merge::DelegatedChildGroupReviewState>(
+        apply_plan_fixture["review_state"].clone(),
+    )
+    .expect("review state should deserialize");
+    let expected_apply_plan = serde_json::from_value::<ast_merge::DelegatedChildApplyPlan>(
+        apply_plan_fixture["expected_plan"].clone(),
+    )
+    .expect("expected plan should deserialize");
+    assert_eq!(
+        delegated_child_apply_plan(&apply_plan_state, apply_plan_family),
+        expected_apply_plan
     );
 }

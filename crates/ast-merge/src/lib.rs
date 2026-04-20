@@ -360,6 +360,19 @@ pub struct DelegatedChildGroupReviewState {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedChildApplyPlanEntry {
+    pub request_id: String,
+    pub family: String,
+    pub delegated_group: ProjectedChildReviewGroup,
+    pub decision: ReviewDecision,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedChildApplyPlan {
+    pub entries: Vec<DelegatedChildApplyPlanEntry>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReviewReplayBundle {
     pub replay_context: ReviewReplayContext,
     pub decisions: Vec<ReviewDecision>,
@@ -699,6 +712,33 @@ pub fn review_projected_child_groups(
         .collect();
 
     DelegatedChildGroupReviewState { requests, accepted_groups, applied_decisions, diagnostics }
+}
+
+pub fn delegated_child_apply_plan(
+    state: &DelegatedChildGroupReviewState,
+    family: &str,
+) -> DelegatedChildApplyPlan {
+    let entries = state
+        .accepted_groups
+        .iter()
+        .filter_map(|group| {
+            let request_id = review_request_id_for_projected_child_group(group);
+            let decision = state
+                .applied_decisions
+                .iter()
+                .find(|decision| decision.request_id == request_id)?
+                .clone();
+
+            Some(DelegatedChildApplyPlanEntry {
+                request_id,
+                family: family.to_string(),
+                delegated_group: group.clone(),
+                decision,
+            })
+        })
+        .collect();
+
+    DelegatedChildApplyPlan { entries }
 }
 
 pub fn conformance_review_host_hints(

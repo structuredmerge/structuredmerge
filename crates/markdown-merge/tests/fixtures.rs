@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf};
 use ast_merge::{
     ConformanceManifest, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, conformance_family_feature_profile_path,
-    conformance_fixture_path, group_projected_child_review_cases,
+    conformance_fixture_path, delegated_child_apply_plan, group_projected_child_review_cases,
     projected_child_group_review_request, review_projected_child_groups,
     select_projected_child_review_groups_accepted_for_apply,
     select_projected_child_review_groups_ready_for_apply,
@@ -400,4 +400,24 @@ fn conforms_to_slice_241_markdown_delegated_child_review_state() {
     .expect("expected state should deserialize");
 
     assert_eq!(review_projected_child_groups(&groups, family, &decisions), expected);
+}
+
+#[test]
+fn conforms_to_slice_244_markdown_delegated_child_apply_plan() {
+    let fixture = read_fixture(&[
+        "markdown",
+        "slice-244-delegated-child-apply-plan",
+        "fenced-code-apply-plan.json",
+    ]);
+    let family = fixture["family"].as_str().expect("family should be a string");
+    let state = serde_json::from_value::<ast_merge::DelegatedChildGroupReviewState>(
+        fixture["review_state"].clone(),
+    )
+    .expect("review state should deserialize");
+    let expected = serde_json::from_value::<ast_merge::DelegatedChildApplyPlan>(
+        fixture["expected_plan"].clone(),
+    )
+    .expect("expected plan should deserialize");
+
+    assert_eq!(delegated_child_apply_plan(&state, family), expected);
 }

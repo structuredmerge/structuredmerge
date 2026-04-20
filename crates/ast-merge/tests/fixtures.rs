@@ -17,16 +17,17 @@ use ast_merge::{
     conformance_manifest_replay_context, conformance_manifest_review_request_ids,
     conformance_manifest_review_state_envelope, conformance_review_host_hints,
     conformance_suite_definition, conformance_suite_names, default_conformance_family_context,
-    group_projected_child_review_cases, import_conformance_manifest_review_state_envelope,
-    import_review_replay_bundle_envelope, plan_conformance_suite, plan_named_conformance_suite,
-    plan_named_conformance_suite_entry, plan_named_conformance_suites,
-    plan_named_conformance_suites_with_diagnostics, projected_child_group_review_request,
-    report_conformance_manifest, report_conformance_suite, report_named_conformance_suite,
-    report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
-    report_named_conformance_suite_manifest, report_planned_conformance_suite,
-    report_planned_named_conformance_suites, resolve_conformance_family_context,
-    review_conformance_family_context, review_conformance_manifest, review_projected_child_groups,
-    review_replay_bundle_envelope, review_replay_bundle_inputs, review_replay_context_compatible,
+    delegated_child_apply_plan, group_projected_child_review_cases,
+    import_conformance_manifest_review_state_envelope, import_review_replay_bundle_envelope,
+    plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
+    plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
+    projected_child_group_review_request, report_conformance_manifest, report_conformance_suite,
+    report_named_conformance_suite, report_named_conformance_suite_entry,
+    report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
+    report_planned_conformance_suite, report_planned_named_conformance_suites,
+    resolve_conformance_family_context, review_conformance_family_context,
+    review_conformance_manifest, review_projected_child_groups, review_replay_bundle_envelope,
+    review_replay_bundle_inputs, review_replay_context_compatible,
     review_request_id_for_family_context, review_request_id_for_projected_child_group,
     run_conformance_case, run_conformance_suite, run_named_conformance_suite,
     run_named_conformance_suite_entry, run_planned_conformance_suite,
@@ -2726,6 +2727,22 @@ fn conforms_to_slice_240_delegated_child_group_review_state_fixture() {
     .expect("expected state should deserialize");
 
     assert_eq!(review_projected_child_groups(&groups, family, &decisions), expected);
+}
+
+#[test]
+fn conforms_to_slice_243_delegated_child_apply_plan_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("delegated_child_apply_plan"));
+    let family = fixture["family"].as_str().expect("family should be a string");
+    let state = serde_json::from_value::<ast_merge::DelegatedChildGroupReviewState>(
+        fixture["review_state"].clone(),
+    )
+    .expect("review state should deserialize");
+    let expected = serde_json::from_value::<ast_merge::DelegatedChildApplyPlan>(
+        fixture["expected_plan"].clone(),
+    )
+    .expect("expected plan should deserialize");
+
+    assert_eq!(delegated_child_apply_plan(&state, family), expected);
 }
 
 #[test]
