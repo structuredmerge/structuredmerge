@@ -2115,6 +2115,43 @@ fn conforms_to_backend_sensitive_aggregate_fixtures() {
 
         assert_eq!(report, expected_report);
     }
+
+    for path in [
+        &[
+            "diagnostics",
+            "slice-192-backend-sensitive-aggregate-tree-sitter-review-state",
+            "backend-sensitive-aggregate-tree-sitter-review-state.json",
+        ][..],
+        &[
+            "diagnostics",
+            "slice-193-backend-sensitive-aggregate-native-review-state",
+            "backend-sensitive-aggregate-native-review-state.json",
+        ][..],
+    ] {
+        let fixture = read_fixture_from_path(fixture_path(path));
+        let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+            .expect("manifest should deserialize");
+        let options =
+            serde_json::from_value::<ConformanceManifestReviewOptions>(fixture["options"].clone())
+                .expect("options should deserialize");
+        let expected_state = serde_json::from_value::<ConformanceManifestReviewState>(
+            fixture["expected_state"].clone(),
+        )
+        .expect("expected state should deserialize");
+        let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+        let state = review_conformance_manifest(&manifest, &options, |run| {
+            let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+            serde_json::from_value::<ConformanceCaseExecution>(
+                executions.get(&key).cloned().unwrap_or_else(
+                    || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+                ),
+            )
+            .expect("execution should deserialize")
+        });
+
+        assert_eq!(state, expected_state);
+    }
 }
 
 #[test]
