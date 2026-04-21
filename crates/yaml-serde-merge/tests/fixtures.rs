@@ -6,6 +6,7 @@ use ast_merge::{
     report_planned_named_conformance_suites,
 };
 use serde_json::Value;
+use tree_haver::registered_backends;
 use yaml_merge::YamlDialect;
 use yaml_serde_merge::{
     available_yaml_backends, match_yaml_owners, merge_yaml, parse_yaml,
@@ -38,6 +39,9 @@ fn conforms_to_provider_feature_profile_fixture() {
     ]);
 
     assert_eq!(available_yaml_backends(), vec!["yaml_serde".to_string()]);
+    assert!(registered_backends()
+        .iter()
+        .any(|backend| backend.id == "yaml_serde" && backend.family == "native"));
     let profile = yaml_backend_feature_profile();
     let supported_dialects = profile
         .supported_dialects
