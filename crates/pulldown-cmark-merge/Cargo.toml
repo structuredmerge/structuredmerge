@@ -8,6 +8,7 @@ ast-merge = { path = "../ast-merge" }
 markdown-merge = { path = "../markdown-merge" }
 pulldown-cmark = "0.13"
 serde_json = "1"
+tree-haver = { path = "../tree-haver" }
 
 [dev-dependencies]
 serde_json = "1"

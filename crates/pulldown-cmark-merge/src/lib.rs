@@ -1,3 +1,5 @@
+use std::sync::Once;
+
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
     DiagnosticSeverity, ParseResult,
@@ -7,9 +9,20 @@ use markdown_merge::{
     match_markdown_owners as match_markdown_owners_with_substrate, normalize_markdown_source,
 };
 use pulldown_cmark::Parser;
+use tree_haver::{BackendReference, register_backend};
 
 pub const PACKAGE_NAME: &str = "pulldown-cmark-merge";
 pub const BACKEND_ID: &str = "pulldown-cmark";
+
+fn ensure_backend_registered() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        register_backend(BackendReference {
+            id: BACKEND_ID.to_string(),
+            family: "native".to_string(),
+        });
+    });
+}
 
 fn unsupported_feature(message: &str) -> Diagnostic {
     Diagnostic {
@@ -22,10 +35,12 @@ fn unsupported_feature(message: &str) -> Diagnostic {
 }
 
 pub fn available_markdown_backends() -> Vec<String> {
+    ensure_backend_registered();
     vec![BACKEND_ID.to_string()]
 }
 
 pub fn markdown_backend_feature_profile() -> std::collections::BTreeMap<String, serde_json::Value> {
+    ensure_backend_registered();
     let mut profile = serde_json::Map::new();
     profile.insert("family".to_string(), serde_json::Value::String("markdown".to_string()));
     profile.insert(
@@ -38,6 +53,7 @@ pub fn markdown_backend_feature_profile() -> std::collections::BTreeMap<String, 
 }
 
 pub fn markdown_plan_context() -> ConformanceFamilyPlanContext {
+    ensure_backend_registered();
     ConformanceFamilyPlanContext {
         family_profile: ast_merge::FamilyFeatureProfile {
             family: "markdown".to_string(),
@@ -61,6 +77,7 @@ pub fn parse_markdown(
     dialect: MarkdownDialect,
     backend: Option<&str>,
 ) -> ParseResult<MarkdownAnalysis> {
+    ensure_backend_registered();
     let requested = backend.unwrap_or(BACKEND_ID);
     if requested != BACKEND_ID {
         return ParseResult {

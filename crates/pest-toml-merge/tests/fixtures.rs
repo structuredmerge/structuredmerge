@@ -10,6 +10,7 @@ use pest_toml_merge::{
     provider_toml_feature_profile, toml_backend_feature_profile, toml_plan_context,
 };
 use serde_json::Value;
+use tree_haver::registered_backends;
 use toml_merge::TomlDialect;
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -38,6 +39,7 @@ fn conforms_to_provider_feature_profile_fixture() {
     ]);
 
     assert_eq!(available_toml_backends(), vec!["pest".to_string()]);
+    assert!(registered_backends().iter().any(|backend| backend.id == "pest" && backend.family == "peg"));
     assert_eq!(
         serde_json::to_value(toml_backend_feature_profile()).unwrap(),
         fixture["providers"]["pest"]["feature_profile"]

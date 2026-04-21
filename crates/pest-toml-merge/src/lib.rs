@@ -1,9 +1,12 @@
+use std::sync::Once;
+
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
     DiagnosticSeverity, MergeResult, ParseResult, PolicyReference, PolicySurface,
 };
 use pest::Parser;
 use pest_grammars::toml::{Rule as PestTomlRule, TomlParser as PestTomlParser};
+use tree_haver::{BackendReference, register_backend};
 use toml_merge::{
     TomlAnalysis, TomlDialect, TomlFeatureProfile, TomlOwnerMatchResult, analyze_toml_source,
     match_toml_owners as match_toml_owners_with_substrate, merge_toml_with_parser,
@@ -12,6 +15,16 @@ use toml_merge::{
 
 pub const PACKAGE_NAME: &str = "pest-toml-merge";
 pub const BACKEND_ID: &str = "pest";
+
+fn ensure_backend_registered() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        register_backend(BackendReference {
+            id: BACKEND_ID.to_string(),
+            family: "peg".to_string(),
+        });
+    });
+}
 
 fn unsupported_feature(message: &str) -> Diagnostic {
     Diagnostic {
@@ -34,10 +47,12 @@ fn parse_error(message: &str) -> Diagnostic {
 }
 
 pub fn available_toml_backends() -> Vec<String> {
+    ensure_backend_registered();
     vec![BACKEND_ID.to_string()]
 }
 
 pub fn toml_backend_feature_profile() -> std::collections::BTreeMap<String, serde_json::Value> {
+    ensure_backend_registered();
     let mut profile = serde_json::Map::new();
     profile.insert("family".to_string(), serde_json::Value::String("toml".to_string()));
     profile.insert(
@@ -56,6 +71,7 @@ pub fn toml_backend_feature_profile() -> std::collections::BTreeMap<String, serd
 }
 
 pub fn toml_plan_context() -> ConformanceFamilyPlanContext {
+    ensure_backend_registered();
     ConformanceFamilyPlanContext {
         family_profile: ast_merge::FamilyFeatureProfile {
             family: "toml".to_string(),
@@ -85,6 +101,7 @@ pub fn parse_toml(
     dialect: TomlDialect,
     backend: Option<&str>,
 ) -> ParseResult<TomlAnalysis> {
+    ensure_backend_registered();
     let requested = backend.unwrap_or(BACKEND_ID);
     if requested != BACKEND_ID {
         return ParseResult {
@@ -122,6 +139,7 @@ pub fn merge_toml(
     dialect: TomlDialect,
     backend: Option<&str>,
 ) -> MergeResult<String> {
+    ensure_backend_registered();
     let requested = backend.unwrap_or(BACKEND_ID);
     if requested != BACKEND_ID {
         return MergeResult {
