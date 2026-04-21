@@ -3,10 +3,8 @@ use ast_merge::{
     DiagnosticSeverity, FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference,
     PolicySurface,
 };
-use pest::Parser;
-use pest_grammars::toml::{Rule as PestTomlRule, TomlParser as PestTomlParser};
 use toml::Value;
-use tree_haver::{BackendReference, current_backend_id, pest_backend};
+use tree_haver::{BackendReference, kreuzberg_language_pack_backend, parse_with_language_pack};
 
 pub const PACKAGE_NAME: &str = "toml-merge";
 
@@ -69,8 +67,7 @@ pub struct TomlFeatureProfile {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TomlBackend {
-    Native,
-    Pest,
+    TreeSitter,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -131,22 +128,16 @@ pub fn toml_feature_profile() -> TomlFeatureProfile {
 }
 
 pub fn available_toml_backends() -> Vec<TomlBackend> {
-    vec![TomlBackend::Native, TomlBackend::Pest]
+    vec![TomlBackend::TreeSitter]
 }
 
 pub fn toml_backend_feature_profile(backend: Option<TomlBackend>) -> TomlBackendFeatureProfile {
-    let backend = resolve_backend(backend);
-    let (backend_name, backend_ref) = match backend {
-        TomlBackend::Native => (
-            "native".to_string(),
-            BackendReference { id: "native".to_string(), family: "builtin".to_string() },
-        ),
-        TomlBackend::Pest => ("pest".to_string(), pest_backend()),
-    };
+    let _ = resolve_backend(backend);
+    let backend_ref = kreuzberg_language_pack_backend();
 
     TomlBackendFeatureProfile {
         family: "toml",
-        backend: backend_name,
+        backend: backend_ref.id.clone(),
         backend_ref,
         supported_dialects: vec![TomlDialect::Toml],
         supported_policies: vec![destination_wins_array_policy()],
@@ -155,7 +146,6 @@ pub fn toml_backend_feature_profile(backend: Option<TomlBackend>) -> TomlBackend
 
 pub fn toml_plan_context(backend: Option<TomlBackend>) -> ConformanceFamilyPlanContext {
     let backend_profile = toml_backend_feature_profile(backend);
-    let supports_dialects = backend_profile.backend != "pest";
     ConformanceFamilyPlanContext {
         family_profile: FamilyFeatureProfile {
             family: toml_feature_profile().family.to_string(),
@@ -164,7 +154,7 @@ pub fn toml_plan_context(backend: Option<TomlBackend>) -> ConformanceFamilyPlanC
         },
         feature_profile: Some(ConformanceFeatureProfileView {
             backend: backend_profile.backend,
-            supports_dialects,
+            supports_dialects: false,
             supported_policies: backend_profile.supported_policies,
         }),
     }
@@ -188,19 +178,7 @@ fn display_path(path: &str) -> &str {
 }
 
 fn resolve_backend(backend: Option<TomlBackend>) -> TomlBackend {
-    match backend {
-        Some(backend) => backend,
-        None => match current_backend_id().as_deref() {
-            Some("pest") => TomlBackend::Pest,
-            _ => TomlBackend::Native,
-        },
-    }
-}
-
-fn parse_with_pest(source: &str) -> Result<(), Diagnostic> {
-    PestTomlParser::parse(PestTomlRule::toml, source)
-        .map(|_| ())
-        .map_err(|error| parse_error(&error.to_string()))
+    backend.unwrap_or(TomlBackend::TreeSitter)
 }
 
 fn validate_toml_node(value: &Value, path: &str) -> Result<(), Diagnostic> {
@@ -369,13 +347,11 @@ fn merge_toml_tables(
     merged
 }
 
-fn analyze_toml_document(source: &str, backend: TomlBackend) -> ParseResult<TomlAnalysis> {
-    if backend == TomlBackend::Pest
-        && let Err(diagnostic) = parse_with_pest(source)
-    {
+pub fn analyze_toml_source(source: &str, dialect: TomlDialect) -> ParseResult<TomlAnalysis> {
+    if dialect != TomlDialect::Toml {
         return ParseResult {
             ok: false,
-            diagnostics: vec![diagnostic],
+            diagnostics: vec![unsupported_feature("Unsupported TOML dialect.")],
             analysis: None,
             policies: vec![],
         };
@@ -418,16 +394,33 @@ pub fn parse_toml(
     dialect: TomlDialect,
     backend: Option<TomlBackend>,
 ) -> ParseResult<TomlAnalysis> {
-    if dialect != TomlDialect::Toml {
+    let resolved = resolve_backend(backend);
+    if resolved != TomlBackend::TreeSitter {
         return ParseResult {
             ok: false,
-            diagnostics: vec![unsupported_feature("Unsupported TOML dialect.")],
+            diagnostics: vec![unsupported_feature(&format!(
+                "Unsupported TOML backend {resolved:?}."
+            ))],
             analysis: None,
             policies: vec![],
         };
     }
 
-    analyze_toml_document(source, resolve_backend(backend))
+    let syntax = parse_with_language_pack(&tree_haver::ParserRequest {
+        source: source.to_string(),
+        language: "toml".to_string(),
+        dialect: Some("toml".to_string()),
+    });
+    if !syntax.ok {
+        return ParseResult {
+            ok: false,
+            diagnostics: syntax.diagnostics,
+            analysis: None,
+            policies: vec![],
+        };
+    }
+
+    analyze_toml_source(source, dialect)
 }
 
 pub fn match_toml_owners(
@@ -470,14 +463,13 @@ pub fn match_toml_owners(
     }
 }
 
-pub fn merge_toml(
+pub fn merge_toml_with_parser(
     template_source: &str,
     destination_source: &str,
     dialect: TomlDialect,
-    backend: Option<TomlBackend>,
+    parser: impl Fn(&str, TomlDialect) -> ParseResult<TomlAnalysis>,
 ) -> MergeResult<String> {
-    let backend = resolve_backend(backend);
-    let template = parse_toml(template_source, dialect, Some(backend));
+    let template = parser(template_source, dialect);
     if !template.ok {
         return MergeResult {
             ok: false,
@@ -487,7 +479,7 @@ pub fn merge_toml(
         };
     }
 
-    let destination = parse_toml(destination_source, dialect, Some(backend));
+    let destination = parser(destination_source, dialect);
     if !destination.ok {
         return MergeResult {
             ok: false,
@@ -544,4 +536,27 @@ pub fn merge_toml(
         output: Some(canonical_toml(&merged)),
         policies: vec![destination_wins_array_policy()],
     }
+}
+
+pub fn merge_toml(
+    template_source: &str,
+    destination_source: &str,
+    dialect: TomlDialect,
+    backend: Option<TomlBackend>,
+) -> MergeResult<String> {
+    let resolved = resolve_backend(backend);
+    if resolved != TomlBackend::TreeSitter {
+        return MergeResult {
+            ok: false,
+            diagnostics: vec![unsupported_feature(&format!(
+                "Unsupported TOML backend {resolved:?}."
+            ))],
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    merge_toml_with_parser(template_source, destination_source, dialect, |source, parse_dialect| {
+        parse_toml(source, parse_dialect, Some(resolved))
+    })
 }
