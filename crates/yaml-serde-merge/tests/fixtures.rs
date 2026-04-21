@@ -32,6 +32,11 @@ fn read_fixture(parts: &[&str]) -> Value {
 
 #[test]
 fn conforms_to_provider_feature_profile_fixture() {
+    let family_fixture = read_fixture(&[
+        "diagnostics",
+        "slice-95-yaml-family-feature-profile",
+        "yaml-feature-profile.json",
+    ]);
     let fixture = read_fixture(&[
         "diagnostics",
         "slice-277-yaml-provider-feature-profiles",
@@ -42,6 +47,21 @@ fn conforms_to_provider_feature_profile_fixture() {
     assert!(registered_backends()
         .iter()
         .any(|backend| backend.id == "yaml_serde" && backend.family == "native"));
+    let family_profile = yaml_merge::yaml_feature_profile();
+    assert_eq!(
+        serde_json::json!({
+            "family": family_profile.family,
+            "supported_dialects": family_profile
+                .supported_dialects
+                .iter()
+                .map(|dialect| match dialect {
+                    yaml_merge::YamlDialect::Yaml => "yaml".to_string(),
+                })
+                .collect::<Vec<_>>(),
+            "supported_policies": family_profile.supported_policies,
+        }),
+        family_fixture["feature_profile"]
+    );
     let profile = yaml_backend_feature_profile();
     let supported_dialects = profile
         .supported_dialects
@@ -85,6 +105,50 @@ fn conforms_to_shared_yaml_parse_matching_and_merge_fixtures() {
     let valid = read_fixture(&["yaml", "slice-96-parse", "valid-document.json"]);
     let valid_result = parse_yaml(valid["source"].as_str().unwrap(), YamlDialect::Yaml, None);
     assert!(valid_result.ok);
+
+    let structure_fixture = read_fixture(&["yaml", "slice-97-structure", "mapping-and-sequence.json"]);
+    let structure_result = parse_yaml(
+        structure_fixture["source"].as_str().unwrap(),
+        YamlDialect::Yaml,
+        None,
+    );
+    assert!(structure_result.ok);
+    let structure_analysis = structure_result.analysis.unwrap();
+    assert_eq!(
+        serde_json::json!(
+            structure_analysis
+                .owners
+                .iter()
+                .map(|owner| {
+                    let mut entry = serde_json::Map::from_iter([
+                        (
+                            "path".to_string(),
+                            serde_json::Value::String(owner.path.clone()),
+                        ),
+                        (
+                            "owner_kind".to_string(),
+                            serde_json::Value::String(
+                                match owner.owner_kind {
+                                    yaml_merge::YamlOwnerKind::Mapping => "mapping",
+                                    yaml_merge::YamlOwnerKind::KeyValue => "key_value",
+                                    yaml_merge::YamlOwnerKind::SequenceItem => "sequence_item",
+                                }
+                                .to_string(),
+                            ),
+                        ),
+                    ]);
+                    if let Some(match_key) = &owner.match_key {
+                        entry.insert(
+                            "match_key".to_string(),
+                            serde_json::Value::String(match_key.clone()),
+                        );
+                    }
+                    serde_json::Value::Object(entry)
+                })
+                .collect::<Vec<_>>()
+        ),
+        structure_fixture["expected"]["owners"]
+    );
 
     let matching_fixture = read_fixture(&["yaml", "slice-98-matching", "path-equality.json"]);
     let template =

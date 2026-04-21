@@ -33,6 +33,11 @@ fn read_fixture(parts: &[&str]) -> Value {
 
 #[test]
 fn conforms_to_provider_feature_profile_fixture() {
+    let family_fixture = read_fixture(&[
+        "diagnostics",
+        "slice-194-markdown-family-feature-profile",
+        "markdown-feature-profile.json",
+    ]);
     let fixture = read_fixture(&[
         "diagnostics",
         "slice-204-markdown-provider-feature-profiles",
@@ -44,6 +49,21 @@ fn conforms_to_provider_feature_profile_fixture() {
         registered_backends()
             .iter()
             .any(|backend| backend.id == "pulldown-cmark" && backend.family == "native")
+    );
+    let family_profile = markdown_merge::markdown_feature_profile();
+    assert_eq!(
+        serde_json::json!({
+            "family": family_profile.family,
+            "supported_dialects": family_profile
+                .supported_dialects
+                .iter()
+                .map(|dialect| match dialect {
+                    markdown_merge::MarkdownDialect::Markdown => "markdown".to_string(),
+                })
+                .collect::<Vec<_>>(),
+            "supported_policies": [],
+        }),
+        family_fixture["feature_profile"]
     );
     assert_eq!(
         serde_json::to_value(markdown_backend_feature_profile()).unwrap(),

@@ -32,6 +32,11 @@ fn read_fixture(parts: &[&str]) -> Value {
 
 #[test]
 fn conforms_to_provider_feature_profile_fixture() {
+    let family_fixture = read_fixture(&[
+        "diagnostics",
+        "slice-90-toml-family-feature-profile",
+        "toml-feature-profile.json",
+    ]);
     let fixture = read_fixture(&[
         "diagnostics",
         "slice-269-toml-provider-feature-profiles",
@@ -41,6 +46,21 @@ fn conforms_to_provider_feature_profile_fixture() {
     assert_eq!(available_toml_backends(), vec!["pest".to_string()]);
     assert!(
         registered_backends().iter().any(|backend| backend.id == "pest" && backend.family == "peg")
+    );
+    let family_profile = toml_merge::toml_feature_profile();
+    assert_eq!(
+        serde_json::json!({
+            "family": family_profile.family,
+            "supported_dialects": family_profile
+                .supported_dialects
+                .iter()
+                .map(|dialect| match dialect {
+                    toml_merge::TomlDialect::Toml => "toml".to_string(),
+                })
+                .collect::<Vec<_>>(),
+            "supported_policies": family_profile.supported_policies,
+        }),
+        family_fixture["feature_profile"]
     );
     assert_eq!(
         serde_json::to_value(toml_backend_feature_profile()).unwrap(),
@@ -65,6 +85,50 @@ fn conforms_to_shared_toml_parse_matching_and_merge_fixtures() {
     let valid = read_fixture(&["toml", "slice-91-parse", "valid-document.json"]);
     let valid_result = parse_toml(valid["source"].as_str().unwrap(), TomlDialect::Toml, None);
     assert!(valid_result.ok);
+
+    let structure_fixture = read_fixture(&["toml", "slice-92-structure", "table-and-array.json"]);
+    let structure_result = parse_toml(
+        structure_fixture["source"].as_str().unwrap(),
+        TomlDialect::Toml,
+        None,
+    );
+    assert!(structure_result.ok);
+    let structure_analysis = structure_result.analysis.unwrap();
+    assert_eq!(
+        serde_json::json!(
+            structure_analysis
+                .owners
+                .iter()
+                .map(|owner| {
+                    let mut entry = serde_json::Map::from_iter([
+                        (
+                            "path".to_string(),
+                            serde_json::Value::String(owner.path.clone()),
+                        ),
+                        (
+                            "owner_kind".to_string(),
+                            serde_json::Value::String(
+                                match owner.owner_kind {
+                                    toml_merge::TomlOwnerKind::Table => "table",
+                                    toml_merge::TomlOwnerKind::KeyValue => "key_value",
+                                    toml_merge::TomlOwnerKind::ArrayItem => "array_item",
+                                }
+                                .to_string(),
+                            ),
+                        ),
+                    ]);
+                    if let Some(match_key) = &owner.match_key {
+                        entry.insert(
+                            "match_key".to_string(),
+                            serde_json::Value::String(match_key.clone()),
+                        );
+                    }
+                    serde_json::Value::Object(entry)
+                })
+                .collect::<Vec<_>>()
+        ),
+        structure_fixture["expected"]["owners"]
+    );
 
     let matching_fixture = read_fixture(&["toml", "slice-93-matching", "path-equality.json"]);
     let template =
