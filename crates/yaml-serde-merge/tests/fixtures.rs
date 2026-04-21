@@ -293,3 +293,31 @@ fn conforms_to_provider_manifest_report_fixture() {
         fixture["expected_reports"]["yaml_serde"]
     );
 }
+
+#[test]
+fn rejects_unsupported_provider_backend_overrides() {
+    let expected = serde_json::json!([{
+        "severity": "error",
+        "category": "unsupported_feature",
+        "message": "Unsupported YAML backend kreuzberg-language-pack.",
+        "path": null,
+        "review": null
+    }]);
+
+    let parse_result = parse_yaml(
+        "name: structuredmerge\n",
+        YamlDialect::Yaml,
+        Some("kreuzberg-language-pack"),
+    );
+    assert!(!parse_result.ok);
+    assert_eq!(serde_json::to_value(parse_result.diagnostics).unwrap(), expected);
+
+    let merge_result = merge_yaml(
+        "name: a\n",
+        "name: b\n",
+        YamlDialect::Yaml,
+        Some("kreuzberg-language-pack"),
+    );
+    assert!(!merge_result.ok);
+    assert_eq!(serde_json::to_value(merge_result.diagnostics).unwrap(), expected);
+}

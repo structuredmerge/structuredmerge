@@ -159,6 +159,24 @@ fn conforms_to_shared_toml_parse_matching_and_merge_fixtures() {
             })
             .collect::<Vec<_>>()
     );
+    assert_eq!(
+        result.unmatched_template,
+        matching_fixture["expected"]["unmatched_template"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item.as_str().unwrap().to_string())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        result.unmatched_destination,
+        matching_fixture["expected"]["unmatched_destination"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item.as_str().unwrap().to_string())
+            .collect::<Vec<_>>()
+    );
 
     let merge_fixture = read_fixture(&["toml", "slice-94-merge", "table-merge.json"]);
     let merge_result = merge_toml(
@@ -252,4 +270,32 @@ fn conforms_to_provider_manifest_report_fixture() {
         serde_json::to_value(report_named_conformance_suite_envelope(&entries)).unwrap(),
         fixture["expected_report"]
     );
+}
+
+#[test]
+fn rejects_unsupported_provider_backend_overrides() {
+    let expected = serde_json::json!([{
+        "severity": "error",
+        "category": "unsupported_feature",
+        "message": "Unsupported TOML backend kreuzberg-language-pack.",
+        "path": null,
+        "review": null
+    }]);
+
+    let parse_result = parse_toml(
+        "title = \"x\"\n",
+        TomlDialect::Toml,
+        Some("kreuzberg-language-pack"),
+    );
+    assert!(!parse_result.ok);
+    assert_eq!(serde_json::to_value(parse_result.diagnostics).unwrap(), expected);
+
+    let merge_result = merge_toml(
+        "title = \"x\"\n",
+        "title = \"y\"\n",
+        TomlDialect::Toml,
+        Some("kreuzberg-language-pack"),
+    );
+    assert!(!merge_result.ok);
+    assert_eq!(serde_json::to_value(merge_result.diagnostics).unwrap(), expected);
 }
