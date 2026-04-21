@@ -16,6 +16,7 @@ use markdown_merge::{
     markdown_plan_context_with_backend, match_markdown_owners, parse_markdown_with_backend,
 };
 use serde_json::Value;
+use tree_haver::registered_backends;
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -56,6 +57,9 @@ fn conforms_to_slice_195_markdown_backend_feature_profiles() {
     ]);
 
     assert_eq!(available_markdown_backends(), vec![MarkdownBackend::KreuzbergLanguagePack]);
+    assert!(registered_backends()
+        .iter()
+        .any(|backend| backend.id == "kreuzberg-language-pack" && backend.family == "tree-sitter"));
 
     let tree_sitter = markdown_backend_feature_profile(MarkdownBackend::KreuzbergLanguagePack);
     assert_eq!(tree_sitter.backend, fixture["tree_sitter"]["backend"]);

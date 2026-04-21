@@ -6,6 +6,7 @@ use ast_merge::{
     plan_named_conformance_suites, report_conformance_manifest,
 };
 use serde_json::Value;
+use tree_haver::registered_backends;
 use toml_merge::{
     TomlBackend, TomlDialect, TomlOwnerKind, TomlRootKind, available_toml_backends,
     match_toml_owners, merge_toml, parse_toml, toml_backend_feature_profile, toml_feature_profile,
@@ -71,6 +72,9 @@ fn conforms_to_slice_90_toml_feature_profile_fixture() {
         }]
     );
     assert_eq!(available_toml_backends(), vec![TomlBackend::TreeSitter]);
+    assert!(registered_backends()
+        .iter()
+        .any(|backend| backend.id == "kreuzberg-language-pack" && backend.family == "tree-sitter"));
     assert_eq!(
         toml_backend_feature_profile(Some(TomlBackend::TreeSitter)).backend,
         "kreuzberg-language-pack"

@@ -4,6 +4,7 @@ use ast_merge::{
     ConformanceManifest, conformance_family_feature_profile_path, conformance_fixture_path,
 };
 use serde_json::Value;
+use tree_haver::registered_backends;
 use yaml_merge::{
     YamlBackend, YamlDialect, YamlOwnerKind, YamlRootKind, available_yaml_backends,
     match_yaml_owners, merge_yaml_with_backend, parse_yaml, parse_yaml_with_backend,
@@ -79,6 +80,9 @@ fn conforms_to_slice_171_yaml_backend_feature_profiles() {
     ]);
 
     assert_eq!(available_yaml_backends(), vec![YamlBackend::KreuzbergLanguagePack]);
+    assert!(registered_backends()
+        .iter()
+        .any(|backend| backend.id == "kreuzberg-language-pack" && backend.family == "tree-sitter"));
     let tree_sitter = yaml_backend_feature_profile(YamlBackend::KreuzbergLanguagePack);
     assert_eq!(tree_sitter.backend, fixture["tree_sitter"]["backend"]);
 }
