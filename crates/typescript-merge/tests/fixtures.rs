@@ -2,8 +2,9 @@ use std::{fs, path::PathBuf};
 
 use serde_json::Value;
 use typescript_merge::{
-    TypeScriptDialect, match_typescript_owners, merge_typescript, parse_typescript,
-    typescript_feature_profile,
+    TypeScriptBackend, TypeScriptDialect, match_typescript_owners, merge_typescript,
+    parse_typescript, typescript_backend_feature_profile, typescript_backends,
+    typescript_feature_profile, typescript_plan_context,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -147,5 +148,140 @@ fn conforms_to_typescript_fixtures() {
     assert_eq!(
         diagnostic_shape(&invalid_destination_result.diagnostics),
         invalid_destination["expected"]["diagnostics"]
+    );
+
+    let backends_fixture = read_fixture(&[
+        "diagnostics",
+        "slice-115-typescript-family-backends",
+        "typescript-backends.json",
+    ]);
+    assert_eq!(typescript_backends(), vec![TypeScriptBackend::TreeSitter]);
+    assert_eq!(
+        Value::Array(vec![Value::String("kreuzberg-language-pack".to_string())]),
+        backends_fixture["backends"]
+    );
+
+    let backend_fixture = read_fixture(&[
+        "diagnostics",
+        "slice-122-source-family-backend-feature-profiles",
+        "typescript-backend-feature-profiles.json",
+    ]);
+    let backend_profile = typescript_backend_feature_profile(TypeScriptBackend::TreeSitter);
+    let backend_ref = backend_profile
+        .backend_ref
+        .as_ref()
+        .map(|reference| {
+            serde_json::json!({
+                "id": reference.id,
+                "family": reference.family,
+            })
+        })
+        .unwrap_or(Value::Null);
+    assert_eq!(
+        serde_json::json!({
+            "backend": backend_profile.backend,
+            "supports_dialects": backend_profile.supports_dialects,
+            "supported_policies": backend_profile.supported_policies,
+            "backend_ref": backend_ref,
+        }),
+        backend_fixture["tree_sitter"]
+    );
+
+    let plan_fixture = read_fixture(&[
+        "diagnostics",
+        "slice-123-source-family-plan-contexts",
+        "typescript-plan-contexts.json",
+    ]);
+    assert_eq!(
+        serde_json::to_value(typescript_plan_context(TypeScriptBackend::TreeSitter))
+            .expect("typescript plan context should serialize"),
+        plan_fixture["tree_sitter"]
+    );
+
+    let source_manifest_fixture = read_fixture(&[
+        "conformance",
+        "slice-124-source-family-manifest",
+        "source-family-manifest.json",
+    ]);
+    let source_manifest =
+        serde_json::from_value::<ast_merge::ConformanceManifest>(source_manifest_fixture)
+            .expect("source manifest should deserialize");
+    assert_eq!(
+        ast_merge::conformance_family_feature_profile_path(&source_manifest, "typescript"),
+        Some(vec![
+            "diagnostics".to_string(),
+            "slice-101-typescript-family-feature-profile".to_string(),
+            "typescript-feature-profile.json".to_string(),
+        ])
+        .as_deref()
+    );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&source_manifest, "typescript", "analysis"),
+        Some(vec![
+            "typescript".to_string(),
+            "slice-102-analysis".to_string(),
+            "module-owners.json".to_string(),
+        ])
+        .as_deref()
+    );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&source_manifest, "typescript", "matching"),
+        Some(vec![
+            "typescript".to_string(),
+            "slice-103-matching".to_string(),
+            "path-equality.json".to_string(),
+        ])
+        .as_deref()
+    );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&source_manifest, "typescript", "merge"),
+        Some(vec![
+            "typescript".to_string(),
+            "slice-104-merge".to_string(),
+            "module-merge.json".to_string(),
+        ])
+        .as_deref()
+    );
+
+    let canonical_manifest_fixture =
+        read_fixture(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
+    let canonical_manifest =
+        serde_json::from_value::<ast_merge::ConformanceManifest>(canonical_manifest_fixture)
+            .expect("canonical manifest should deserialize");
+    assert_eq!(
+        ast_merge::conformance_family_feature_profile_path(&canonical_manifest, "typescript"),
+        Some(vec![
+            "diagnostics".to_string(),
+            "slice-101-typescript-family-feature-profile".to_string(),
+            "typescript-feature-profile.json".to_string(),
+        ])
+        .as_deref()
+    );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&canonical_manifest, "typescript", "analysis"),
+        Some(vec![
+            "typescript".to_string(),
+            "slice-102-analysis".to_string(),
+            "module-owners.json".to_string(),
+        ])
+        .as_deref()
+    );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&canonical_manifest, "typescript", "matching"),
+        Some(vec![
+            "typescript".to_string(),
+            "slice-103-matching".to_string(),
+            "path-equality.json".to_string(),
+        ])
+        .as_deref()
+    );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&canonical_manifest, "typescript", "merge"),
+        Some(vec![
+            "typescript".to_string(),
+            "slice-104-merge".to_string(),
+            "module-merge.json".to_string(),
+        ])
+        .as_deref()
     );
 }

@@ -1,6 +1,10 @@
-use ast_merge::{FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference, PolicySurface};
+use ast_merge::{
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult,
+    ParseResult, PolicyReference, PolicySurface,
+};
 use tree_haver::{
-    ParserRequest, ProcessRequest, parse_with_language_pack, process_with_language_pack,
+    BackendReference, ParserRequest, ProcessRequest, kreuzberg_language_pack_backend,
+    language_pack_adapter_info, parse_with_language_pack, process_with_language_pack,
 };
 
 pub const PACKAGE_NAME: &str = "typescript-merge";
@@ -8,6 +12,11 @@ pub const PACKAGE_NAME: &str = "typescript-merge";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TypeScriptDialect {
     TypeScript,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TypeScriptBackend {
+    TreeSitter,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -66,6 +75,14 @@ pub struct TypeScriptFeatureProfile {
     pub supported_policies: Vec<PolicyReference>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TypeScriptBackendFeatureProfile {
+    pub backend: String,
+    pub backend_ref: Option<BackendReference>,
+    pub supports_dialects: bool,
+    pub supported_policies: Vec<PolicyReference>,
+}
+
 fn destination_wins_array_policy() -> PolicyReference {
     PolicyReference { surface: PolicySurface::Array, name: "destination_wins_array".to_string() }
 }
@@ -107,6 +124,37 @@ pub fn typescript_feature_profile() -> TypeScriptFeatureProfile {
             .collect(),
         supported_policies: shared.supported_policies,
     }
+}
+
+pub fn typescript_backend_feature_profile(
+    _backend: TypeScriptBackend,
+) -> TypeScriptBackendFeatureProfile {
+    TypeScriptBackendFeatureProfile {
+        backend: language_pack_adapter_info().backend,
+        backend_ref: Some(kreuzberg_language_pack_backend()),
+        supports_dialects: true,
+        supported_policies: vec![destination_wins_array_policy()],
+    }
+}
+
+pub fn typescript_plan_context(backend: TypeScriptBackend) -> ConformanceFamilyPlanContext {
+    let feature_profile = typescript_backend_feature_profile(backend);
+    ConformanceFamilyPlanContext {
+        family_profile: FamilyFeatureProfile {
+            family: typescript_feature_profile().family.to_string(),
+            supported_dialects: vec!["typescript".to_string()],
+            supported_policies: typescript_feature_profile().supported_policies,
+        },
+        feature_profile: Some(ConformanceFeatureProfileView {
+            backend: feature_profile.backend,
+            supports_dialects: feature_profile.supports_dialects,
+            supported_policies: feature_profile.supported_policies,
+        }),
+    }
+}
+
+pub fn typescript_backends() -> Vec<TypeScriptBackend> {
+    vec![TypeScriptBackend::TreeSitter]
 }
 
 pub fn parse_typescript(
