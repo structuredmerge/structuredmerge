@@ -57,6 +57,10 @@ pub fn yaml_backend_feature_profile() -> YamlBackendFeatureProfile {
         supported_dialects: vec![YamlDialect::Yaml],
         supported_policies: yaml_feature_profile().supported_policies,
         backend: BACKEND_ID.to_string(),
+        backend_ref: Some(BackendReference {
+            id: BACKEND_ID.to_string(),
+            family: "native".to_string(),
+        }),
     }
 }
 

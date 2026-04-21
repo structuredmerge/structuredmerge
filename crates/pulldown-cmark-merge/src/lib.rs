@@ -49,6 +49,13 @@ pub fn markdown_backend_feature_profile() -> std::collections::BTreeMap<String, 
     );
     profile.insert("supported_policies".to_string(), serde_json::Value::Array(vec![]));
     profile.insert("backend".to_string(), serde_json::Value::String(BACKEND_ID.to_string()));
+    profile.insert(
+        "backend_ref".to_string(),
+        serde_json::json!({
+            "id": BACKEND_ID,
+            "family": "native",
+        }),
+    );
     profile.into_iter().collect()
 }
 

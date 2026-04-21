@@ -39,8 +39,26 @@ fn conforms_to_provider_feature_profile_fixture() {
 
     assert_eq!(available_yaml_backends(), vec!["yaml_serde".to_string()]);
     let profile = yaml_backend_feature_profile();
-    assert_eq!(profile.family, fixture["providers"]["yaml_serde"]["feature_profile"]["family"]);
-    assert_eq!(profile.backend, fixture["providers"]["yaml_serde"]["feature_profile"]["backend"]);
+    let supported_dialects = profile
+        .supported_dialects
+        .iter()
+        .map(|dialect| match dialect {
+            yaml_merge::YamlDialect::Yaml => "yaml".to_string(),
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        serde_json::json!({
+            "family": profile.family,
+            "supported_dialects": supported_dialects,
+            "supported_policies": profile.supported_policies,
+            "backend": profile.backend,
+            "backend_ref": profile.backend_ref.map(|backend| serde_json::json!({
+                "id": backend.id,
+                "family": backend.family,
+            })),
+        }),
+        fixture["providers"]["yaml_serde"]["feature_profile"]
+    );
     assert_eq!(provider_yaml_feature_profile().family, "yaml");
 }
 

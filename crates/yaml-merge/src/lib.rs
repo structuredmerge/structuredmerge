@@ -72,6 +72,7 @@ pub struct YamlBackendFeatureProfile {
     pub supported_dialects: Vec<YamlDialect>,
     pub supported_policies: Vec<PolicyReference>,
     pub backend: String,
+    pub backend_ref: Option<tree_haver::BackendReference>,
 }
 
 fn destination_wins_array_policy() -> PolicyReference {
@@ -134,6 +135,15 @@ pub fn yaml_backend_feature_profile(backend: YamlBackend) -> YamlBackendFeatureP
         backend: match backend {
             YamlBackend::YamlSerde => "yaml_serde".to_string(),
             YamlBackend::KreuzbergLanguagePack => "kreuzberg-language-pack".to_string(),
+        },
+        backend_ref: match backend {
+            YamlBackend::YamlSerde => Some(tree_haver::BackendReference {
+                id: "yaml_serde".to_string(),
+                family: "native".to_string(),
+            }),
+            YamlBackend::KreuzbergLanguagePack => {
+                Some(tree_haver::kreuzberg_language_pack_backend())
+            }
         },
     }
 }

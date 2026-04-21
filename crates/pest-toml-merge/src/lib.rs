@@ -6,12 +6,12 @@ use ast_merge::{
 };
 use pest::Parser;
 use pest_grammars::toml::{Rule as PestTomlRule, TomlParser as PestTomlParser};
-use tree_haver::{BackendReference, register_backend};
 use toml_merge::{
     TomlAnalysis, TomlDialect, TomlFeatureProfile, TomlOwnerMatchResult, analyze_toml_source,
     match_toml_owners as match_toml_owners_with_substrate, merge_toml_with_parser,
     toml_feature_profile,
 };
+use tree_haver::{BackendReference, register_backend};
 
 pub const PACKAGE_NAME: &str = "pest-toml-merge";
 pub const BACKEND_ID: &str = "pest";
@@ -67,6 +67,13 @@ pub fn toml_backend_feature_profile() -> std::collections::BTreeMap<String, serd
         })]),
     );
     profile.insert("backend".to_string(), serde_json::Value::String(BACKEND_ID.to_string()));
+    profile.insert(
+        "backend_ref".to_string(),
+        serde_json::json!({
+            "id": BACKEND_ID,
+            "family": "peg",
+        }),
+    );
     profile.into_iter().collect()
 }
 

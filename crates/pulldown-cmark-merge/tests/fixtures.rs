@@ -40,7 +40,11 @@ fn conforms_to_provider_feature_profile_fixture() {
     ]);
 
     assert_eq!(available_markdown_backends(), vec!["pulldown-cmark".to_string()]);
-    assert!(registered_backends().iter().any(|backend| backend.id == "pulldown-cmark" && backend.family == "native"));
+    assert!(
+        registered_backends()
+            .iter()
+            .any(|backend| backend.id == "pulldown-cmark" && backend.family == "native")
+    );
     assert_eq!(
         serde_json::to_value(markdown_backend_feature_profile()).unwrap(),
         fixture["providers"]["pulldown-cmark"]["feature_profile"]
