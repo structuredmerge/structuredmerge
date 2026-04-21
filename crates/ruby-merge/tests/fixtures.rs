@@ -66,6 +66,41 @@ fn conforms_to_ruby_fixtures() {
         plan_fixture["tree_sitter"]["feature_profile"]["backend"]
     );
 
+    let manifest_fixture = read_fixture(&[
+        "conformance",
+        "slice-217-ruby-family-manifest",
+        "ruby-family-manifest.json",
+    ]);
+    let manifest = serde_json::from_value::<ast_merge::ConformanceManifest>(manifest_fixture)
+        .expect("ruby manifest should deserialize");
+    assert_eq!(
+        ast_merge::conformance_family_feature_profile_path(&manifest, "ruby"),
+        Some(vec![
+            "diagnostics".to_string(),
+            "slice-214-ruby-family-feature-profile".to_string(),
+            "ruby-feature-profile.json".to_string(),
+        ])
+        .as_deref()
+    );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&manifest, "ruby", "analysis"),
+        Some(vec![
+            "ruby".to_string(),
+            "slice-218-analysis".to_string(),
+            "module-owners.json".to_string(),
+        ])
+        .as_deref()
+    );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&manifest, "ruby", "matching"),
+        Some(vec![
+            "ruby".to_string(),
+            "slice-219-matching".to_string(),
+            "path-equality.json".to_string(),
+        ])
+        .as_deref()
+    );
+
     let analysis_fixture = read_fixture(&["ruby", "slice-218-analysis", "module-owners.json"]);
     let analysis = parse_ruby(analysis_fixture["source"].as_str().unwrap(), RubyDialect::Ruby);
     assert!(analysis.ok);
