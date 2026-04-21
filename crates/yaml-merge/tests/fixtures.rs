@@ -80,11 +80,21 @@ fn conforms_to_slice_171_yaml_backend_feature_profiles() {
     ]);
 
     assert_eq!(available_yaml_backends(), vec![YamlBackend::KreuzbergLanguagePack]);
-    assert!(registered_backends()
-        .iter()
-        .any(|backend| backend.id == "kreuzberg-language-pack" && backend.family == "tree-sitter"));
+    assert!(
+        registered_backends()
+            .iter()
+            .any(|backend| backend.id == "kreuzberg-language-pack"
+                && backend.family == "tree-sitter")
+    );
     let tree_sitter = yaml_backend_feature_profile(YamlBackend::KreuzbergLanguagePack);
     assert_eq!(tree_sitter.backend, fixture["tree_sitter"]["backend"]);
+    assert_eq!(
+        tree_sitter.backend_ref.as_ref().map(|backend| serde_json::json!({
+            "id": backend.id,
+            "family": backend.family,
+        })),
+        Some(fixture["tree_sitter"]["backend_ref"].clone())
+    );
 }
 
 #[test]

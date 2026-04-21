@@ -83,6 +83,7 @@ pub struct MarkdownBackendFeatureProfile {
     pub family: &'static str,
     pub supported_dialects: Vec<MarkdownDialect>,
     pub backend: String,
+    pub backend_ref: tree_haver::BackendReference,
 }
 
 fn unsupported_feature(message: &str) -> Diagnostic {
@@ -231,12 +232,14 @@ pub fn available_markdown_backends() -> Vec<MarkdownBackend> {
 }
 
 pub fn markdown_backend_feature_profile(backend: MarkdownBackend) -> MarkdownBackendFeatureProfile {
+    let backend_ref = tree_haver::kreuzberg_language_pack_backend();
     MarkdownBackendFeatureProfile {
         family: "markdown",
         supported_dialects: vec![MarkdownDialect::Markdown],
         backend: match backend {
-            MarkdownBackend::KreuzbergLanguagePack => "kreuzberg-language-pack".to_string(),
+            MarkdownBackend::KreuzbergLanguagePack => backend_ref.id.clone(),
         },
+        backend_ref,
     }
 }
 

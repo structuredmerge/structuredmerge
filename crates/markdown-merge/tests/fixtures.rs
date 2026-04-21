@@ -57,12 +57,26 @@ fn conforms_to_slice_195_markdown_backend_feature_profiles() {
     ]);
 
     assert_eq!(available_markdown_backends(), vec![MarkdownBackend::KreuzbergLanguagePack]);
-    assert!(registered_backends()
-        .iter()
-        .any(|backend| backend.id == "kreuzberg-language-pack" && backend.family == "tree-sitter"));
+    assert!(
+        registered_backends()
+            .iter()
+            .any(|backend| backend.id == "kreuzberg-language-pack"
+                && backend.family == "tree-sitter")
+    );
 
     let tree_sitter = markdown_backend_feature_profile(MarkdownBackend::KreuzbergLanguagePack);
     assert_eq!(tree_sitter.backend, fixture["tree_sitter"]["backend"]);
+    assert_eq!(
+        serde_json::json!({
+            "backend": tree_sitter.backend,
+            "supported_policies": [],
+            "backend_ref": {
+                "id": tree_sitter.backend_ref.id,
+                "family": tree_sitter.backend_ref.family,
+            }
+        }),
+        fixture["tree_sitter"]
+    );
 }
 
 #[test]

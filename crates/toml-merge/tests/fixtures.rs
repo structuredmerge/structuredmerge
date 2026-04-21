@@ -6,12 +6,12 @@ use ast_merge::{
     plan_named_conformance_suites, report_conformance_manifest,
 };
 use serde_json::Value;
-use tree_haver::registered_backends;
 use toml_merge::{
     TomlBackend, TomlDialect, TomlOwnerKind, TomlRootKind, available_toml_backends,
     match_toml_owners, merge_toml, parse_toml, toml_backend_feature_profile, toml_feature_profile,
     toml_plan_context,
 };
+use tree_haver::registered_backends;
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -72,9 +72,12 @@ fn conforms_to_slice_90_toml_feature_profile_fixture() {
         }]
     );
     assert_eq!(available_toml_backends(), vec![TomlBackend::TreeSitter]);
-    assert!(registered_backends()
-        .iter()
-        .any(|backend| backend.id == "kreuzberg-language-pack" && backend.family == "tree-sitter"));
+    assert!(
+        registered_backends()
+            .iter()
+            .any(|backend| backend.id == "kreuzberg-language-pack"
+                && backend.family == "tree-sitter")
+    );
     assert_eq!(
         toml_backend_feature_profile(Some(TomlBackend::TreeSitter)).backend,
         "kreuzberg-language-pack"
@@ -92,6 +95,13 @@ fn conforms_to_slice_135_toml_backend_feature_profiles() {
     let tree_sitter = toml_backend_feature_profile(Some(TomlBackend::TreeSitter));
     assert_eq!(tree_sitter.backend, fixture["tree_sitter"]["backend"].as_str().unwrap());
     assert_eq!(tree_sitter.backend_ref.id, "kreuzberg-language-pack");
+    assert_eq!(
+        serde_json::json!({
+            "id": tree_sitter.backend_ref.id,
+            "family": tree_sitter.backend_ref.family,
+        }),
+        fixture["tree_sitter"]["backend_ref"]
+    );
 }
 
 #[test]
