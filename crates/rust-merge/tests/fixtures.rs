@@ -218,7 +218,11 @@ fn conforms_to_rust_backend_fixtures() {
                     ast_merge::PolicySurface::Array => "array",
                 },
                 "name": policy.name
-            })).collect::<Vec<_>>()
+            })).collect::<Vec<_>>(),
+            "backend_ref": rust_backend_feature_profile(RustBackend::TreeSitter).backend_ref.as_ref().map(|backend| serde_json::json!({
+                "id": backend.id,
+                "family": backend.family,
+            }))
         }),
         backend_profiles["tree_sitter"]
     );

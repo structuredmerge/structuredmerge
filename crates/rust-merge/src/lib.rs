@@ -4,8 +4,8 @@ use ast_merge::{
 };
 use syn::{File, Item};
 use tree_haver::{
-    ParserRequest, ProcessRequest, language_pack_adapter_info, parse_with_language_pack,
-    process_with_language_pack,
+    BackendReference, ParserRequest, ProcessRequest, kreuzberg_language_pack_backend,
+    language_pack_adapter_info, parse_with_language_pack, process_with_language_pack,
 };
 
 pub const PACKAGE_NAME: &str = "rust-merge";
@@ -77,6 +77,14 @@ pub struct RustFeatureProfile {
     pub supported_policies: Vec<PolicyReference>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RustBackendFeatureProfile {
+    pub backend: String,
+    pub backend_ref: Option<BackendReference>,
+    pub supports_dialects: bool,
+    pub supported_policies: Vec<PolicyReference>,
+}
+
 fn destination_wins_array_policy() -> PolicyReference {
     PolicyReference { surface: PolicySurface::Array, name: "destination_wins_array".to_string() }
 }
@@ -120,15 +128,17 @@ pub fn rust_feature_profile() -> RustFeatureProfile {
     }
 }
 
-pub fn rust_backend_feature_profile(backend: RustBackend) -> ConformanceFeatureProfileView {
+pub fn rust_backend_feature_profile(backend: RustBackend) -> RustBackendFeatureProfile {
     match backend {
-        RustBackend::Native => ConformanceFeatureProfileView {
+        RustBackend::Native => RustBackendFeatureProfile {
             backend: "syn".to_string(),
+            backend_ref: None,
             supports_dialects: true,
             supported_policies: vec![destination_wins_array_policy()],
         },
-        RustBackend::TreeSitter => ConformanceFeatureProfileView {
+        RustBackend::TreeSitter => RustBackendFeatureProfile {
             backend: language_pack_adapter_info().backend,
+            backend_ref: Some(kreuzberg_language_pack_backend()),
             supports_dialects: true,
             supported_policies: vec![destination_wins_array_policy()],
         },
@@ -136,13 +146,18 @@ pub fn rust_backend_feature_profile(backend: RustBackend) -> ConformanceFeatureP
 }
 
 pub fn rust_plan_context(backend: RustBackend) -> ConformanceFamilyPlanContext {
+    let feature_profile = rust_backend_feature_profile(backend);
     ConformanceFamilyPlanContext {
         family_profile: FamilyFeatureProfile {
             family: rust_feature_profile().family.to_string(),
             supported_dialects: vec!["rust".to_string()],
             supported_policies: rust_feature_profile().supported_policies,
         },
-        feature_profile: Some(rust_backend_feature_profile(backend)),
+        feature_profile: Some(ConformanceFeatureProfileView {
+            backend: feature_profile.backend,
+            supports_dialects: feature_profile.supports_dialects,
+            supported_policies: feature_profile.supported_policies,
+        }),
     }
 }
 
