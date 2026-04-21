@@ -5,7 +5,7 @@ use serde_json::Value;
 use tree_haver::{
     AdapterInfo, BackendReference, FeatureProfile, ParserRequest, ProcessRequest,
     current_backend_id, pest_adapter_info, pest_backend, pest_feature_profile,
-    process_with_language_pack, with_backend,
+    process_with_language_pack, register_backend, registered_backends, with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -299,5 +299,27 @@ fn supports_temporary_backend_context_selection() {
     })
     .expect("pest backend should be valid");
 
+    assert_eq!(current_backend_id(), None);
+}
+
+#[test]
+fn supports_runtime_backend_registration() {
+    register_backend(BackendReference {
+        id: "custom-toml".to_string(),
+        family: "native".to_string(),
+    });
+
+    assert_eq!(
+        tree_haver::backend_reference("custom-toml"),
+        Some(BackendReference { id: "custom-toml".to_string(), family: "native".to_string() })
+    );
+    assert!(registered_backends().contains(&BackendReference {
+        id: "custom-toml".to_string(),
+        family: "native".to_string(),
+    }));
+    with_backend("custom-toml", || {
+        assert_eq!(current_backend_id(), Some("custom-toml".to_string()));
+    })
+    .expect("custom backend should be valid");
     assert_eq!(current_backend_id(), None);
 }

@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{Mutex, OnceLock},
 };
 
@@ -133,12 +133,41 @@ pub fn pest_backend() -> BackendReference {
     BackendReference { id: "pest".to_string(), family: "peg".to_string() }
 }
 
+fn backend_registry() -> &'static Mutex<HashMap<String, BackendReference>> {
+    static BACKEND_REGISTRY: OnceLock<Mutex<HashMap<String, BackendReference>>> = OnceLock::new();
+    BACKEND_REGISTRY.get_or_init(|| {
+        let mut backends = HashMap::new();
+        let language_pack = kreuzberg_language_pack_backend();
+        let pest = pest_backend();
+        backends.insert(language_pack.id.clone(), language_pack);
+        backends.insert(pest.id.clone(), pest);
+        Mutex::new(backends)
+    })
+}
+
+pub fn register_backend(backend: BackendReference) {
+    let mut backends =
+        backend_registry().lock().expect("backend registry lock should not be poisoned");
+    backends.insert(backend.id.clone(), backend);
+}
+
 pub fn backend_reference(id: &str) -> Option<BackendReference> {
-    match id {
-        "kreuzberg-language-pack" => Some(kreuzberg_language_pack_backend()),
-        "pest" => Some(pest_backend()),
-        _ => None,
-    }
+    backend_registry()
+        .lock()
+        .expect("backend registry lock should not be poisoned")
+        .get(id)
+        .cloned()
+}
+
+pub fn registered_backends() -> Vec<BackendReference> {
+    let mut backends = backend_registry()
+        .lock()
+        .expect("backend registry lock should not be poisoned")
+        .values()
+        .cloned()
+        .collect::<Vec<_>>();
+    backends.sort_by(|left, right| left.id.cmp(&right.id));
+    backends
 }
 
 pub fn pest_adapter_info() -> AdapterInfo {
