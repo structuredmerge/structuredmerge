@@ -187,6 +187,59 @@ fn conforms_to_slice_143_yaml_family_manifest_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_173_yaml_backend_named_suite_plans_fixture() {
+    let fixture = read_fixture(&[
+        "diagnostics",
+        "slice-173-yaml-family-backend-named-suite-plans",
+        "rust-yaml-backend-named-suite-plans.json",
+    ]);
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let contexts = serde_json::from_value::<std::collections::HashMap<String, ast_merge::ConformanceFamilyPlanContext>>(
+        fixture["contexts"].clone(),
+    )
+    .expect("contexts should deserialize");
+    let expected = serde_json::from_value::<Vec<ast_merge::NamedConformanceSuitePlan>>(
+        fixture["expected_entries"].clone(),
+    )
+    .expect("expected entries should deserialize");
+
+    assert_eq!(ast_merge::plan_named_conformance_suites(&manifest, &contexts), expected);
+}
+
+#[test]
+fn conforms_to_slice_174_yaml_backend_manifest_report_fixture() {
+    let fixture = read_fixture(&[
+        "diagnostics",
+        "slice-174-yaml-family-backend-manifest-report",
+        "rust-yaml-backend-manifest-report.json",
+    ]);
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let options = serde_json::from_value::<ast_merge::ConformanceManifestPlanningOptions>(
+        fixture["options"].clone(),
+    )
+    .expect("options should deserialize");
+    let expected = serde_json::from_value::<ast_merge::ConformanceManifestReport>(
+        fixture["expected_report"].clone(),
+    )
+    .expect("expected report should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+    let report = ast_merge::report_conformance_manifest(&manifest, &options, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        serde_json::from_value::<ast_merge::ConformanceCaseExecution>(
+            executions.get(&key).cloned().unwrap_or_else(
+                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+            ),
+        )
+        .expect("execution should deserialize")
+    });
+
+    assert_eq!(report, expected);
+}
+
+#[test]
 fn resolves_yaml_paths_through_the_canonical_manifest() {
     let fixture =
         read_fixture(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
