@@ -4,7 +4,6 @@ use ast_merge::{
     ConformanceManifest, conformance_family_feature_profile_path, conformance_fixture_path,
 };
 use serde_json::Value;
-use tree_haver::with_backend;
 use yaml_merge::{
     YamlBackend, YamlDialect, YamlOwnerKind, YamlRootKind, available_yaml_backends,
     match_yaml_owners, merge_yaml_with_backend, parse_yaml, parse_yaml_with_backend,
@@ -79,14 +78,9 @@ fn conforms_to_slice_171_yaml_backend_feature_profiles() {
         "rust-yaml-backend-feature-profiles.json",
     ]);
 
-    assert_eq!(
-        available_yaml_backends(),
-        vec![YamlBackend::SerdeYaml, YamlBackend::YamlSerde, YamlBackend::KreuzbergLanguagePack]
-    );
-    let serde_yaml = yaml_backend_feature_profile(YamlBackend::SerdeYaml);
-    assert_eq!(serde_yaml.backend, fixture["serde_yaml"]["backend"]);
-    let yaml_serde = yaml_backend_feature_profile(YamlBackend::YamlSerde);
-    assert_eq!(yaml_serde.backend, fixture["yaml_serde"]["backend"]);
+    assert_eq!(available_yaml_backends(), vec![YamlBackend::KreuzbergLanguagePack]);
+    let tree_sitter = yaml_backend_feature_profile(YamlBackend::KreuzbergLanguagePack);
+    assert_eq!(tree_sitter.backend, fixture["tree_sitter"]["backend"]);
 }
 
 #[test]
@@ -109,15 +103,14 @@ fn conforms_to_slice_172_yaml_backend_plan_context_fixture() {
         "rust-yaml-plan-contexts.json",
     ]);
 
-    let serde_yaml = yaml_plan_context_with_backend(YamlBackend::SerdeYaml);
-    assert_eq!(serde_yaml.family_profile.family, fixture["serde_yaml"]["family_profile"]["family"]);
-    let serde_feature = serde_yaml.feature_profile.expect("feature profile should be present");
-    assert_eq!(serde_feature.backend, fixture["serde_yaml"]["feature_profile"]["backend"]);
-
-    let yaml_serde = yaml_plan_context_with_backend(YamlBackend::YamlSerde);
-    assert_eq!(yaml_serde.family_profile.family, fixture["yaml_serde"]["family_profile"]["family"]);
-    let yaml_serde_feature = yaml_serde.feature_profile.expect("feature profile should be present");
-    assert_eq!(yaml_serde_feature.backend, fixture["yaml_serde"]["feature_profile"]["backend"]);
+    let tree_sitter = yaml_plan_context_with_backend(YamlBackend::KreuzbergLanguagePack);
+    assert_eq!(
+        tree_sitter.family_profile.family,
+        fixture["tree_sitter"]["family_profile"]["family"]
+    );
+    let tree_sitter_feature =
+        tree_sitter.feature_profile.expect("feature profile should be present");
+    assert_eq!(tree_sitter_feature.backend, fixture["tree_sitter"]["feature_profile"]["backend"]);
 }
 
 #[test]
@@ -212,9 +205,7 @@ fn conforms_to_slice_96_yaml_parse_fixtures() {
     let valid = read_fixture(&["yaml", "slice-96-parse", "valid-document.json"]);
     let invalid = read_fixture(&["yaml", "slice-96-parse", "invalid-document.json"]);
 
-    for backend in
-        [YamlBackend::SerdeYaml, YamlBackend::YamlSerde, YamlBackend::KreuzbergLanguagePack]
-    {
+    for backend in [YamlBackend::KreuzbergLanguagePack] {
         let valid_result =
             parse_yaml_with_backend(valid["source"].as_str().unwrap(), YamlDialect::Yaml, backend);
         assert!(valid_result.ok);
@@ -248,9 +239,7 @@ fn conforms_to_slice_96_yaml_parse_fixtures() {
 fn conforms_to_slice_97_yaml_structure_fixture() {
     let fixture = read_fixture(&["yaml", "slice-97-structure", "mapping-and-sequence.json"]);
 
-    for backend in
-        [YamlBackend::SerdeYaml, YamlBackend::YamlSerde, YamlBackend::KreuzbergLanguagePack]
-    {
+    for backend in [YamlBackend::KreuzbergLanguagePack] {
         let result = parse_yaml_with_backend(
             fixture["source"].as_str().unwrap(),
             YamlDialect::Yaml,
@@ -291,9 +280,7 @@ fn conforms_to_slice_97_yaml_structure_fixture() {
 fn conforms_to_slice_98_yaml_matching_fixture() {
     let fixture = read_fixture(&["yaml", "slice-98-matching", "path-equality.json"]);
 
-    for backend in
-        [YamlBackend::SerdeYaml, YamlBackend::YamlSerde, YamlBackend::KreuzbergLanguagePack]
-    {
+    for backend in [YamlBackend::KreuzbergLanguagePack] {
         let template = parse_yaml_with_backend(
             fixture["template"].as_str().unwrap(),
             YamlDialect::Yaml,
@@ -342,9 +329,7 @@ fn conforms_to_slice_99_yaml_merge_fixtures() {
     let invalid_template = read_fixture(&["yaml", "slice-99-merge", "invalid-template.json"]);
     let invalid_destination = read_fixture(&["yaml", "slice-99-merge", "invalid-destination.json"]);
 
-    for backend in
-        [YamlBackend::SerdeYaml, YamlBackend::YamlSerde, YamlBackend::KreuzbergLanguagePack]
-    {
+    for backend in [YamlBackend::KreuzbergLanguagePack] {
         let merge_result = merge_yaml_with_backend(
             merge_fixture["template"].as_str().unwrap(),
             merge_fixture["destination"].as_str().unwrap(),
@@ -404,12 +389,9 @@ fn conforms_to_slice_99_yaml_merge_fixtures() {
 }
 
 #[test]
-fn uses_tree_haver_backend_context_when_no_explicit_yaml_backend_is_given() {
+fn uses_kreuzberg_backend_by_default() {
     let valid = read_fixture(&["yaml", "slice-96-parse", "valid-document.json"]);
-    let result = with_backend("kreuzberg-language-pack", || {
-        parse_yaml(valid["source"].as_str().unwrap(), YamlDialect::Yaml)
-    })
-    .expect("kreuzberg-language-pack backend context should be valid");
+    let result = parse_yaml(valid["source"].as_str().unwrap(), YamlDialect::Yaml);
     assert!(result.ok);
     assert_eq!(
         result.analysis.as_ref().map(|analysis| analysis.root_kind),

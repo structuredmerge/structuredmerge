@@ -4,7 +4,7 @@ use ast_merge::{
     PolicySurface,
 };
 use serde_json::{Map, Value};
-use tree_haver::{ParserRequest, current_backend_id, parse_with_language_pack};
+use tree_haver::{ParserRequest, parse_with_language_pack};
 
 pub const PACKAGE_NAME: &str = "yaml-merge";
 
@@ -15,7 +15,6 @@ pub enum YamlDialect {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum YamlBackend {
-    SerdeYaml,
     YamlSerde,
     KreuzbergLanguagePack,
 }
@@ -124,7 +123,7 @@ pub fn yaml_feature_profile() -> YamlFeatureProfile {
 }
 
 pub fn available_yaml_backends() -> Vec<YamlBackend> {
-    vec![YamlBackend::SerdeYaml, YamlBackend::YamlSerde, YamlBackend::KreuzbergLanguagePack]
+    vec![YamlBackend::KreuzbergLanguagePack]
 }
 
 pub fn yaml_backend_feature_profile(backend: YamlBackend) -> YamlBackendFeatureProfile {
@@ -133,7 +132,6 @@ pub fn yaml_backend_feature_profile(backend: YamlBackend) -> YamlBackendFeatureP
         supported_dialects: vec![YamlDialect::Yaml],
         supported_policies: vec![destination_wins_array_policy()],
         backend: match backend {
-            YamlBackend::SerdeYaml => "serde_yaml".to_string(),
             YamlBackend::YamlSerde => "yaml_serde".to_string(),
             YamlBackend::KreuzbergLanguagePack => "kreuzberg-language-pack".to_string(),
         },
@@ -141,7 +139,7 @@ pub fn yaml_backend_feature_profile(backend: YamlBackend) -> YamlBackendFeatureP
 }
 
 pub fn yaml_plan_context() -> ConformanceFamilyPlanContext {
-    yaml_plan_context_with_backend(YamlBackend::SerdeYaml)
+    yaml_plan_context_with_backend(YamlBackend::KreuzbergLanguagePack)
 }
 
 pub fn yaml_plan_context_with_backend(backend: YamlBackend) -> ConformanceFamilyPlanContext {
@@ -157,17 +155,6 @@ pub fn yaml_plan_context_with_backend(backend: YamlBackend) -> ConformanceFamily
             supports_dialects: backend != YamlBackend::KreuzbergLanguagePack,
             supported_policies: backend_profile.supported_policies,
         }),
-    }
-}
-
-fn resolve_backend(backend: Option<YamlBackend>) -> YamlBackend {
-    if let Some(backend) = backend {
-        return backend;
-    }
-
-    match current_backend_id().as_deref() {
-        Some("kreuzberg-language-pack") => YamlBackend::KreuzbergLanguagePack,
-        _ => YamlBackend::SerdeYaml,
     }
 }
 
@@ -314,12 +301,7 @@ fn collect_yaml_owners(mapping: &Map<String, Value>, prefix: &str) -> Vec<YamlOw
 
 fn parse_yaml_value(source: &str, backend: YamlBackend) -> Result<Value, Diagnostic> {
     match backend {
-        YamlBackend::SerdeYaml => {
-            serde_yaml::from_str::<Value>(source).map_err(|error| parse_error(&error.to_string()))
-        }
-        YamlBackend::YamlSerde => {
-            yaml_serde::from_str::<Value>(source).map_err(|error| parse_error(&error.to_string()))
-        }
+        YamlBackend::YamlSerde => Err(unsupported_feature("Unsupported YAML backend yaml_serde.")),
         YamlBackend::KreuzbergLanguagePack => {
             serde_yaml::from_str::<Value>(source).map_err(|error| parse_error(&error.to_string()))
         }
@@ -327,7 +309,7 @@ fn parse_yaml_value(source: &str, backend: YamlBackend) -> Result<Value, Diagnos
 }
 
 pub fn parse_yaml(source: &str, dialect: YamlDialect) -> ParseResult<YamlAnalysis> {
-    parse_yaml_with_backend(source, dialect, resolve_backend(None))
+    parse_yaml_with_backend(source, dialect, YamlBackend::KreuzbergLanguagePack)
 }
 
 pub fn parse_yaml_with_backend(
@@ -344,24 +326,55 @@ pub fn parse_yaml_with_backend(
         };
     }
 
-    if backend == YamlBackend::KreuzbergLanguagePack {
-        let backend_result = parse_with_language_pack(&ParserRequest {
-            source: source.to_string(),
-            language: "yaml".to_string(),
-            dialect: Some("yaml".to_string()),
-        });
-        if !backend_result.ok {
-            return ParseResult {
-                ok: false,
-                diagnostics: backend_result.diagnostics,
-                analysis: None,
-                policies: vec![],
-            };
-        }
+    if backend != YamlBackend::KreuzbergLanguagePack {
+        return ParseResult {
+            ok: false,
+            diagnostics: vec![unsupported_feature(&format!(
+                "Unsupported YAML backend {}.",
+                yaml_backend_feature_profile(backend).backend
+            ))],
+            analysis: None,
+            policies: vec![],
+        };
+    }
+
+    let backend_result = parse_with_language_pack(&ParserRequest {
+        source: source.to_string(),
+        language: "yaml".to_string(),
+        dialect: Some("yaml".to_string()),
+    });
+    if !backend_result.ok {
+        return ParseResult {
+            ok: false,
+            diagnostics: backend_result.diagnostics,
+            analysis: None,
+            policies: vec![],
+        };
     }
 
     match parse_yaml_value(source, backend) {
-        Ok(Value::Object(mapping)) => {
+        Ok(parsed) => analyze_yaml_value(parsed, dialect),
+        Err(diagnostic) => ParseResult {
+            ok: false,
+            diagnostics: vec![diagnostic],
+            analysis: None,
+            policies: vec![],
+        },
+    }
+}
+
+pub fn analyze_yaml_value(parsed: Value, dialect: YamlDialect) -> ParseResult<YamlAnalysis> {
+    if dialect != YamlDialect::Yaml {
+        return ParseResult {
+            ok: false,
+            diagnostics: vec![unsupported_feature("Unsupported YAML dialect.")],
+            analysis: None,
+            policies: vec![],
+        };
+    }
+
+    match parsed {
+        Value::Object(mapping) => {
             if let Err(diagnostic) = validate_yaml_node(&Value::Object(mapping.clone()), "") {
                 return ParseResult {
                     ok: false,
@@ -383,15 +396,9 @@ pub fn parse_yaml_with_backend(
                 policies: vec![],
             }
         }
-        Ok(_) => ParseResult {
+        _ => ParseResult {
             ok: false,
             diagnostics: vec![parse_error("YAML documents must parse to a mapping root.")],
-            analysis: None,
-            policies: vec![],
-        },
-        Err(diagnostic) => ParseResult {
-            ok: false,
-            diagnostics: vec![diagnostic],
             analysis: None,
             policies: vec![],
         },
@@ -479,7 +486,12 @@ pub fn merge_yaml(
     destination_source: &str,
     dialect: YamlDialect,
 ) -> MergeResult<String> {
-    merge_yaml_with_backend(template_source, destination_source, dialect, YamlBackend::SerdeYaml)
+    merge_yaml_with_backend(
+        template_source,
+        destination_source,
+        dialect,
+        YamlBackend::KreuzbergLanguagePack,
+    )
 }
 
 pub fn merge_yaml_with_backend(
@@ -488,7 +500,30 @@ pub fn merge_yaml_with_backend(
     dialect: YamlDialect,
     backend: YamlBackend,
 ) -> MergeResult<String> {
-    let template = parse_yaml_with_backend(template_source, dialect, backend);
+    if backend != YamlBackend::KreuzbergLanguagePack {
+        return MergeResult {
+            ok: false,
+            diagnostics: vec![unsupported_feature(&format!(
+                "Unsupported YAML backend {}.",
+                yaml_backend_feature_profile(backend).backend
+            ))],
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    merge_yaml_with_parser(template_source, destination_source, dialect, |source, parse_dialect| {
+        parse_yaml_with_backend(source, parse_dialect, backend)
+    })
+}
+
+pub fn merge_yaml_with_parser(
+    template_source: &str,
+    destination_source: &str,
+    dialect: YamlDialect,
+    parser: impl Fn(&str, YamlDialect) -> ParseResult<YamlAnalysis>,
+) -> MergeResult<String> {
+    let template = parser(template_source, dialect);
     if !template.ok {
         return MergeResult {
             ok: false,
@@ -498,7 +533,7 @@ pub fn merge_yaml_with_backend(
         };
     }
 
-    let destination = parse_yaml_with_backend(destination_source, dialect, backend);
+    let destination = parser(destination_source, dialect);
     if !destination.ok {
         return MergeResult {
             ok: false,
@@ -518,13 +553,11 @@ pub fn merge_yaml_with_backend(
         };
     }
 
-    let template_mapping = parse_yaml_value(
+    let template_mapping = serde_yaml::from_str::<Value>(
         &template.analysis.as_ref().expect("template analysis").normalized_source,
-        backend,
     );
-    let destination_mapping = parse_yaml_value(
+    let destination_mapping = serde_yaml::from_str::<Value>(
         &destination.analysis.as_ref().expect("destination analysis").normalized_source,
-        backend,
     );
 
     match (template_mapping, destination_mapping) {
@@ -539,13 +572,13 @@ pub fn merge_yaml_with_backend(
         }
         (_, Err(error)) => MergeResult {
             ok: false,
-            diagnostics: vec![destination_parse_error(&error.message)],
+            diagnostics: vec![destination_parse_error(&error.to_string())],
             output: None,
             policies: vec![],
         },
         (Err(error), _) => MergeResult {
             ok: false,
-            diagnostics: vec![parse_error(&error.message)],
+            diagnostics: vec![parse_error(&error.to_string())],
             output: None,
             policies: vec![],
         },
