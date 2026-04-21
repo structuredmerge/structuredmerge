@@ -1,6 +1,9 @@
 use std::{fs, path::PathBuf};
 
-use go_merge::{GoDialect, go_feature_profile, match_go_owners, merge_go, parse_go};
+use go_merge::{
+    GoBackend, GoDialect, go_backend_feature_profile, go_backends, go_feature_profile,
+    go_plan_context, match_go_owners, merge_go, parse_go,
+};
 use serde_json::Value;
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -131,5 +134,137 @@ fn conforms_to_go_fixtures() {
     assert_eq!(
         diagnostic_shape(&invalid_destination_result.diagnostics),
         invalid_destination["expected"]["diagnostics"]
+    );
+
+    let backends_fixture =
+        read_fixture(&["diagnostics", "slice-113-go-family-backends", "go-backends.json"]);
+    assert_eq!(go_backends(), vec![GoBackend::TreeSitter]);
+    assert_eq!(
+        Value::Array(vec![Value::String("kreuzberg-language-pack".to_string())]),
+        backends_fixture["backends"]
+    );
+
+    let backend_fixture = read_fixture(&[
+        "diagnostics",
+        "slice-122-source-family-backend-feature-profiles",
+        "go-backend-feature-profiles.json",
+    ]);
+    let backend_profile = go_backend_feature_profile(GoBackend::TreeSitter);
+    let backend_ref = backend_profile
+        .backend_ref
+        .as_ref()
+        .map(|reference| {
+            serde_json::json!({
+                "id": reference.id,
+                "family": reference.family,
+            })
+        })
+        .unwrap_or(Value::Null);
+    assert_eq!(
+        serde_json::json!({
+            "backend": backend_profile.backend,
+            "supports_dialects": backend_profile.supports_dialects,
+            "supported_policies": backend_profile.supported_policies,
+            "backend_ref": backend_ref,
+        }),
+        backend_fixture["tree_sitter"]
+    );
+
+    let plan_fixture = read_fixture(&[
+        "diagnostics",
+        "slice-123-source-family-plan-contexts",
+        "go-plan-contexts.json",
+    ]);
+    assert_eq!(
+        serde_json::to_value(go_plan_context(GoBackend::TreeSitter))
+            .expect("go plan context should serialize"),
+        plan_fixture["tree_sitter"]
+    );
+
+    let source_manifest_fixture = read_fixture(&[
+        "conformance",
+        "slice-124-source-family-manifest",
+        "source-family-manifest.json",
+    ]);
+    let source_manifest =
+        serde_json::from_value::<ast_merge::ConformanceManifest>(source_manifest_fixture)
+            .expect("source manifest should deserialize");
+    assert_eq!(
+        ast_merge::conformance_family_feature_profile_path(&source_manifest, "go"),
+        Some(vec![
+            "diagnostics".to_string(),
+            "slice-109-go-family-feature-profile".to_string(),
+            "go-feature-profile.json".to_string(),
+        ])
+        .as_deref()
+    );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&source_manifest, "go", "analysis"),
+        Some(vec![
+            "go".to_string(),
+            "slice-110-analysis".to_string(),
+            "module-owners.json".to_string(),
+        ])
+        .as_deref()
+    );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&source_manifest, "go", "matching"),
+        Some(vec![
+            "go".to_string(),
+            "slice-111-matching".to_string(),
+            "path-equality.json".to_string(),
+        ])
+        .as_deref()
+    );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&source_manifest, "go", "merge"),
+        Some(vec![
+            "go".to_string(),
+            "slice-112-merge".to_string(),
+            "module-merge.json".to_string(),
+        ])
+        .as_deref()
+    );
+
+    let canonical_manifest_fixture =
+        read_fixture(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
+    let canonical_manifest =
+        serde_json::from_value::<ast_merge::ConformanceManifest>(canonical_manifest_fixture)
+            .expect("canonical manifest should deserialize");
+    assert_eq!(
+        ast_merge::conformance_family_feature_profile_path(&canonical_manifest, "go"),
+        Some(vec![
+            "diagnostics".to_string(),
+            "slice-109-go-family-feature-profile".to_string(),
+            "go-feature-profile.json".to_string(),
+        ])
+        .as_deref()
+    );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&canonical_manifest, "go", "analysis"),
+        Some(vec![
+            "go".to_string(),
+            "slice-110-analysis".to_string(),
+            "module-owners.json".to_string(),
+        ])
+        .as_deref()
+    );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&canonical_manifest, "go", "matching"),
+        Some(vec![
+            "go".to_string(),
+            "slice-111-matching".to_string(),
+            "path-equality.json".to_string(),
+        ])
+        .as_deref()
+    );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&canonical_manifest, "go", "merge"),
+        Some(vec![
+            "go".to_string(),
+            "slice-112-merge".to_string(),
+            "module-merge.json".to_string(),
+        ])
+        .as_deref()
     );
 }
