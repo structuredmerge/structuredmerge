@@ -253,19 +253,33 @@ pub struct ConformanceFamilyFeatureProfileEntry {
 pub struct ConformanceManifest {
     pub family_feature_profiles: Vec<ConformanceFamilyFeatureProfileEntry>,
     #[serde(default)]
-    pub suites: HashMap<String, ConformanceSuiteDefinition>,
+    pub suite_descriptors: Vec<ConformanceSuiteDefinition>,
     pub families: HashMap<String, Vec<ConformanceManifestEntry>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceSuiteSubject {
+    pub grammar: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variant: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceSuiteSelector {
+    pub kind: String,
+    pub subject: ConformanceSuiteSubject,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ConformanceSuiteDefinition {
-    pub family: String,
+    pub kind: String,
+    pub subject: ConformanceSuiteSubject,
     pub roles: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct NamedConformanceSuiteReport {
-    pub suite: String,
+    pub suite: ConformanceSuiteDefinition,
     pub report: ConformanceSuiteReport,
 }
 
@@ -277,13 +291,13 @@ pub struct ConformanceFamilyPlanContext {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct NamedConformanceSuitePlan {
-    pub suite: String,
+    pub suite: ConformanceSuiteDefinition,
     pub plan: ConformanceSuitePlan,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct NamedConformanceSuiteResults {
-    pub suite: String,
+    pub suite: ConformanceSuiteDefinition,
     pub results: Vec<ConformanceCaseResult>,
 }
 
@@ -520,15 +534,57 @@ pub fn conformance_family_feature_profile_path<'a>(
 
 pub fn conformance_suite_definition<'a>(
     manifest: &'a ConformanceManifest,
-    suite_name: &str,
+    selector: &ConformanceSuiteSelector,
 ) -> Option<&'a ConformanceSuiteDefinition> {
-    manifest.suites.get(suite_name)
+    manifest.suite_descriptors.iter().find(|definition| {
+        definition.kind == selector.kind && definition.subject == selector.subject
+    })
 }
 
-pub fn conformance_suite_names(manifest: &ConformanceManifest) -> Vec<String> {
-    let mut names = manifest.suites.keys().cloned().collect::<Vec<_>>();
-    names.sort();
-    names
+fn compare_conformance_suite_selectors(
+    left: &ConformanceSuiteSelector,
+    right: &ConformanceSuiteSelector,
+) -> std::cmp::Ordering {
+    left.kind
+        .cmp(&right.kind)
+        .then_with(|| left.subject.grammar.cmp(&right.subject.grammar))
+        .then_with(|| left.subject.variant.cmp(&right.subject.variant))
+}
+
+pub fn conformance_suite_selectors(manifest: &ConformanceManifest) -> Vec<ConformanceSuiteSelector> {
+    let mut selectors = manifest
+        .suite_descriptors
+        .iter()
+        .map(|definition| ConformanceSuiteSelector {
+            kind: definition.kind.clone(),
+            subject: definition.subject.clone(),
+        })
+        .collect::<Vec<_>>();
+    selectors.sort_by(compare_conformance_suite_selectors);
+    selectors
+}
+
+fn conformance_suite_descriptor_string(definition: &ConformanceSuiteDefinition) -> String {
+    serde_json::to_string(definition).unwrap_or_else(|_| {
+        let mut rendered = format!(
+            "{{\"kind\":\"{}\",\"subject\":{{\"grammar\":\"{}\"",
+            definition.kind, definition.subject.grammar
+        );
+        if let Some(variant) = &definition.subject.variant {
+            rendered.push_str(&format!(",\"variant\":\"{}\"", variant));
+        }
+        rendered.push_str("},\"roles\":[");
+        rendered.push_str(
+            &definition
+                .roles
+                .iter()
+                .map(|role| format!("\"{}\"", role))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+        rendered.push_str("]}");
+        rendered
+    })
 }
 
 pub fn default_conformance_family_context(
@@ -754,10 +810,10 @@ pub fn conformance_manifest_replay_context(
     manifest: &ConformanceManifest,
     options: &ConformanceManifestReviewOptions,
 ) -> ReviewReplayContext {
-    let mut families: Vec<String> = conformance_suite_names(manifest)
+    let mut families: Vec<String> = conformance_suite_selectors(manifest)
         .into_iter()
-        .filter_map(|suite_name| conformance_suite_definition(manifest, &suite_name))
-        .map(|definition| definition.family.clone())
+        .filter_map(|selector| conformance_suite_definition(manifest, &selector))
+        .map(|definition| definition.subject.grammar.clone())
         .collect();
     families.sort();
     families.dedup();
@@ -790,12 +846,12 @@ pub fn conformance_manifest_review_request_ids(
         return Vec::new();
     }
 
-    let mut request_ids: Vec<String> = conformance_suite_names(manifest)
+    let mut request_ids: Vec<String> = conformance_suite_selectors(manifest)
         .into_iter()
-        .filter_map(|suite_name| conformance_suite_definition(manifest, &suite_name))
-        .filter(|definition| !options.contexts.contains_key(&definition.family))
-        .filter(|definition| options.family_profiles.contains_key(&definition.family))
-        .map(|definition| review_request_id_for_family_context(&definition.family))
+        .filter_map(|selector| conformance_suite_definition(manifest, &selector))
+        .filter(|definition| !options.contexts.contains_key(&definition.subject.grammar))
+        .filter(|definition| options.family_profiles.contains_key(&definition.subject.grammar))
+        .map(|definition| review_request_id_for_family_context(&definition.subject.grammar))
         .collect();
     request_ids.sort();
     request_ids.dedup();
@@ -1242,30 +1298,31 @@ pub fn run_planned_conformance_suite(
 
 pub fn run_named_conformance_suite(
     manifest: &ConformanceManifest,
-    suite_name: &str,
+    selector: &ConformanceSuiteSelector,
     family_profile: &FamilyFeatureProfile,
     execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
     feature_profile: Option<&ConformanceFeatureProfileView>,
 ) -> Option<Vec<ConformanceCaseResult>> {
-    let plan = plan_named_conformance_suite(manifest, suite_name, family_profile, feature_profile)?;
+    let plan = plan_named_conformance_suite(manifest, selector, family_profile, feature_profile)?;
     Some(run_planned_conformance_suite(&plan, execute))
 }
 
 pub fn run_named_conformance_suite_entry(
     manifest: &ConformanceManifest,
-    suite_name: &str,
+    selector: &ConformanceSuiteSelector,
     family_profile: &FamilyFeatureProfile,
     execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
     feature_profile: Option<&ConformanceFeatureProfileView>,
 ) -> Option<NamedConformanceSuiteResults> {
     let results = run_named_conformance_suite(
         manifest,
-        suite_name,
+        selector,
         family_profile,
         execute,
         feature_profile,
     )?;
-    Some(NamedConformanceSuiteResults { suite: suite_name.to_string(), results })
+    let definition = conformance_suite_definition(manifest, selector)?;
+    Some(NamedConformanceSuiteResults { suite: definition.clone(), results })
 }
 
 pub fn run_planned_named_conformance_suites(
@@ -1290,30 +1347,31 @@ pub fn report_planned_conformance_suite(
 
 pub fn report_named_conformance_suite(
     manifest: &ConformanceManifest,
-    suite_name: &str,
+    selector: &ConformanceSuiteSelector,
     family_profile: &FamilyFeatureProfile,
     execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
     feature_profile: Option<&ConformanceFeatureProfileView>,
 ) -> Option<ConformanceSuiteReport> {
-    let plan = plan_named_conformance_suite(manifest, suite_name, family_profile, feature_profile)?;
+    let plan = plan_named_conformance_suite(manifest, selector, family_profile, feature_profile)?;
     Some(report_planned_conformance_suite(&plan, execute))
 }
 
 pub fn report_named_conformance_suite_entry(
     manifest: &ConformanceManifest,
-    suite_name: &str,
+    selector: &ConformanceSuiteSelector,
     family_profile: &FamilyFeatureProfile,
     execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
     feature_profile: Option<&ConformanceFeatureProfileView>,
 ) -> Option<NamedConformanceSuiteReport> {
     let report = report_named_conformance_suite(
         manifest,
-        suite_name,
+        selector,
         family_profile,
         execute,
         feature_profile,
     )?;
-    Some(NamedConformanceSuiteReport { suite: suite_name.to_string(), report })
+    let definition = conformance_suite_definition(manifest, selector)?;
+    Some(NamedConformanceSuiteReport { suite: definition.clone(), report })
 }
 
 pub fn report_planned_named_conformance_suites(
@@ -1455,20 +1513,20 @@ pub fn review_conformance_manifest(
     let mut resolved_contexts: HashMap<String, Option<ConformanceFamilyPlanContext>> =
         HashMap::new();
 
-    for suite_name in conformance_suite_names(manifest) {
-        let Some(definition) = conformance_suite_definition(manifest, &suite_name) else {
+    for selector in conformance_suite_selectors(manifest) {
+        let Some(definition) = conformance_suite_definition(manifest, &selector) else {
             continue;
         };
 
-        let context = if let Some(context) = resolved_contexts.get(&definition.family) {
+        let context = if let Some(context) = resolved_contexts.get(&definition.subject.grammar) {
             context.clone()
         } else {
             let (context, mut context_diagnostics, mut context_requests, mut context_decisions) =
-                review_conformance_family_context(&definition.family, &effective_options);
+                review_conformance_family_context(&definition.subject.grammar, &effective_options);
             diagnostics.append(&mut context_diagnostics);
             requests.append(&mut context_requests);
             applied_decisions.append(&mut context_decisions);
-            resolved_contexts.insert(definition.family.clone(), context.clone());
+            resolved_contexts.insert(definition.subject.grammar.clone(), context.clone());
             context
         };
 
@@ -1476,7 +1534,7 @@ pub fn review_conformance_manifest(
             continue;
         };
 
-        let Some(entry) = plan_named_conformance_suite_entry(manifest, &suite_name, &context)
+        let Some(entry) = plan_named_conformance_suite_entry(manifest, &selector, &context)
         else {
             continue;
         };
@@ -1487,7 +1545,7 @@ pub fn review_conformance_manifest(
                 category: DiagnosticCategory::ConfigurationError,
                 message: format!(
                     "suite {} declares missing roles: {}.",
-                    suite_name,
+                    conformance_suite_descriptor_string(&entry.suite),
                     entry.plan.missing_roles.join(", ")
                 ),
                 path: None,
@@ -1563,14 +1621,14 @@ pub fn plan_conformance_suite(
 
 pub fn plan_named_conformance_suite(
     manifest: &ConformanceManifest,
-    suite_name: &str,
+    selector: &ConformanceSuiteSelector,
     family_profile: &FamilyFeatureProfile,
     feature_profile: Option<&ConformanceFeatureProfileView>,
 ) -> Option<ConformanceSuitePlan> {
-    let definition = conformance_suite_definition(manifest, suite_name)?;
+    let definition = conformance_suite_definition(manifest, selector)?;
     Some(plan_conformance_suite(
         manifest,
-        &definition.family,
+        &definition.subject.grammar,
         &definition.roles,
         family_profile,
         feature_profile,
@@ -1579,28 +1637,29 @@ pub fn plan_named_conformance_suite(
 
 pub fn plan_named_conformance_suite_entry(
     manifest: &ConformanceManifest,
-    suite_name: &str,
+    selector: &ConformanceSuiteSelector,
     context: &ConformanceFamilyPlanContext,
 ) -> Option<NamedConformanceSuitePlan> {
     let plan = plan_named_conformance_suite(
         manifest,
-        suite_name,
+        selector,
         &context.family_profile,
         context.feature_profile.as_ref(),
     )?;
-    Some(NamedConformanceSuitePlan { suite: suite_name.to_string(), plan })
+    let definition = conformance_suite_definition(manifest, selector)?;
+    Some(NamedConformanceSuitePlan { suite: definition.clone(), plan })
 }
 
 pub fn plan_named_conformance_suites(
     manifest: &ConformanceManifest,
     contexts: &HashMap<String, ConformanceFamilyPlanContext>,
 ) -> Vec<NamedConformanceSuitePlan> {
-    conformance_suite_names(manifest)
+    conformance_suite_selectors(manifest)
         .into_iter()
-        .filter_map(|suite_name| {
-            let definition = conformance_suite_definition(manifest, &suite_name)?;
-            let context = contexts.get(&definition.family)?;
-            plan_named_conformance_suite_entry(manifest, &suite_name, context)
+        .filter_map(|selector| {
+            let definition = conformance_suite_definition(manifest, &selector)?;
+            let context = contexts.get(&definition.subject.grammar)?;
+            plan_named_conformance_suite_entry(manifest, &selector, context)
         })
         .collect()
 }
@@ -1614,18 +1673,18 @@ pub fn plan_named_conformance_suites_with_diagnostics(
     let mut resolved_contexts: HashMap<String, Option<ConformanceFamilyPlanContext>> =
         HashMap::new();
 
-    for suite_name in conformance_suite_names(manifest) {
-        let Some(definition) = conformance_suite_definition(manifest, &suite_name) else {
+    for selector in conformance_suite_selectors(manifest) {
+        let Some(definition) = conformance_suite_definition(manifest, &selector) else {
             continue;
         };
 
-        let context = if let Some(context) = resolved_contexts.get(&definition.family) {
+        let context = if let Some(context) = resolved_contexts.get(&definition.subject.grammar) {
             context.clone()
         } else {
             let (context, mut context_diagnostics) =
-                resolve_conformance_family_context(&definition.family, options);
+                resolve_conformance_family_context(&definition.subject.grammar, options);
             diagnostics.append(&mut context_diagnostics);
-            resolved_contexts.insert(definition.family.clone(), context.clone());
+            resolved_contexts.insert(definition.subject.grammar.clone(), context.clone());
             context
         };
 
@@ -1633,7 +1692,7 @@ pub fn plan_named_conformance_suites_with_diagnostics(
             continue;
         };
 
-        let Some(entry) = plan_named_conformance_suite_entry(manifest, &suite_name, &context)
+        let Some(entry) = plan_named_conformance_suite_entry(manifest, &selector, &context)
         else {
             continue;
         };
@@ -1644,7 +1703,7 @@ pub fn plan_named_conformance_suites_with_diagnostics(
                 category: DiagnosticCategory::ConfigurationError,
                 message: format!(
                     "suite {} declares missing roles: {}.",
-                    suite_name,
+                    conformance_suite_descriptor_string(&entry.suite),
                     entry.plan.missing_roles.join(", ")
                 ),
                 path: None,

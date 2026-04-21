@@ -1,8 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
 use ast_merge::{
-    DelegatedChildOperation, DiscoveredSurface, FamilyFeatureProfile, ParseResult, PolicyReference,
-    PolicySurface, SurfaceOwnerKind, SurfaceOwnerRef, SurfaceSpan,
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, DelegatedChildOperation,
+    DiscoveredSurface, FamilyFeatureProfile, ParseResult, PolicyReference, PolicySurface,
+    SurfaceOwnerKind, SurfaceOwnerRef, SurfaceSpan,
 };
 use tree_haver::{ParserRequest, parse_with_language_pack};
 
@@ -52,6 +53,15 @@ pub struct RubyFeatureProfile {
     pub family: &'static str,
     pub supported_dialects: Vec<RubyDialect>,
     pub supported_policies: Vec<PolicyReference>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RubyBackendFeatureProfile {
+    pub family: &'static str,
+    pub supported_dialects: Vec<RubyDialect>,
+    pub supported_policies: Vec<PolicyReference>,
+    pub backend: String,
+    pub supports_dialects: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -336,6 +346,36 @@ pub fn ruby_feature_profile() -> RubyFeatureProfile {
         family: "ruby",
         supported_dialects: shared.supported_dialects.iter().map(|_| RubyDialect::Ruby).collect(),
         supported_policies: shared.supported_policies,
+    }
+}
+
+pub fn available_ruby_backends() -> Vec<String> {
+    vec!["kreuzberg-language-pack".to_string()]
+}
+
+pub fn ruby_backend_feature_profile() -> RubyBackendFeatureProfile {
+    RubyBackendFeatureProfile {
+        family: "ruby",
+        supported_dialects: vec![RubyDialect::Ruby],
+        supported_policies: vec![destination_wins_array_policy()],
+        backend: "kreuzberg-language-pack".to_string(),
+        supports_dialects: true,
+    }
+}
+
+pub fn ruby_plan_context() -> ConformanceFamilyPlanContext {
+    let backend_profile = ruby_backend_feature_profile();
+    ConformanceFamilyPlanContext {
+        family_profile: FamilyFeatureProfile {
+            family: "ruby".to_string(),
+            supported_dialects: vec!["ruby".to_string()],
+            supported_policies: vec![destination_wins_array_policy()],
+        },
+        feature_profile: Some(ConformanceFeatureProfileView {
+            backend: backend_profile.backend,
+            supports_dialects: backend_profile.supports_dialects,
+            supported_policies: backend_profile.supported_policies,
+        }),
     }
 }
 

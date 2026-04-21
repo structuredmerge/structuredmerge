@@ -9,8 +9,9 @@ use ast_merge::{
     summarize_projected_child_review_group_progress,
 };
 use ruby_merge::{
-    RubyDialect, RubyOwnerKind, match_ruby_owners, parse_ruby, ruby_delegated_child_operations,
-    ruby_discovered_surfaces, ruby_feature_profile,
+    RubyDialect, RubyOwnerKind, available_ruby_backends, match_ruby_owners, parse_ruby,
+    ruby_backend_feature_profile, ruby_delegated_child_operations, ruby_discovered_surfaces,
+    ruby_feature_profile, ruby_plan_context,
 };
 use serde_json::Value;
 
@@ -40,6 +41,30 @@ fn conforms_to_ruby_fixtures() {
     ]);
     let profile = ruby_feature_profile();
     assert_eq!(profile.family, profile_fixture["feature_profile"]["family"].as_str().unwrap());
+
+    let backend_fixture = read_fixture(&[
+        "diagnostics",
+        "slice-215-ruby-family-backend-feature-profiles",
+        "ruby-ruby-backend-feature-profiles.json",
+    ]);
+    assert_eq!(available_ruby_backends(), vec!["kreuzberg-language-pack".to_string()]);
+    let backend_profile = ruby_backend_feature_profile();
+    assert_eq!(backend_profile.backend, backend_fixture["tree_sitter"]["backend"]);
+
+    let plan_fixture = read_fixture(&[
+        "diagnostics",
+        "slice-216-ruby-family-plan-contexts",
+        "ruby-ruby-plan-contexts.json",
+    ]);
+    let plan_context = ruby_plan_context();
+    assert_eq!(
+        plan_context.family_profile.family,
+        plan_fixture["tree_sitter"]["family_profile"]["family"]
+    );
+    assert_eq!(
+        plan_context.feature_profile.as_ref().unwrap().backend,
+        plan_fixture["tree_sitter"]["feature_profile"]["backend"]
+    );
 
     let analysis_fixture = read_fixture(&["ruby", "slice-218-analysis", "module-owners.json"]);
     let analysis = parse_ruby(analysis_fixture["source"].as_str().unwrap(), RubyDialect::Ruby);

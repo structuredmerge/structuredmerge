@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 ast-merge = { path = "../ast-merge" }
-pulldown-cmark = "0.13"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tree-haver = { path = "../tree-haver" }

@@ -3,8 +3,7 @@ use ast_merge::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile,
     ParseResult, SurfaceOwnerKind, SurfaceOwnerRef,
 };
-use pulldown_cmark::Parser;
-use tree_haver::{ParserRequest, current_backend_id, parse_with_language_pack};
+use tree_haver::{ParserRequest, parse_with_language_pack};
 
 pub const PACKAGE_NAME: &str = "markdown-merge";
 
@@ -15,7 +14,6 @@ pub enum MarkdownDialect {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MarkdownBackend {
-    PulldownCmark,
     KreuzbergLanguagePack,
 }
 
@@ -221,22 +219,6 @@ fn is_code_fence_close(line: &str, marker_char: char, marker_length: usize) -> b
     count >= marker_length && trimmed.chars().all(|character| character == marker_char)
 }
 
-fn validate_native_markdown(source: &str) {
-    let parser = Parser::new(source);
-    for _ in parser {}
-}
-
-fn resolve_backend(backend: Option<MarkdownBackend>) -> MarkdownBackend {
-    if let Some(backend) = backend {
-        return backend;
-    }
-
-    match current_backend_id().as_deref() {
-        Some("kreuzberg-language-pack") => MarkdownBackend::KreuzbergLanguagePack,
-        _ => MarkdownBackend::PulldownCmark,
-    }
-}
-
 pub fn markdown_feature_profile() -> MarkdownFeatureProfile {
     MarkdownFeatureProfile {
         family: "markdown",
@@ -245,7 +227,7 @@ pub fn markdown_feature_profile() -> MarkdownFeatureProfile {
 }
 
 pub fn available_markdown_backends() -> Vec<MarkdownBackend> {
-    vec![MarkdownBackend::PulldownCmark, MarkdownBackend::KreuzbergLanguagePack]
+    vec![MarkdownBackend::KreuzbergLanguagePack]
 }
 
 pub fn markdown_backend_feature_profile(backend: MarkdownBackend) -> MarkdownBackendFeatureProfile {
@@ -253,14 +235,13 @@ pub fn markdown_backend_feature_profile(backend: MarkdownBackend) -> MarkdownBac
         family: "markdown",
         supported_dialects: vec![MarkdownDialect::Markdown],
         backend: match backend {
-            MarkdownBackend::PulldownCmark => "pulldown-cmark".to_string(),
             MarkdownBackend::KreuzbergLanguagePack => "kreuzberg-language-pack".to_string(),
         },
     }
 }
 
 pub fn markdown_plan_context() -> ConformanceFamilyPlanContext {
-    markdown_plan_context_with_backend(MarkdownBackend::PulldownCmark)
+    markdown_plan_context_with_backend(MarkdownBackend::KreuzbergLanguagePack)
 }
 
 pub fn markdown_plan_context_with_backend(
@@ -275,14 +256,14 @@ pub fn markdown_plan_context_with_backend(
         },
         feature_profile: Some(ConformanceFeatureProfileView {
             backend: backend_profile.backend,
-            supports_dialects: backend != MarkdownBackend::KreuzbergLanguagePack,
+            supports_dialects: false,
             supported_policies: vec![],
         }),
     }
 }
 
 pub fn parse_markdown(source: &str, dialect: MarkdownDialect) -> ParseResult<MarkdownAnalysis> {
-    parse_markdown_with_backend(source, dialect, resolve_backend(None))
+    parse_markdown_with_backend(source, dialect, MarkdownBackend::KreuzbergLanguagePack)
 }
 
 pub fn parse_markdown_with_backend(
@@ -303,7 +284,6 @@ pub fn parse_markdown_with_backend(
     }
 
     match backend {
-        MarkdownBackend::PulldownCmark => validate_native_markdown(source),
         MarkdownBackend::KreuzbergLanguagePack => {
             let syntax = parse_with_language_pack(&ParserRequest {
                 source: source.to_string(),

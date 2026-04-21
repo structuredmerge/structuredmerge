@@ -7,6 +7,7 @@ use ast_merge::{
     ConformanceManifestReport, ConformanceManifestReviewOptions, ConformanceManifestReviewState,
     ConformanceManifestReviewStateEnvelope, ConformanceOutcome, ConformanceSelectionStatus,
     ConformanceSuiteDefinition, ConformanceSuitePlan, ConformanceSuiteReport,
+    ConformanceSuiteSelector, ConformanceSuiteSubject,
     ConformanceSuiteSummary, DelegatedChildOperation, DiagnosticCategory, DiagnosticSeverity,
     DiscoveredSurface, FamilyFeatureProfile, NamedConformanceSuitePlan,
     NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
@@ -16,7 +17,8 @@ use ast_merge::{
     conformance_family_feature_profile_path, conformance_fixture_path,
     conformance_manifest_replay_context, conformance_manifest_review_request_ids,
     conformance_manifest_review_state_envelope, conformance_review_host_hints,
-    conformance_suite_definition, conformance_suite_names, default_conformance_family_context,
+    conformance_suite_definition, conformance_suite_selectors,
+    default_conformance_family_context,
     delegated_child_apply_plan, group_projected_child_review_cases,
     import_conformance_manifest_review_state_envelope, import_review_replay_bundle_envelope,
     plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
@@ -78,6 +80,16 @@ fn diagnostics_fixture_path(role: &str) -> PathBuf {
 fn read_fixture_from_path(path: PathBuf) -> Value {
     let source = fs::read_to_string(path).expect("fixture should be readable");
     serde_json::from_str(&source).expect("fixture should be valid json")
+}
+
+fn fixture_suite_selector(fixture: &Value) -> ConformanceSuiteSelector {
+    serde_json::from_value::<ConformanceSuiteSelector>(fixture["suite_selector"].clone())
+        .expect("suite selector should deserialize")
+}
+
+fn fixture_suite_selectors(fixture: &Value) -> Vec<ConformanceSuiteSelector> {
+    serde_json::from_value::<Vec<ConformanceSuiteSelector>>(fixture["suite_selectors"].clone())
+        .expect("suite selectors should deserialize")
 }
 
 fn diagnostic_category_name(category: DiagnosticCategory) -> &'static str {
@@ -658,7 +670,7 @@ fn conforms_to_slice_42_manifest_case_requirements_fixture() {
 fn conforms_to_slice_43_conformance_suite_definitions_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("suite_definitions"));
     let manifest = read_manifest();
-    let suite_name = fixture["suite_name"].as_str().expect("suite name should be a string");
+    let selector = fixture_suite_selector(&fixture);
     let expected = serde_json::from_value::<ast_merge::ConformanceSuiteDefinition>(
         fixture["expected"].clone(),
     )
@@ -678,12 +690,12 @@ fn conforms_to_slice_43_conformance_suite_definitions_fixture() {
         ],
     };
 
-    assert_eq!(conformance_suite_definition(&manifest, suite_name), Some(&expected));
+    assert_eq!(conformance_suite_definition(&manifest, &selector), Some(&expected));
     assert_eq!(
-        plan_named_conformance_suite(&manifest, suite_name, &family_profile, None),
+        plan_named_conformance_suite(&manifest, &selector, &family_profile, None),
         Some(plan_conformance_suite(
             &manifest,
-            &expected.family,
+            &expected.subject.grammar,
             &expected.roles,
             &family_profile,
             None,
@@ -700,21 +712,16 @@ fn conforms_to_slice_125_source_family_suite_definitions_fixture() {
     ]));
     let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
         .expect("manifest should deserialize");
-    let suite_names = fixture["suite_names"]
-        .as_array()
-        .expect("suite_names should be an array")
-        .iter()
-        .map(|value| value.as_str().expect("suite name should be a string").to_string())
-        .collect::<Vec<_>>();
+    let expected_selectors = fixture_suite_selectors(&fixture);
+    let expected_definitions = serde_json::from_value::<Vec<ConformanceSuiteDefinition>>(
+        fixture["suite_definitions"].clone(),
+    )
+    .expect("suite definitions should deserialize");
 
-    assert_eq!(conformance_suite_names(&manifest), suite_names);
+    assert_eq!(conformance_suite_selectors(&manifest), expected_selectors);
 
-    let definitions = fixture["definitions"].as_object().expect("definitions should be an object");
-    for (suite_name, definition) in definitions {
-        let expected =
-            serde_json::from_value::<ast_merge::ConformanceSuiteDefinition>(definition.clone())
-                .expect("expected definition should deserialize");
-        assert_eq!(conformance_suite_definition(&manifest, suite_name), Some(&expected));
+    for (selector, expected) in expected_selectors.iter().zip(expected_definitions.iter()) {
+        assert_eq!(conformance_suite_definition(&manifest, selector), Some(expected));
     }
 }
 
@@ -722,7 +729,7 @@ fn conforms_to_slice_125_source_family_suite_definitions_fixture() {
 fn conforms_to_slice_44_named_conformance_suite_report_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_report"));
     let manifest = read_manifest();
-    let suite_name = fixture["suite_name"].as_str().expect("suite name should be a string");
+    let selector = fixture_suite_selector(&fixture);
     let family_profile =
         serde_json::from_value::<FamilyFeatureProfile>(fixture["family_profile"].clone())
             .expect("family profile should deserialize");
@@ -741,7 +748,7 @@ fn conforms_to_slice_44_named_conformance_suite_report_fixture() {
 
     let report = report_named_conformance_suite(
         &manifest,
-        suite_name,
+        &selector,
         &family_profile,
         |run| {
             let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
@@ -762,7 +769,7 @@ fn conforms_to_slice_44_named_conformance_suite_report_fixture() {
 fn conforms_to_slice_45_named_conformance_suite_runner_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_runner"));
     let manifest = read_manifest();
-    let suite_name = fixture["suite_name"].as_str().expect("suite name should be a string");
+    let selector = fixture_suite_selector(&fixture);
     let family_profile =
         serde_json::from_value::<FamilyFeatureProfile>(fixture["family_profile"].clone())
             .expect("family profile should deserialize");
@@ -781,7 +788,7 @@ fn conforms_to_slice_45_named_conformance_suite_runner_fixture() {
 
     let results = run_named_conformance_suite(
         &manifest,
-        suite_name,
+        &selector,
         &family_profile,
         |run| {
             let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
@@ -802,21 +809,16 @@ fn conforms_to_slice_45_named_conformance_suite_runner_fixture() {
 fn conforms_to_slice_46_conformance_suite_names_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("suite_names"));
     let manifest = read_manifest();
-    let expected = fixture["suite_names"]
-        .as_array()
-        .expect("suite_names should be an array")
-        .iter()
-        .map(|value| value.as_str().expect("suite name should be a string").to_string())
-        .collect::<Vec<_>>();
+    let expected = fixture_suite_selectors(&fixture);
 
-    assert_eq!(conformance_suite_names(&manifest), expected);
+    assert_eq!(conformance_suite_selectors(&manifest), expected);
 }
 
 #[test]
 fn conforms_to_slice_47_named_conformance_suite_entry_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_entry"));
     let manifest = read_manifest();
-    let suite_name = fixture["suite_name"].as_str().expect("suite name should be a string");
+    let selector = fixture_suite_selector(&fixture);
     let family_profile =
         serde_json::from_value::<FamilyFeatureProfile>(fixture["family_profile"].clone())
             .expect("family profile should deserialize");
@@ -835,7 +837,7 @@ fn conforms_to_slice_47_named_conformance_suite_entry_fixture() {
 
     let entry = report_named_conformance_suite_entry(
         &manifest,
-        suite_name,
+        &selector,
         &family_profile,
         |run| {
             let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
@@ -856,7 +858,7 @@ fn conforms_to_slice_47_named_conformance_suite_entry_fixture() {
 fn conforms_to_slice_48_named_conformance_suite_plan_entry_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_plan_entry"));
     let manifest = read_manifest();
-    let suite_name = fixture["suite_name"].as_str().expect("suite name should be a string");
+    let selector = fixture_suite_selector(&fixture);
     let context =
         serde_json::from_value::<ConformanceFamilyPlanContext>(fixture["context"].clone())
             .expect("context should deserialize");
@@ -864,7 +866,7 @@ fn conforms_to_slice_48_named_conformance_suite_plan_entry_fixture() {
         serde_json::from_value::<NamedConformanceSuitePlan>(fixture["expected_entry"].clone())
             .expect("expected entry should deserialize");
 
-    assert_eq!(plan_named_conformance_suite_entry(&manifest, suite_name, &context), Some(expected),);
+    assert_eq!(plan_named_conformance_suite_entry(&manifest, &selector, &context), Some(expected),);
 }
 
 #[test]
@@ -971,13 +973,26 @@ fn conforms_to_slice_138_toml_family_suite_definitions_fixture() {
     let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
         .expect("manifest should deserialize");
 
-    assert_eq!(conformance_suite_names(&manifest), vec!["toml_portable".to_string()]);
+    assert_eq!(
+        conformance_suite_selectors(&manifest),
+        vec![ConformanceSuiteSelector {
+            kind: "portable".to_string(),
+            subject: ConformanceSuiteSubject { grammar: "toml".to_string(), variant: None },
+        }]
+    );
     let expected_definition = ConformanceSuiteDefinition {
-        family: "toml".to_string(),
+        kind: "portable".to_string(),
+        subject: ConformanceSuiteSubject { grammar: "toml".to_string(), variant: None },
         roles: vec!["analysis".to_string(), "matching".to_string(), "merge".to_string()],
     };
     assert_eq!(
-        conformance_suite_definition(&manifest, "toml_portable"),
+        conformance_suite_definition(
+            &manifest,
+            &ConformanceSuiteSelector {
+                kind: "portable".to_string(),
+                subject: ConformanceSuiteSubject { grammar: "toml".to_string(), variant: None },
+            },
+        ),
         Some(&expected_definition)
     );
 }
@@ -1013,13 +1028,26 @@ fn conforms_to_slice_200_markdown_family_suite_definitions_fixture() {
     let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
         .expect("manifest should deserialize");
 
-    assert_eq!(conformance_suite_names(&manifest), vec!["markdown_portable".to_string()]);
+    assert_eq!(
+        conformance_suite_selectors(&manifest),
+        vec![ConformanceSuiteSelector {
+            kind: "portable".to_string(),
+            subject: ConformanceSuiteSubject { grammar: "markdown".to_string(), variant: None },
+        }]
+    );
     let expected_definition = ConformanceSuiteDefinition {
-        family: "markdown".to_string(),
+        kind: "portable".to_string(),
+        subject: ConformanceSuiteSubject { grammar: "markdown".to_string(), variant: None },
         roles: vec!["analysis".to_string(), "matching".to_string()],
     };
     assert_eq!(
-        conformance_suite_definition(&manifest, "markdown_portable"),
+        conformance_suite_definition(
+            &manifest,
+            &ConformanceSuiteSelector {
+                kind: "portable".to_string(),
+                subject: ConformanceSuiteSubject { grammar: "markdown".to_string(), variant: None },
+            },
+        ),
         Some(&expected_definition)
     );
 }
@@ -1085,9 +1113,27 @@ fn conforms_to_slice_246_markdown_nested_suite_definitions_fixture() {
     let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
         .expect("manifest should deserialize");
 
-    assert_eq!(conformance_suite_names(&manifest), vec!["markdown_nested_portable".to_string()]);
     assert_eq!(
-        conformance_suite_definition(&manifest, "markdown_nested_portable")
+        conformance_suite_selectors(&manifest),
+        vec![ConformanceSuiteSelector {
+            kind: "portable".to_string(),
+            subject: ConformanceSuiteSubject {
+                grammar: "markdown".to_string(),
+                variant: Some("nested".to_string()),
+            },
+        }]
+    );
+    assert_eq!(
+        conformance_suite_definition(
+            &manifest,
+            &ConformanceSuiteSelector {
+                kind: "portable".to_string(),
+                subject: ConformanceSuiteSubject {
+                    grammar: "markdown".to_string(),
+                    variant: Some("nested".to_string()),
+                },
+            },
+        )
             .expect("definition should exist")
             .roles,
         vec![
@@ -1168,9 +1214,27 @@ fn conforms_to_slice_249_ruby_nested_suite_definitions_fixture() {
     let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
         .expect("manifest should deserialize");
 
-    assert_eq!(conformance_suite_names(&manifest), vec!["ruby_nested_portable".to_string()]);
     assert_eq!(
-        conformance_suite_definition(&manifest, "ruby_nested_portable")
+        conformance_suite_selectors(&manifest),
+        vec![ConformanceSuiteSelector {
+            kind: "portable".to_string(),
+            subject: ConformanceSuiteSubject {
+                grammar: "ruby".to_string(),
+                variant: Some("nested".to_string()),
+            },
+        }]
+    );
+    assert_eq!(
+        conformance_suite_definition(
+            &manifest,
+            &ConformanceSuiteSelector {
+                kind: "portable".to_string(),
+                subject: ConformanceSuiteSubject {
+                    grammar: "ruby".to_string(),
+                    variant: Some("nested".to_string()),
+                },
+            },
+        )
             .expect("definition should exist")
             .roles,
         vec![
@@ -1244,7 +1308,7 @@ fn conforms_to_slice_251_ruby_nested_manifest_report_fixture() {
 fn conforms_to_slice_51_named_conformance_suite_results_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("named_suite_results"));
     let manifest = read_manifest();
-    let suite_name = fixture["suite_name"].as_str().expect("suite name should be a string");
+    let selector = fixture_suite_selector(&fixture);
     let family_profile =
         serde_json::from_value::<FamilyFeatureProfile>(fixture["family_profile"].clone())
             .expect("family profile should deserialize");
@@ -1263,7 +1327,7 @@ fn conforms_to_slice_51_named_conformance_suite_results_fixture() {
 
     let entry = run_named_conformance_suite_entry(
         &manifest,
-        suite_name,
+        &selector,
         &family_profile,
         |run| {
             let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
@@ -1542,13 +1606,26 @@ fn conforms_to_slice_144_yaml_family_suite_definitions_fixture() {
     let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
         .expect("manifest should deserialize");
 
-    assert_eq!(conformance_suite_names(&manifest), vec!["yaml_portable".to_string()]);
+    assert_eq!(
+        conformance_suite_selectors(&manifest),
+        vec![ConformanceSuiteSelector {
+            kind: "portable".to_string(),
+            subject: ConformanceSuiteSubject { grammar: "yaml".to_string(), variant: None },
+        }]
+    );
     let expected_definition = ConformanceSuiteDefinition {
-        family: "yaml".to_string(),
+        kind: "portable".to_string(),
+        subject: ConformanceSuiteSubject { grammar: "yaml".to_string(), variant: None },
         roles: vec!["analysis".to_string(), "matching".to_string(), "merge".to_string()],
     };
     assert_eq!(
-        conformance_suite_definition(&manifest, "yaml_portable"),
+        conformance_suite_definition(
+            &manifest,
+            &ConformanceSuiteSelector {
+                kind: "portable".to_string(),
+                subject: ConformanceSuiteSubject { grammar: "yaml".to_string(), variant: None },
+            },
+        ),
         Some(&expected_definition)
     );
 }
@@ -1717,12 +1794,24 @@ fn conforms_to_slice_148_config_family_aggregate_manifest_fixture() {
         .expect("manifest should deserialize");
 
     assert_eq!(
-        conformance_suite_names(&manifest),
+        conformance_suite_selectors(&manifest),
         vec![
-            "json_portable".to_string(),
-            "text_portable".to_string(),
-            "toml_portable".to_string(),
-            "yaml_portable".to_string(),
+            ConformanceSuiteSelector {
+                kind: "portable".to_string(),
+                subject: ConformanceSuiteSubject { grammar: "json".to_string(), variant: None },
+            },
+            ConformanceSuiteSelector {
+                kind: "portable".to_string(),
+                subject: ConformanceSuiteSubject { grammar: "text".to_string(), variant: None },
+            },
+            ConformanceSuiteSelector {
+                kind: "portable".to_string(),
+                subject: ConformanceSuiteSubject { grammar: "toml".to_string(), variant: None },
+            },
+            ConformanceSuiteSelector {
+                kind: "portable".to_string(),
+                subject: ConformanceSuiteSubject { grammar: "yaml".to_string(), variant: None },
+            },
         ]
     );
 }

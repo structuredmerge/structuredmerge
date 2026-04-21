@@ -55,13 +55,8 @@ fn conforms_to_slice_195_markdown_backend_feature_profiles() {
         "rust-markdown-backend-feature-profiles.json",
     ]);
 
-    assert_eq!(
-        available_markdown_backends(),
-        vec![MarkdownBackend::PulldownCmark, MarkdownBackend::KreuzbergLanguagePack]
-    );
+    assert_eq!(available_markdown_backends(), vec![MarkdownBackend::KreuzbergLanguagePack]);
 
-    let native = markdown_backend_feature_profile(MarkdownBackend::PulldownCmark);
-    assert_eq!(native.backend, fixture["native"]["backend"]);
     let tree_sitter = markdown_backend_feature_profile(MarkdownBackend::KreuzbergLanguagePack);
     assert_eq!(tree_sitter.backend, fixture["tree_sitter"]["backend"]);
 }
@@ -73,13 +68,6 @@ fn conforms_to_slice_196_markdown_plan_contexts() {
         "slice-196-markdown-family-plan-contexts",
         "rust-markdown-plan-contexts.json",
     ]);
-
-    let native = markdown_plan_context_with_backend(MarkdownBackend::PulldownCmark);
-    assert_eq!(native.family_profile.family, fixture["native"]["family_profile"]["family"]);
-    assert_eq!(
-        native.feature_profile.expect("feature profile should be present").backend,
-        fixture["native"]["feature_profile"]["backend"]
-    );
 
     let tree_sitter = markdown_plan_context_with_backend(MarkdownBackend::KreuzbergLanguagePack);
     assert_eq!(
@@ -128,32 +116,30 @@ fn conforms_to_slice_198_markdown_analysis() {
     let fixture =
         read_fixture(&["markdown", "slice-198-analysis", "headings-and-code-fences.json"]);
 
-    for backend in [MarkdownBackend::PulldownCmark, MarkdownBackend::KreuzbergLanguagePack] {
-        let result = parse_markdown_with_backend(
-            fixture["source"].as_str().unwrap(),
-            MarkdownDialect::Markdown,
-            backend,
-        );
-        assert!(result.ok);
-        let analysis = result.analysis.expect("analysis should be present");
-        assert_eq!(analysis.root_kind, markdown_merge::MarkdownRootKind::Document);
+    let result = parse_markdown_with_backend(
+        fixture["source"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        MarkdownBackend::KreuzbergLanguagePack,
+    );
+    assert!(result.ok);
+    let analysis = result.analysis.expect("analysis should be present");
+    assert_eq!(analysis.root_kind, markdown_merge::MarkdownRootKind::Document);
 
-        let owners = fixture["expected"]["owners"].as_array().unwrap();
-        assert_eq!(analysis.owners.len(), owners.len());
-        for (index, owner) in owners.iter().enumerate() {
-            let expected = owner.as_object().unwrap();
-            let actual = &analysis.owners[index];
-            assert_eq!(actual.path, expected["path"]);
-            assert_eq!(
-                actual.owner_kind,
-                match expected["owner_kind"].as_str().unwrap() {
-                    "heading" => MarkdownOwnerKind::Heading,
-                    "code_fence" => MarkdownOwnerKind::CodeFence,
-                    other => panic!("unexpected owner kind {other}"),
-                }
-            );
-            assert_eq!(actual.match_key, expected["match_key"]);
-        }
+    let owners = fixture["expected"]["owners"].as_array().unwrap();
+    assert_eq!(analysis.owners.len(), owners.len());
+    for (index, owner) in owners.iter().enumerate() {
+        let expected = owner.as_object().unwrap();
+        let actual = &analysis.owners[index];
+        assert_eq!(actual.path, expected["path"]);
+        assert_eq!(
+            actual.owner_kind,
+            match expected["owner_kind"].as_str().unwrap() {
+                "heading" => MarkdownOwnerKind::Heading,
+                "code_fence" => MarkdownOwnerKind::CodeFence,
+                other => panic!("unexpected owner kind {other}"),
+            }
+        );
+        assert_eq!(actual.match_key, expected["match_key"]);
     }
 }
 
@@ -161,61 +147,59 @@ fn conforms_to_slice_198_markdown_analysis() {
 fn conforms_to_slice_199_markdown_matching() {
     let fixture = read_fixture(&["markdown", "slice-199-matching", "path-equality.json"]);
 
-    for backend in [MarkdownBackend::PulldownCmark, MarkdownBackend::KreuzbergLanguagePack] {
-        let template = parse_markdown_with_backend(
-            fixture["template"].as_str().unwrap(),
-            MarkdownDialect::Markdown,
-            backend,
-        )
-        .analysis
-        .expect("template analysis should exist");
-        let destination = parse_markdown_with_backend(
-            fixture["destination"].as_str().unwrap(),
-            MarkdownDialect::Markdown,
-            backend,
-        )
-        .analysis
-        .expect("destination analysis should exist");
+    let template = parse_markdown_with_backend(
+        fixture["template"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        MarkdownBackend::KreuzbergLanguagePack,
+    )
+    .analysis
+    .expect("template analysis should exist");
+    let destination = parse_markdown_with_backend(
+        fixture["destination"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        MarkdownBackend::KreuzbergLanguagePack,
+    )
+    .analysis
+    .expect("destination analysis should exist");
 
-        let result = match_markdown_owners(template, destination);
-        assert_eq!(
-            result
-                .matched
-                .iter()
-                .map(|item| vec![item.template_path.clone(), item.destination_path.clone()])
-                .collect::<Vec<_>>(),
-            fixture["expected"]["matched"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|item| {
-                    item.as_array()
-                        .unwrap()
-                        .iter()
-                        .map(|part| part.as_str().unwrap().to_string())
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>()
-        );
-        assert_eq!(
-            result.unmatched_template,
-            fixture["expected"]["unmatched_template"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|item| item.as_str().unwrap().to_string())
-                .collect::<Vec<_>>()
-        );
-        assert_eq!(
-            result.unmatched_destination,
-            fixture["expected"]["unmatched_destination"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|item| item.as_str().unwrap().to_string())
-                .collect::<Vec<_>>()
-        );
-    }
+    let result = match_markdown_owners(template, destination);
+    assert_eq!(
+        result
+            .matched
+            .iter()
+            .map(|item| vec![item.template_path.clone(), item.destination_path.clone()])
+            .collect::<Vec<_>>(),
+        fixture["expected"]["matched"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| {
+                item.as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|part| part.as_str().unwrap().to_string())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        result.unmatched_template,
+        fixture["expected"]["unmatched_template"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item.as_str().unwrap().to_string())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        result.unmatched_destination,
+        fixture["expected"]["unmatched_destination"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item.as_str().unwrap().to_string())
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]
@@ -223,20 +207,18 @@ fn conforms_to_slice_208_markdown_embedded_families() {
     let fixture =
         read_fixture(&["markdown", "slice-208-embedded-families", "code-fence-families.json"]);
 
-    for backend in [MarkdownBackend::PulldownCmark, MarkdownBackend::KreuzbergLanguagePack] {
-        let analysis = parse_markdown_with_backend(
-            fixture["source"].as_str().unwrap(),
-            MarkdownDialect::Markdown,
-            backend,
-        )
-        .analysis
-        .expect("analysis should exist");
+    let analysis = parse_markdown_with_backend(
+        fixture["source"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        MarkdownBackend::KreuzbergLanguagePack,
+    )
+    .analysis
+    .expect("analysis should exist");
 
-        assert_eq!(
-            serde_json::to_value(markdown_embedded_families(&analysis)).unwrap(),
-            fixture["expected"]
-        );
-    }
+    assert_eq!(
+        serde_json::to_value(markdown_embedded_families(&analysis)).unwrap(),
+        fixture["expected"]
+    );
 }
 
 #[test]
@@ -247,7 +229,7 @@ fn conforms_to_slice_212_markdown_discovered_surfaces() {
     let analysis = parse_markdown_with_backend(
         fixture["source"].as_str().unwrap(),
         MarkdownDialect::Markdown,
-        MarkdownBackend::PulldownCmark,
+        MarkdownBackend::KreuzbergLanguagePack,
     )
     .analysis
     .expect("analysis should exist");
@@ -269,7 +251,7 @@ fn conforms_to_slice_213_markdown_delegated_child_operations() {
     let analysis = parse_markdown_with_backend(
         fixture["source"].as_str().unwrap(),
         MarkdownDialect::Markdown,
-        MarkdownBackend::PulldownCmark,
+        MarkdownBackend::KreuzbergLanguagePack,
     )
     .analysis
     .expect("analysis should exist");
