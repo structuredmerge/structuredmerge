@@ -161,8 +161,41 @@ fn conforms_to_shared_yaml_parse_matching_and_merge_fixtures() {
             .unwrap();
     let result = match_yaml_owners(&template, &destination);
     assert_eq!(
-        result.matched.len(),
-        matching_fixture["expected"]["matched"].as_array().unwrap().len()
+        result
+            .matched
+            .iter()
+            .map(|item| vec![item.template_path.clone(), item.destination_path.clone()])
+            .collect::<Vec<_>>(),
+        matching_fixture["expected"]["matched"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| {
+                item.as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|part| part.as_str().unwrap().to_string())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        result.unmatched_template,
+        matching_fixture["expected"]["unmatched_template"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item.as_str().unwrap().to_string())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        result.unmatched_destination,
+        matching_fixture["expected"]["unmatched_destination"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item.as_str().unwrap().to_string())
+            .collect::<Vec<_>>()
     );
 
     let merge_fixture = read_fixture(&["yaml", "slice-99-merge", "mapping-merge.json"]);

@@ -135,6 +135,24 @@ fn conforms_to_shared_markdown_analysis_and_matching_fixtures() {
             })
             .collect::<Vec<_>>()
     );
+    assert_eq!(
+        result.unmatched_template,
+        matching_fixture["expected"]["unmatched_template"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item.as_str().unwrap().to_string())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        result.unmatched_destination,
+        matching_fixture["expected"]["unmatched_destination"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item.as_str().unwrap().to_string())
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]
