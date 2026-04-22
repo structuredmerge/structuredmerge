@@ -15,13 +15,13 @@ use ast_merge::{
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
     ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, TemplateDestinationContext,
-    TemplatePlanEntry, TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplateStrategy,
-    TemplateStrategyOverride, TemplateTokenConfig, classify_template_target_path,
-    conformance_family_feature_profile_path, conformance_fixture_path,
-    conformance_manifest_replay_context, conformance_manifest_review_request_ids,
-    conformance_manifest_review_state_envelope, conformance_review_host_hints,
-    conformance_suite_definition, conformance_suite_selectors, default_conformance_family_context,
-    delegated_child_apply_plan, enrich_template_plan_entries,
+    TemplateExecutionPlanEntry, TemplatePlanEntry, TemplatePlanStateEntry,
+    TemplatePlanTokenStateEntry, TemplatePreparedEntry, TemplateStrategy, TemplateStrategyOverride,
+    TemplateTokenConfig, classify_template_target_path, conformance_family_feature_profile_path,
+    conformance_fixture_path, conformance_manifest_replay_context,
+    conformance_manifest_review_request_ids, conformance_manifest_review_state_envelope,
+    conformance_review_host_hints, conformance_suite_definition, conformance_suite_selectors,
+    default_conformance_family_context, delegated_child_apply_plan, enrich_template_plan_entries,
     enrich_template_plan_entries_with_token_state,
     execute_review_replay_bundle_envelope_reviewed_nested_executions,
     execute_review_replay_bundle_reviewed_nested_executions,
@@ -31,8 +31,9 @@ use ast_merge::{
     import_reviewed_nested_execution_envelope, normalize_template_source_path,
     plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
     plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
-    plan_template_entries, projected_child_group_review_request, report_conformance_manifest,
-    report_conformance_suite, report_named_conformance_suite, report_named_conformance_suite_entry,
+    plan_template_entries, plan_template_execution, prepare_template_entries,
+    projected_child_group_review_request, report_conformance_manifest, report_conformance_suite,
+    report_named_conformance_suite, report_named_conformance_suite_entry,
     report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
     report_planned_conformance_suite, report_planned_named_conformance_suites,
     resolve_conformance_family_context, resolve_delegated_child_outputs,
@@ -427,6 +428,55 @@ fn conforms_to_template_entry_token_state_fixture() {
         ),
         expected
     );
+}
+
+#[test]
+fn conforms_to_template_entry_prepared_content_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("template_entry_prepared_content"));
+    let planned_entries = serde_json::from_value::<Vec<TemplatePlanTokenStateEntry>>(
+        fixture["planned_entries"].clone(),
+    )
+    .expect("planned_entries should deserialize");
+    let template_contents = serde_json::from_value::<std::collections::HashMap<String, String>>(
+        fixture["template_contents"].clone(),
+    )
+    .expect("template_contents should deserialize");
+    let replacements = serde_json::from_value::<std::collections::HashMap<String, String>>(
+        fixture["replacements"].clone(),
+    )
+    .expect("replacements should deserialize");
+    let expected =
+        serde_json::from_value::<Vec<TemplatePreparedEntry>>(fixture["expected_entries"].clone())
+            .expect("expected_entries should deserialize");
+
+    assert_eq!(
+        prepare_template_entries(
+            &planned_entries,
+            &template_contents,
+            &replacements,
+            &ast_merge::default_template_token_config(),
+        ),
+        expected
+    );
+}
+
+#[test]
+fn conforms_to_template_execution_plan_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("template_execution_plan"));
+    let prepared_entries =
+        serde_json::from_value::<Vec<TemplatePreparedEntry>>(fixture["prepared_entries"].clone())
+            .expect("prepared_entries should deserialize");
+    let destination_contents = serde_json::from_value::<std::collections::HashMap<String, String>>(
+        fixture["destination_contents"].clone(),
+    )
+    .expect("destination_contents should deserialize");
+    let expected = serde_json::from_value::<Vec<TemplateExecutionPlanEntry>>(
+        fixture["expected_entries"].clone(),
+    )
+    .expect("expected_entries should deserialize");
+
+    assert_eq!(plan_template_execution(&prepared_entries, &destination_contents), expected);
 }
 
 #[test]

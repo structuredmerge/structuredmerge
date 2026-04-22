@@ -259,6 +259,75 @@ pub struct TemplatePlanTokenStateEntry {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
+pub enum TemplatePreparationAction {
+    Blocked,
+    ResolveTokens,
+    PassThrough,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplatePreparedEntry {
+    pub template_source_path: String,
+    pub logical_destination_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination_path: Option<String>,
+    pub classification: TemplateTargetClassification,
+    pub strategy: TemplateStrategy,
+    pub action: String,
+    pub destination_exists: bool,
+    pub write_action: String,
+    pub token_keys: Vec<String>,
+    pub unresolved_token_keys: Vec<String>,
+    pub token_resolution_required: bool,
+    pub blocked: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_reason: Option<TemplatePlanBlockReason>,
+    pub template_content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prepared_template_content: Option<String>,
+    pub preparation_action: TemplatePreparationAction,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TemplateExecutionAction {
+    Blocked,
+    Omit,
+    Keep,
+    RawCopy,
+    WritePreparedContent,
+    MergePreparedContent,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateExecutionPlanEntry {
+    pub template_source_path: String,
+    pub logical_destination_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination_path: Option<String>,
+    pub classification: TemplateTargetClassification,
+    pub strategy: TemplateStrategy,
+    pub action: String,
+    pub destination_exists: bool,
+    pub write_action: String,
+    pub token_keys: Vec<String>,
+    pub unresolved_token_keys: Vec<String>,
+    pub token_resolution_required: bool,
+    pub blocked: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_reason: Option<TemplatePlanBlockReason>,
+    pub template_content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prepared_template_content: Option<String>,
+    pub preparation_action: TemplatePreparationAction,
+    pub execution_action: TemplateExecutionAction,
+    pub ready: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination_content: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ConformanceOutcome {
     Passed,
     Failed,
@@ -945,6 +1014,21 @@ pub fn unresolved_template_token_keys(
         .collect()
 }
 
+pub fn resolve_template_tokens(
+    content: &str,
+    replacements: &HashMap<String, String>,
+    config: &TemplateTokenConfig,
+) -> String {
+    let mut resolved = content.to_string();
+    for key in template_token_keys(content, config) {
+        let Some(replacement) = replacements.get(&key) else {
+            continue;
+        };
+        resolved = resolved.replace(&format!("{}{}{}", config.pre, key, config.post), replacement);
+    }
+    resolved
+}
+
 pub fn select_template_strategy(
     path: &str,
     default_strategy: TemplateStrategy,
@@ -1068,6 +1152,126 @@ pub fn enrich_template_plan_entries_with_token_state(
                 token_resolution_required,
                 blocked,
                 block_reason: blocked.then_some(TemplatePlanBlockReason::UnresolvedTokens),
+            }
+        })
+        .collect()
+}
+
+pub fn prepare_template_entries(
+    entries: &[TemplatePlanTokenStateEntry],
+    template_contents: &HashMap<String, String>,
+    replacements: &HashMap<String, String>,
+    config: &TemplateTokenConfig,
+) -> Vec<TemplatePreparedEntry> {
+    entries
+        .iter()
+        .map(|entry| {
+            let template_content =
+                template_contents.get(&entry.template_source_path).cloned().unwrap_or_default();
+            if entry.blocked {
+                return TemplatePreparedEntry {
+                    template_source_path: entry.template_source_path.clone(),
+                    logical_destination_path: entry.logical_destination_path.clone(),
+                    destination_path: entry.destination_path.clone(),
+                    classification: entry.classification.clone(),
+                    strategy: entry.strategy,
+                    action: entry.action.clone(),
+                    destination_exists: entry.destination_exists,
+                    write_action: entry.write_action.clone(),
+                    token_keys: entry.token_keys.clone(),
+                    unresolved_token_keys: entry.unresolved_token_keys.clone(),
+                    token_resolution_required: entry.token_resolution_required,
+                    blocked: entry.blocked,
+                    block_reason: entry.block_reason,
+                    template_content,
+                    prepared_template_content: None,
+                    preparation_action: TemplatePreparationAction::Blocked,
+                };
+            }
+
+            let prepared_template_content = if entry.token_resolution_required {
+                Some(resolve_template_tokens(&template_content, replacements, config))
+            } else {
+                Some(template_content.clone())
+            };
+
+            TemplatePreparedEntry {
+                template_source_path: entry.template_source_path.clone(),
+                logical_destination_path: entry.logical_destination_path.clone(),
+                destination_path: entry.destination_path.clone(),
+                classification: entry.classification.clone(),
+                strategy: entry.strategy,
+                action: entry.action.clone(),
+                destination_exists: entry.destination_exists,
+                write_action: entry.write_action.clone(),
+                token_keys: entry.token_keys.clone(),
+                unresolved_token_keys: entry.unresolved_token_keys.clone(),
+                token_resolution_required: entry.token_resolution_required,
+                blocked: entry.blocked,
+                block_reason: entry.block_reason,
+                template_content,
+                prepared_template_content,
+                preparation_action: if entry.token_resolution_required {
+                    TemplatePreparationAction::ResolveTokens
+                } else {
+                    TemplatePreparationAction::PassThrough
+                },
+            }
+        })
+        .collect()
+}
+
+pub fn plan_template_execution(
+    entries: &[TemplatePreparedEntry],
+    destination_contents: &HashMap<String, String>,
+) -> Vec<TemplateExecutionPlanEntry> {
+    entries
+        .iter()
+        .map(|entry| {
+            let destination_content = entry
+                .destination_path
+                .as_ref()
+                .and_then(|path| destination_contents.get(path).cloned());
+            let execution_action = if entry.blocked {
+                TemplateExecutionAction::Blocked
+            } else if entry.destination_path.is_none() {
+                TemplateExecutionAction::Omit
+            } else if entry.write_action == "keep" {
+                TemplateExecutionAction::Keep
+            } else if entry.strategy == TemplateStrategy::RawCopy {
+                TemplateExecutionAction::RawCopy
+            } else if entry.strategy == TemplateStrategy::AcceptTemplate {
+                TemplateExecutionAction::WritePreparedContent
+            } else {
+                TemplateExecutionAction::MergePreparedContent
+            };
+            let ready = !matches!(
+                execution_action,
+                TemplateExecutionAction::Blocked
+                    | TemplateExecutionAction::Omit
+                    | TemplateExecutionAction::Keep
+            );
+
+            TemplateExecutionPlanEntry {
+                template_source_path: entry.template_source_path.clone(),
+                logical_destination_path: entry.logical_destination_path.clone(),
+                destination_path: entry.destination_path.clone(),
+                classification: entry.classification.clone(),
+                strategy: entry.strategy,
+                action: entry.action.clone(),
+                destination_exists: entry.destination_exists,
+                write_action: entry.write_action.clone(),
+                token_keys: entry.token_keys.clone(),
+                unresolved_token_keys: entry.unresolved_token_keys.clone(),
+                token_resolution_required: entry.token_resolution_required,
+                blocked: entry.blocked,
+                block_reason: entry.block_reason,
+                template_content: entry.template_content.clone(),
+                prepared_template_content: entry.prepared_template_content.clone(),
+                preparation_action: entry.preparation_action,
+                execution_action,
+                ready,
+                destination_content,
             }
         })
         .collect()
