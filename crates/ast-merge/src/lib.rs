@@ -20,6 +20,8 @@ pub enum DiagnosticCategory {
     UnsupportedFeature,
     FallbackApplied,
     Ambiguity,
+    KindMismatch,
+    UnsupportedVersion,
     AssumedDefault,
     ConfigurationError,
     ReplayRejected,

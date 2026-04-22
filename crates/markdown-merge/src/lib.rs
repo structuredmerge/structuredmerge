@@ -2,10 +2,12 @@ use std::collections::HashMap;
 
 use ast_merge::{
     AppliedDelegatedChildOutput, ConformanceFamilyPlanContext, ConformanceFeatureProfileView,
-    ConformanceManifestReviewState, DelegatedChildGroupReviewState, DelegatedChildOperation,
-    Diagnostic, DiagnosticCategory, DiagnosticSeverity, DiscoveredSurface,
-    FamilyFeatureProfile, MergeResult, ParseResult, ReviewReplayBundle, SurfaceOwnerKind,
-    SurfaceOwnerRef, execute_reviewed_nested_merge,
+    ConformanceManifestReviewState, ConformanceManifestReviewStateEnvelope,
+    DelegatedChildGroupReviewState, DelegatedChildOperation, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, MergeResult, ParseResult,
+    ReviewReplayBundle, ReviewReplayBundleEnvelope, SurfaceOwnerKind, SurfaceOwnerRef,
+    execute_reviewed_nested_merge, import_conformance_manifest_review_state_envelope,
+    import_review_replay_bundle_envelope,
 };
 use tree_haver::{ParserRequest, parse_with_language_pack};
 
@@ -749,6 +751,80 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state(
         }],
         output: None,
         policies: vec![],
+    }
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    envelope: &ReviewReplayBundleEnvelope,
+    backend: MarkdownBackend,
+) -> MergeResult<String> {
+    match import_review_replay_bundle_envelope(envelope) {
+        Ok(bundle) => merge_markdown_with_reviewed_nested_outputs_from_replay_bundle(
+            template_source,
+            destination_source,
+            dialect,
+            &bundle,
+            backend,
+        ),
+        Err(error) => MergeResult {
+            ok: false,
+            diagnostics: vec![Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: match error.category {
+                    ast_merge::ReviewTransportImportErrorCategory::KindMismatch => {
+                        DiagnosticCategory::KindMismatch
+                    }
+                    ast_merge::ReviewTransportImportErrorCategory::UnsupportedVersion => {
+                        DiagnosticCategory::UnsupportedVersion
+                    }
+                },
+                message: error.message,
+                path: None,
+                review: None,
+            }],
+            output: None,
+            policies: vec![],
+        },
+    }
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    envelope: &ConformanceManifestReviewStateEnvelope,
+    backend: MarkdownBackend,
+) -> MergeResult<String> {
+    match import_conformance_manifest_review_state_envelope(envelope) {
+        Ok(state) => merge_markdown_with_reviewed_nested_outputs_from_review_state(
+            template_source,
+            destination_source,
+            dialect,
+            &state,
+            backend,
+        ),
+        Err(error) => MergeResult {
+            ok: false,
+            diagnostics: vec![Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: match error.category {
+                    ast_merge::ReviewTransportImportErrorCategory::KindMismatch => {
+                        DiagnosticCategory::KindMismatch
+                    }
+                    ast_merge::ReviewTransportImportErrorCategory::UnsupportedVersion => {
+                        DiagnosticCategory::UnsupportedVersion
+                    }
+                },
+                message: error.message,
+                path: None,
+                review: None,
+            }],
+            output: None,
+            policies: vec![],
+        },
     }
 }
 

@@ -2,13 +2,16 @@ use std::sync::Once;
 
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, ConformanceManifestReviewState,
-    DelegatedChildGroupReviewState, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
-    MergeResult, ParseResult, ReviewReplayBundle,
+    ConformanceManifestReviewStateEnvelope, DelegatedChildGroupReviewState, Diagnostic,
+    DiagnosticCategory, DiagnosticSeverity, MergeResult, ParseResult, ReviewReplayBundle,
+    ReviewReplayBundleEnvelope,
 };
 use markdown_merge::{
     AppliedChildOutput, MarkdownAnalysis, MarkdownDialect, collect_markdown_owners,
     markdown_feature_profile, merge_markdown as merge_markdown_with_substrate,
+    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope as merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope_with_substrate,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle as merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_substrate,
+    merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope as merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope_with_substrate,
     merge_markdown_with_reviewed_nested_outputs_from_review_state as merge_markdown_with_reviewed_nested_outputs_from_review_state_with_substrate,
     merge_markdown_with_reviewed_nested_outputs as merge_markdown_with_reviewed_nested_outputs_with_substrate,
     match_markdown_owners as match_markdown_owners_with_substrate, normalize_markdown_source,
@@ -225,6 +228,35 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle(
     )
 }
 
+pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    envelope: &ReviewReplayBundleEnvelope,
+    backend: Option<&str>,
+) -> MergeResult<String> {
+    ensure_backend_registered();
+    let requested = backend.unwrap_or(BACKEND_ID);
+    if requested != BACKEND_ID {
+        return MergeResult {
+            ok: false,
+            diagnostics: vec![unsupported_feature(&format!(
+                "Unsupported Markdown backend {requested}."
+            ))],
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope_with_substrate(
+        template_source,
+        destination_source,
+        dialect,
+        envelope,
+        markdown_merge::MarkdownBackend::KreuzbergLanguagePack,
+    )
+}
+
 pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state(
     template_source: &str,
     destination_source: &str,
@@ -250,6 +282,35 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state(
         destination_source,
         dialect,
         review_state,
+        markdown_merge::MarkdownBackend::KreuzbergLanguagePack,
+    )
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    envelope: &ConformanceManifestReviewStateEnvelope,
+    backend: Option<&str>,
+) -> MergeResult<String> {
+    ensure_backend_registered();
+    let requested = backend.unwrap_or(BACKEND_ID);
+    if requested != BACKEND_ID {
+        return MergeResult {
+            ok: false,
+            diagnostics: vec![unsupported_feature(&format!(
+                "Unsupported Markdown backend {requested}."
+            ))],
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope_with_substrate(
+        template_source,
+        destination_source,
+        dialect,
+        envelope,
         markdown_merge::MarkdownBackend::KreuzbergLanguagePack,
     )
 }

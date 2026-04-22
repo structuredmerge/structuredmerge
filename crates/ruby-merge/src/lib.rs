@@ -2,10 +2,12 @@ use std::collections::{HashMap, HashSet};
 
 use ast_merge::{
     AppliedDelegatedChildOutput, ConformanceFamilyPlanContext, ConformanceFeatureProfileView,
-    ConformanceManifestReviewState, DelegatedChildGroupReviewState, DelegatedChildOperation,
-    Diagnostic, DiagnosticCategory, DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile,
-    MergeResult, ParseResult, PolicyReference, PolicySurface, ReviewReplayBundle,
+    ConformanceManifestReviewState, ConformanceManifestReviewStateEnvelope,
+    DelegatedChildGroupReviewState, DelegatedChildOperation, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, MergeResult, ParseResult,
+    PolicyReference, PolicySurface, ReviewReplayBundle, ReviewReplayBundleEnvelope,
     SurfaceOwnerKind, SurfaceOwnerRef, SurfaceSpan, execute_reviewed_nested_merge,
+    import_conformance_manifest_review_state_envelope, import_review_replay_bundle_envelope,
 };
 use tree_haver::{ParserRequest, parse_with_language_pack};
 
@@ -889,6 +891,76 @@ pub fn merge_ruby_with_reviewed_nested_outputs_from_review_state(
         }],
         output: None,
         policies: vec![],
+    }
+}
+
+pub fn merge_ruby_with_reviewed_nested_outputs_from_replay_bundle_envelope(
+    template_source: &str,
+    destination_source: &str,
+    dialect: RubyDialect,
+    envelope: &ReviewReplayBundleEnvelope,
+) -> MergeResult<String> {
+    match import_review_replay_bundle_envelope(envelope) {
+        Ok(bundle) => merge_ruby_with_reviewed_nested_outputs_from_replay_bundle(
+            template_source,
+            destination_source,
+            dialect,
+            &bundle,
+        ),
+        Err(error) => MergeResult {
+            ok: false,
+            diagnostics: vec![Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: match error.category {
+                    ast_merge::ReviewTransportImportErrorCategory::KindMismatch => {
+                        DiagnosticCategory::KindMismatch
+                    }
+                    ast_merge::ReviewTransportImportErrorCategory::UnsupportedVersion => {
+                        DiagnosticCategory::UnsupportedVersion
+                    }
+                },
+                message: error.message,
+                path: None,
+                review: None,
+            }],
+            output: None,
+            policies: vec![],
+        },
+    }
+}
+
+pub fn merge_ruby_with_reviewed_nested_outputs_from_review_state_envelope(
+    template_source: &str,
+    destination_source: &str,
+    dialect: RubyDialect,
+    envelope: &ConformanceManifestReviewStateEnvelope,
+) -> MergeResult<String> {
+    match import_conformance_manifest_review_state_envelope(envelope) {
+        Ok(state) => merge_ruby_with_reviewed_nested_outputs_from_review_state(
+            template_source,
+            destination_source,
+            dialect,
+            &state,
+        ),
+        Err(error) => MergeResult {
+            ok: false,
+            diagnostics: vec![Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: match error.category {
+                    ast_merge::ReviewTransportImportErrorCategory::KindMismatch => {
+                        DiagnosticCategory::KindMismatch
+                    }
+                    ast_merge::ReviewTransportImportErrorCategory::UnsupportedVersion => {
+                        DiagnosticCategory::UnsupportedVersion
+                    }
+                },
+                message: error.message,
+                path: None,
+                review: None,
+            }],
+            output: None,
+            policies: vec![],
+        },
     }
 }
 
