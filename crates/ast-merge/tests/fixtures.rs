@@ -22,7 +22,7 @@ use ast_merge::{
     TemplateConvergenceResult, TemplateDestinationContext, TemplateExecutionPlanEntry,
     TemplatePlanEntry, TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
     TemplatePreviewResult, TemplateStrategy, TemplateStrategyOverride, TemplateTokenConfig,
-    apply_template_execution, classify_template_target_path,
+    TemplateTreeRunResult, apply_template_execution, classify_template_target_path,
     conformance_family_feature_profile_path, conformance_fixture_path,
     conformance_manifest_replay_context, conformance_manifest_review_request_ids,
     conformance_manifest_review_state_envelope, conformance_review_host_hints,
@@ -51,7 +51,8 @@ use ast_merge::{
     review_request_id_for_family_context, review_request_id_for_projected_child_group,
     reviewed_nested_execution, reviewed_nested_execution_envelope, run_conformance_case,
     run_conformance_suite, run_named_conformance_suite, run_named_conformance_suite_entry,
-    run_planned_conformance_suite, run_planned_named_conformance_suites, select_conformance_case,
+    run_planned_conformance_suite, run_planned_named_conformance_suites,
+    run_template_tree_execution, select_conformance_case,
     select_projected_child_review_groups_accepted_for_apply,
     select_projected_child_review_groups_ready_for_apply, select_template_strategy,
     summarize_conformance_results, summarize_named_conformance_suite_reports,
@@ -729,6 +730,58 @@ fn conforms_to_mini_template_tree_convergence_fixture() {
         convergence_fixture["expected"].clone(),
     )
     .expect("expected should deserialize");
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn conforms_to_mini_template_tree_run_fixture() {
+    let plan_fixture = read_fixture_from_path(diagnostics_fixture_path("mini_template_tree_plan"));
+    let run_fixture = read_fixture_from_path(diagnostics_fixture_path("mini_template_tree_run"));
+    let fixture_dir = diagnostics_fixture_path("mini_template_tree_plan")
+        .parent()
+        .expect("fixture should have parent")
+        .to_path_buf();
+    let template_contents = read_relative_file_tree(&fixture_dir.join("template"));
+    let destination_contents = read_relative_file_tree(&fixture_dir.join("destination"));
+    let mut template_source_paths = template_contents.keys().cloned().collect::<Vec<_>>();
+    template_source_paths.sort();
+    let context =
+        serde_json::from_value::<TemplateDestinationContext>(plan_fixture["context"].clone())
+            .expect("context should deserialize");
+    let default_strategy =
+        serde_json::from_value::<TemplateStrategy>(plan_fixture["default_strategy"].clone())
+            .expect("default_strategy should deserialize");
+    let overrides =
+        serde_json::from_value::<Vec<TemplateStrategyOverride>>(plan_fixture["overrides"].clone())
+            .expect("overrides should deserialize");
+    let replacements =
+        serde_json::from_value::<HashMap<String, String>>(plan_fixture["replacements"].clone())
+            .expect("replacements should deserialize");
+    let merge_results = serde_json::from_value::<HashMap<String, ast_merge::MergeResult<String>>>(
+        run_fixture["merge_results"].clone(),
+    )
+    .expect("merge_results should deserialize");
+
+    let actual = run_template_tree_execution(
+        &template_source_paths,
+        &template_contents,
+        &destination_contents,
+        &context,
+        default_strategy,
+        &overrides,
+        &replacements,
+        |entry| {
+            let destination_path = entry
+                .destination_path
+                .as_ref()
+                .expect("run merge entry should have destination path");
+            merge_results.get(destination_path).cloned().expect("merge result should be present")
+        },
+        &ast_merge::default_template_token_config(),
+    );
+    let expected = serde_json::from_value::<TemplateTreeRunResult>(run_fixture["expected"].clone())
+        .expect("expected should deserialize");
 
     assert_eq!(actual, expected);
 }

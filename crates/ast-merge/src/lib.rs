@@ -353,6 +353,12 @@ pub struct TemplateConvergenceResult {
     pub pending_paths: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TemplateTreeRunResult {
+    pub execution_plan: Vec<TemplateExecutionPlanEntry>,
+    pub apply_result: TemplateApplyResult,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConformanceOutcome {
@@ -1541,6 +1547,40 @@ pub fn evaluate_template_tree_convergence(
         .collect::<Vec<_>>();
 
     TemplateConvergenceResult { converged: pending_paths.is_empty(), pending_paths }
+}
+
+pub fn run_template_tree_execution<F>(
+    template_source_paths: &[String],
+    template_contents: &HashMap<String, String>,
+    destination_contents: &HashMap<String, String>,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    merge_prepared_content: F,
+    config: &TemplateTokenConfig,
+) -> TemplateTreeRunResult
+where
+    F: Fn(&TemplateExecutionPlanEntry) -> MergeResult<String>,
+{
+    let mut existing_destination_paths = destination_contents.keys().cloned().collect::<Vec<_>>();
+    existing_destination_paths.sort();
+    let execution_plan = plan_template_tree_execution(
+        template_source_paths,
+        template_contents,
+        &existing_destination_paths,
+        destination_contents,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        config,
+    );
+
+    TemplateTreeRunResult {
+        apply_result: apply_template_execution(&execution_plan, merge_prepared_content),
+        execution_plan,
+    }
 }
 
 pub fn conformance_suite_definition<'a>(
