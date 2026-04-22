@@ -44,9 +44,11 @@ fn conforms_to_provider_feature_profile_fixture() {
     ]);
 
     assert_eq!(available_yaml_backends(), vec!["yaml_serde".to_string()]);
-    assert!(registered_backends()
-        .iter()
-        .any(|backend| backend.id == "yaml_serde" && backend.family == "native"));
+    assert!(
+        registered_backends()
+            .iter()
+            .any(|backend| backend.id == "yaml_serde" && backend.family == "native")
+    );
     let family_profile = yaml_merge::yaml_feature_profile();
     assert_eq!(
         serde_json::json!({
@@ -106,12 +108,10 @@ fn conforms_to_shared_yaml_parse_matching_and_merge_fixtures() {
     let valid_result = parse_yaml(valid["source"].as_str().unwrap(), YamlDialect::Yaml, None);
     assert!(valid_result.ok);
 
-    let structure_fixture = read_fixture(&["yaml", "slice-97-structure", "mapping-and-sequence.json"]);
-    let structure_result = parse_yaml(
-        structure_fixture["source"].as_str().unwrap(),
-        YamlDialect::Yaml,
-        None,
-    );
+    let structure_fixture =
+        read_fixture(&["yaml", "slice-97-structure", "mapping-and-sequence.json"]);
+    let structure_result =
+        parse_yaml(structure_fixture["source"].as_str().unwrap(), YamlDialect::Yaml, None);
     assert!(structure_result.ok);
     let structure_analysis = structure_result.analysis.unwrap();
     assert_eq!(
@@ -121,10 +121,7 @@ fn conforms_to_shared_yaml_parse_matching_and_merge_fixtures() {
                 .iter()
                 .map(|owner| {
                     let mut entry = serde_json::Map::from_iter([
-                        (
-                            "path".to_string(),
-                            serde_json::Value::String(owner.path.clone()),
-                        ),
+                        ("path".to_string(), serde_json::Value::String(owner.path.clone())),
                         (
                             "owner_kind".to_string(),
                             serde_json::Value::String(
@@ -304,20 +301,13 @@ fn rejects_unsupported_provider_backend_overrides() {
         "review": null
     }]);
 
-    let parse_result = parse_yaml(
-        "name: structuredmerge\n",
-        YamlDialect::Yaml,
-        Some("kreuzberg-language-pack"),
-    );
+    let parse_result =
+        parse_yaml("name: structuredmerge\n", YamlDialect::Yaml, Some("kreuzberg-language-pack"));
     assert!(!parse_result.ok);
     assert_eq!(serde_json::to_value(parse_result.diagnostics).unwrap(), expected);
 
-    let merge_result = merge_yaml(
-        "name: a\n",
-        "name: b\n",
-        YamlDialect::Yaml,
-        Some("kreuzberg-language-pack"),
-    );
+    let merge_result =
+        merge_yaml("name: a\n", "name: b\n", YamlDialect::Yaml, Some("kreuzberg-language-pack"));
     assert!(!merge_result.ok);
     assert_eq!(serde_json::to_value(merge_result.diagnostics).unwrap(), expected);
 }

@@ -195,9 +195,9 @@ fn conforms_to_slice_173_yaml_backend_named_suite_plans_fixture() {
     ]);
     let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
         .expect("manifest should deserialize");
-    let contexts = serde_json::from_value::<std::collections::HashMap<String, ast_merge::ConformanceFamilyPlanContext>>(
-        fixture["contexts"].clone(),
-    )
+    let contexts = serde_json::from_value::<
+        std::collections::HashMap<String, ast_merge::ConformanceFamilyPlanContext>,
+    >(fixture["contexts"].clone())
     .expect("contexts should deserialize");
     let expected = serde_json::from_value::<Vec<ast_merge::NamedConformanceSuitePlan>>(
         fixture["expected_entries"].clone(),

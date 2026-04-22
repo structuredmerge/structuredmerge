@@ -87,11 +87,8 @@ fn conforms_to_shared_toml_parse_matching_and_merge_fixtures() {
     assert!(valid_result.ok);
 
     let structure_fixture = read_fixture(&["toml", "slice-92-structure", "table-and-array.json"]);
-    let structure_result = parse_toml(
-        structure_fixture["source"].as_str().unwrap(),
-        TomlDialect::Toml,
-        None,
-    );
+    let structure_result =
+        parse_toml(structure_fixture["source"].as_str().unwrap(), TomlDialect::Toml, None);
     assert!(structure_result.ok);
     let structure_analysis = structure_result.analysis.unwrap();
     assert_eq!(
@@ -101,10 +98,7 @@ fn conforms_to_shared_toml_parse_matching_and_merge_fixtures() {
                 .iter()
                 .map(|owner| {
                     let mut entry = serde_json::Map::from_iter([
-                        (
-                            "path".to_string(),
-                            serde_json::Value::String(owner.path.clone()),
-                        ),
+                        ("path".to_string(), serde_json::Value::String(owner.path.clone())),
                         (
                             "owner_kind".to_string(),
                             serde_json::Value::String(
@@ -282,11 +276,8 @@ fn rejects_unsupported_provider_backend_overrides() {
         "review": null
     }]);
 
-    let parse_result = parse_toml(
-        "title = \"x\"\n",
-        TomlDialect::Toml,
-        Some("kreuzberg-language-pack"),
-    );
+    let parse_result =
+        parse_toml("title = \"x\"\n", TomlDialect::Toml, Some("kreuzberg-language-pack"));
     assert!(!parse_result.ok);
     assert_eq!(serde_json::to_value(parse_result.diagnostics).unwrap(), expected);
 

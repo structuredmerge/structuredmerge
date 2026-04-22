@@ -816,10 +816,8 @@ pub fn merge_ruby_with_reviewed_nested_outputs_from_replay_bundle(
     dialect: RubyDialect,
     replay_bundle: &ReviewReplayBundle,
 ) -> MergeResult<String> {
-    if let Some(execution) = replay_bundle
-        .reviewed_nested_executions
-        .iter()
-        .find(|execution| execution.family == "ruby")
+    if let Some(execution) =
+        replay_bundle.reviewed_nested_executions.iter().find(|execution| execution.family == "ruby")
     {
         let applied_children = execution
             .applied_children
@@ -843,7 +841,8 @@ pub fn merge_ruby_with_reviewed_nested_outputs_from_replay_bundle(
         diagnostics: vec![Diagnostic {
             severity: DiagnosticSeverity::Error,
             category: DiagnosticCategory::ConfigurationError,
-            message: "review replay bundle does not include a reviewed nested execution for ruby.".to_string(),
+            message: "review replay bundle does not include a reviewed nested execution for ruby."
+                .to_string(),
             path: None,
             review: None,
         }],
@@ -858,10 +857,8 @@ pub fn merge_ruby_with_reviewed_nested_outputs_from_review_state(
     dialect: RubyDialect,
     review_state: &ConformanceManifestReviewState,
 ) -> MergeResult<String> {
-    if let Some(execution) = review_state
-        .reviewed_nested_executions
-        .iter()
-        .find(|execution| execution.family == "ruby")
+    if let Some(execution) =
+        review_state.reviewed_nested_executions.iter().find(|execution| execution.family == "ruby")
     {
         let applied_children = execution
             .applied_children
@@ -885,7 +882,8 @@ pub fn merge_ruby_with_reviewed_nested_outputs_from_review_state(
         diagnostics: vec![Diagnostic {
             severity: DiagnosticSeverity::Error,
             category: DiagnosticCategory::ConfigurationError,
-            message: "review state does not include a reviewed nested execution for ruby.".to_string(),
+            message: "review state does not include a reviewed nested execution for ruby."
+                .to_string(),
             path: None,
             review: None,
         }],

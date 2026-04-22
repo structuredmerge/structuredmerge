@@ -11,11 +11,11 @@ use ast_merge::{
 use ruby_merge::{
     RubyDialect, RubyOwnerKind, apply_ruby_delegated_child_outputs, available_ruby_backends,
     match_ruby_owners, merge_ruby, merge_ruby_with_nested_outputs,
-    merge_ruby_with_reviewed_nested_outputs_from_replay_bundle_envelope,
+    merge_ruby_with_reviewed_nested_outputs,
     merge_ruby_with_reviewed_nested_outputs_from_replay_bundle,
-    merge_ruby_with_reviewed_nested_outputs_from_review_state_envelope,
+    merge_ruby_with_reviewed_nested_outputs_from_replay_bundle_envelope,
     merge_ruby_with_reviewed_nested_outputs_from_review_state,
-    merge_ruby_with_reviewed_nested_outputs, parse_ruby,
+    merge_ruby_with_reviewed_nested_outputs_from_review_state_envelope, parse_ruby,
     ruby_backend_feature_profile, ruby_delegated_child_operations, ruby_discovered_surfaces,
     ruby_feature_profile, ruby_plan_context,
 };
@@ -530,9 +530,7 @@ fn conforms_to_ruby_fixtures() {
     assert!(!state_rejection.ok);
     assert_eq!(
         state_rejection.diagnostics[0].message,
-        rejection_fixture["expected_review_state"]["diagnostics"][0]["message"]
-            .as_str()
-            .unwrap()
+        rejection_fixture["expected_review_state"]["diagnostics"][0]["message"].as_str().unwrap()
     );
 
     let envelope_fixture = read_fixture(&[
@@ -540,22 +538,21 @@ fn conforms_to_ruby_fixtures() {
         "slice-314-reviewed-nested-review-artifact-envelope-application",
         "yard-example-reviewed-nested-review-artifact-envelope-application.json",
     ]);
-    let replay_bundle_envelope =
-        serde_json::from_value::<ast_merge::ReviewReplayBundleEnvelope>(
-            envelope_fixture["replay_bundle_envelope"].clone(),
-        )
-        .expect("replay bundle envelope should deserialize");
-    let review_state_envelope =
-        serde_json::from_value::<ast_merge::ConformanceManifestReviewStateEnvelope>(
-            envelope_fixture["review_state_envelope"].clone(),
-        )
-        .expect("review state envelope should deserialize");
-    let replay_envelope_result = merge_ruby_with_reviewed_nested_outputs_from_replay_bundle_envelope(
-        envelope_fixture["template"].as_str().unwrap(),
-        envelope_fixture["destination"].as_str().unwrap(),
-        RubyDialect::Ruby,
-        &replay_bundle_envelope,
-    );
+    let replay_bundle_envelope = serde_json::from_value::<ast_merge::ReviewReplayBundleEnvelope>(
+        envelope_fixture["replay_bundle_envelope"].clone(),
+    )
+    .expect("replay bundle envelope should deserialize");
+    let review_state_envelope = serde_json::from_value::<
+        ast_merge::ConformanceManifestReviewStateEnvelope,
+    >(envelope_fixture["review_state_envelope"].clone())
+    .expect("review state envelope should deserialize");
+    let replay_envelope_result =
+        merge_ruby_with_reviewed_nested_outputs_from_replay_bundle_envelope(
+            envelope_fixture["template"].as_str().unwrap(),
+            envelope_fixture["destination"].as_str().unwrap(),
+            RubyDialect::Ruby,
+            &replay_bundle_envelope,
+        );
     assert!(replay_envelope_result.ok);
     assert_eq!(
         replay_envelope_result.output,
@@ -578,16 +575,14 @@ fn conforms_to_ruby_fixtures() {
         "slice-316-reviewed-nested-review-artifact-envelope-rejection",
         "yard-example-reviewed-nested-review-artifact-envelope-rejection.json",
     ]);
-    let replay_bundle_envelope =
-        serde_json::from_value::<ast_merge::ReviewReplayBundleEnvelope>(
-            envelope_rejection_fixture["replay_bundle_envelope"].clone(),
-        )
-        .expect("replay bundle envelope should deserialize");
-    let review_state_envelope =
-        serde_json::from_value::<ast_merge::ConformanceManifestReviewStateEnvelope>(
-            envelope_rejection_fixture["review_state_envelope"].clone(),
-        )
-        .expect("review state envelope should deserialize");
+    let replay_bundle_envelope = serde_json::from_value::<ast_merge::ReviewReplayBundleEnvelope>(
+        envelope_rejection_fixture["replay_bundle_envelope"].clone(),
+    )
+    .expect("replay bundle envelope should deserialize");
+    let review_state_envelope = serde_json::from_value::<
+        ast_merge::ConformanceManifestReviewStateEnvelope,
+    >(envelope_rejection_fixture["review_state_envelope"].clone())
+    .expect("review state envelope should deserialize");
     let replay_envelope_rejection =
         merge_ruby_with_reviewed_nested_outputs_from_replay_bundle_envelope(
             envelope_rejection_fixture["template"].as_str().unwrap(),
