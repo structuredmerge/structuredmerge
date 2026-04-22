@@ -15,12 +15,13 @@ use ast_merge::{
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
     ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, TemplateDestinationContext,
-    TemplatePlanEntry, TemplateStrategy, TemplateStrategyOverride, classify_template_target_path,
-    conformance_family_feature_profile_path, conformance_fixture_path,
-    conformance_manifest_replay_context, conformance_manifest_review_request_ids,
-    conformance_manifest_review_state_envelope, conformance_review_host_hints,
-    conformance_suite_definition, conformance_suite_selectors, default_conformance_family_context,
-    delegated_child_apply_plan, execute_review_replay_bundle_envelope_reviewed_nested_executions,
+    TemplatePlanEntry, TemplatePlanStateEntry, TemplateStrategy, TemplateStrategyOverride,
+    classify_template_target_path, conformance_family_feature_profile_path,
+    conformance_fixture_path, conformance_manifest_replay_context,
+    conformance_manifest_review_request_ids, conformance_manifest_review_state_envelope,
+    conformance_review_host_hints, conformance_suite_definition, conformance_suite_selectors,
+    default_conformance_family_context, delegated_child_apply_plan, enrich_template_plan_entries,
+    execute_review_replay_bundle_envelope_reviewed_nested_executions,
     execute_review_replay_bundle_reviewed_nested_executions,
     execute_review_state_envelope_reviewed_nested_executions,
     execute_review_state_reviewed_nested_executions, group_projected_child_review_cases,
@@ -352,6 +353,25 @@ fn conforms_to_template_entry_plan_fixture() {
 
     assert_eq!(
         plan_template_entries(&template_source_paths, &context, default_strategy, &overrides),
+        expected
+    );
+}
+
+#[test]
+fn conforms_to_template_entry_plan_state_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("template_entry_plan_state"));
+    let planned_entries =
+        serde_json::from_value::<Vec<TemplatePlanEntry>>(fixture["planned_entries"].clone())
+            .expect("planned_entries should deserialize");
+    let existing_destination_paths =
+        serde_json::from_value::<Vec<String>>(fixture["existing_destination_paths"].clone())
+            .expect("existing_destination_paths should deserialize");
+    let expected =
+        serde_json::from_value::<Vec<TemplatePlanStateEntry>>(fixture["expected_entries"].clone())
+            .expect("expected_entries should deserialize");
+
+    assert_eq!(
+        enrich_template_plan_entries(&planned_entries, &existing_destination_paths),
         expected
     );
 }

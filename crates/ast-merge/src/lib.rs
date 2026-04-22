@@ -208,6 +208,19 @@ pub struct TemplatePlanEntry {
     pub action: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplatePlanStateEntry {
+    pub template_source_path: String,
+    pub logical_destination_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination_path: Option<String>,
+    pub classification: TemplateTargetClassification,
+    pub strategy: TemplateStrategy,
+    pub action: String,
+    pub destination_exists: bool,
+    pub write_action: String,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConformanceOutcome {
@@ -809,6 +822,39 @@ pub fn plan_template_entries(
                 classification,
                 strategy,
                 action,
+            }
+        })
+        .collect()
+}
+
+pub fn enrich_template_plan_entries(
+    entries: &[TemplatePlanEntry],
+    existing_destination_paths: &[String],
+) -> Vec<TemplatePlanStateEntry> {
+    let existing = existing_destination_paths.iter().collect::<std::collections::HashSet<_>>();
+    entries
+        .iter()
+        .map(|entry| {
+            let destination_exists =
+                entry.destination_path.as_ref().is_some_and(|path| existing.contains(&path));
+            let write_action = match entry.destination_path.as_ref() {
+                None => "omit".to_string(),
+                Some(_) if entry.strategy == TemplateStrategy::KeepDestination => {
+                    "keep".to_string()
+                }
+                Some(_) if destination_exists => "update".to_string(),
+                Some(_) => "create".to_string(),
+            };
+
+            TemplatePlanStateEntry {
+                template_source_path: entry.template_source_path.clone(),
+                logical_destination_path: entry.logical_destination_path.clone(),
+                destination_path: entry.destination_path.clone(),
+                classification: entry.classification.clone(),
+                strategy: entry.strategy,
+                action: entry.action.clone(),
+                destination_exists,
+                write_action,
             }
         })
         .collect()
