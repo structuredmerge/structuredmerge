@@ -446,6 +446,8 @@ pub struct NestedMergeExecutionCallbacks<
 pub struct ReviewReplayBundle {
     pub replay_context: ReviewReplayContext,
     pub decisions: Vec<ReviewDecision>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub reviewed_nested_executions: Vec<ReviewedNestedExecution>,
 }
 
 pub const REVIEW_TRANSPORT_VERSION: u32 = 1;
@@ -528,6 +530,8 @@ pub struct ConformanceManifestReviewState {
     pub applied_decisions: Vec<ReviewDecision>,
     pub host_hints: ReviewHostHints,
     pub replay_context: ReviewReplayContext,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub reviewed_nested_executions: Vec<ReviewedNestedExecution>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1217,12 +1221,16 @@ pub fn conformance_manifest_review_request_ids(
 
 pub fn review_replay_bundle_inputs(
     options: &ConformanceManifestReviewOptions,
-) -> (Option<ReviewReplayContext>, Vec<ReviewDecision>) {
+) -> (Option<ReviewReplayContext>, Vec<ReviewDecision>, Vec<ReviewedNestedExecution>) {
     if let Some(bundle) = &options.review_replay_bundle {
-        return (Some(bundle.replay_context.clone()), bundle.decisions.clone());
+        return (
+            Some(bundle.replay_context.clone()),
+            bundle.decisions.clone(),
+            bundle.reviewed_nested_executions.clone(),
+        );
     }
 
-    (options.review_replay_context.clone(), options.review_decisions.clone())
+    (options.review_replay_context.clone(), options.review_decisions.clone(), Vec::new())
 }
 
 pub fn conformance_manifest_review_state_envelope(
@@ -1833,7 +1841,8 @@ pub fn review_conformance_manifest(
     let mut requests = Vec::new();
     let mut applied_decisions = Vec::new();
     let mut effective_options = options.clone();
-    let (replay_input_context, replay_input_decisions) = review_replay_bundle_inputs(options);
+    let (replay_input_context, replay_input_decisions, mut reviewed_nested_executions) =
+        review_replay_bundle_inputs(options);
     if !replay_input_decisions.is_empty() && replay_input_context.is_none() {
         diagnostics.push(Diagnostic {
             severity: DiagnosticSeverity::Error,
@@ -1845,6 +1854,7 @@ pub fn review_conformance_manifest(
         effective_options.review_replay_bundle = None;
         effective_options.review_replay_context = None;
         effective_options.review_decisions.clear();
+        reviewed_nested_executions.clear();
     } else if !replay_input_decisions.is_empty()
         && !review_replay_context_compatible(&replay_context, replay_input_context.as_ref())
     {
@@ -1859,6 +1869,7 @@ pub fn review_conformance_manifest(
         effective_options.review_replay_bundle = None;
         effective_options.review_replay_context = None;
         effective_options.review_decisions.clear();
+        reviewed_nested_executions.clear();
     } else if !replay_input_decisions.is_empty() {
         let allowed_request_ids: HashMap<String, bool> =
             conformance_manifest_review_request_ids(manifest, options)
@@ -1950,6 +1961,7 @@ pub fn review_conformance_manifest(
         applied_decisions,
         host_hints: conformance_review_host_hints(options),
         replay_context,
+        reviewed_nested_executions,
     }
 }
 

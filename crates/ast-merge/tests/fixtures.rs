@@ -2773,7 +2773,31 @@ fn conforms_to_slice_69_review_replay_bundle_fixture() {
 
     assert_eq!(
         review_replay_bundle_inputs(&options),
-        (Some(bundle.replay_context), bundle.decisions)
+        (Some(bundle.replay_context), bundle.decisions, bundle.reviewed_nested_executions)
+    );
+}
+
+#[test]
+fn conforms_to_slice_305_review_replay_bundle_reviewed_nested_executions_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "review_replay_bundle_reviewed_nested_executions",
+    ));
+    let bundle =
+        serde_json::from_value::<ast_merge::ReviewReplayBundle>(fixture["replay_bundle"].clone())
+            .expect("replay bundle should deserialize");
+    let options = ConformanceManifestReviewOptions {
+        contexts: std::collections::HashMap::new(),
+        family_profiles: std::collections::HashMap::new(),
+        require_explicit_contexts: false,
+        review_decisions: Vec::new(),
+        review_replay_context: None,
+        review_replay_bundle: Some(bundle.clone()),
+        interactive: false,
+    };
+
+    assert_eq!(
+        review_replay_bundle_inputs(&options),
+        (Some(bundle.replay_context), bundle.decisions, bundle.reviewed_nested_executions)
     );
 }
 
@@ -3229,4 +3253,31 @@ fn conforms_to_slice_303_reviewed_nested_execution_payload_fixture() {
         ),
         expected
     );
+}
+
+#[test]
+fn conforms_to_slice_306_review_state_reviewed_nested_executions_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("review_state_reviewed_nested_executions"));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let options =
+        serde_json::from_value::<ConformanceManifestReviewOptions>(fixture["options"].clone())
+            .expect("options should deserialize");
+    let expected =
+        serde_json::from_value::<ConformanceManifestReviewState>(fixture["expected_state"].clone())
+            .expect("expected state should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+    let state = review_conformance_manifest(&manifest, &options, |run| {
+        let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+        serde_json::from_value::<ConformanceCaseExecution>(
+            executions.get(&key).cloned().unwrap_or_else(
+                || serde_json::json!({ "outcome": "failed", "messages": ["missing execution"] }),
+            ),
+        )
+        .expect("execution should deserialize")
+    });
+
+    assert_eq!(state, expected);
 }
