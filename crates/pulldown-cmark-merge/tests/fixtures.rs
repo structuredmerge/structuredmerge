@@ -9,11 +9,11 @@ use markdown_merge::MarkdownDialect;
 use pulldown_cmark_merge::{
     available_markdown_backends, markdown_backend_feature_profile, markdown_embedded_families,
     markdown_plan_context, match_markdown_owners, merge_markdown,
-    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope,
+    merge_markdown_with_reviewed_nested_outputs,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle,
-    merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope,
+    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope,
     merge_markdown_with_reviewed_nested_outputs_from_review_state,
-    merge_markdown_with_reviewed_nested_outputs, parse_markdown,
+    merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope, parse_markdown,
     provider_markdown_feature_profile,
 };
 use serde_json::Value;
@@ -231,10 +231,9 @@ fn conforms_to_slice_326_markdown_provider_reviewed_nested_review_artifact_appli
         .collect::<Vec<_>>();
     let fixture = read_fixture(&shared_fixture_path);
     let expected = &provider_fixture["providers"]["pulldown-cmark"]["expected"];
-    let replay_bundle = serde_json::from_value::<ast_merge::ReviewReplayBundle>(
-        fixture["replay_bundle"].clone(),
-    )
-    .expect("replay bundle should deserialize");
+    let replay_bundle =
+        serde_json::from_value::<ast_merge::ReviewReplayBundle>(fixture["replay_bundle"].clone())
+            .expect("replay bundle should deserialize");
     let review_state = serde_json::from_value::<ast_merge::ConformanceManifestReviewState>(
         fixture["review_state"].clone(),
     )
@@ -275,12 +274,12 @@ fn conforms_to_slice_327_markdown_provider_reviewed_nested_review_artifact_rejec
         .map(|value| value.as_str().unwrap())
         .collect::<Vec<_>>();
     let fixture = read_fixture(&shared_fixture_path);
-    let expected_replay = &provider_fixture["providers"]["pulldown-cmark"]["expected_replay_bundle"];
+    let expected_replay =
+        &provider_fixture["providers"]["pulldown-cmark"]["expected_replay_bundle"];
     let expected_state = &provider_fixture["providers"]["pulldown-cmark"]["expected_review_state"];
-    let replay_bundle = serde_json::from_value::<ast_merge::ReviewReplayBundle>(
-        fixture["replay_bundle"].clone(),
-    )
-    .expect("replay bundle should deserialize");
+    let replay_bundle =
+        serde_json::from_value::<ast_merge::ReviewReplayBundle>(fixture["replay_bundle"].clone())
+            .expect("replay bundle should deserialize");
     let review_state = serde_json::from_value::<ast_merge::ConformanceManifestReviewState>(
         fixture["review_state"].clone(),
     )
@@ -309,14 +308,13 @@ fn conforms_to_slice_327_markdown_provider_reviewed_nested_review_artifact_rejec
     assert!(!state_result.ok);
     assert_eq!(
         state_result.diagnostics[0].message,
-        expected_state["diagnostics"][0]["message"]
-            .as_str()
-            .unwrap()
+        expected_state["diagnostics"][0]["message"].as_str().unwrap()
     );
 }
 
 #[test]
-fn conforms_to_slice_328_markdown_provider_reviewed_nested_review_artifact_envelope_application_fixture() {
+fn conforms_to_slice_328_markdown_provider_reviewed_nested_review_artifact_envelope_application_fixture()
+ {
     let provider_fixture = read_fixture(&[
         "diagnostics",
         "slice-328-markdown-provider-reviewed-nested-review-artifact-envelope-application",
@@ -330,16 +328,14 @@ fn conforms_to_slice_328_markdown_provider_reviewed_nested_review_artifact_envel
         .collect::<Vec<_>>();
     let fixture = read_fixture(&shared_fixture_path);
     let expected = &provider_fixture["providers"]["pulldown-cmark"]["expected"];
-    let replay_bundle_envelope =
-        serde_json::from_value::<ast_merge::ReviewReplayBundleEnvelope>(
-            fixture["replay_bundle_envelope"].clone(),
-        )
-        .expect("replay bundle envelope should deserialize");
-    let review_state_envelope =
-        serde_json::from_value::<ast_merge::ConformanceManifestReviewStateEnvelope>(
-            fixture["review_state_envelope"].clone(),
-        )
-        .expect("review state envelope should deserialize");
+    let replay_bundle_envelope = serde_json::from_value::<ast_merge::ReviewReplayBundleEnvelope>(
+        fixture["replay_bundle_envelope"].clone(),
+    )
+    .expect("replay bundle envelope should deserialize");
+    let review_state_envelope = serde_json::from_value::<
+        ast_merge::ConformanceManifestReviewStateEnvelope,
+    >(fixture["review_state_envelope"].clone())
+    .expect("review state envelope should deserialize");
 
     let replay_result = merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope(
         fixture["template"].as_str().unwrap(),
@@ -369,16 +365,14 @@ fn conforms_to_slice_315_reviewed_nested_review_artifact_envelope_rejection_fixt
         "slice-315-reviewed-nested-review-artifact-envelope-rejection",
         "fenced-code-reviewed-nested-review-artifact-envelope-rejection.json",
     ]);
-    let replay_bundle_envelope =
-        serde_json::from_value::<ast_merge::ReviewReplayBundleEnvelope>(
-            fixture["replay_bundle_envelope"].clone(),
-        )
-        .expect("replay bundle envelope should deserialize");
-    let review_state_envelope =
-        serde_json::from_value::<ast_merge::ConformanceManifestReviewStateEnvelope>(
-            fixture["review_state_envelope"].clone(),
-        )
-        .expect("review state envelope should deserialize");
+    let replay_bundle_envelope = serde_json::from_value::<ast_merge::ReviewReplayBundleEnvelope>(
+        fixture["replay_bundle_envelope"].clone(),
+    )
+    .expect("replay bundle envelope should deserialize");
+    let review_state_envelope = serde_json::from_value::<
+        ast_merge::ConformanceManifestReviewStateEnvelope,
+    >(fixture["review_state_envelope"].clone())
+    .expect("review state envelope should deserialize");
 
     let replay_result = merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope(
         fixture["template"].as_str().unwrap(),
@@ -390,9 +384,7 @@ fn conforms_to_slice_315_reviewed_nested_review_artifact_envelope_rejection_fixt
     assert!(!replay_result.ok);
     assert_eq!(
         replay_result.diagnostics[0].message,
-        fixture["expected_replay_bundle"]["diagnostics"][0]["message"]
-            .as_str()
-            .unwrap()
+        fixture["expected_replay_bundle"]["diagnostics"][0]["message"].as_str().unwrap()
     );
 
     let state_result = merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope(
@@ -405,9 +397,7 @@ fn conforms_to_slice_315_reviewed_nested_review_artifact_envelope_rejection_fixt
     assert!(!state_result.ok);
     assert_eq!(
         state_result.diagnostics[0].message,
-        fixture["expected_review_state"]["diagnostics"][0]["message"]
-            .as_str()
-            .unwrap()
+        fixture["expected_review_state"]["diagnostics"][0]["message"].as_str().unwrap()
     );
 }
 
@@ -501,11 +491,8 @@ fn rejects_unsupported_provider_backend_overrides() {
         "review": null
     }]);
 
-    let parse_result = parse_markdown(
-        "# Title\n",
-        MarkdownDialect::Markdown,
-        Some("kreuzberg-language-pack"),
-    );
+    let parse_result =
+        parse_markdown("# Title\n", MarkdownDialect::Markdown, Some("kreuzberg-language-pack"));
     assert!(!parse_result.ok);
     assert_eq!(serde_json::to_value(parse_result.diagnostics).unwrap(), expected);
 }

@@ -15,11 +15,12 @@ use markdown_merge::{
     markdown_delegated_child_operations, markdown_discovered_surfaces, markdown_embedded_families,
     markdown_feature_profile, markdown_plan_context_with_backend, match_markdown_owners,
     merge_markdown, merge_markdown_with_nested_outputs,
-    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope,
+    merge_markdown_with_reviewed_nested_outputs,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle,
-    merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope,
+    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope,
     merge_markdown_with_reviewed_nested_outputs_from_review_state,
-    merge_markdown_with_reviewed_nested_outputs, parse_markdown_with_backend,
+    merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope,
+    parse_markdown_with_backend,
 };
 use serde_json::Value;
 use tree_haver::registered_backends;
@@ -243,7 +244,6 @@ fn conforms_to_slice_286_markdown_merge() {
         fixture["template"].as_str().unwrap(),
         fixture["destination"].as_str().unwrap(),
         MarkdownDialect::Markdown,
-        MarkdownBackend::KreuzbergLanguagePack,
     );
     assert!(result.ok);
     assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
@@ -498,7 +498,6 @@ fn conforms_to_slice_290_markdown_nested_merge() {
         fixture["destination"].as_str().unwrap(),
         MarkdownDialect::Markdown,
         &nested_outputs,
-        MarkdownBackend::KreuzbergLanguagePack,
     );
     assert!(result.ok);
     assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
@@ -525,7 +524,6 @@ fn conforms_to_slice_298_markdown_reviewed_nested_merge() {
         MarkdownDialect::Markdown,
         &review_state,
         &applied_children,
-        MarkdownBackend::KreuzbergLanguagePack,
     );
     assert!(result.ok);
     assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
@@ -538,10 +536,9 @@ fn conforms_to_slice_309_markdown_reviewed_nested_review_artifact_application() 
         "slice-309-reviewed-nested-review-artifact-application",
         "fenced-code-reviewed-nested-review-artifact-application.json",
     ]);
-    let replay_bundle = serde_json::from_value::<ast_merge::ReviewReplayBundle>(
-        fixture["replay_bundle"].clone(),
-    )
-    .expect("replay bundle should deserialize");
+    let replay_bundle =
+        serde_json::from_value::<ast_merge::ReviewReplayBundle>(fixture["replay_bundle"].clone())
+            .expect("replay bundle should deserialize");
     let review_state = serde_json::from_value::<ast_merge::ConformanceManifestReviewState>(
         fixture["review_state"].clone(),
     )
@@ -552,7 +549,6 @@ fn conforms_to_slice_309_markdown_reviewed_nested_review_artifact_application() 
         fixture["destination"].as_str().unwrap(),
         MarkdownDialect::Markdown,
         &replay_bundle,
-        MarkdownBackend::KreuzbergLanguagePack,
     );
     assert!(replay_result.ok);
     assert_eq!(replay_result.output, fixture["expected"]["output"].as_str().map(str::to_string));
@@ -562,7 +558,6 @@ fn conforms_to_slice_309_markdown_reviewed_nested_review_artifact_application() 
         fixture["destination"].as_str().unwrap(),
         MarkdownDialect::Markdown,
         &review_state,
-        MarkdownBackend::KreuzbergLanguagePack,
     );
     assert!(state_result.ok);
     assert_eq!(state_result.output, fixture["expected"]["output"].as_str().map(str::to_string));
@@ -575,10 +570,9 @@ fn conforms_to_slice_311_markdown_reviewed_nested_review_artifact_rejection() {
         "slice-311-reviewed-nested-review-artifact-rejection",
         "fenced-code-reviewed-nested-review-artifact-rejection.json",
     ]);
-    let replay_bundle = serde_json::from_value::<ast_merge::ReviewReplayBundle>(
-        fixture["replay_bundle"].clone(),
-    )
-    .expect("replay bundle should deserialize");
+    let replay_bundle =
+        serde_json::from_value::<ast_merge::ReviewReplayBundle>(fixture["replay_bundle"].clone())
+            .expect("replay bundle should deserialize");
     let review_state = serde_json::from_value::<ast_merge::ConformanceManifestReviewState>(
         fixture["review_state"].clone(),
     )
@@ -588,7 +582,6 @@ fn conforms_to_slice_311_markdown_reviewed_nested_review_artifact_rejection() {
         fixture["destination"].as_str().unwrap(),
         MarkdownDialect::Markdown,
         &replay_bundle,
-        MarkdownBackend::KreuzbergLanguagePack,
     );
     assert!(!replay_result.ok);
     assert_eq!(
@@ -600,14 +593,11 @@ fn conforms_to_slice_311_markdown_reviewed_nested_review_artifact_rejection() {
         fixture["destination"].as_str().unwrap(),
         MarkdownDialect::Markdown,
         &review_state,
-        MarkdownBackend::KreuzbergLanguagePack,
     );
     assert!(!state_result.ok);
     assert_eq!(
         state_result.diagnostics[0].message,
-        fixture["expected_review_state"]["diagnostics"][0]["message"]
-            .as_str()
-            .unwrap()
+        fixture["expected_review_state"]["diagnostics"][0]["message"].as_str().unwrap()
     );
 }
 
@@ -618,23 +608,20 @@ fn conforms_to_slice_313_markdown_reviewed_nested_review_artifact_envelope_appli
         "slice-313-reviewed-nested-review-artifact-envelope-application",
         "fenced-code-reviewed-nested-review-artifact-envelope-application.json",
     ]);
-    let replay_bundle_envelope =
-        serde_json::from_value::<ast_merge::ReviewReplayBundleEnvelope>(
-            fixture["replay_bundle_envelope"].clone(),
-        )
-        .expect("replay bundle envelope should deserialize");
-    let review_state_envelope =
-        serde_json::from_value::<ast_merge::ConformanceManifestReviewStateEnvelope>(
-            fixture["review_state_envelope"].clone(),
-        )
-        .expect("review state envelope should deserialize");
+    let replay_bundle_envelope = serde_json::from_value::<ast_merge::ReviewReplayBundleEnvelope>(
+        fixture["replay_bundle_envelope"].clone(),
+    )
+    .expect("replay bundle envelope should deserialize");
+    let review_state_envelope = serde_json::from_value::<
+        ast_merge::ConformanceManifestReviewStateEnvelope,
+    >(fixture["review_state_envelope"].clone())
+    .expect("review state envelope should deserialize");
 
     let replay_result = merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope(
         fixture["template"].as_str().unwrap(),
         fixture["destination"].as_str().unwrap(),
         MarkdownDialect::Markdown,
         &replay_bundle_envelope,
-        MarkdownBackend::KreuzbergLanguagePack,
     );
     assert!(replay_result.ok);
     assert_eq!(replay_result.output, fixture["expected"]["output"].as_str().map(str::to_string));
@@ -644,7 +631,6 @@ fn conforms_to_slice_313_markdown_reviewed_nested_review_artifact_envelope_appli
         fixture["destination"].as_str().unwrap(),
         MarkdownDialect::Markdown,
         &review_state_envelope,
-        MarkdownBackend::KreuzbergLanguagePack,
     );
     assert!(state_result.ok);
     assert_eq!(state_result.output, fixture["expected"]["output"].as_str().map(str::to_string));
@@ -657,30 +643,25 @@ fn conforms_to_slice_315_markdown_reviewed_nested_review_artifact_envelope_rejec
         "slice-315-reviewed-nested-review-artifact-envelope-rejection",
         "fenced-code-reviewed-nested-review-artifact-envelope-rejection.json",
     ]);
-    let replay_bundle_envelope =
-        serde_json::from_value::<ast_merge::ReviewReplayBundleEnvelope>(
-            fixture["replay_bundle_envelope"].clone(),
-        )
-        .expect("replay bundle envelope should deserialize");
-    let review_state_envelope =
-        serde_json::from_value::<ast_merge::ConformanceManifestReviewStateEnvelope>(
-            fixture["review_state_envelope"].clone(),
-        )
-        .expect("review state envelope should deserialize");
+    let replay_bundle_envelope = serde_json::from_value::<ast_merge::ReviewReplayBundleEnvelope>(
+        fixture["replay_bundle_envelope"].clone(),
+    )
+    .expect("replay bundle envelope should deserialize");
+    let review_state_envelope = serde_json::from_value::<
+        ast_merge::ConformanceManifestReviewStateEnvelope,
+    >(fixture["review_state_envelope"].clone())
+    .expect("review state envelope should deserialize");
 
     let replay_result = merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope(
         fixture["template"].as_str().unwrap(),
         fixture["destination"].as_str().unwrap(),
         MarkdownDialect::Markdown,
         &replay_bundle_envelope,
-        MarkdownBackend::KreuzbergLanguagePack,
     );
     assert!(!replay_result.ok);
     assert_eq!(
         replay_result.diagnostics[0].message,
-        fixture["expected_replay_bundle"]["diagnostics"][0]["message"]
-            .as_str()
-            .unwrap()
+        fixture["expected_replay_bundle"]["diagnostics"][0]["message"].as_str().unwrap()
     );
 
     let state_result = merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope(
@@ -688,13 +669,10 @@ fn conforms_to_slice_315_markdown_reviewed_nested_review_artifact_envelope_rejec
         fixture["destination"].as_str().unwrap(),
         MarkdownDialect::Markdown,
         &review_state_envelope,
-        MarkdownBackend::KreuzbergLanguagePack,
     );
     assert!(!state_result.ok);
     assert_eq!(
         state_result.diagnostics[0].message,
-        fixture["expected_review_state"]["diagnostics"][0]["message"]
-            .as_str()
-            .unwrap()
+        fixture["expected_review_state"]["diagnostics"][0]["message"].as_str().unwrap()
     );
 }

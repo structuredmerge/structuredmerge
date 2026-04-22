@@ -550,6 +550,21 @@ pub fn merge_markdown_with_nested_outputs(
     destination_source: &str,
     dialect: MarkdownDialect,
     nested_outputs: &[NestedChildOutput],
+) -> MergeResult<String> {
+    merge_markdown_with_nested_outputs_with_backend(
+        template_source,
+        destination_source,
+        dialect,
+        nested_outputs,
+        MarkdownBackend::KreuzbergLanguagePack,
+    )
+}
+
+pub fn merge_markdown_with_nested_outputs_with_backend(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    nested_outputs: &[NestedChildOutput],
     backend: MarkdownBackend,
 ) -> MergeResult<String> {
     ast_merge::execute_nested_merge(
@@ -565,7 +580,9 @@ pub fn merge_markdown_with_nested_outputs(
             request_id_prefix: "nested_markdown_child".to_string(),
         },
         ast_merge::NestedMergeExecutionCallbacks {
-            merge_parent: || merge_markdown(template_source, destination_source, dialect, backend),
+            merge_parent: || {
+                merge_markdown_with_backend(template_source, destination_source, dialect, backend)
+            },
             discover_operations: |merged_output| {
                 let analysis = parse_markdown_with_backend(merged_output, dialect, backend);
                 if !analysis.ok || analysis.analysis.is_none() {
@@ -611,6 +628,23 @@ pub fn merge_markdown_with_reviewed_nested_outputs(
     dialect: MarkdownDialect,
     review_state: &DelegatedChildGroupReviewState,
     applied_children: &[AppliedChildOutput],
+) -> MergeResult<String> {
+    merge_markdown_with_reviewed_nested_outputs_with_backend(
+        template_source,
+        destination_source,
+        dialect,
+        review_state,
+        applied_children,
+        MarkdownBackend::KreuzbergLanguagePack,
+    )
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_with_backend(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    review_state: &DelegatedChildGroupReviewState,
+    applied_children: &[AppliedChildOutput],
     backend: MarkdownBackend,
 ) -> MergeResult<String> {
     let resolved_children = applied_children
@@ -626,7 +660,9 @@ pub fn merge_markdown_with_reviewed_nested_outputs(
         "markdown",
         &resolved_children,
         ast_merge::NestedMergeExecutionCallbacks {
-            merge_parent: || merge_markdown(template_source, destination_source, dialect, backend),
+            merge_parent: || {
+                merge_markdown_with_backend(template_source, destination_source, dialect, backend)
+            },
             discover_operations: |merged_output| {
                 let analysis = parse_markdown_with_backend(merged_output, dialect, backend);
                 if !analysis.ok || analysis.analysis.is_none() {
@@ -671,6 +707,21 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle(
     destination_source: &str,
     dialect: MarkdownDialect,
     replay_bundle: &ReviewReplayBundle,
+) -> MergeResult<String> {
+    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_backend(
+        template_source,
+        destination_source,
+        dialect,
+        replay_bundle,
+        MarkdownBackend::KreuzbergLanguagePack,
+    )
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_backend(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    replay_bundle: &ReviewReplayBundle,
     backend: MarkdownBackend,
 ) -> MergeResult<String> {
     if let Some(execution) = replay_bundle
@@ -686,7 +737,7 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle(
                 output: child.output.clone(),
             })
             .collect::<Vec<_>>();
-        return merge_markdown_with_reviewed_nested_outputs(
+        return merge_markdown_with_reviewed_nested_outputs_with_backend(
             template_source,
             destination_source,
             dialect,
@@ -701,7 +752,9 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle(
         diagnostics: vec![Diagnostic {
             severity: DiagnosticSeverity::Error,
             category: DiagnosticCategory::ConfigurationError,
-            message: "review replay bundle does not include a reviewed nested execution for markdown.".to_string(),
+            message:
+                "review replay bundle does not include a reviewed nested execution for markdown."
+                    .to_string(),
             path: None,
             review: None,
         }],
@@ -711,6 +764,21 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle(
 }
 
 pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    review_state: &ConformanceManifestReviewState,
+) -> MergeResult<String> {
+    merge_markdown_with_reviewed_nested_outputs_from_review_state_with_backend(
+        template_source,
+        destination_source,
+        dialect,
+        review_state,
+        MarkdownBackend::KreuzbergLanguagePack,
+    )
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state_with_backend(
     template_source: &str,
     destination_source: &str,
     dialect: MarkdownDialect,
@@ -730,7 +798,7 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state(
                 output: child.output.clone(),
             })
             .collect::<Vec<_>>();
-        return merge_markdown_with_reviewed_nested_outputs(
+        return merge_markdown_with_reviewed_nested_outputs_with_backend(
             template_source,
             destination_source,
             dialect,
@@ -745,7 +813,8 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state(
         diagnostics: vec![Diagnostic {
             severity: DiagnosticSeverity::Error,
             category: DiagnosticCategory::ConfigurationError,
-            message: "review state does not include a reviewed nested execution for markdown.".to_string(),
+            message: "review state does not include a reviewed nested execution for markdown."
+                .to_string(),
             path: None,
             review: None,
         }],
@@ -759,10 +828,25 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope(
     destination_source: &str,
     dialect: MarkdownDialect,
     envelope: &ReviewReplayBundleEnvelope,
+) -> MergeResult<String> {
+    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope_with_backend(
+        template_source,
+        destination_source,
+        dialect,
+        envelope,
+        MarkdownBackend::KreuzbergLanguagePack,
+    )
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope_with_backend(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    envelope: &ReviewReplayBundleEnvelope,
     backend: MarkdownBackend,
 ) -> MergeResult<String> {
     match import_review_replay_bundle_envelope(envelope) {
-        Ok(bundle) => merge_markdown_with_reviewed_nested_outputs_from_replay_bundle(
+        Ok(bundle) => merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_backend(
             template_source,
             destination_source,
             dialect,
@@ -796,10 +880,25 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope(
     destination_source: &str,
     dialect: MarkdownDialect,
     envelope: &ConformanceManifestReviewStateEnvelope,
+) -> MergeResult<String> {
+    merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope_with_backend(
+        template_source,
+        destination_source,
+        dialect,
+        envelope,
+        MarkdownBackend::KreuzbergLanguagePack,
+    )
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope_with_backend(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    envelope: &ConformanceManifestReviewStateEnvelope,
     backend: MarkdownBackend,
 ) -> MergeResult<String> {
     match import_conformance_manifest_review_state_envelope(envelope) {
-        Ok(state) => merge_markdown_with_reviewed_nested_outputs_from_review_state(
+        Ok(state) => merge_markdown_with_reviewed_nested_outputs_from_review_state_with_backend(
             template_source,
             destination_source,
             dialect,
@@ -829,6 +928,19 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope(
 }
 
 pub fn merge_markdown(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+) -> MergeResult<String> {
+    merge_markdown_with_backend(
+        template_source,
+        destination_source,
+        dialect,
+        MarkdownBackend::KreuzbergLanguagePack,
+    )
+}
+
+pub fn merge_markdown_with_backend(
     template_source: &str,
     destination_source: &str,
     dialect: MarkdownDialect,
