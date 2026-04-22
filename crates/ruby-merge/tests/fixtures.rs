@@ -10,7 +10,8 @@ use ast_merge::{
 };
 use ruby_merge::{
     RubyDialect, RubyOwnerKind, apply_ruby_delegated_child_outputs, available_ruby_backends,
-    match_ruby_owners, merge_ruby, merge_ruby_with_nested_outputs, parse_ruby,
+    match_ruby_owners, merge_ruby, merge_ruby_with_nested_outputs,
+    merge_ruby_with_reviewed_nested_outputs, parse_ruby,
     ruby_backend_feature_profile, ruby_delegated_child_operations, ruby_discovered_surfaces,
     ruby_feature_profile, ruby_plan_context,
 };
@@ -423,5 +424,36 @@ fn conforms_to_ruby_fixtures() {
     assert_eq!(
         nested_merge_result.output,
         nested_merge_fixture["expected"]["output"].as_str().map(str::to_string)
+    );
+
+    let reviewed_nested_merge_fixture = read_fixture(&[
+        "ruby",
+        "slice-299-reviewed-nested-merge",
+        "yard-example-reviewed-nested-merge.json",
+    ]);
+    let reviewed_state = serde_json::from_value::<ast_merge::DelegatedChildGroupReviewState>(
+        reviewed_nested_merge_fixture["review_state"].clone(),
+    )
+    .expect("review state should deserialize");
+    let reviewed_children = reviewed_nested_merge_fixture["applied_children"]
+        .as_array()
+        .expect("applied children should be an array")
+        .iter()
+        .map(|entry| ruby_merge::AppliedChildOutput {
+            operation_id: entry["operation_id"].as_str().unwrap().to_string(),
+            output: entry["output"].as_str().unwrap().to_string(),
+        })
+        .collect::<Vec<_>>();
+    let reviewed_nested_merge_result = merge_ruby_with_reviewed_nested_outputs(
+        reviewed_nested_merge_fixture["template"].as_str().unwrap(),
+        reviewed_nested_merge_fixture["destination"].as_str().unwrap(),
+        RubyDialect::Ruby,
+        &reviewed_state,
+        &reviewed_children,
+    );
+    assert!(reviewed_nested_merge_result.ok);
+    assert_eq!(
+        reviewed_nested_merge_result.output,
+        reviewed_nested_merge_fixture["expected"]["output"].as_str().map(str::to_string)
     );
 }

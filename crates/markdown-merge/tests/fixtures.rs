@@ -14,7 +14,8 @@ use markdown_merge::{
     available_markdown_backends, markdown_backend_feature_profile,
     markdown_delegated_child_operations, markdown_discovered_surfaces, markdown_embedded_families,
     markdown_feature_profile, markdown_plan_context_with_backend, match_markdown_owners,
-    merge_markdown, merge_markdown_with_nested_outputs, parse_markdown_with_backend,
+    merge_markdown, merge_markdown_with_nested_outputs,
+    merge_markdown_with_reviewed_nested_outputs, parse_markdown_with_backend,
 };
 use serde_json::Value;
 use tree_haver::registered_backends;
@@ -493,6 +494,33 @@ fn conforms_to_slice_290_markdown_nested_merge() {
         fixture["destination"].as_str().unwrap(),
         MarkdownDialect::Markdown,
         &nested_outputs,
+        MarkdownBackend::KreuzbergLanguagePack,
+    );
+    assert!(result.ok);
+    assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
+}
+
+#[test]
+fn conforms_to_slice_298_markdown_reviewed_nested_merge() {
+    let fixture = read_fixture(&[
+        "markdown",
+        "slice-298-reviewed-nested-merge",
+        "fenced-code-reviewed-nested-merge.json",
+    ]);
+    let review_state = serde_json::from_value::<ast_merge::DelegatedChildGroupReviewState>(
+        fixture["review_state"].clone(),
+    )
+    .expect("review state should deserialize");
+    let applied_children = serde_json::from_value::<Vec<markdown_merge::AppliedChildOutput>>(
+        fixture["applied_children"].clone(),
+    )
+    .expect("applied children should deserialize");
+    let result = merge_markdown_with_reviewed_nested_outputs(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        &review_state,
+        &applied_children,
         MarkdownBackend::KreuzbergLanguagePack,
     );
     assert!(result.ok);
