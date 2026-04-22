@@ -2,9 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use ast_merge::{
     AppliedDelegatedChildOutput, ConformanceFamilyPlanContext, ConformanceFeatureProfileView,
-    DelegatedChildGroupReviewState, DelegatedChildOperation, DiagnosticCategory,
-    DiscoveredSurface, FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference,
-    PolicySurface, SurfaceOwnerKind, SurfaceOwnerRef, SurfaceSpan, execute_reviewed_nested_merge,
+    ConformanceManifestReviewState, DelegatedChildGroupReviewState, DelegatedChildOperation,
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile,
+    MergeResult, ParseResult, PolicyReference, PolicySurface, ReviewReplayBundle,
+    SurfaceOwnerKind, SurfaceOwnerRef, SurfaceSpan, execute_reviewed_nested_merge,
 };
 use tree_haver::{ParserRequest, parse_with_language_pack};
 
@@ -805,6 +806,90 @@ pub fn merge_ruby_with_reviewed_nested_outputs(
             },
         },
     )
+}
+
+pub fn merge_ruby_with_reviewed_nested_outputs_from_replay_bundle(
+    template_source: &str,
+    destination_source: &str,
+    dialect: RubyDialect,
+    replay_bundle: &ReviewReplayBundle,
+) -> MergeResult<String> {
+    if let Some(execution) = replay_bundle
+        .reviewed_nested_executions
+        .iter()
+        .find(|execution| execution.family == "ruby")
+    {
+        let applied_children = execution
+            .applied_children
+            .iter()
+            .map(|child| AppliedChildOutput {
+                operation_id: child.operation_id.clone(),
+                output: child.output.clone(),
+            })
+            .collect::<Vec<_>>();
+        return merge_ruby_with_reviewed_nested_outputs(
+            template_source,
+            destination_source,
+            dialect,
+            &execution.review_state,
+            &applied_children,
+        );
+    }
+
+    MergeResult {
+        ok: false,
+        diagnostics: vec![Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            category: DiagnosticCategory::ConfigurationError,
+            message: "review replay bundle does not include a reviewed nested execution for ruby.".to_string(),
+            path: None,
+            review: None,
+        }],
+        output: None,
+        policies: vec![],
+    }
+}
+
+pub fn merge_ruby_with_reviewed_nested_outputs_from_review_state(
+    template_source: &str,
+    destination_source: &str,
+    dialect: RubyDialect,
+    review_state: &ConformanceManifestReviewState,
+) -> MergeResult<String> {
+    if let Some(execution) = review_state
+        .reviewed_nested_executions
+        .iter()
+        .find(|execution| execution.family == "ruby")
+    {
+        let applied_children = execution
+            .applied_children
+            .iter()
+            .map(|child| AppliedChildOutput {
+                operation_id: child.operation_id.clone(),
+                output: child.output.clone(),
+            })
+            .collect::<Vec<_>>();
+        return merge_ruby_with_reviewed_nested_outputs(
+            template_source,
+            destination_source,
+            dialect,
+            &execution.review_state,
+            &applied_children,
+        );
+    }
+
+    MergeResult {
+        ok: false,
+        diagnostics: vec![Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            category: DiagnosticCategory::ConfigurationError,
+            message: "review state does not include a reviewed nested execution for ruby.".to_string(),
+            path: None,
+            review: None,
+        }],
+        output: None,
+        policies: vec![],
+    }
 }
 
 pub fn ruby_discovered_surfaces(analysis: &RubyAnalysis) -> Vec<DiscoveredSurface> {

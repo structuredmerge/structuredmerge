@@ -11,6 +11,8 @@ use ast_merge::{
 use ruby_merge::{
     RubyDialect, RubyOwnerKind, apply_ruby_delegated_child_outputs, available_ruby_backends,
     match_ruby_owners, merge_ruby, merge_ruby_with_nested_outputs,
+    merge_ruby_with_reviewed_nested_outputs_from_replay_bundle,
+    merge_ruby_with_reviewed_nested_outputs_from_review_state,
     merge_ruby_with_reviewed_nested_outputs, parse_ruby,
     ruby_backend_feature_profile, ruby_delegated_child_operations, ruby_discovered_surfaces,
     ruby_feature_profile, ruby_plan_context,
@@ -455,5 +457,41 @@ fn conforms_to_ruby_fixtures() {
     assert_eq!(
         reviewed_nested_merge_result.output,
         reviewed_nested_merge_fixture["expected"]["output"].as_str().map(str::to_string)
+    );
+
+    let review_artifact_fixture = read_fixture(&[
+        "ruby",
+        "slice-310-reviewed-nested-review-artifact-application",
+        "yard-example-reviewed-nested-review-artifact-application.json",
+    ]);
+    let replay_bundle = serde_json::from_value::<ast_merge::ReviewReplayBundle>(
+        review_artifact_fixture["replay_bundle"].clone(),
+    )
+    .expect("replay bundle should deserialize");
+    let review_state = serde_json::from_value::<ast_merge::ConformanceManifestReviewState>(
+        review_artifact_fixture["review_state"].clone(),
+    )
+    .expect("review state should deserialize");
+    let replay_result = merge_ruby_with_reviewed_nested_outputs_from_replay_bundle(
+        review_artifact_fixture["template"].as_str().unwrap(),
+        review_artifact_fixture["destination"].as_str().unwrap(),
+        RubyDialect::Ruby,
+        &replay_bundle,
+    );
+    assert!(replay_result.ok);
+    assert_eq!(
+        replay_result.output,
+        review_artifact_fixture["expected"]["output"].as_str().map(str::to_string)
+    );
+    let state_result = merge_ruby_with_reviewed_nested_outputs_from_review_state(
+        review_artifact_fixture["template"].as_str().unwrap(),
+        review_artifact_fixture["destination"].as_str().unwrap(),
+        RubyDialect::Ruby,
+        &review_state,
+    );
+    assert!(state_result.ok);
+    assert_eq!(
+        state_result.output,
+        review_artifact_fixture["expected"]["output"].as_str().map(str::to_string)
     );
 }

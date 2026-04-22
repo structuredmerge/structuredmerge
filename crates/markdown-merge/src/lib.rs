@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use ast_merge::{
     AppliedDelegatedChildOutput, ConformanceFamilyPlanContext, ConformanceFeatureProfileView,
-    DelegatedChildGroupReviewState, DelegatedChildOperation, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, MergeResult, ParseResult,
-    SurfaceOwnerKind, SurfaceOwnerRef, execute_reviewed_nested_merge,
+    ConformanceManifestReviewState, DelegatedChildGroupReviewState, DelegatedChildOperation,
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, DiscoveredSurface,
+    FamilyFeatureProfile, MergeResult, ParseResult, ReviewReplayBundle, SurfaceOwnerKind,
+    SurfaceOwnerRef, execute_reviewed_nested_merge,
 };
 use tree_haver::{ParserRequest, parse_with_language_pack};
 
@@ -661,6 +662,94 @@ pub fn merge_markdown_with_reviewed_nested_outputs(
             },
         },
     )
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    replay_bundle: &ReviewReplayBundle,
+    backend: MarkdownBackend,
+) -> MergeResult<String> {
+    if let Some(execution) = replay_bundle
+        .reviewed_nested_executions
+        .iter()
+        .find(|execution| execution.family == "markdown")
+    {
+        let applied_children = execution
+            .applied_children
+            .iter()
+            .map(|child| AppliedChildOutput {
+                operation_id: child.operation_id.clone(),
+                output: child.output.clone(),
+            })
+            .collect::<Vec<_>>();
+        return merge_markdown_with_reviewed_nested_outputs(
+            template_source,
+            destination_source,
+            dialect,
+            &execution.review_state,
+            &applied_children,
+            backend,
+        );
+    }
+
+    MergeResult {
+        ok: false,
+        diagnostics: vec![Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            category: DiagnosticCategory::ConfigurationError,
+            message: "review replay bundle does not include a reviewed nested execution for markdown.".to_string(),
+            path: None,
+            review: None,
+        }],
+        output: None,
+        policies: vec![],
+    }
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    review_state: &ConformanceManifestReviewState,
+    backend: MarkdownBackend,
+) -> MergeResult<String> {
+    if let Some(execution) = review_state
+        .reviewed_nested_executions
+        .iter()
+        .find(|execution| execution.family == "markdown")
+    {
+        let applied_children = execution
+            .applied_children
+            .iter()
+            .map(|child| AppliedChildOutput {
+                operation_id: child.operation_id.clone(),
+                output: child.output.clone(),
+            })
+            .collect::<Vec<_>>();
+        return merge_markdown_with_reviewed_nested_outputs(
+            template_source,
+            destination_source,
+            dialect,
+            &execution.review_state,
+            &applied_children,
+            backend,
+        );
+    }
+
+    MergeResult {
+        ok: false,
+        diagnostics: vec![Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            category: DiagnosticCategory::ConfigurationError,
+            message: "review state does not include a reviewed nested execution for markdown.".to_string(),
+            path: None,
+            review: None,
+        }],
+        output: None,
+        policies: vec![],
+    }
 }
 
 pub fn merge_markdown(
