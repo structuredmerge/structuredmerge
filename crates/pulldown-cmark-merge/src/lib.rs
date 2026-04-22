@@ -2,10 +2,11 @@ use std::sync::Once;
 
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, ParseResult,
+    DiagnosticSeverity, MergeResult, ParseResult,
 };
 use markdown_merge::{
     MarkdownAnalysis, MarkdownDialect, collect_markdown_owners, markdown_feature_profile,
+    merge_markdown as merge_markdown_with_substrate,
     match_markdown_owners as match_markdown_owners_with_substrate, normalize_markdown_source,
 };
 use pulldown_cmark::Parser;
@@ -131,6 +132,33 @@ pub fn match_markdown_owners(
     destination: MarkdownAnalysis,
 ) -> markdown_merge::MarkdownOwnerMatchResult {
     match_markdown_owners_with_substrate(template, destination)
+}
+
+pub fn merge_markdown(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    backend: Option<&str>,
+) -> MergeResult<String> {
+    ensure_backend_registered();
+    let requested = backend.unwrap_or(BACKEND_ID);
+    if requested != BACKEND_ID {
+        return MergeResult {
+            ok: false,
+            diagnostics: vec![unsupported_feature(&format!(
+                "Unsupported Markdown backend {requested}."
+            ))],
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    merge_markdown_with_substrate(
+        template_source,
+        destination_source,
+        dialect,
+        markdown_merge::MarkdownBackend::KreuzbergLanguagePack,
+    )
 }
 
 pub fn markdown_embedded_families(

@@ -8,7 +8,7 @@ use ast_merge::{
 use markdown_merge::MarkdownDialect;
 use pulldown_cmark_merge::{
     available_markdown_backends, markdown_backend_feature_profile, markdown_embedded_families,
-    markdown_plan_context, match_markdown_owners, parse_markdown,
+    markdown_plan_context, match_markdown_owners, merge_markdown, parse_markdown,
     provider_markdown_feature_profile,
 };
 use serde_json::Value;
@@ -152,6 +152,19 @@ fn conforms_to_shared_markdown_analysis_and_matching_fixtures() {
             .iter()
             .map(|item| item.as_str().unwrap().to_string())
             .collect::<Vec<_>>()
+    );
+
+    let merge_fixture = read_fixture(&["markdown", "slice-286-merge", "section-merge.json"]);
+    let merge_result = merge_markdown(
+        merge_fixture["template"].as_str().unwrap(),
+        merge_fixture["destination"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        None,
+    );
+    assert!(merge_result.ok);
+    assert_eq!(
+        merge_result.output,
+        merge_fixture["expected"]["output"].as_str().map(str::to_string)
     );
 }
 
