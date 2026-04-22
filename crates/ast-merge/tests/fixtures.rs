@@ -15,12 +15,14 @@ use ast_merge::{
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
     ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, TemplateDestinationContext,
-    TemplatePlanEntry, TemplatePlanStateEntry, TemplateStrategy, TemplateStrategyOverride,
-    classify_template_target_path, conformance_family_feature_profile_path,
-    conformance_fixture_path, conformance_manifest_replay_context,
-    conformance_manifest_review_request_ids, conformance_manifest_review_state_envelope,
-    conformance_review_host_hints, conformance_suite_definition, conformance_suite_selectors,
-    default_conformance_family_context, delegated_child_apply_plan, enrich_template_plan_entries,
+    TemplatePlanEntry, TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplateStrategy,
+    TemplateStrategyOverride, TemplateTokenConfig, classify_template_target_path,
+    conformance_family_feature_profile_path, conformance_fixture_path,
+    conformance_manifest_replay_context, conformance_manifest_review_request_ids,
+    conformance_manifest_review_state_envelope, conformance_review_host_hints,
+    conformance_suite_definition, conformance_suite_selectors, default_conformance_family_context,
+    delegated_child_apply_plan, enrich_template_plan_entries,
+    enrich_template_plan_entries_with_token_state,
     execute_review_replay_bundle_envelope_reviewed_nested_executions,
     execute_review_replay_bundle_reviewed_nested_executions,
     execute_review_state_envelope_reviewed_nested_executions,
@@ -46,7 +48,7 @@ use ast_merge::{
     select_projected_child_review_groups_accepted_for_apply,
     select_projected_child_review_groups_ready_for_apply, select_template_strategy,
     summarize_conformance_results, summarize_named_conformance_suite_reports,
-    summarize_projected_child_review_group_progress,
+    summarize_projected_child_review_group_progress, template_token_keys,
 };
 use serde_json::Value;
 
@@ -372,6 +374,57 @@ fn conforms_to_template_entry_plan_state_fixture() {
 
     assert_eq!(
         enrich_template_plan_entries(&planned_entries, &existing_destination_paths),
+        expected
+    );
+}
+
+#[test]
+fn conforms_to_template_token_keys_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("template_token_keys"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for entry in cases {
+        let content = entry["content"].as_str().expect("content should be a string");
+        let config = entry
+            .get("config")
+            .map(|raw| {
+                serde_json::from_value::<TemplateTokenConfig>(raw.clone())
+                    .expect("config should deserialize")
+            })
+            .unwrap_or_else(ast_merge::default_template_token_config);
+        let expected = serde_json::from_value::<Vec<String>>(entry["expected_token_keys"].clone())
+            .expect("expected_token_keys should deserialize");
+
+        assert_eq!(template_token_keys(content, &config), expected);
+    }
+}
+
+#[test]
+fn conforms_to_template_entry_token_state_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("template_entry_token_state"));
+    let planned_entries =
+        serde_json::from_value::<Vec<TemplatePlanStateEntry>>(fixture["planned_entries"].clone())
+            .expect("planned_entries should deserialize");
+    let template_contents = serde_json::from_value::<std::collections::HashMap<String, String>>(
+        fixture["template_contents"].clone(),
+    )
+    .expect("template_contents should deserialize");
+    let replacements = serde_json::from_value::<std::collections::HashMap<String, String>>(
+        fixture["replacements"].clone(),
+    )
+    .expect("replacements should deserialize");
+    let expected = serde_json::from_value::<Vec<TemplatePlanTokenStateEntry>>(
+        fixture["expected_entries"].clone(),
+    )
+    .expect("expected_entries should deserialize");
+
+    assert_eq!(
+        enrich_template_plan_entries_with_token_state(
+            &planned_entries,
+            &template_contents,
+            &replacements,
+            &ast_merge::default_template_token_config(),
+        ),
         expected
     );
 }

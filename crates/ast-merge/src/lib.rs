@@ -182,6 +182,17 @@ pub struct TemplateDestinationContext {
     pub project_name: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateTokenConfig {
+    pub pre: String,
+    pub post: String,
+    pub separators: Vec<String>,
+    pub min_segments: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_segments: Option<usize>,
+    pub segment_pattern: String,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TemplateStrategy {
@@ -219,6 +230,31 @@ pub struct TemplatePlanStateEntry {
     pub action: String,
     pub destination_exists: bool,
     pub write_action: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TemplatePlanBlockReason {
+    UnresolvedTokens,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplatePlanTokenStateEntry {
+    pub template_source_path: String,
+    pub logical_destination_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination_path: Option<String>,
+    pub classification: TemplateTargetClassification,
+    pub strategy: TemplateStrategy,
+    pub action: String,
+    pub destination_exists: bool,
+    pub write_action: String,
+    pub token_keys: Vec<String>,
+    pub unresolved_token_keys: Vec<String>,
+    pub token_resolution_required: bool,
+    pub blocked: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_reason: Option<TemplatePlanBlockReason>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -775,6 +811,140 @@ pub fn resolve_template_destination_path(
     }
 }
 
+pub fn default_template_token_config() -> TemplateTokenConfig {
+    TemplateTokenConfig {
+        pre: "{".to_string(),
+        post: "}".to_string(),
+        separators: vec!["|".to_string(), ":".to_string()],
+        min_segments: 2,
+        max_segments: None,
+        segment_pattern: "[A-Za-z0-9_]".to_string(),
+    }
+}
+
+fn template_token_separator_at(config: &TemplateTokenConfig, boundary_index: usize) -> &str {
+    if boundary_index < config.separators.len() {
+        &config.separators[boundary_index]
+    } else {
+        config
+            .separators
+            .last()
+            .map(String::as_str)
+            .expect("template token config should have at least one separator")
+    }
+}
+
+fn segment_pattern_matches(pattern: &str, ch: char) -> bool {
+    if !pattern.starts_with('[') || !pattern.ends_with(']') {
+        return false;
+    }
+
+    let chars = pattern[1..pattern.len() - 1].chars().collect::<Vec<_>>();
+    let mut index = 0;
+    while index < chars.len() {
+        if index + 2 < chars.len() && chars[index + 1] == '-' {
+            if chars[index] <= ch && ch <= chars[index + 2] {
+                return true;
+            }
+            index += 3;
+            continue;
+        }
+
+        if chars[index] == ch {
+            return true;
+        }
+        index += 1;
+    }
+
+    false
+}
+
+fn valid_template_token_key(key: &str, config: &TemplateTokenConfig) -> bool {
+    if key.is_empty() {
+        return false;
+    }
+
+    let mut index = 0;
+    let mut segments = 0;
+    let mut boundary_index = 0;
+
+    while index < key.len() {
+        let segment_start = index;
+        while index < key.len() {
+            let ch = key[index..].chars().next().expect("character should exist");
+            if !segment_pattern_matches(&config.segment_pattern, ch) {
+                break;
+            }
+            index += ch.len_utf8();
+        }
+
+        if index == segment_start {
+            return false;
+        }
+
+        segments += 1;
+        if index == key.len() {
+            break;
+        }
+
+        let separator = template_token_separator_at(config, boundary_index);
+        if !key[index..].starts_with(separator) {
+            return false;
+        }
+
+        index += separator.len();
+        boundary_index += 1;
+    }
+
+    if segments < config.min_segments {
+        return false;
+    }
+
+    config.max_segments.is_none_or(|max| segments <= max)
+}
+
+pub fn template_token_keys(content: &str, config: &TemplateTokenConfig) -> Vec<String> {
+    if content.is_empty() || !content.contains(&config.pre) {
+        return Vec::new();
+    }
+
+    let mut keys = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut offset = 0;
+
+    while offset < content.len() {
+        let Some(token_start) = content[offset..].find(&config.pre) else {
+            break;
+        };
+        let token_start = offset + token_start;
+        let content_start = token_start + config.pre.len();
+        let Some(token_end) = content[content_start..].find(&config.post) else {
+            break;
+        };
+        let token_end = content_start + token_end;
+        let key = &content[content_start..token_end];
+
+        if valid_template_token_key(key, config) && seen.insert(key.to_string()) {
+            keys.push(key.to_string());
+        }
+
+        offset = token_end + config.post.len();
+    }
+
+    keys
+}
+
+pub fn unresolved_template_token_keys(
+    content: &str,
+    replacements: &HashMap<String, String>,
+    config: &TemplateTokenConfig,
+) -> Vec<String> {
+    template_token_keys(content, config)
+        .into_iter()
+        .filter(|key| !replacements.contains_key(key))
+        .collect()
+}
+
 pub fn select_template_strategy(
     path: &str,
     default_strategy: TemplateStrategy,
@@ -855,6 +1025,49 @@ pub fn enrich_template_plan_entries(
                 action: entry.action.clone(),
                 destination_exists,
                 write_action,
+            }
+        })
+        .collect()
+}
+
+pub fn enrich_template_plan_entries_with_token_state(
+    entries: &[TemplatePlanStateEntry],
+    template_contents: &HashMap<String, String>,
+    replacements: &HashMap<String, String>,
+    config: &TemplateTokenConfig,
+) -> Vec<TemplatePlanTokenStateEntry> {
+    entries
+        .iter()
+        .map(|entry| {
+            let content = template_contents
+                .get(&entry.template_source_path)
+                .map(String::as_str)
+                .unwrap_or("");
+            let token_keys = template_token_keys(content, config);
+            let unresolved_token_keys = token_keys
+                .iter()
+                .filter(|key| !replacements.contains_key(*key))
+                .cloned()
+                .collect::<Vec<_>>();
+            let token_resolution_required = entry.destination_path.is_some()
+                && entry.strategy != TemplateStrategy::KeepDestination
+                && entry.strategy != TemplateStrategy::RawCopy;
+            let blocked = token_resolution_required && !unresolved_token_keys.is_empty();
+
+            TemplatePlanTokenStateEntry {
+                template_source_path: entry.template_source_path.clone(),
+                logical_destination_path: entry.logical_destination_path.clone(),
+                destination_path: entry.destination_path.clone(),
+                classification: entry.classification.clone(),
+                strategy: entry.strategy,
+                action: entry.action.clone(),
+                destination_exists: entry.destination_exists,
+                write_action: entry.write_action.clone(),
+                token_keys,
+                unresolved_token_keys,
+                token_resolution_required,
+                blocked,
+                block_reason: blocked.then_some(TemplatePlanBlockReason::UnresolvedTokens),
             }
         })
         .collect()
