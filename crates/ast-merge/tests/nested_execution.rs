@@ -5,7 +5,11 @@ use ast_merge::{
     DiscoveredSurface, MergeResult, NestedMergeDiscoveryResult, NestedMergeExecutionCallbacks,
     ProjectedChildReviewGroup, ReviewDecision, ReviewDecisionAction, SurfaceOwnerKind,
     SurfaceOwnerRef, execute_delegated_child_apply_plan, execute_nested_merge,
-    execute_reviewed_nested_execution, execute_reviewed_nested_merge, reviewed_nested_execution,
+    execute_review_replay_bundle_reviewed_nested_executions,
+    execute_review_state_reviewed_nested_executions, execute_reviewed_nested_execution,
+    execute_reviewed_nested_executions, execute_reviewed_nested_merge, reviewed_nested_execution,
+    ConformanceManifestReviewState, ConformanceSuiteSummary, NamedConformanceSuiteReportEnvelope,
+    ReviewHostHints, ReviewReplayBundle, ReviewReplayContext,
 };
 
 fn nested_operation(address: &str, family: Option<&str>) -> DelegatedChildOperation {
@@ -362,4 +366,270 @@ fn execute_reviewed_nested_execution_uses_payload() {
     );
 
     assert_eq!(result.output, Some("final-parent".to_string()));
+}
+
+#[test]
+fn execute_reviewed_nested_executions_preserves_order() {
+    let markdown_address = "document[0] > fenced_code_block[/code_fence/0]";
+    let ruby_address = "document[0] > ruby_doc_comment[Greeter] > yard_example[1]";
+    let runs = execute_reviewed_nested_executions(
+        &[
+            reviewed_nested_execution(
+                "markdown",
+                &DelegatedChildGroupReviewState {
+                    requests: vec![],
+                    accepted_groups: vec![ProjectedChildReviewGroup {
+                        delegated_apply_group: "nested_markdown_child:0".to_string(),
+                        parent_operation_id: "markdown-document-0".to_string(),
+                        child_operation_id: "markdown-fence-0".to_string(),
+                        delegated_runtime_surface_path: markdown_address.to_string(),
+                        case_ids: vec![],
+                        delegated_case_ids: vec![],
+                    }],
+                    applied_decisions: vec![ReviewDecision {
+                        request_id: "projected_child_group:nested_markdown_child:0".to_string(),
+                        action: ReviewDecisionAction::ApplyDelegatedChildGroup,
+                        context: None,
+                    }],
+                    diagnostics: vec![],
+                },
+                &[AppliedDelegatedChildOutput {
+                    operation_id: "markdown-fence-0".to_string(),
+                    output: "child-output\n".to_string(),
+                }],
+            ),
+            reviewed_nested_execution(
+                "ruby",
+                &DelegatedChildGroupReviewState {
+                    requests: vec![],
+                    accepted_groups: vec![ProjectedChildReviewGroup {
+                        delegated_apply_group: "nested_ruby_child:0".to_string(),
+                        parent_operation_id: "ruby-doc-comment-0".to_string(),
+                        child_operation_id: "yard-example-0".to_string(),
+                        delegated_runtime_surface_path: ruby_address.to_string(),
+                        case_ids: vec![],
+                        delegated_case_ids: vec![],
+                    }],
+                    applied_decisions: vec![ReviewDecision {
+                        request_id: "projected_child_group:nested_ruby_child:0".to_string(),
+                        action: ReviewDecisionAction::ApplyDelegatedChildGroup,
+                        context: None,
+                    }],
+                    diagnostics: vec![],
+                },
+                &[AppliedDelegatedChildOutput {
+                    operation_id: "yard-example-0".to_string(),
+                    output: "Greeter.new.wave\n".to_string(),
+                }],
+            ),
+        ],
+        |execution, _| {
+            let family_for_merge = execution.family.clone();
+            let family_for_discovery = execution.family.clone();
+            let family_for_apply = execution.family.clone();
+            let applied_children = execution.applied_children.clone();
+            NestedMergeExecutionCallbacks {
+                merge_parent: move || MergeResult {
+                    ok: true,
+                    diagnostics: vec![],
+                    output: Some(format!("{family_for_merge}-merged")),
+                    policies: vec![],
+                },
+                discover_operations: move |_| NestedMergeDiscoveryResult {
+                    ok: true,
+                    diagnostics: vec![],
+                    operations: Some(match family_for_discovery.as_str() {
+                        "markdown" => vec![nested_operation(markdown_address, Some("typescript"))],
+                        _ => vec![DelegatedChildOperation {
+                            operation_id: "yard-example-0".to_string(),
+                            parent_operation_id: "ruby-doc-comment-0".to_string(),
+                            requested_strategy: "delegate_child_surface".to_string(),
+                            language_chain: vec!["ruby".to_string(), "ruby".to_string()],
+                            surface: DiscoveredSurface {
+                                surface_kind: "yard_example".to_string(),
+                                declared_language: None,
+                                effective_language: "ruby".to_string(),
+                                address: ruby_address.to_string(),
+                                parent_address: None,
+                                span: None,
+                                owner: SurfaceOwnerRef {
+                                    kind: SurfaceOwnerKind::OwnedRegion,
+                                    address: "/yard_example/1".to_string(),
+                                },
+                                reconstruction_strategy: "portable_write".to_string(),
+                                metadata: std::collections::HashMap::from([(
+                                    "family".to_string(),
+                                    serde_json::json!("ruby"),
+                                )]),
+                            },
+                        }],
+                    }),
+                },
+                apply_resolved_outputs: move |_, _, _, applied_children_actual| {
+                    assert_eq!(applied_children_actual, applied_children);
+                    MergeResult {
+                        ok: true,
+                        diagnostics: vec![],
+                        output: Some(format!("{family_for_apply}-final")),
+                        policies: vec![],
+                    }
+                },
+            }
+        },
+    );
+
+    assert_eq!(runs.len(), 2);
+    assert_eq!(runs[0].execution.family, "markdown");
+    assert_eq!(runs[0].result.output, Some("markdown-final".to_string()));
+    assert_eq!(runs[1].execution.family, "ruby");
+    assert_eq!(runs[1].result.output, Some("ruby-final".to_string()));
+}
+
+#[test]
+fn execute_review_replay_bundle_reviewed_nested_executions_uses_bundle() {
+    let runs = execute_review_replay_bundle_reviewed_nested_executions(
+        &ReviewReplayBundle {
+            replay_context: ReviewReplayContext {
+                surface: "conformance_manifest".to_string(),
+                families: vec!["text".to_string()],
+                require_explicit_contexts: true,
+            },
+            decisions: vec![ReviewDecision {
+                request_id: "family_context:text".to_string(),
+                action: ReviewDecisionAction::AcceptDefaultContext,
+                context: None,
+            }],
+            reviewed_nested_executions: vec![reviewed_nested_execution(
+                "markdown",
+                &DelegatedChildGroupReviewState {
+                    requests: vec![],
+                    accepted_groups: vec![ProjectedChildReviewGroup {
+                        delegated_apply_group: "nested_markdown_child:0".to_string(),
+                        parent_operation_id: "markdown-document-0".to_string(),
+                        child_operation_id: "markdown-fence-0".to_string(),
+                        delegated_runtime_surface_path:
+                            "document[0] > fenced_code_block[/code_fence/0]".to_string(),
+                        case_ids: vec![],
+                        delegated_case_ids: vec![],
+                    }],
+                    applied_decisions: vec![ReviewDecision {
+                        request_id: "projected_child_group:nested_markdown_child:0".to_string(),
+                        action: ReviewDecisionAction::ApplyDelegatedChildGroup,
+                        context: None,
+                    }],
+                    diagnostics: vec![],
+                },
+                &[AppliedDelegatedChildOutput {
+                    operation_id: "markdown-fence-0".to_string(),
+                    output: "child-output\n".to_string(),
+                }],
+            )],
+        },
+        |_, _| NestedMergeExecutionCallbacks {
+            merge_parent: || MergeResult {
+                ok: true,
+                diagnostics: vec![],
+                output: Some("merged-parent".to_string()),
+                policies: vec![],
+            },
+            discover_operations: |_| NestedMergeDiscoveryResult {
+                ok: true,
+                diagnostics: vec![],
+                operations: Some(vec![nested_operation(
+                    "document[0] > fenced_code_block[/code_fence/0]",
+                    Some("typescript"),
+                )]),
+            },
+            apply_resolved_outputs: |_, _, _, _| MergeResult {
+                ok: true,
+                diagnostics: vec![],
+                output: Some("final-parent".to_string()),
+                policies: vec![],
+            },
+        },
+    );
+
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].execution.family, "markdown");
+    assert_eq!(runs[0].result.output, Some("final-parent".to_string()));
+}
+
+#[test]
+fn execute_review_state_reviewed_nested_executions_uses_state() {
+    let runs = execute_review_state_reviewed_nested_executions(
+        &ConformanceManifestReviewState {
+            report: NamedConformanceSuiteReportEnvelope {
+                entries: vec![],
+                summary: ConformanceSuiteSummary {
+                    total: 0,
+                    passed: 0,
+                    failed: 0,
+                    skipped: 0,
+                },
+            },
+            diagnostics: vec![],
+            requests: vec![],
+            applied_decisions: vec![],
+            host_hints: ReviewHostHints {
+                interactive: false,
+                require_explicit_contexts: false,
+            },
+            replay_context: ReviewReplayContext {
+                surface: "conformance_manifest".to_string(),
+                families: vec![],
+                require_explicit_contexts: false,
+            },
+            reviewed_nested_executions: vec![reviewed_nested_execution(
+                "markdown",
+                &DelegatedChildGroupReviewState {
+                    requests: vec![],
+                    accepted_groups: vec![ProjectedChildReviewGroup {
+                        delegated_apply_group: "nested_markdown_child:0".to_string(),
+                        parent_operation_id: "markdown-document-0".to_string(),
+                        child_operation_id: "markdown-fence-0".to_string(),
+                        delegated_runtime_surface_path:
+                            "document[0] > fenced_code_block[/code_fence/0]".to_string(),
+                        case_ids: vec![],
+                        delegated_case_ids: vec![],
+                    }],
+                    applied_decisions: vec![ReviewDecision {
+                        request_id: "projected_child_group:nested_markdown_child:0".to_string(),
+                        action: ReviewDecisionAction::ApplyDelegatedChildGroup,
+                        context: None,
+                    }],
+                    diagnostics: vec![],
+                },
+                &[AppliedDelegatedChildOutput {
+                    operation_id: "markdown-fence-0".to_string(),
+                    output: "child-output\n".to_string(),
+                }],
+            )],
+        },
+        |_, _| NestedMergeExecutionCallbacks {
+            merge_parent: || MergeResult {
+                ok: true,
+                diagnostics: vec![],
+                output: Some("merged-parent".to_string()),
+                policies: vec![],
+            },
+            discover_operations: |_| NestedMergeDiscoveryResult {
+                ok: true,
+                diagnostics: vec![],
+                operations: Some(vec![nested_operation(
+                    "document[0] > fenced_code_block[/code_fence/0]",
+                    Some("typescript"),
+                )]),
+            },
+            apply_resolved_outputs: |_, _, _, _| MergeResult {
+                ok: true,
+                diagnostics: vec![],
+                output: Some("final-parent".to_string()),
+                policies: vec![],
+            },
+        },
+    );
+
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].execution.family, "markdown");
+    assert_eq!(runs[0].result.output, Some("final-parent".to_string()));
 }

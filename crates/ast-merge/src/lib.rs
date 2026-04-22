@@ -487,6 +487,12 @@ pub struct ReviewedNestedExecution {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReviewedNestedExecutionResult<TOutput> {
+    pub execution: ReviewedNestedExecution,
+    pub result: MergeResult<TOutput>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReviewedNestedExecutionEnvelope {
     pub kind: String,
     pub version: u32,
@@ -1152,6 +1158,112 @@ where
         &execution.applied_children,
         callbacks,
     )
+}
+
+pub fn execute_reviewed_nested_executions<
+    TOutput,
+    CallbacksForExecution,
+    MergeParent,
+    DiscoverOperations,
+    ApplyResolvedOutputs,
+>(
+    executions: &[ReviewedNestedExecution],
+    callbacks_for_execution: CallbacksForExecution,
+) -> Vec<ReviewedNestedExecutionResult<TOutput>>
+where
+    TOutput: Clone,
+    CallbacksForExecution: Fn(
+        &ReviewedNestedExecution,
+        usize,
+    ) -> NestedMergeExecutionCallbacks<
+        TOutput,
+        MergeParent,
+        DiscoverOperations,
+        ApplyResolvedOutputs,
+    >,
+    MergeParent: Fn() -> MergeResult<TOutput>,
+    DiscoverOperations: Fn(&TOutput) -> NestedMergeDiscoveryResult,
+    ApplyResolvedOutputs: Fn(
+        &TOutput,
+        &[DelegatedChildOperation],
+        &DelegatedChildApplyPlan,
+        &[AppliedDelegatedChildOutput],
+    ) -> MergeResult<TOutput>,
+{
+    executions
+        .iter()
+        .enumerate()
+        .map(|(index, execution)| ReviewedNestedExecutionResult {
+            execution: execution.clone(),
+            result: execute_reviewed_nested_execution(execution, callbacks_for_execution(execution, index)),
+        })
+        .collect()
+}
+
+pub fn execute_review_replay_bundle_reviewed_nested_executions<
+    TOutput,
+    CallbacksForExecution,
+    MergeParent,
+    DiscoverOperations,
+    ApplyResolvedOutputs,
+>(
+    bundle: &ReviewReplayBundle,
+    callbacks_for_execution: CallbacksForExecution,
+) -> Vec<ReviewedNestedExecutionResult<TOutput>>
+where
+    TOutput: Clone,
+    CallbacksForExecution: Fn(
+        &ReviewedNestedExecution,
+        usize,
+    ) -> NestedMergeExecutionCallbacks<
+        TOutput,
+        MergeParent,
+        DiscoverOperations,
+        ApplyResolvedOutputs,
+    >,
+    MergeParent: Fn() -> MergeResult<TOutput>,
+    DiscoverOperations: Fn(&TOutput) -> NestedMergeDiscoveryResult,
+    ApplyResolvedOutputs: Fn(
+        &TOutput,
+        &[DelegatedChildOperation],
+        &DelegatedChildApplyPlan,
+        &[AppliedDelegatedChildOutput],
+    ) -> MergeResult<TOutput>,
+{
+    execute_reviewed_nested_executions(&bundle.reviewed_nested_executions, callbacks_for_execution)
+}
+
+pub fn execute_review_state_reviewed_nested_executions<
+    TOutput,
+    CallbacksForExecution,
+    MergeParent,
+    DiscoverOperations,
+    ApplyResolvedOutputs,
+>(
+    state: &ConformanceManifestReviewState,
+    callbacks_for_execution: CallbacksForExecution,
+) -> Vec<ReviewedNestedExecutionResult<TOutput>>
+where
+    TOutput: Clone,
+    CallbacksForExecution: Fn(
+        &ReviewedNestedExecution,
+        usize,
+    ) -> NestedMergeExecutionCallbacks<
+        TOutput,
+        MergeParent,
+        DiscoverOperations,
+        ApplyResolvedOutputs,
+    >,
+    MergeParent: Fn() -> MergeResult<TOutput>,
+    DiscoverOperations: Fn(&TOutput) -> NestedMergeDiscoveryResult,
+    ApplyResolvedOutputs: Fn(
+        &TOutput,
+        &[DelegatedChildOperation],
+        &DelegatedChildApplyPlan,
+        &[AppliedDelegatedChildOutput],
+    ) -> MergeResult<TOutput>,
+{
+    execute_reviewed_nested_executions(&state.reviewed_nested_executions, callbacks_for_execution)
 }
 
 pub fn conformance_review_host_hints(

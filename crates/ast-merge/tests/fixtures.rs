@@ -31,9 +31,11 @@ use ast_merge::{
     review_conformance_family_context, review_conformance_manifest, review_projected_child_groups,
     review_replay_bundle_envelope, review_replay_bundle_inputs, review_replay_context_compatible,
     review_request_id_for_family_context, review_request_id_for_projected_child_group,
-    reviewed_nested_execution, reviewed_nested_execution_envelope, run_conformance_case,
-    run_conformance_suite, run_named_conformance_suite, run_named_conformance_suite_entry,
-    run_planned_conformance_suite, run_planned_named_conformance_suites, select_conformance_case,
+    reviewed_nested_execution, reviewed_nested_execution_envelope,
+    execute_review_replay_bundle_reviewed_nested_executions,
+    execute_review_state_reviewed_nested_executions, run_conformance_case, run_conformance_suite,
+    run_named_conformance_suite, run_named_conformance_suite_entry, run_planned_conformance_suite,
+    run_planned_named_conformance_suites, select_conformance_case,
     select_projected_child_review_groups_accepted_for_apply,
     select_projected_child_review_groups_ready_for_apply, summarize_conformance_results,
     summarize_named_conformance_suite_reports, summarize_projected_child_review_group_progress,
@@ -3280,4 +3282,182 @@ fn conforms_to_slice_306_review_state_reviewed_nested_executions_fixture() {
     });
 
     assert_eq!(state, expected);
+}
+
+#[test]
+fn conforms_to_slice_307_review_replay_bundle_reviewed_nested_execution_application_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "review_replay_bundle_reviewed_nested_execution_application",
+    ));
+    let bundle = serde_json::from_value::<ReviewReplayBundle>(fixture["replay_bundle"].clone())
+        .expect("replay bundle should deserialize");
+    let expected = fixture["expected_results"]
+        .as_array()
+        .expect("expected_results should be an array");
+
+    let runs = execute_review_replay_bundle_reviewed_nested_executions(&bundle, |execution, index| {
+        reviewed_nested_execution_callbacks_from_fixture(
+            execution.clone(),
+            expected[index]["result"]["output"].as_str().map(str::to_string),
+        )
+    });
+
+    assert_reviewed_nested_execution_runs(&runs, expected);
+}
+
+#[test]
+fn conforms_to_slice_308_review_state_reviewed_nested_execution_application_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "review_state_reviewed_nested_execution_application",
+    ));
+    let state =
+        serde_json::from_value::<ConformanceManifestReviewState>(fixture["review_state"].clone())
+            .expect("review state should deserialize");
+    let expected = fixture["expected_results"]
+        .as_array()
+        .expect("expected_results should be an array");
+
+    let runs = execute_review_state_reviewed_nested_executions(&state, |execution, index| {
+        reviewed_nested_execution_callbacks_from_fixture(
+            execution.clone(),
+            expected[index]["result"]["output"].as_str().map(str::to_string),
+        )
+    });
+
+    assert_reviewed_nested_execution_runs(&runs, expected);
+}
+
+fn assert_reviewed_nested_execution_runs(
+    runs: &[ast_merge::ReviewedNestedExecutionResult<String>],
+    expected: &[Value],
+) {
+    assert_eq!(runs.len(), expected.len());
+
+    for (run, expected_run) in runs.iter().zip(expected) {
+        assert_eq!(
+            run.execution.family,
+            expected_run["execution_family"]
+                .as_str()
+                .expect("execution_family should be a string")
+        );
+        assert_eq!(
+            run.result.ok,
+            expected_run["result"]["ok"]
+                .as_bool()
+                .expect("result ok should be a bool")
+        );
+        assert_eq!(
+            run.result.output.as_deref(),
+            expected_run["result"]["output"].as_str()
+        );
+        assert_eq!(
+            run.result.diagnostics.len(),
+            expected_run["result"]["diagnostics"]
+                .as_array()
+                .expect("diagnostics should be an array")
+                .len()
+        );
+        assert_eq!(
+            run.result.policies.len(),
+            expected_run["result"]["policies"]
+                .as_array()
+                .expect("policies should be an array")
+                .len()
+        );
+    }
+}
+
+fn reviewed_nested_execution_callbacks_from_fixture(
+    execution: ReviewedNestedExecution,
+    expected_output: Option<String>,
+) -> ast_merge::NestedMergeExecutionCallbacks<
+    String,
+    impl Fn() -> ast_merge::MergeResult<String>,
+    impl Fn(&String) -> ast_merge::NestedMergeDiscoveryResult,
+    impl Fn(
+            &String,
+            &[ast_merge::DelegatedChildOperation],
+            &ast_merge::DelegatedChildApplyPlan,
+            &[ast_merge::AppliedDelegatedChildOutput],
+        ) -> ast_merge::MergeResult<String>
+        ,
+> {
+    let family_for_merge = execution.family.clone();
+    let family_for_discovery = execution.family.clone();
+    let expected_applied_children = execution.applied_children.clone();
+    let accepted_groups = execution.review_state.accepted_groups.clone();
+    ast_merge::NestedMergeExecutionCallbacks {
+        merge_parent: move || ast_merge::MergeResult {
+            ok: true,
+            diagnostics: vec![],
+            output: Some(format!("{family_for_merge}-merged-parent")),
+            policies: vec![],
+        },
+        discover_operations: move |_| ast_merge::NestedMergeDiscoveryResult {
+            ok: true,
+            diagnostics: vec![],
+            operations: Some(
+                accepted_groups
+                    .iter()
+                    .map(|group| match family_for_discovery.as_str() {
+                        "markdown" => ast_merge::DelegatedChildOperation {
+                            operation_id: group.child_operation_id.clone(),
+                            parent_operation_id: group.parent_operation_id.clone(),
+                            requested_strategy: "delegate_child_surface".to_string(),
+                            language_chain: vec!["markdown".to_string(), "typescript".to_string()],
+                            surface: ast_merge::DiscoveredSurface {
+                                surface_kind: "fenced_code_block".to_string(),
+                                declared_language: None,
+                                effective_language: "typescript".to_string(),
+                                address: group.delegated_runtime_surface_path.clone(),
+                                parent_address: None,
+                                span: None,
+                                owner: ast_merge::SurfaceOwnerRef {
+                                    kind: ast_merge::SurfaceOwnerKind::OwnedRegion,
+                                    address: "/code_fence/0".to_string(),
+                                },
+                                reconstruction_strategy: "portable_write".to_string(),
+                                metadata: std::collections::HashMap::from([(
+                                    "family".to_string(),
+                                    serde_json::json!("typescript"),
+                                )]),
+                            },
+                        },
+                        _ => ast_merge::DelegatedChildOperation {
+                            operation_id: group.child_operation_id.clone(),
+                            parent_operation_id: group.parent_operation_id.clone(),
+                            requested_strategy: "delegate_child_surface".to_string(),
+                            language_chain: vec!["ruby".to_string(), "ruby".to_string()],
+                            surface: ast_merge::DiscoveredSurface {
+                                surface_kind: "yard_example".to_string(),
+                                declared_language: None,
+                                effective_language: "ruby".to_string(),
+                                address: group.delegated_runtime_surface_path.clone(),
+                                parent_address: None,
+                                span: None,
+                                owner: ast_merge::SurfaceOwnerRef {
+                                    kind: ast_merge::SurfaceOwnerKind::OwnedRegion,
+                                    address: "/yard_example/1".to_string(),
+                                },
+                                reconstruction_strategy: "portable_write".to_string(),
+                                metadata: std::collections::HashMap::from([(
+                                    "family".to_string(),
+                                    serde_json::json!("ruby"),
+                                )]),
+                            },
+                        },
+                    })
+                    .collect(),
+            ),
+        },
+        apply_resolved_outputs: move |_, _, _, applied_children| {
+            assert_eq!(applied_children, expected_applied_children);
+            ast_merge::MergeResult {
+                ok: true,
+                diagnostics: vec![],
+                output: expected_output.clone(),
+                policies: vec![],
+            }
+        },
+    }
 }
