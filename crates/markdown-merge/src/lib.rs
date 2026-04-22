@@ -1,7 +1,7 @@
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, DelegatedChildOperation,
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile,
-    ParseResult, SurfaceOwnerKind, SurfaceOwnerRef,
+    MergeResult, ParseResult, SurfaceOwnerKind, SurfaceOwnerRef,
 };
 use tree_haver::{ParserRequest, parse_with_language_pack};
 
@@ -56,6 +56,12 @@ pub struct MarkdownAnalysis {
     pub normalized_source: String,
     pub root_kind: MarkdownRootKind,
     pub owners: Vec<MarkdownOwner>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct MarkdownSection {
+    path: String,
+    text: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -355,6 +361,122 @@ pub fn match_markdown_owners(
             .map(|owner| owner.path.clone())
             .filter(|path| !template_paths.contains(path))
             .collect(),
+    }
+}
+
+fn markdown_owner_start_indices(source: &str) -> std::collections::HashMap<String, usize> {
+    let normalized = normalize_markdown_source(source);
+    let lines = normalized.split('\n').collect::<Vec<_>>();
+    let mut starts = std::collections::HashMap::new();
+    let mut heading_index = 0usize;
+    let mut code_fence_index = 0usize;
+    let mut index = 0usize;
+
+    while index < lines.len() {
+        let line = lines[index];
+        if parse_heading(line).is_some() {
+            starts.insert(format!("/heading/{heading_index}"), index);
+            heading_index += 1;
+            index += 1;
+            continue;
+        }
+
+        if let Some((marker_char, marker_length, _)) = parse_code_fence(line) {
+            starts.insert(format!("/code_fence/{code_fence_index}"), index);
+            code_fence_index += 1;
+            index += 1;
+            while index < lines.len() {
+                if is_code_fence_close(lines[index], marker_char, marker_length) {
+                    break;
+                }
+                index += 1;
+            }
+            index += 1;
+            continue;
+        }
+
+        index += 1;
+    }
+
+    starts
+}
+
+fn collect_markdown_sections(source: &str, owners: &[MarkdownOwner]) -> Vec<MarkdownSection> {
+    let normalized = normalize_markdown_source(source);
+    let lines = normalized.split('\n').collect::<Vec<_>>();
+    let starts = markdown_owner_start_indices(&normalized);
+    let mut ordered = owners
+        .iter()
+        .filter_map(|owner| starts.get(&owner.path).map(|start| (owner, *start)))
+        .collect::<Vec<_>>();
+    ordered.sort_by_key(|(_, start)| *start);
+
+    ordered
+        .iter()
+        .enumerate()
+        .map(|(index, (owner, start))| {
+            let end_exclusive = ordered.get(index + 1).map(|(_, start)| *start).unwrap_or(lines.len());
+            MarkdownSection {
+                path: owner.path.clone(),
+                text: lines[*start..end_exclusive].join("\n").trim().to_string(),
+            }
+        })
+        .collect()
+}
+
+pub fn merge_markdown(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    backend: MarkdownBackend,
+) -> MergeResult<String> {
+    let template = parse_markdown_with_backend(template_source, dialect, backend);
+    if !template.ok || template.analysis.is_none() {
+        return MergeResult {
+            ok: false,
+            diagnostics: template.diagnostics,
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    let destination = parse_markdown_with_backend(destination_source, dialect, backend);
+    if !destination.ok || destination.analysis.is_none() {
+        return MergeResult {
+            ok: false,
+            diagnostics: destination.diagnostics,
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    let template_analysis = template.analysis.expect("template analysis");
+    let destination_analysis = destination.analysis.expect("destination analysis");
+    let destination_sections =
+        collect_markdown_sections(&destination_analysis.normalized_source, &destination_analysis.owners);
+    let template_sections =
+        collect_markdown_sections(&template_analysis.normalized_source, &template_analysis.owners);
+    let destination_paths = destination_sections
+        .iter()
+        .map(|section| section.path.clone())
+        .collect::<std::collections::HashSet<_>>();
+    let mut merged_sections = destination_sections
+        .iter()
+        .map(|section| section.text.clone())
+        .filter(|section| !section.is_empty())
+        .collect::<Vec<_>>();
+    merged_sections.extend(
+        template_sections
+            .iter()
+            .filter(|section| !destination_paths.contains(&section.path) && !section.text.is_empty())
+            .map(|section| section.text.clone()),
+    );
+
+    MergeResult {
+        ok: true,
+        diagnostics: vec![],
+        output: Some(format!("{}\n", merged_sections.join("\n\n").trim())),
+        policies: vec![],
     }
 }
 

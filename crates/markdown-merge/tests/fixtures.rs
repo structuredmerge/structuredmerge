@@ -13,7 +13,8 @@ use markdown_merge::{
     MarkdownBackend, MarkdownDialect, MarkdownOwnerKind, available_markdown_backends,
     markdown_backend_feature_profile, markdown_delegated_child_operations,
     markdown_discovered_surfaces, markdown_embedded_families, markdown_feature_profile,
-    markdown_plan_context_with_backend, match_markdown_owners, parse_markdown_with_backend,
+    markdown_plan_context_with_backend, match_markdown_owners, merge_markdown,
+    parse_markdown_with_backend,
 };
 use serde_json::Value;
 use tree_haver::registered_backends;
@@ -127,6 +128,16 @@ fn conforms_to_slice_197_markdown_manifest() {
             ][..]
         )
     );
+    assert_eq!(
+        conformance_fixture_path(&manifest, "markdown", "merge"),
+        Some(
+            &[
+                "markdown".to_string(),
+                "slice-286-merge".to_string(),
+                "section-merge.json".to_string(),
+            ][..]
+        )
+    );
 }
 
 #[test]
@@ -217,6 +228,22 @@ fn conforms_to_slice_199_markdown_matching() {
             .iter()
             .map(|item| item.as_str().unwrap().to_string())
             .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn conforms_to_slice_286_markdown_merge() {
+    let fixture = read_fixture(&["markdown", "slice-286-merge", "section-merge.json"]);
+    let result = merge_markdown(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        MarkdownBackend::KreuzbergLanguagePack,
+    );
+    assert!(result.ok);
+    assert_eq!(
+        result.output,
+        fixture["expected"]["output"].as_str().map(str::to_string)
     );
 }
 

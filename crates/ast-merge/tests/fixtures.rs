@@ -1038,7 +1038,7 @@ fn conforms_to_slice_200_markdown_family_suite_definitions_fixture() {
     let expected_definition = ConformanceSuiteDefinition {
         kind: "portable".to_string(),
         subject: ConformanceSuiteSubject { grammar: "markdown".to_string(), variant: None },
-        roles: vec!["analysis".to_string(), "matching".to_string()],
+        roles: vec!["analysis".to_string(), "matching".to_string(), "merge".to_string()],
     };
     assert_eq!(
         conformance_suite_definition(

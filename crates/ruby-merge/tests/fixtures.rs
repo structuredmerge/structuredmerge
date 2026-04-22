@@ -9,7 +9,7 @@ use ast_merge::{
     summarize_projected_child_review_group_progress,
 };
 use ruby_merge::{
-    RubyDialect, RubyOwnerKind, available_ruby_backends, match_ruby_owners, parse_ruby,
+    RubyDialect, RubyOwnerKind, available_ruby_backends, match_ruby_owners, merge_ruby, parse_ruby,
     ruby_backend_feature_profile, ruby_delegated_child_operations, ruby_discovered_surfaces,
     ruby_feature_profile, ruby_plan_context,
 };
@@ -100,6 +100,15 @@ fn conforms_to_ruby_fixtures() {
         ])
         .as_deref()
     );
+    assert_eq!(
+        ast_merge::conformance_fixture_path(&manifest, "ruby", "merge"),
+        Some(vec![
+            "ruby".to_string(),
+            "slice-287-merge".to_string(),
+            "module-merge.json".to_string(),
+        ])
+        .as_deref()
+    );
 
     let analysis_fixture = read_fixture(&["ruby", "slice-218-analysis", "module-owners.json"]);
     let analysis = parse_ruby(analysis_fixture["source"].as_str().unwrap(), RubyDialect::Ruby);
@@ -152,6 +161,48 @@ fn conforms_to_ruby_fixtures() {
             matched.unmatched_destination.iter().map(|path| Value::String(path.clone())).collect(),
         ),
         matching_fixture["expected"]["unmatched_destination"]
+    );
+
+    let merge_fixture = read_fixture(&["ruby", "slice-287-merge", "module-merge.json"]);
+    let merge_result = merge_ruby(
+        merge_fixture["template"].as_str().unwrap(),
+        merge_fixture["destination"].as_str().unwrap(),
+        RubyDialect::Ruby,
+    );
+    assert!(merge_result.ok);
+    assert_eq!(
+        merge_result.output,
+        merge_fixture["expected"]["output"].as_str().map(str::to_string)
+    );
+
+    let invalid_template_fixture = read_fixture(&["ruby", "slice-287-merge", "invalid-template.json"]);
+    let invalid_template_result = merge_ruby(
+        invalid_template_fixture["template"].as_str().unwrap(),
+        invalid_template_fixture["destination"].as_str().unwrap(),
+        RubyDialect::Ruby,
+    );
+    assert!(!invalid_template_result.ok);
+    assert_eq!(
+        serde_json::json!([{
+            "severity": invalid_template_result.diagnostics[0].severity,
+            "category": invalid_template_result.diagnostics[0].category,
+        }]),
+        invalid_template_fixture["expected"]["diagnostics"]
+    );
+
+    let invalid_destination_fixture = read_fixture(&["ruby", "slice-287-merge", "invalid-destination.json"]);
+    let invalid_destination_result = merge_ruby(
+        invalid_destination_fixture["template"].as_str().unwrap(),
+        invalid_destination_fixture["destination"].as_str().unwrap(),
+        RubyDialect::Ruby,
+    );
+    assert!(!invalid_destination_result.ok);
+    assert_eq!(
+        serde_json::json!([{
+            "severity": invalid_destination_result.diagnostics[0].severity,
+            "category": invalid_destination_result.diagnostics[0].category,
+        }]),
+        invalid_destination_fixture["expected"]["diagnostics"]
     );
 
     let surfaces_fixture =
