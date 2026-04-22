@@ -1197,7 +1197,10 @@ where
         .enumerate()
         .map(|(index, execution)| ReviewedNestedExecutionResult {
             execution: execution.clone(),
-            result: execute_reviewed_nested_execution(execution, callbacks_for_execution(execution, index)),
+            result: execute_reviewed_nested_execution(
+                execution,
+                callbacks_for_execution(execution, index),
+            ),
         })
         .collect()
 }
@@ -2076,6 +2079,41 @@ pub fn review_conformance_manifest(
         host_hints: conformance_review_host_hints(options),
         replay_context,
         reviewed_nested_executions,
+    }
+}
+
+pub fn review_conformance_manifest_with_replay_bundle_envelope(
+    manifest: &ConformanceManifest,
+    options: &ConformanceManifestReviewOptions,
+    replay_bundle_envelope: &ReviewReplayBundleEnvelope,
+    execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
+) -> ConformanceManifestReviewState {
+    match import_review_replay_bundle_envelope(replay_bundle_envelope) {
+        Ok(replay_bundle) => {
+            let mut envelope_options = options.clone();
+            envelope_options.review_replay_bundle = Some(replay_bundle);
+            review_conformance_manifest(manifest, &envelope_options, execute)
+        }
+        Err(error) => {
+            let mut fallback_options = options.clone();
+            fallback_options.review_replay_bundle = None;
+            let mut state = review_conformance_manifest(manifest, &fallback_options, execute);
+            state.diagnostics.push(Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: match error.category {
+                    ReviewTransportImportErrorCategory::KindMismatch => {
+                        DiagnosticCategory::KindMismatch
+                    }
+                    ReviewTransportImportErrorCategory::UnsupportedVersion => {
+                        DiagnosticCategory::UnsupportedVersion
+                    }
+                },
+                message: error.message,
+                path: None,
+                review: None,
+            });
+            state
+        }
     }
 }
 
