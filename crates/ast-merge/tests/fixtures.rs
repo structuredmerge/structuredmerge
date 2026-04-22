@@ -60,7 +60,9 @@ use ast_merge::{
     summarize_projected_child_review_group_progress, template_token_keys,
 };
 use markdown_merge::{MarkdownDialect, merge_markdown};
+use ruby_merge::{RubyDialect, merge_ruby};
 use serde_json::Value;
+use toml_merge::{TomlDialect, merge_toml};
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -882,6 +884,76 @@ fn conforms_to_mini_template_tree_family_merge_callback_fixture() {
                 entry.prepared_template_content.as_ref().expect("prepared content should exist"),
                 entry.destination_content.as_ref().expect("destination content should exist"),
                 MarkdownDialect::Markdown,
+            ),
+            family => ast_merge::MergeResult {
+                ok: false,
+                diagnostics: vec![ast_merge::Diagnostic {
+                    severity: ast_merge::DiagnosticSeverity::Error,
+                    category: ast_merge::DiagnosticCategory::ConfigurationError,
+                    message: format!("missing family merge adapter for {family}"),
+                    path: None,
+                    review: None,
+                }],
+                output: None,
+                policies: vec![],
+            },
+        },
+        &ast_merge::default_template_token_config(),
+    );
+    let expected = serde_json::from_value::<TemplateTreeRunResult>(fixture["expected"].clone())
+        .expect("expected should deserialize");
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn conforms_to_mini_template_tree_multi_family_merge_callback_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "mini_template_tree_multi_family_merge_callback",
+    ));
+    let fixture_dir = diagnostics_fixture_path("mini_template_tree_multi_family_merge_callback")
+        .parent()
+        .expect("fixture should have parent")
+        .to_path_buf();
+    let template_contents = read_relative_file_tree(&fixture_dir.join("template"));
+    let destination_contents = read_relative_file_tree(&fixture_dir.join("destination"));
+    let mut template_source_paths = template_contents.keys().cloned().collect::<Vec<_>>();
+    template_source_paths.sort();
+    let context = serde_json::from_value::<TemplateDestinationContext>(fixture["context"].clone())
+        .expect("context should deserialize");
+    let default_strategy =
+        serde_json::from_value::<TemplateStrategy>(fixture["default_strategy"].clone())
+            .expect("default_strategy should deserialize");
+    let overrides =
+        serde_json::from_value::<Vec<TemplateStrategyOverride>>(fixture["overrides"].clone())
+            .expect("overrides should deserialize");
+    let replacements =
+        serde_json::from_value::<HashMap<String, String>>(fixture["replacements"].clone())
+            .expect("replacements should deserialize");
+
+    let actual = run_template_tree_execution(
+        &template_source_paths,
+        &template_contents,
+        &destination_contents,
+        &context,
+        default_strategy,
+        &overrides,
+        &replacements,
+        |entry| match entry.classification.family.as_str() {
+            "markdown" => merge_markdown(
+                entry.prepared_template_content.as_ref().expect("prepared content should exist"),
+                entry.destination_content.as_ref().expect("destination content should exist"),
+                MarkdownDialect::Markdown,
+            ),
+            "toml" => merge_toml(
+                entry.prepared_template_content.as_ref().expect("prepared content should exist"),
+                entry.destination_content.as_ref().expect("destination content should exist"),
+                TomlDialect::Toml,
+            ),
+            "ruby" => merge_ruby(
+                entry.prepared_template_content.as_ref().expect("prepared content should exist"),
+                entry.destination_content.as_ref().expect("destination content should exist"),
+                RubyDialect::Ruby,
             ),
             family => ast_merge::MergeResult {
                 ok: false,

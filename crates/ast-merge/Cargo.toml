@@ -9,6 +9,8 @@ serde_json = "1.0"
 
 [dev-dependencies]
 markdown-merge = { path = "../markdown-merge" }
+toml-merge = { path = "../toml-merge" }
+ruby-merge = { path = "../ruby-merge" }
 
 [lib]
 path = "src/lib.rs"
