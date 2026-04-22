@@ -1,6 +1,6 @@
 use ast_merge::{
-    DelegatedChildApplyPlan, DelegatedChildApplyPlanEntry, DelegatedChildGroupReviewState,
-    AppliedDelegatedChildOutput, DelegatedChildOperation, DelegatedChildOutputResolutionOptions,
+    AppliedDelegatedChildOutput, DelegatedChildApplyPlan, DelegatedChildApplyPlanEntry,
+    DelegatedChildGroupReviewState, DelegatedChildOperation, DelegatedChildOutputResolutionOptions,
     DelegatedChildSurfaceOutput, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
     DiscoveredSurface, MergeResult, NestedMergeDiscoveryResult, NestedMergeExecutionCallbacks,
     ProjectedChildReviewGroup, ReviewDecision, ReviewDecisionAction, SurfaceOwnerKind,

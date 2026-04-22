@@ -13,25 +13,26 @@ use ast_merge::{
     NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults, PolicySurface,
     ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
     REVIEW_TRANSPORT_VERSION, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
-    ReviewReplayContext, ReviewRequest, conformance_family_feature_profile_path,
-    conformance_fixture_path, conformance_manifest_replay_context,
-    conformance_manifest_review_request_ids, conformance_manifest_review_state_envelope,
-    conformance_review_host_hints, conformance_suite_definition, conformance_suite_selectors,
-    default_conformance_family_context, delegated_child_apply_plan,
-    group_projected_child_review_cases, import_conformance_manifest_review_state_envelope,
-    import_review_replay_bundle_envelope, plan_conformance_suite, plan_named_conformance_suite,
-    plan_named_conformance_suite_entry, plan_named_conformance_suites,
-    plan_named_conformance_suites_with_diagnostics, projected_child_group_review_request,
-    report_conformance_manifest, report_conformance_suite, report_named_conformance_suite,
-    report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
-    report_named_conformance_suite_manifest, report_planned_conformance_suite,
-    report_planned_named_conformance_suites, resolve_conformance_family_context,
-    resolve_delegated_child_outputs, review_conformance_family_context,
-    review_conformance_manifest, review_projected_child_groups, review_replay_bundle_envelope,
-    review_replay_bundle_inputs, review_replay_context_compatible,
+    ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
+    conformance_family_feature_profile_path, conformance_fixture_path,
+    conformance_manifest_replay_context, conformance_manifest_review_request_ids,
+    conformance_manifest_review_state_envelope, conformance_review_host_hints,
+    conformance_suite_definition, conformance_suite_selectors, default_conformance_family_context,
+    delegated_child_apply_plan, group_projected_child_review_cases,
+    import_conformance_manifest_review_state_envelope, import_review_replay_bundle_envelope,
+    import_reviewed_nested_execution_envelope, plan_conformance_suite,
+    plan_named_conformance_suite, plan_named_conformance_suite_entry,
+    plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
+    projected_child_group_review_request, report_conformance_manifest, report_conformance_suite,
+    report_named_conformance_suite, report_named_conformance_suite_entry,
+    report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
+    report_planned_conformance_suite, report_planned_named_conformance_suites,
+    resolve_conformance_family_context, resolve_delegated_child_outputs,
+    review_conformance_family_context, review_conformance_manifest, review_projected_child_groups,
+    review_replay_bundle_envelope, review_replay_bundle_inputs, review_replay_context_compatible,
     review_request_id_for_family_context, review_request_id_for_projected_child_group,
-    run_conformance_case, run_conformance_suite, run_named_conformance_suite,
-    run_named_conformance_suite_entry, run_planned_conformance_suite,
+    reviewed_nested_execution_envelope, run_conformance_case, run_conformance_suite,
+    run_named_conformance_suite, run_named_conformance_suite_entry, run_planned_conformance_suite,
     run_planned_named_conformance_suites, select_conformance_case,
     select_projected_child_review_groups_accepted_for_apply,
     select_projected_child_review_groups_ready_for_apply, summarize_conformance_results,
@@ -3150,5 +3151,56 @@ fn conforms_to_slice_76_review_replay_bundle_transport_rejection_fixture() {
                 .expect("expected error should deserialize");
 
         assert_eq!(import_review_replay_bundle_envelope(&envelope), Err(expected));
+    }
+}
+
+#[test]
+fn conforms_to_slice_300_reviewed_nested_execution_json_roundtrip_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "reviewed_nested_execution_json_roundtrip",
+    ));
+    let execution = serde_json::from_value::<ReviewedNestedExecution>(fixture["execution"].clone())
+        .expect("reviewed nested execution should deserialize");
+
+    let round_tripped: ReviewedNestedExecution = serde_json::from_str(
+        &serde_json::to_string(&execution).expect("execution should serialize"),
+    )
+    .expect("execution should deserialize after roundtrip");
+
+    assert_eq!(round_tripped, execution);
+}
+
+#[test]
+fn conforms_to_slice_301_reviewed_nested_execution_transport_envelope_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("reviewed_nested_execution_envelope"));
+    let execution = serde_json::from_value::<ReviewedNestedExecution>(fixture["execution"].clone())
+        .expect("reviewed nested execution should deserialize");
+    let expected = serde_json::from_value::<ReviewedNestedExecutionEnvelope>(
+        fixture["expected_envelope"].clone(),
+    )
+    .expect("expected reviewed nested execution envelope should deserialize");
+
+    assert_eq!(reviewed_nested_execution_envelope(&execution), expected);
+    assert_eq!(import_reviewed_nested_execution_envelope(&expected), Ok(execution));
+    assert_eq!(expected.version, REVIEW_TRANSPORT_VERSION);
+}
+
+#[test]
+fn conforms_to_slice_302_reviewed_nested_execution_transport_rejection_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "reviewed_nested_execution_envelope_rejection",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let envelope =
+            serde_json::from_value::<ReviewedNestedExecutionEnvelope>(case["envelope"].clone())
+                .expect("envelope should deserialize");
+        let expected: ast_merge::ReviewTransportImportError =
+            serde_json::from_value(case["expected_error"].clone())
+                .expect("expected error should deserialize");
+
+        assert_eq!(import_reviewed_nested_execution_envelope(&envelope), Err(expected));
     }
 }

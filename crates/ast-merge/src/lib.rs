@@ -478,6 +478,20 @@ pub struct ReviewReplayBundleEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReviewedNestedExecution {
+    pub family: String,
+    pub review_state: DelegatedChildGroupReviewState,
+    pub applied_children: Vec<AppliedDelegatedChildOutput>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReviewedNestedExecutionEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub execution: ReviewedNestedExecution,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReviewHostHints {
     pub interactive: bool,
     pub require_explicit_contexts: bool,
@@ -1185,6 +1199,16 @@ pub fn review_replay_bundle_envelope(bundle: &ReviewReplayBundle) -> ReviewRepla
     }
 }
 
+pub fn reviewed_nested_execution_envelope(
+    execution: &ReviewedNestedExecution,
+) -> ReviewedNestedExecutionEnvelope {
+    ReviewedNestedExecutionEnvelope {
+        kind: "reviewed_nested_execution".to_string(),
+        version: REVIEW_TRANSPORT_VERSION,
+        execution: execution.clone(),
+    }
+}
+
 pub fn import_conformance_manifest_review_state_envelope(
     envelope: &ConformanceManifestReviewStateEnvelope,
 ) -> Result<ConformanceManifestReviewState, ReviewTransportImportError> {
@@ -1229,6 +1253,29 @@ pub fn import_review_replay_bundle_envelope(
     }
 
     Ok(envelope.replay_bundle.clone())
+}
+
+pub fn import_reviewed_nested_execution_envelope(
+    envelope: &ReviewedNestedExecutionEnvelope,
+) -> Result<ReviewedNestedExecution, ReviewTransportImportError> {
+    if envelope.kind != "reviewed_nested_execution" {
+        return Err(ReviewTransportImportError {
+            category: ReviewTransportImportErrorCategory::KindMismatch,
+            message: "expected reviewed_nested_execution envelope kind.".to_string(),
+        });
+    }
+
+    if envelope.version != REVIEW_TRANSPORT_VERSION {
+        return Err(ReviewTransportImportError {
+            category: ReviewTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported reviewed_nested_execution envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.execution.clone())
 }
 
 pub fn resolve_conformance_family_context(
