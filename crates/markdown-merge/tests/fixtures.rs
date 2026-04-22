@@ -10,8 +10,8 @@ use ast_merge::{
     summarize_projected_child_review_group_progress,
 };
 use markdown_merge::{
-    MarkdownBackend, MarkdownDialect, MarkdownOwnerKind, available_markdown_backends,
-    markdown_backend_feature_profile, markdown_delegated_child_operations,
+    MarkdownBackend, MarkdownDialect, MarkdownOwnerKind, apply_markdown_delegated_child_outputs,
+    available_markdown_backends, markdown_backend_feature_profile, markdown_delegated_child_operations,
     markdown_discovered_surfaces, markdown_embedded_families, markdown_feature_profile,
     markdown_plan_context_with_backend, match_markdown_owners, merge_markdown,
     parse_markdown_with_backend,
@@ -447,4 +447,34 @@ fn conforms_to_slice_244_markdown_delegated_child_apply_plan() {
     .expect("expected plan should deserialize");
 
     assert_eq!(delegated_child_apply_plan(&state, family), expected);
+}
+
+#[test]
+fn conforms_to_slice_288_markdown_delegated_child_apply_output() {
+    let fixture = read_fixture(&[
+        "markdown",
+        "slice-288-delegated-child-apply-output",
+        "fenced-code-applied-output.json",
+    ]);
+    let operations = serde_json::from_value::<Vec<ast_merge::DelegatedChildOperation>>(
+        fixture["delegated_operations"].clone(),
+    )
+    .expect("delegated operations should deserialize");
+    let apply_plan = serde_json::from_value::<ast_merge::DelegatedChildApplyPlan>(
+        fixture["apply_plan"].clone(),
+    )
+    .expect("apply plan should deserialize");
+    let applied_children = serde_json::from_value::<Vec<markdown_merge::AppliedChildOutput>>(
+        fixture["applied_children"].clone(),
+    )
+    .expect("applied children should deserialize");
+
+    let result = apply_markdown_delegated_child_outputs(
+        fixture["source"].as_str().unwrap(),
+        &operations,
+        &apply_plan,
+        &applied_children,
+    );
+    assert!(result.ok);
+    assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
 }

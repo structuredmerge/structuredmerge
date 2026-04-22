@@ -49,6 +49,12 @@ pub struct RubyAnalysis {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AppliedChildOutput {
+    pub operation_id: String,
+    pub output: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RubyFeatureProfile {
     pub family: &'static str,
     pub supported_dialects: Vec<RubyDialect>,
@@ -83,6 +89,16 @@ struct RubyDeclarationEntry {
 
 fn destination_wins_array_policy() -> PolicyReference {
     PolicyReference { surface: PolicySurface::Array, name: "destination_wins_array".to_string() }
+}
+
+fn configuration_error(message: &str) -> ast_merge::Diagnostic {
+    ast_merge::Diagnostic {
+        severity: ast_merge::DiagnosticSeverity::Error,
+        category: DiagnosticCategory::ConfigurationError,
+        message: message.to_string(),
+        path: None,
+        review: None,
+    }
 }
 
 fn parse_request(source: &str) -> ParserRequest {
@@ -582,6 +598,73 @@ pub fn merge_ruby(
         ok: true,
         diagnostics: vec![],
         output: Some(format!("{}\n", sections.join("\n\n").trim())),
+        policies: vec![destination_wins_array_policy()],
+    }
+}
+
+fn ruby_example_line_prefix(line: &str) -> String {
+    regex_lite::Regex::new(r"^(\s*#\s*)")
+        .expect("ruby example prefix regex")
+        .captures(line)
+        .and_then(|captures| captures.get(1).map(|value| value.as_str().to_string()))
+        .unwrap_or_else(|| "# ".to_string())
+}
+
+pub fn apply_ruby_delegated_child_outputs(
+    source: &str,
+    operations: &[DelegatedChildOperation],
+    apply_plan: &ast_merge::DelegatedChildApplyPlan,
+    applied_children: &[AppliedChildOutput],
+) -> MergeResult<String> {
+    let mut lines = normalize_source(source).split('\n').map(str::to_string).collect::<Vec<_>>();
+    let operations_by_id =
+        operations.iter().map(|operation| (operation.operation_id.clone(), operation)).collect::<HashMap<_, _>>();
+    let outputs_by_id = applied_children
+        .iter()
+        .map(|entry| (entry.operation_id.clone(), entry.output.clone()))
+        .collect::<HashMap<_, _>>();
+
+    let mut replacements = Vec::new();
+    for entry in &apply_plan.entries {
+        let Some(operation) = operations_by_id.get(&entry.delegated_group.child_operation_id) else {
+            continue;
+        };
+        let Some(span) = operation.surface.span.as_ref() else {
+            continue;
+        };
+        let Some(output) = outputs_by_id.get(&entry.delegated_group.child_operation_id) else {
+            continue;
+        };
+        replacements.push((span.start_line - 1, span.end_line - 1, output.clone()));
+    }
+
+    replacements.sort_by(|left, right| right.0.cmp(&left.0));
+    for (start, end, output) in replacements {
+        if start >= lines.len() {
+            return MergeResult {
+                ok: false,
+                diagnostics: vec![configuration_error("invalid delegated child span.")],
+                output: None,
+                policies: vec![destination_wins_array_policy()],
+            };
+        }
+        let prefix = ruby_example_line_prefix(&lines[start]);
+        let replacement_lines = if output.is_empty() {
+            Vec::new()
+        } else {
+            output
+                .trim_end_matches('\n')
+                .split('\n')
+                .map(|line| format!("{prefix}{line}"))
+                .collect::<Vec<_>>()
+        };
+        lines.splice(start..=end, replacement_lines);
+    }
+
+    MergeResult {
+        ok: true,
+        diagnostics: vec![],
+        output: Some(format!("{}\n", lines.join("\n").trim_end_matches('\n'))),
         policies: vec![destination_wins_array_policy()],
     }
 }

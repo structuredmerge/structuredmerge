@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, DelegatedChildOperation,
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile,
@@ -72,6 +74,12 @@ pub struct MarkdownEmbeddedFamilyCandidate {
     pub dialect: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct AppliedChildOutput {
+    pub operation_id: String,
+    pub output: String,
+}
+
 impl tree_haver::AnalysisHandle for MarkdownAnalysis {
     fn kind(&self) -> &'static str {
         "markdown"
@@ -96,6 +104,16 @@ fn unsupported_feature(message: &str) -> Diagnostic {
     Diagnostic {
         severity: DiagnosticSeverity::Error,
         category: DiagnosticCategory::UnsupportedFeature,
+        message: message.to_string(),
+        path: None,
+        review: None,
+    }
+}
+
+fn configuration_error(message: &str) -> Diagnostic {
+    Diagnostic {
+        severity: DiagnosticSeverity::Error,
+        category: DiagnosticCategory::ConfigurationError,
         message: message.to_string(),
         path: None,
         review: None,
@@ -422,6 +440,96 @@ fn collect_markdown_sections(source: &str, owners: &[MarkdownOwner]) -> Vec<Mark
             }
         })
         .collect()
+}
+
+fn markdown_fence_ranges(source: &str) -> HashMap<String, (usize, usize)> {
+    let lines = normalize_markdown_source(source).split('\n').map(str::to_string).collect::<Vec<_>>();
+    let mut ranges = HashMap::new();
+    let mut code_fence_index = 0usize;
+    let mut index = 0usize;
+
+    while index < lines.len() {
+        let line = &lines[index];
+        if let Some((marker_char, marker_length, _)) = parse_code_fence(line) {
+            let mut end = index;
+            let mut cursor = index + 1;
+            while cursor < lines.len() {
+                if is_code_fence_close(&lines[cursor], marker_char, marker_length) {
+                    end = cursor;
+                    break;
+                }
+                if cursor == lines.len() - 1 {
+                    end = cursor;
+                }
+                cursor += 1;
+            }
+            ranges.insert(format!("/code_fence/{code_fence_index}"), (index, end));
+            code_fence_index += 1;
+            index = end + 1;
+            continue;
+        }
+        index += 1;
+    }
+
+    ranges
+}
+
+pub fn apply_markdown_delegated_child_outputs(
+    source: &str,
+    operations: &[DelegatedChildOperation],
+    apply_plan: &ast_merge::DelegatedChildApplyPlan,
+    applied_children: &[AppliedChildOutput],
+) -> MergeResult<String> {
+    let mut lines = normalize_markdown_source(source)
+        .split('\n')
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    let ranges = markdown_fence_ranges(source);
+    let operations_by_id =
+        operations.iter().map(|operation| (operation.operation_id.clone(), operation)).collect::<HashMap<_, _>>();
+    let outputs_by_id = applied_children
+        .iter()
+        .map(|entry| (entry.operation_id.clone(), entry.output.clone()))
+        .collect::<HashMap<_, _>>();
+
+    let mut replacements = Vec::new();
+    for entry in &apply_plan.entries {
+        let Some(operation) = operations_by_id.get(&entry.delegated_group.child_operation_id) else {
+            continue;
+        };
+        let Some(output) = outputs_by_id.get(&entry.delegated_group.child_operation_id) else {
+            continue;
+        };
+        let Some((start, end)) = ranges.get(&operation.surface.owner.address).copied() else {
+            return MergeResult {
+                ok: false,
+                diagnostics: vec![configuration_error(&format!(
+                    "missing fenced-code range for {}",
+                    operation.surface.owner.address
+                ))],
+                output: None,
+                policies: vec![],
+            };
+        };
+        replacements.push((start, end, output.clone()));
+    }
+
+    replacements.sort_by(|left, right| right.0.cmp(&left.0));
+    for (start, end, output) in replacements {
+        let replacement_lines = if output.is_empty() {
+            Vec::new()
+        } else {
+            output.trim_end_matches('\n').split('\n').map(str::to_string).collect::<Vec<_>>()
+        };
+        lines.splice(start + 1..end, replacement_lines);
+    }
+
+    MergeResult {
+        ok: true,
+        diagnostics: vec![],
+        output: Some(format!("{}\n", lines.join("\n").trim_end_matches('\n'))),
+        policies: vec![],
+    }
 }
 
 pub fn merge_markdown(

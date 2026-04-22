@@ -9,9 +9,9 @@ use ast_merge::{
     summarize_projected_child_review_group_progress,
 };
 use ruby_merge::{
-    RubyDialect, RubyOwnerKind, available_ruby_backends, match_ruby_owners, merge_ruby, parse_ruby,
-    ruby_backend_feature_profile, ruby_delegated_child_operations, ruby_discovered_surfaces,
-    ruby_feature_profile, ruby_plan_context,
+    RubyDialect, RubyOwnerKind, apply_ruby_delegated_child_outputs, available_ruby_backends,
+    match_ruby_owners, merge_ruby, parse_ruby, ruby_backend_feature_profile,
+    ruby_delegated_child_operations, ruby_discovered_surfaces, ruby_feature_profile, ruby_plan_context,
 };
 use serde_json::Value;
 
@@ -363,5 +363,39 @@ fn conforms_to_ruby_fixtures() {
     assert_eq!(
         delegated_child_apply_plan(&apply_plan_state, apply_plan_family),
         expected_apply_plan
+    );
+
+    let apply_output_fixture = read_fixture(&[
+        "ruby",
+        "slice-289-delegated-child-apply-output",
+        "yard-example-applied-output.json",
+    ]);
+    let operations = serde_json::from_value::<Vec<ast_merge::DelegatedChildOperation>>(
+        apply_output_fixture["delegated_operations"].clone(),
+    )
+    .expect("delegated operations should deserialize");
+    let apply_plan = serde_json::from_value::<ast_merge::DelegatedChildApplyPlan>(
+        apply_output_fixture["apply_plan"].clone(),
+    )
+    .expect("apply plan should deserialize");
+    let applied_children = apply_output_fixture["applied_children"]
+        .as_array()
+        .expect("applied children should be an array")
+        .iter()
+        .map(|entry| ruby_merge::AppliedChildOutput {
+            operation_id: entry["operation_id"].as_str().unwrap().to_string(),
+            output: entry["output"].as_str().unwrap().to_string(),
+        })
+        .collect::<Vec<_>>();
+    let apply_output_result = apply_ruby_delegated_child_outputs(
+        apply_output_fixture["source"].as_str().unwrap(),
+        &operations,
+        &apply_plan,
+        &applied_children,
+    );
+    assert!(apply_output_result.ok);
+    assert_eq!(
+        apply_output_result.output,
+        apply_output_fixture["expected"]["output"].as_str().map(str::to_string)
     );
 }
