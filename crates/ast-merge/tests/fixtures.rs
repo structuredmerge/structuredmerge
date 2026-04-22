@@ -18,7 +18,9 @@ use ast_merge::{
     conformance_manifest_replay_context, conformance_manifest_review_request_ids,
     conformance_manifest_review_state_envelope, conformance_review_host_hints,
     conformance_suite_definition, conformance_suite_selectors, default_conformance_family_context,
-    delegated_child_apply_plan, execute_review_replay_bundle_reviewed_nested_executions,
+    delegated_child_apply_plan, execute_review_replay_bundle_envelope_reviewed_nested_executions,
+    execute_review_replay_bundle_reviewed_nested_executions,
+    execute_review_state_envelope_reviewed_nested_executions,
     execute_review_state_reviewed_nested_executions, group_projected_child_review_cases,
     import_conformance_manifest_review_state_envelope, import_review_replay_bundle_envelope,
     import_reviewed_nested_execution_envelope, plan_conformance_suite,
@@ -3442,6 +3444,136 @@ fn conforms_to_slice_308_review_state_reviewed_nested_execution_application_fixt
     });
 
     assert_reviewed_nested_execution_runs(&runs, expected);
+}
+
+#[test]
+fn conforms_to_slice_320_review_replay_bundle_envelope_reviewed_nested_execution_application_fixture()
+ {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "review_replay_bundle_envelope_reviewed_nested_execution_application",
+    ));
+    let envelope = serde_json::from_value::<ReviewReplayBundleEnvelope>(
+        fixture["replay_bundle_envelope"].clone(),
+    )
+    .expect("replay bundle envelope should deserialize");
+    let expected_application = fixture["expected_application"]
+        .as_object()
+        .expect("expected_application should be an object");
+    let expected =
+        expected_application["results"].as_array().expect("expected results should be an array");
+
+    let application = execute_review_replay_bundle_envelope_reviewed_nested_executions(
+        &envelope,
+        |execution, index| {
+            reviewed_nested_execution_callbacks_from_fixture(
+                execution.clone(),
+                expected[index]["result"]["output"].as_str().map(str::to_string),
+            )
+        },
+    );
+
+    assert!(application.diagnostics.is_empty());
+    assert_reviewed_nested_execution_runs(&application.results, expected);
+}
+
+#[test]
+fn conforms_to_slice_321_review_state_envelope_reviewed_nested_execution_application_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "review_state_envelope_reviewed_nested_execution_application",
+    ));
+    let envelope = serde_json::from_value::<ConformanceManifestReviewStateEnvelope>(
+        fixture["review_state_envelope"].clone(),
+    )
+    .expect("review state envelope should deserialize");
+    let expected_application = fixture["expected_application"]
+        .as_object()
+        .expect("expected_application should be an object");
+    let expected =
+        expected_application["results"].as_array().expect("expected results should be an array");
+
+    let application =
+        execute_review_state_envelope_reviewed_nested_executions(&envelope, |execution, index| {
+            reviewed_nested_execution_callbacks_from_fixture(
+                execution.clone(),
+                expected[index]["result"]["output"].as_str().map(str::to_string),
+            )
+        });
+
+    assert!(application.diagnostics.is_empty());
+    assert_reviewed_nested_execution_runs(&application.results, expected);
+}
+
+#[test]
+fn conforms_to_slice_322_review_replay_bundle_envelope_reviewed_nested_execution_rejection_fixture()
+{
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "review_replay_bundle_envelope_reviewed_nested_execution_rejection",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let envelope = serde_json::from_value::<ReviewReplayBundleEnvelope>(
+            case["replay_bundle_envelope"].clone(),
+        )
+        .expect("replay bundle envelope should deserialize");
+        let expected_application = case["expected_application"]
+            .as_object()
+            .expect("expected_application should be an object");
+        let expected_diagnostics = serde_json::from_value::<Vec<ast_merge::Diagnostic>>(
+            expected_application["diagnostics"].clone(),
+        )
+        .expect("expected diagnostics should deserialize");
+
+        let application =
+            execute_review_replay_bundle_envelope_reviewed_nested_executions::<String, _, _, _, _>(
+                &envelope,
+                |execution, _| {
+                    reviewed_nested_execution_callbacks_from_fixture(
+                        execution.clone(),
+                        Some("unused".to_string()),
+                    )
+                },
+            );
+
+        assert_eq!(application.diagnostics, expected_diagnostics);
+        assert!(application.results.is_empty());
+    }
+}
+
+#[test]
+fn conforms_to_slice_323_review_state_envelope_reviewed_nested_execution_rejection_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "review_state_envelope_reviewed_nested_execution_rejection",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let envelope = serde_json::from_value::<ConformanceManifestReviewStateEnvelope>(
+            case["review_state_envelope"].clone(),
+        )
+        .expect("review state envelope should deserialize");
+        let expected_application = case["expected_application"]
+            .as_object()
+            .expect("expected_application should be an object");
+        let expected_diagnostics = serde_json::from_value::<Vec<ast_merge::Diagnostic>>(
+            expected_application["diagnostics"].clone(),
+        )
+        .expect("expected diagnostics should deserialize");
+
+        let application =
+            execute_review_state_envelope_reviewed_nested_executions::<String, _, _, _, _>(
+                &envelope,
+                |execution, _| {
+                    reviewed_nested_execution_callbacks_from_fixture(
+                        execution.clone(),
+                        Some("unused".to_string()),
+                    )
+                },
+            );
+
+        assert_eq!(application.diagnostics, expected_diagnostics);
+        assert!(application.results.is_empty());
+    }
 }
 
 fn assert_reviewed_nested_execution_runs(

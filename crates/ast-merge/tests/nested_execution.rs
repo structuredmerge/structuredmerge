@@ -1,15 +1,15 @@
 use ast_merge::{
-    AppliedDelegatedChildOutput, DelegatedChildApplyPlan, DelegatedChildApplyPlanEntry,
-    DelegatedChildGroupReviewState, DelegatedChildOperation, DelegatedChildOutputResolutionOptions,
-    DelegatedChildSurfaceOutput, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
-    DiscoveredSurface, MergeResult, NestedMergeDiscoveryResult, NestedMergeExecutionCallbacks,
-    ProjectedChildReviewGroup, ReviewDecision, ReviewDecisionAction, SurfaceOwnerKind,
-    SurfaceOwnerRef, execute_delegated_child_apply_plan, execute_nested_merge,
+    AppliedDelegatedChildOutput, ConformanceManifestReviewState, ConformanceSuiteSummary,
+    DelegatedChildApplyPlan, DelegatedChildApplyPlanEntry, DelegatedChildGroupReviewState,
+    DelegatedChildOperation, DelegatedChildOutputResolutionOptions, DelegatedChildSurfaceOutput,
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, DiscoveredSurface, MergeResult,
+    NamedConformanceSuiteReportEnvelope, NestedMergeDiscoveryResult, NestedMergeExecutionCallbacks,
+    ProjectedChildReviewGroup, ReviewDecision, ReviewDecisionAction, ReviewHostHints,
+    ReviewReplayBundle, ReviewReplayContext, SurfaceOwnerKind, SurfaceOwnerRef,
+    execute_delegated_child_apply_plan, execute_nested_merge,
     execute_review_replay_bundle_reviewed_nested_executions,
     execute_review_state_reviewed_nested_executions, execute_reviewed_nested_execution,
     execute_reviewed_nested_executions, execute_reviewed_nested_merge, reviewed_nested_execution,
-    ConformanceManifestReviewState, ConformanceSuiteSummary, NamedConformanceSuiteReportEnvelope,
-    ReviewHostHints, ReviewReplayBundle, ReviewReplayContext,
 };
 
 fn nested_operation(address: &str, family: Option<&str>) -> DelegatedChildOperation {
@@ -560,20 +560,12 @@ fn execute_review_state_reviewed_nested_executions_uses_state() {
         &ConformanceManifestReviewState {
             report: NamedConformanceSuiteReportEnvelope {
                 entries: vec![],
-                summary: ConformanceSuiteSummary {
-                    total: 0,
-                    passed: 0,
-                    failed: 0,
-                    skipped: 0,
-                },
+                summary: ConformanceSuiteSummary { total: 0, passed: 0, failed: 0, skipped: 0 },
             },
             diagnostics: vec![],
             requests: vec![],
             applied_decisions: vec![],
-            host_hints: ReviewHostHints {
-                interactive: false,
-                require_explicit_contexts: false,
-            },
+            host_hints: ReviewHostHints { interactive: false, require_explicit_contexts: false },
             replay_context: ReviewReplayContext {
                 surface: "conformance_manifest".to_string(),
                 families: vec![],

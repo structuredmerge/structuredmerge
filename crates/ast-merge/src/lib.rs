@@ -495,6 +495,12 @@ pub struct ReviewedNestedExecutionResult<TOutput> {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReviewedNestedExecutionApplication<TOutput> {
+    pub diagnostics: Vec<Diagnostic>,
+    pub results: Vec<ReviewedNestedExecutionResult<TOutput>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReviewedNestedExecutionEnvelope {
     pub kind: String,
     pub version: u32,
@@ -1238,6 +1244,64 @@ where
     execute_reviewed_nested_executions(&bundle.reviewed_nested_executions, callbacks_for_execution)
 }
 
+pub fn execute_review_replay_bundle_envelope_reviewed_nested_executions<
+    TOutput,
+    CallbacksForExecution,
+    MergeParent,
+    DiscoverOperations,
+    ApplyResolvedOutputs,
+>(
+    envelope: &ReviewReplayBundleEnvelope,
+    callbacks_for_execution: CallbacksForExecution,
+) -> ReviewedNestedExecutionApplication<TOutput>
+where
+    TOutput: Clone,
+    CallbacksForExecution: Fn(
+        &ReviewedNestedExecution,
+        usize,
+    ) -> NestedMergeExecutionCallbacks<
+        TOutput,
+        MergeParent,
+        DiscoverOperations,
+        ApplyResolvedOutputs,
+    >,
+    MergeParent: Fn() -> MergeResult<TOutput>,
+    DiscoverOperations: Fn(&TOutput) -> NestedMergeDiscoveryResult,
+    ApplyResolvedOutputs: Fn(
+        &TOutput,
+        &[DelegatedChildOperation],
+        &DelegatedChildApplyPlan,
+        &[AppliedDelegatedChildOutput],
+    ) -> MergeResult<TOutput>,
+{
+    match import_review_replay_bundle_envelope(envelope) {
+        Ok(bundle) => ReviewedNestedExecutionApplication {
+            diagnostics: Vec::new(),
+            results: execute_review_replay_bundle_reviewed_nested_executions(
+                &bundle,
+                callbacks_for_execution,
+            ),
+        },
+        Err(error) => ReviewedNestedExecutionApplication {
+            diagnostics: vec![Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: match error.category {
+                    ReviewTransportImportErrorCategory::KindMismatch => {
+                        DiagnosticCategory::KindMismatch
+                    }
+                    ReviewTransportImportErrorCategory::UnsupportedVersion => {
+                        DiagnosticCategory::UnsupportedVersion
+                    }
+                },
+                message: error.message,
+                path: None,
+                review: None,
+            }],
+            results: Vec::new(),
+        },
+    }
+}
+
 pub fn execute_review_state_reviewed_nested_executions<
     TOutput,
     CallbacksForExecution,
@@ -1269,6 +1333,64 @@ where
     ) -> MergeResult<TOutput>,
 {
     execute_reviewed_nested_executions(&state.reviewed_nested_executions, callbacks_for_execution)
+}
+
+pub fn execute_review_state_envelope_reviewed_nested_executions<
+    TOutput,
+    CallbacksForExecution,
+    MergeParent,
+    DiscoverOperations,
+    ApplyResolvedOutputs,
+>(
+    envelope: &ConformanceManifestReviewStateEnvelope,
+    callbacks_for_execution: CallbacksForExecution,
+) -> ReviewedNestedExecutionApplication<TOutput>
+where
+    TOutput: Clone,
+    CallbacksForExecution: Fn(
+        &ReviewedNestedExecution,
+        usize,
+    ) -> NestedMergeExecutionCallbacks<
+        TOutput,
+        MergeParent,
+        DiscoverOperations,
+        ApplyResolvedOutputs,
+    >,
+    MergeParent: Fn() -> MergeResult<TOutput>,
+    DiscoverOperations: Fn(&TOutput) -> NestedMergeDiscoveryResult,
+    ApplyResolvedOutputs: Fn(
+        &TOutput,
+        &[DelegatedChildOperation],
+        &DelegatedChildApplyPlan,
+        &[AppliedDelegatedChildOutput],
+    ) -> MergeResult<TOutput>,
+{
+    match import_conformance_manifest_review_state_envelope(envelope) {
+        Ok(state) => ReviewedNestedExecutionApplication {
+            diagnostics: Vec::new(),
+            results: execute_review_state_reviewed_nested_executions(
+                &state,
+                callbacks_for_execution,
+            ),
+        },
+        Err(error) => ReviewedNestedExecutionApplication {
+            diagnostics: vec![Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: match error.category {
+                    ReviewTransportImportErrorCategory::KindMismatch => {
+                        DiagnosticCategory::KindMismatch
+                    }
+                    ReviewTransportImportErrorCategory::UnsupportedVersion => {
+                        DiagnosticCategory::UnsupportedVersion
+                    }
+                },
+                message: error.message,
+                path: None,
+                review: None,
+            }],
+            results: Vec::new(),
+        },
+    }
 }
 
 pub fn conformance_review_host_hints(
