@@ -316,12 +316,20 @@ fn conforms_to_slice_327_markdown_provider_reviewed_nested_review_artifact_rejec
 }
 
 #[test]
-fn conforms_to_slice_313_reviewed_nested_review_artifact_envelope_application_fixture() {
-    let fixture = read_fixture(&[
-        "markdown",
-        "slice-313-reviewed-nested-review-artifact-envelope-application",
-        "fenced-code-reviewed-nested-review-artifact-envelope-application.json",
+fn conforms_to_slice_328_markdown_provider_reviewed_nested_review_artifact_envelope_application_fixture() {
+    let provider_fixture = read_fixture(&[
+        "diagnostics",
+        "slice-328-markdown-provider-reviewed-nested-review-artifact-envelope-application",
+        "rust-markdown-provider-reviewed-nested-review-artifact-envelope-application.json",
     ]);
+    let shared_fixture_path = provider_fixture["shared_fixture_path"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|value| value.as_str().unwrap())
+        .collect::<Vec<_>>();
+    let fixture = read_fixture(&shared_fixture_path);
+    let expected = &provider_fixture["providers"]["pulldown-cmark"]["expected"];
     let replay_bundle_envelope =
         serde_json::from_value::<ast_merge::ReviewReplayBundleEnvelope>(
             fixture["replay_bundle_envelope"].clone(),
@@ -341,7 +349,7 @@ fn conforms_to_slice_313_reviewed_nested_review_artifact_envelope_application_fi
         None,
     );
     assert!(replay_result.ok);
-    assert_eq!(replay_result.output, fixture["expected"]["output"].as_str().map(str::to_string));
+    assert_eq!(replay_result.output, expected["output"].as_str().map(str::to_string));
 
     let state_result = merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope(
         fixture["template"].as_str().unwrap(),
@@ -351,7 +359,7 @@ fn conforms_to_slice_313_reviewed_nested_review_artifact_envelope_application_fi
         None,
     );
     assert!(state_result.ok);
-    assert_eq!(state_result.output, fixture["expected"]["output"].as_str().map(str::to_string));
+    assert_eq!(state_result.output, expected["output"].as_str().map(str::to_string));
 }
 
 #[test]
