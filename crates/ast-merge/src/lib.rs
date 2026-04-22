@@ -361,6 +361,40 @@ pub struct TemplateTreeRunResult {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
+pub enum TemplateTreeRunStatus {
+    Created,
+    Updated,
+    Kept,
+    Blocked,
+    Omitted,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateTreeRunReportEntry {
+    pub template_source_path: String,
+    pub logical_destination_path: String,
+    pub destination_path: Option<String>,
+    pub execution_action: TemplateExecutionAction,
+    pub status: TemplateTreeRunStatus,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateTreeRunReportSummary {
+    pub created: usize,
+    pub updated: usize,
+    pub kept: usize,
+    pub blocked: usize,
+    pub omitted: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateTreeRunReport {
+    pub entries: Vec<TemplateTreeRunReportEntry>,
+    pub summary: TemplateTreeRunReportSummary,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ConformanceOutcome {
     Passed,
     Failed,
@@ -1581,6 +1615,61 @@ where
         apply_result: apply_template_execution(&execution_plan, merge_prepared_content),
         execution_plan,
     }
+}
+
+pub fn report_template_tree_run(result: &TemplateTreeRunResult) -> TemplateTreeRunReport {
+    let created =
+        result.apply_result.created_paths.iter().cloned().collect::<std::collections::HashSet<_>>();
+    let updated =
+        result.apply_result.updated_paths.iter().cloned().collect::<std::collections::HashSet<_>>();
+    let kept =
+        result.apply_result.kept_paths.iter().cloned().collect::<std::collections::HashSet<_>>();
+    let blocked =
+        result.apply_result.blocked_paths.iter().cloned().collect::<std::collections::HashSet<_>>();
+    let omitted =
+        result.apply_result.omitted_paths.iter().cloned().collect::<std::collections::HashSet<_>>();
+
+    let mut summary =
+        TemplateTreeRunReportSummary { created: 0, updated: 0, kept: 0, blocked: 0, omitted: 0 };
+    let entries = result
+        .execution_plan
+        .iter()
+        .map(|entry| {
+            let status = if entry.execution_action == TemplateExecutionAction::Omit
+                || omitted.contains(&entry.logical_destination_path)
+            {
+                TemplateTreeRunStatus::Omitted
+            } else if entry.destination_path.as_ref().is_some_and(|path| blocked.contains(path)) {
+                TemplateTreeRunStatus::Blocked
+            } else if entry.destination_path.as_ref().is_some_and(|path| kept.contains(path)) {
+                TemplateTreeRunStatus::Kept
+            } else if entry.destination_path.as_ref().is_some_and(|path| updated.contains(path)) {
+                TemplateTreeRunStatus::Updated
+            } else if entry.destination_path.as_ref().is_some_and(|path| created.contains(path)) {
+                TemplateTreeRunStatus::Created
+            } else {
+                TemplateTreeRunStatus::Created
+            };
+
+            match status {
+                TemplateTreeRunStatus::Created => summary.created += 1,
+                TemplateTreeRunStatus::Updated => summary.updated += 1,
+                TemplateTreeRunStatus::Kept => summary.kept += 1,
+                TemplateTreeRunStatus::Blocked => summary.blocked += 1,
+                TemplateTreeRunStatus::Omitted => summary.omitted += 1,
+            }
+
+            TemplateTreeRunReportEntry {
+                template_source_path: entry.template_source_path.clone(),
+                logical_destination_path: entry.logical_destination_path.clone(),
+                destination_path: entry.destination_path.clone(),
+                execution_action: entry.execution_action,
+                status,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    TemplateTreeRunReport { entries, summary }
 }
 
 pub fn conformance_suite_definition<'a>(
