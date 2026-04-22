@@ -1106,6 +1106,50 @@ where
     execute_delegated_child_apply_plan(&apply_plan, applied_children, callbacks)
 }
 
+pub fn reviewed_nested_execution(
+    family: &str,
+    review_state: &DelegatedChildGroupReviewState,
+    applied_children: &[AppliedDelegatedChildOutput],
+) -> ReviewedNestedExecution {
+    ReviewedNestedExecution {
+        family: family.to_string(),
+        review_state: review_state.clone(),
+        applied_children: applied_children.to_vec(),
+    }
+}
+
+pub fn execute_reviewed_nested_execution<
+    TOutput,
+    MergeParent,
+    DiscoverOperations,
+    ApplyResolvedOutputs,
+>(
+    execution: &ReviewedNestedExecution,
+    callbacks: NestedMergeExecutionCallbacks<
+        TOutput,
+        MergeParent,
+        DiscoverOperations,
+        ApplyResolvedOutputs,
+    >,
+) -> MergeResult<TOutput>
+where
+    MergeParent: Fn() -> MergeResult<TOutput>,
+    DiscoverOperations: Fn(&TOutput) -> NestedMergeDiscoveryResult,
+    ApplyResolvedOutputs: Fn(
+        &TOutput,
+        &[DelegatedChildOperation],
+        &DelegatedChildApplyPlan,
+        &[AppliedDelegatedChildOutput],
+    ) -> MergeResult<TOutput>,
+{
+    execute_reviewed_nested_merge(
+        &execution.review_state,
+        &execution.family,
+        &execution.applied_children,
+        callbacks,
+    )
+}
+
 pub fn conformance_review_host_hints(
     options: &ConformanceManifestReviewOptions,
 ) -> ReviewHostHints {

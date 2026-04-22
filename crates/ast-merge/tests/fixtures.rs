@@ -31,9 +31,9 @@ use ast_merge::{
     review_conformance_family_context, review_conformance_manifest, review_projected_child_groups,
     review_replay_bundle_envelope, review_replay_bundle_inputs, review_replay_context_compatible,
     review_request_id_for_family_context, review_request_id_for_projected_child_group,
-    reviewed_nested_execution_envelope, run_conformance_case, run_conformance_suite,
-    run_named_conformance_suite, run_named_conformance_suite_entry, run_planned_conformance_suite,
-    run_planned_named_conformance_suites, select_conformance_case,
+    reviewed_nested_execution, reviewed_nested_execution_envelope, run_conformance_case,
+    run_conformance_suite, run_named_conformance_suite, run_named_conformance_suite_entry,
+    run_planned_conformance_suite, run_planned_named_conformance_suites, select_conformance_case,
     select_projected_child_review_groups_accepted_for_apply,
     select_projected_child_review_groups_ready_for_apply, summarize_conformance_results,
     summarize_named_conformance_suite_reports, summarize_projected_child_review_group_progress,
@@ -3203,4 +3203,30 @@ fn conforms_to_slice_302_reviewed_nested_execution_transport_rejection_fixture()
 
         assert_eq!(import_reviewed_nested_execution_envelope(&envelope), Err(expected));
     }
+}
+
+#[test]
+fn conforms_to_slice_303_reviewed_nested_execution_payload_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("reviewed_nested_execution_payload"));
+    let review_state = serde_json::from_value::<ast_merge::DelegatedChildGroupReviewState>(
+        fixture["review_state"].clone(),
+    )
+    .expect("review state should deserialize");
+    let applied_children = serde_json::from_value::<Vec<ast_merge::AppliedDelegatedChildOutput>>(
+        fixture["applied_children"].clone(),
+    )
+    .expect("applied children should deserialize");
+    let expected =
+        serde_json::from_value::<ReviewedNestedExecution>(fixture["expected_execution"].clone())
+            .expect("expected reviewed nested execution should deserialize");
+
+    assert_eq!(
+        reviewed_nested_execution(
+            fixture["family"].as_str().expect("family should be a string"),
+            &review_state,
+            &applied_children,
+        ),
+        expected
+    );
 }
