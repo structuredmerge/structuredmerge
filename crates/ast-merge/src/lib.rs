@@ -415,6 +415,34 @@ pub struct DelegatedChildOutputResolution {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NestedMergeDiscoveryResult {
+    pub ok: bool,
+    pub diagnostics: Vec<Diagnostic>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operations: Option<Vec<DelegatedChildOperation>>,
+}
+
+pub struct NestedMergeExecutionCallbacks<
+    TOutput,
+    MergeParent,
+    DiscoverOperations,
+    ApplyResolvedOutputs,
+> where
+    MergeParent: Fn() -> MergeResult<TOutput>,
+    DiscoverOperations: Fn(&TOutput) -> NestedMergeDiscoveryResult,
+    ApplyResolvedOutputs: Fn(
+        &TOutput,
+        &[DelegatedChildOperation],
+        &DelegatedChildApplyPlan,
+        &[AppliedDelegatedChildOutput],
+    ) -> MergeResult<TOutput>,
+{
+    pub merge_parent: MergeParent,
+    pub discover_operations: DiscoverOperations,
+    pub apply_resolved_outputs: ApplyResolvedOutputs,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReviewReplayBundle {
     pub replay_context: ReviewReplayContext,
     pub decisions: Vec<ReviewDecision>,
@@ -903,6 +931,81 @@ pub fn resolve_delegated_child_outputs(
         apply_plan: Some(DelegatedChildApplyPlan { entries }),
         applied_children: Some(applied_children),
     }
+}
+
+pub fn execute_nested_merge<TOutput, MergeParent, DiscoverOperations, ApplyResolvedOutputs>(
+    nested_outputs: &[DelegatedChildSurfaceOutput],
+    options: &DelegatedChildOutputResolutionOptions,
+    callbacks: NestedMergeExecutionCallbacks<
+        TOutput,
+        MergeParent,
+        DiscoverOperations,
+        ApplyResolvedOutputs,
+    >,
+) -> MergeResult<TOutput>
+where
+    MergeParent: Fn() -> MergeResult<TOutput>,
+    DiscoverOperations: Fn(&TOutput) -> NestedMergeDiscoveryResult,
+    ApplyResolvedOutputs: Fn(
+        &TOutput,
+        &[DelegatedChildOperation],
+        &DelegatedChildApplyPlan,
+        &[AppliedDelegatedChildOutput],
+    ) -> MergeResult<TOutput>,
+{
+    let merged = (callbacks.merge_parent)();
+    let Some(merged_output) = merged.output.as_ref() else {
+        return merged;
+    };
+    if !merged.ok {
+        return merged;
+    }
+
+    let discovery = (callbacks.discover_operations)(merged_output);
+    let Some(operations) = discovery.operations.as_ref() else {
+        return MergeResult {
+            ok: false,
+            diagnostics: discovery.diagnostics,
+            output: None,
+            policies: vec![],
+        };
+    };
+    if !discovery.ok {
+        return MergeResult {
+            ok: false,
+            diagnostics: discovery.diagnostics,
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    let resolution = resolve_delegated_child_outputs(operations, nested_outputs, options);
+    let Some(apply_plan) = resolution.apply_plan.as_ref() else {
+        return MergeResult {
+            ok: false,
+            diagnostics: resolution.diagnostics,
+            output: None,
+            policies: vec![],
+        };
+    };
+    let Some(applied_children) = resolution.applied_children.as_ref() else {
+        return MergeResult {
+            ok: false,
+            diagnostics: resolution.diagnostics,
+            output: None,
+            policies: vec![],
+        };
+    };
+    if !resolution.ok {
+        return MergeResult {
+            ok: false,
+            diagnostics: resolution.diagnostics,
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    (callbacks.apply_resolved_outputs)(merged_output, operations, apply_plan, applied_children)
 }
 
 pub fn conformance_review_host_hints(

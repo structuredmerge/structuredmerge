@@ -693,28 +693,7 @@ pub fn merge_ruby_with_nested_outputs(
     dialect: RubyDialect,
     nested_outputs: &[NestedChildOutput],
 ) -> MergeResult<String> {
-    let merged = merge_ruby(template_source, destination_source, dialect);
-    if !merged.ok || merged.output.is_none() {
-        return merged;
-    }
-
-    let merged_output = merged.output.clone().expect("merged output");
-    let analysis = parse_ruby(&merged_output, dialect);
-    if !analysis.ok || analysis.analysis.is_none() {
-        return MergeResult {
-            ok: false,
-            diagnostics: analysis.diagnostics,
-            output: None,
-            policies: vec![],
-        };
-    }
-
-    let operations = ruby_delegated_child_operations(
-        analysis.analysis.as_ref().expect("analysis"),
-        "ruby-document-0",
-    );
-    let resolution = ast_merge::resolve_delegated_child_outputs(
-        &operations,
+    ast_merge::execute_nested_merge(
         &nested_outputs
             .iter()
             .map(|nested_output| ast_merge::DelegatedChildSurfaceOutput {
@@ -726,25 +705,45 @@ pub fn merge_ruby_with_nested_outputs(
             default_family: "ruby".to_string(),
             request_id_prefix: "nested_ruby_child".to_string(),
         },
-    );
-    if !resolution.ok {
-        return MergeResult {
-            ok: false,
-            diagnostics: resolution.diagnostics,
-            output: None,
-            policies: vec![],
-        };
-    }
+        ast_merge::NestedMergeExecutionCallbacks {
+            merge_parent: || merge_ruby(template_source, destination_source, dialect),
+            discover_operations: |merged_output| {
+                let analysis = parse_ruby(merged_output, dialect);
+                if !analysis.ok || analysis.analysis.is_none() {
+                    return ast_merge::NestedMergeDiscoveryResult {
+                        ok: false,
+                        diagnostics: analysis.diagnostics,
+                        operations: None,
+                    };
+                }
 
-    let apply_plan = resolution.apply_plan.expect("apply plan should be present");
-    let applied_children = resolution
-        .applied_children
-        .expect("applied children should be present")
-        .into_iter()
-        .map(|entry| AppliedChildOutput { operation_id: entry.operation_id, output: entry.output })
-        .collect::<Vec<_>>();
+                ast_merge::NestedMergeDiscoveryResult {
+                    ok: true,
+                    diagnostics: vec![],
+                    operations: Some(ruby_delegated_child_operations(
+                        analysis.analysis.as_ref().expect("analysis"),
+                        "ruby-document-0",
+                    )),
+                }
+            },
+            apply_resolved_outputs: |merged_output, operations, apply_plan, applied_children| {
+                let translated = applied_children
+                    .iter()
+                    .map(|entry| AppliedChildOutput {
+                        operation_id: entry.operation_id.clone(),
+                        output: entry.output.clone(),
+                    })
+                    .collect::<Vec<_>>();
 
-    apply_ruby_delegated_child_outputs(&merged_output, &operations, &apply_plan, &applied_children)
+                apply_ruby_delegated_child_outputs(
+                    merged_output,
+                    operations,
+                    apply_plan,
+                    &translated,
+                )
+            },
+        },
+    )
 }
 
 pub fn ruby_discovered_surfaces(analysis: &RubyAnalysis) -> Vec<DiscoveredSurface> {
