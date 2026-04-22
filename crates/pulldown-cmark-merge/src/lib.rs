@@ -1,12 +1,13 @@
 use std::sync::Once;
 
 use ast_merge::{
-    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, MergeResult, ParseResult,
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, DelegatedChildGroupReviewState,
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, MergeResult, ParseResult,
 };
 use markdown_merge::{
-    MarkdownAnalysis, MarkdownDialect, collect_markdown_owners, markdown_feature_profile,
-    merge_markdown as merge_markdown_with_substrate,
+    AppliedChildOutput, MarkdownAnalysis, MarkdownDialect, collect_markdown_owners,
+    markdown_feature_profile, merge_markdown as merge_markdown_with_substrate,
+    merge_markdown_with_reviewed_nested_outputs as merge_markdown_with_reviewed_nested_outputs_with_substrate,
     match_markdown_owners as match_markdown_owners_with_substrate, normalize_markdown_source,
 };
 use pulldown_cmark::Parser;
@@ -135,8 +136,8 @@ pub fn match_markdown_owners(
 }
 
 pub fn merge_markdown(
-    template_source: &str,
-    destination_source: &str,
+  template_source: &str,
+  destination_source: &str,
     dialect: MarkdownDialect,
     backend: Option<&str>,
 ) -> MergeResult<String> {
@@ -157,6 +158,37 @@ pub fn merge_markdown(
         template_source,
         destination_source,
         dialect,
+        markdown_merge::MarkdownBackend::KreuzbergLanguagePack,
+    )
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    review_state: &DelegatedChildGroupReviewState,
+    applied_children: &[AppliedChildOutput],
+    backend: Option<&str>,
+) -> MergeResult<String> {
+    ensure_backend_registered();
+    let requested = backend.unwrap_or(BACKEND_ID);
+    if requested != BACKEND_ID {
+        return MergeResult {
+            ok: false,
+            diagnostics: vec![unsupported_feature(&format!(
+                "Unsupported Markdown backend {requested}."
+            ))],
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    merge_markdown_with_reviewed_nested_outputs_with_substrate(
+        template_source,
+        destination_source,
+        dialect,
+        review_state,
+        applied_children,
         markdown_merge::MarkdownBackend::KreuzbergLanguagePack,
     )
 }

@@ -8,7 +8,8 @@ use ast_merge::{
 use markdown_merge::MarkdownDialect;
 use pulldown_cmark_merge::{
     available_markdown_backends, markdown_backend_feature_profile, markdown_embedded_families,
-    markdown_plan_context, match_markdown_owners, merge_markdown, parse_markdown,
+    markdown_plan_context, match_markdown_owners, merge_markdown,
+    merge_markdown_with_reviewed_nested_outputs, parse_markdown,
     provider_markdown_feature_profile,
 };
 use serde_json::Value;
@@ -181,6 +182,34 @@ fn conforms_to_slice_208_embedded_family_fixture() {
         serde_json::to_value(markdown_embedded_families(&analysis)).unwrap(),
         fixture["expected"]
     );
+}
+
+#[test]
+fn conforms_to_slice_298_reviewed_nested_merge_fixture() {
+    let fixture = read_fixture(&[
+        "markdown",
+        "slice-298-reviewed-nested-merge",
+        "fenced-code-reviewed-nested-merge.json",
+    ]);
+    let review_state = serde_json::from_value::<ast_merge::DelegatedChildGroupReviewState>(
+        fixture["review_state"].clone(),
+    )
+    .expect("review state should deserialize");
+    let applied_children = serde_json::from_value::<Vec<markdown_merge::AppliedChildOutput>>(
+        fixture["applied_children"].clone(),
+    )
+    .expect("applied children should deserialize");
+
+    let result = merge_markdown_with_reviewed_nested_outputs(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        &review_state,
+        &applied_children,
+        None,
+    );
+    assert!(result.ok);
+    assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
 }
 
 #[test]
