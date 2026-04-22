@@ -1,4 +1,8 @@
-use std::{fs, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use ast_merge::{
     ConformanceCaseExecution, ConformanceCaseRef, ConformanceCaseRequirements,
@@ -16,12 +20,13 @@ use ast_merge::{
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
     ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, TemplateDestinationContext,
     TemplateExecutionPlanEntry, TemplatePlanEntry, TemplatePlanStateEntry,
-    TemplatePlanTokenStateEntry, TemplatePreparedEntry, TemplateStrategy, TemplateStrategyOverride,
-    TemplateTokenConfig, classify_template_target_path, conformance_family_feature_profile_path,
-    conformance_fixture_path, conformance_manifest_replay_context,
-    conformance_manifest_review_request_ids, conformance_manifest_review_state_envelope,
-    conformance_review_host_hints, conformance_suite_definition, conformance_suite_selectors,
-    default_conformance_family_context, delegated_child_apply_plan, enrich_template_plan_entries,
+    TemplatePlanTokenStateEntry, TemplatePreparedEntry, TemplatePreviewResult, TemplateStrategy,
+    TemplateStrategyOverride, TemplateTokenConfig, classify_template_target_path,
+    conformance_family_feature_profile_path, conformance_fixture_path,
+    conformance_manifest_replay_context, conformance_manifest_review_request_ids,
+    conformance_manifest_review_state_envelope, conformance_review_host_hints,
+    conformance_suite_definition, conformance_suite_selectors, default_conformance_family_context,
+    delegated_child_apply_plan, enrich_template_plan_entries,
     enrich_template_plan_entries_with_token_state,
     execute_review_replay_bundle_envelope_reviewed_nested_executions,
     execute_review_replay_bundle_reviewed_nested_executions,
@@ -31,13 +36,13 @@ use ast_merge::{
     import_reviewed_nested_execution_envelope, normalize_template_source_path,
     plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
     plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
-    plan_template_entries, plan_template_execution, prepare_template_entries,
-    projected_child_group_review_request, report_conformance_manifest, report_conformance_suite,
-    report_named_conformance_suite, report_named_conformance_suite_entry,
-    report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
-    report_planned_conformance_suite, report_planned_named_conformance_suites,
-    resolve_conformance_family_context, resolve_delegated_child_outputs,
-    resolve_template_destination_path,
+    plan_template_entries, plan_template_execution, plan_template_tree_execution,
+    prepare_template_entries, preview_template_execution, projected_child_group_review_request,
+    report_conformance_manifest, report_conformance_suite, report_named_conformance_suite,
+    report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
+    report_named_conformance_suite_manifest, report_planned_conformance_suite,
+    report_planned_named_conformance_suites, resolve_conformance_family_context,
+    resolve_delegated_child_outputs, resolve_template_destination_path,
     review_and_execute_conformance_manifest_with_replay_bundle_envelope,
     review_conformance_family_context, review_conformance_manifest,
     review_conformance_manifest_with_replay_bundle_envelope, review_projected_child_groups,
@@ -93,6 +98,32 @@ fn diagnostics_fixture_path(role: &str) -> PathBuf {
 fn read_fixture_from_path(path: PathBuf) -> Value {
     let source = fs::read_to_string(path).expect("fixture should be readable");
     serde_json::from_str(&source).expect("fixture should be valid json")
+}
+
+fn read_relative_file_tree(root: &Path) -> HashMap<String, String> {
+    let mut files = HashMap::new();
+
+    fn walk(root: &Path, current: &Path, files: &mut HashMap<String, String>) {
+        for entry in fs::read_dir(current).expect("tree directory should be readable") {
+            let entry = entry.expect("tree entry should be readable");
+            let path = entry.path();
+            if path.is_dir() {
+                walk(root, &path, files);
+                continue;
+            }
+
+            let relative_path = path
+                .strip_prefix(root)
+                .expect("path should be under root")
+                .to_string_lossy()
+                .replace('\\', "/");
+            let content = fs::read_to_string(&path).expect("tree file should be readable");
+            files.insert(relative_path, content);
+        }
+    }
+
+    walk(root, root, &mut files);
+    files
 }
 
 fn fixture_suite_selector(fixture: &Value) -> ConformanceSuiteSelector {
@@ -477,6 +508,97 @@ fn conforms_to_template_execution_plan_fixture() {
     .expect("expected_entries should deserialize");
 
     assert_eq!(plan_template_execution(&prepared_entries, &destination_contents), expected);
+}
+
+#[test]
+fn conforms_to_mini_template_tree_plan_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("mini_template_tree_plan"));
+    let fixture_dir = diagnostics_fixture_path("mini_template_tree_plan")
+        .parent()
+        .expect("fixture should have parent")
+        .to_path_buf();
+    let template_contents = read_relative_file_tree(&fixture_dir.join("template"));
+    let destination_contents = read_relative_file_tree(&fixture_dir.join("destination"));
+    let mut template_source_paths = template_contents.keys().cloned().collect::<Vec<_>>();
+    template_source_paths.sort();
+    let mut existing_destination_paths = destination_contents.keys().cloned().collect::<Vec<_>>();
+    existing_destination_paths.sort();
+    let context = serde_json::from_value::<TemplateDestinationContext>(fixture["context"].clone())
+        .expect("context should deserialize");
+    let default_strategy =
+        serde_json::from_value::<TemplateStrategy>(fixture["default_strategy"].clone())
+            .expect("default_strategy should deserialize");
+    let overrides =
+        serde_json::from_value::<Vec<TemplateStrategyOverride>>(fixture["overrides"].clone())
+            .expect("overrides should deserialize");
+    let replacements =
+        serde_json::from_value::<HashMap<String, String>>(fixture["replacements"].clone())
+            .expect("replacements should deserialize");
+    let expected = serde_json::from_value::<Vec<TemplateExecutionPlanEntry>>(
+        fixture["expected_entries"].clone(),
+    )
+    .expect("expected_entries should deserialize");
+
+    assert_eq!(
+        plan_template_tree_execution(
+            &template_source_paths,
+            &template_contents,
+            &existing_destination_paths,
+            &destination_contents,
+            &context,
+            default_strategy,
+            &overrides,
+            &replacements,
+            &ast_merge::default_template_token_config(),
+        ),
+        expected
+    );
+}
+
+#[test]
+fn conforms_to_mini_template_tree_preview_fixture() {
+    let plan_fixture = read_fixture_from_path(diagnostics_fixture_path("mini_template_tree_plan"));
+    let preview_fixture =
+        read_fixture_from_path(diagnostics_fixture_path("mini_template_tree_preview"));
+    let fixture_dir = diagnostics_fixture_path("mini_template_tree_plan")
+        .parent()
+        .expect("fixture should have parent")
+        .to_path_buf();
+    let template_contents = read_relative_file_tree(&fixture_dir.join("template"));
+    let destination_contents = read_relative_file_tree(&fixture_dir.join("destination"));
+    let mut template_source_paths = template_contents.keys().cloned().collect::<Vec<_>>();
+    template_source_paths.sort();
+    let mut existing_destination_paths = destination_contents.keys().cloned().collect::<Vec<_>>();
+    existing_destination_paths.sort();
+    let context =
+        serde_json::from_value::<TemplateDestinationContext>(plan_fixture["context"].clone())
+            .expect("context should deserialize");
+    let default_strategy =
+        serde_json::from_value::<TemplateStrategy>(plan_fixture["default_strategy"].clone())
+            .expect("default_strategy should deserialize");
+    let overrides =
+        serde_json::from_value::<Vec<TemplateStrategyOverride>>(plan_fixture["overrides"].clone())
+            .expect("overrides should deserialize");
+    let replacements =
+        serde_json::from_value::<HashMap<String, String>>(plan_fixture["replacements"].clone())
+            .expect("replacements should deserialize");
+    let execution_plan = plan_template_tree_execution(
+        &template_source_paths,
+        &template_contents,
+        &existing_destination_paths,
+        &destination_contents,
+        &context,
+        default_strategy,
+        &overrides,
+        &replacements,
+        &ast_merge::default_template_token_config(),
+    );
+    let expected = serde_json::from_value::<TemplatePreviewResult>(
+        preview_fixture["expected_preview"].clone(),
+    )
+    .expect("expected_preview should deserialize");
+
+    assert_eq!(preview_template_execution(&execution_plan), expected);
 }
 
 #[test]

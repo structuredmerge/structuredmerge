@@ -326,6 +326,16 @@ pub struct TemplateExecutionPlanEntry {
     pub destination_content: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplatePreviewResult {
+    pub result_files: HashMap<String, String>,
+    pub created_paths: Vec<String>,
+    pub updated_paths: Vec<String>,
+    pub kept_paths: Vec<String>,
+    pub blocked_paths: Vec<String>,
+    pub omitted_paths: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConformanceOutcome {
@@ -1275,6 +1285,99 @@ pub fn plan_template_execution(
             }
         })
         .collect()
+}
+
+pub fn plan_template_tree_execution(
+    template_source_paths: &[String],
+    template_contents: &HashMap<String, String>,
+    existing_destination_paths: &[String],
+    destination_contents: &HashMap<String, String>,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    config: &TemplateTokenConfig,
+) -> Vec<TemplateExecutionPlanEntry> {
+    let planned_entries =
+        plan_template_entries(template_source_paths, context, default_strategy, overrides);
+    let stateful_entries =
+        enrich_template_plan_entries(&planned_entries, existing_destination_paths);
+    let token_state_entries = enrich_template_plan_entries_with_token_state(
+        &stateful_entries,
+        template_contents,
+        replacements,
+        config,
+    );
+    let prepared_entries =
+        prepare_template_entries(&token_state_entries, template_contents, replacements, config);
+
+    plan_template_execution(&prepared_entries, destination_contents)
+}
+
+pub fn preview_template_execution(entries: &[TemplateExecutionPlanEntry]) -> TemplatePreviewResult {
+    let mut result = TemplatePreviewResult {
+        result_files: HashMap::new(),
+        created_paths: Vec::new(),
+        updated_paths: Vec::new(),
+        kept_paths: Vec::new(),
+        blocked_paths: Vec::new(),
+        omitted_paths: Vec::new(),
+    };
+
+    for entry in entries {
+        match entry.execution_action {
+            TemplateExecutionAction::Blocked => {
+                if let Some(destination_path) = entry.destination_path.as_ref() {
+                    result.blocked_paths.push(destination_path.clone());
+                }
+            }
+            TemplateExecutionAction::Omit => {
+                result.omitted_paths.push(entry.logical_destination_path.clone());
+            }
+            TemplateExecutionAction::Keep => {
+                if let (Some(destination_path), Some(destination_content)) =
+                    (entry.destination_path.as_ref(), entry.destination_content.as_ref())
+                {
+                    result
+                        .result_files
+                        .insert(destination_path.clone(), destination_content.clone());
+                    result.kept_paths.push(destination_path.clone());
+                }
+            }
+            TemplateExecutionAction::RawCopy | TemplateExecutionAction::WritePreparedContent => {
+                if let (Some(destination_path), Some(prepared_template_content)) =
+                    (entry.destination_path.as_ref(), entry.prepared_template_content.as_ref())
+                {
+                    result
+                        .result_files
+                        .insert(destination_path.clone(), prepared_template_content.clone());
+                    if entry.destination_exists {
+                        result.updated_paths.push(destination_path.clone());
+                    } else {
+                        result.created_paths.push(destination_path.clone());
+                    }
+                }
+            }
+            TemplateExecutionAction::MergePreparedContent => {
+                if let (Some(destination_path), Some(prepared_template_content), None) = (
+                    entry.destination_path.as_ref(),
+                    entry.prepared_template_content.as_ref(),
+                    entry.destination_content.as_ref(),
+                ) {
+                    result
+                        .result_files
+                        .insert(destination_path.clone(), prepared_template_content.clone());
+                    if entry.destination_exists {
+                        result.updated_paths.push(destination_path.clone());
+                    } else {
+                        result.created_paths.push(destination_path.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    result
 }
 
 pub fn conformance_suite_definition<'a>(
