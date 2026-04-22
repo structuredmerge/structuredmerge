@@ -466,8 +466,8 @@ pub fn match_ruby_owners(
 }
 
 fn collect_ruby_require_entries(source: &str) -> Vec<RubyRequireEntry> {
-    let require_regex =
-        regex_lite::Regex::new(r#"^\s*require(?:_relative)?\s+["']([^"']+)["']"#).expect("require regex");
+    let require_regex = regex_lite::Regex::new(r#"^\s*require(?:_relative)?\s+["']([^"']+)["']"#)
+        .expect("require regex");
     normalize_source(source)
         .split('\n')
         .filter(|line| require_regex.is_match(line))
@@ -478,8 +478,8 @@ fn collect_ruby_require_entries(source: &str) -> Vec<RubyRequireEntry> {
 fn collect_ruby_declaration_entries(source: &str) -> Vec<RubyDeclarationEntry> {
     let normalized = normalize_source(source);
     let lines = normalized.split('\n').collect::<Vec<_>>();
-    let require_regex =
-        regex_lite::Regex::new(r#"^\s*require(?:_relative)?\s+["']([^"']+)["']"#).expect("require regex");
+    let require_regex = regex_lite::Regex::new(r#"^\s*require(?:_relative)?\s+["']([^"']+)["']"#)
+        .expect("require regex");
     let class_regex =
         regex_lite::Regex::new(r"^\s*class\s+([A-Z]\w*(?:::\w+)*)").expect("class regex");
     let module_regex =
@@ -525,7 +525,10 @@ fn collect_ruby_declaration_entries(source: &str) -> Vec<RubyDeclarationEntry> {
         let mut cursor = index + 1;
         while cursor < lines.len() {
             let candidate = lines[cursor].trim();
-            if class_regex.is_match(candidate) || module_regex.is_match(candidate) || def_regex.is_match(candidate) {
+            if class_regex.is_match(candidate)
+                || module_regex.is_match(candidate)
+                || def_regex.is_match(candidate)
+            {
                 depth += 1;
             }
             if candidate == "end" {
@@ -589,7 +592,13 @@ pub fn merge_ruby(
     let mut sections = Vec::new();
     if !requires.is_empty() {
         sections.push(
-            requires.iter().map(|entry| entry.text.clone()).collect::<Vec<_>>().join("\n").trim().to_string(),
+            requires
+                .iter()
+                .map(|entry| entry.text.clone())
+                .collect::<Vec<_>>()
+                .join("\n")
+                .trim()
+                .to_string(),
         );
     }
     sections.extend(destination_declarations.iter().map(|entry| entry.text.clone()));
@@ -623,8 +632,10 @@ pub fn apply_ruby_delegated_child_outputs(
     applied_children: &[AppliedChildOutput],
 ) -> MergeResult<String> {
     let mut lines = normalize_source(source).split('\n').map(str::to_string).collect::<Vec<_>>();
-    let operations_by_id =
-        operations.iter().map(|operation| (operation.operation_id.clone(), operation)).collect::<HashMap<_, _>>();
+    let operations_by_id = operations
+        .iter()
+        .map(|operation| (operation.operation_id.clone(), operation))
+        .collect::<HashMap<_, _>>();
     let outputs_by_id = applied_children
         .iter()
         .map(|entry| (entry.operation_id.clone(), entry.output.clone()))
@@ -632,7 +643,8 @@ pub fn apply_ruby_delegated_child_outputs(
 
     let mut replacements = Vec::new();
     for entry in &apply_plan.entries {
-        let Some(operation) = operations_by_id.get(&entry.delegated_group.child_operation_id) else {
+        let Some(operation) = operations_by_id.get(&entry.delegated_group.child_operation_id)
+        else {
             continue;
         };
         let Some(span) = operation.surface.span.as_ref() else {
@@ -697,65 +709,39 @@ pub fn merge_ruby_with_nested_outputs(
         };
     }
 
-    let operations =
-        ruby_delegated_child_operations(analysis.analysis.as_ref().expect("analysis"), "ruby-document-0");
-    let operations_by_surface_address =
-        operations.iter().map(|operation| (operation.surface.address.clone(), operation.clone())).collect::<HashMap<_, _>>();
-
-    for nested_output in nested_outputs {
-        if !operations_by_surface_address.contains_key(&nested_output.surface_address) {
-            return MergeResult {
-                ok: false,
-                diagnostics: vec![configuration_error(&format!(
-                    "missing delegated child surface {}.",
-                    nested_output.surface_address
-                ))],
-                output: None,
-                policies: vec![],
-            };
-        }
+    let operations = ruby_delegated_child_operations(
+        analysis.analysis.as_ref().expect("analysis"),
+        "ruby-document-0",
+    );
+    let resolution = ast_merge::resolve_delegated_child_outputs(
+        &operations,
+        &nested_outputs
+            .iter()
+            .map(|nested_output| ast_merge::DelegatedChildSurfaceOutput {
+                surface_address: nested_output.surface_address.clone(),
+                output: nested_output.output.clone(),
+            })
+            .collect::<Vec<_>>(),
+        &ast_merge::DelegatedChildOutputResolutionOptions {
+            default_family: "ruby".to_string(),
+            request_id_prefix: "nested_ruby_child".to_string(),
+        },
+    );
+    if !resolution.ok {
+        return MergeResult {
+            ok: false,
+            diagnostics: resolution.diagnostics,
+            output: None,
+            policies: vec![],
+        };
     }
 
-    let apply_plan = ast_merge::DelegatedChildApplyPlan {
-        entries: nested_outputs
-            .iter()
-            .enumerate()
-            .map(|(index, nested_output)| {
-                let operation = operations_by_surface_address
-                    .get(&nested_output.surface_address)
-                    .expect("operation should exist");
-                let request_id = format!("nested_ruby_child:{index}");
-                ast_merge::DelegatedChildApplyPlanEntry {
-                    request_id: request_id.clone(),
-                    family: "ruby".to_string(),
-                    delegated_group: ast_merge::ProjectedChildReviewGroup {
-                        delegated_apply_group: request_id.clone(),
-                        parent_operation_id: operation.parent_operation_id.clone(),
-                        child_operation_id: operation.operation_id.clone(),
-                        delegated_runtime_surface_path: nested_output.surface_address.clone(),
-                        case_ids: vec![],
-                        delegated_case_ids: vec![],
-                    },
-                    decision: ast_merge::ReviewDecision {
-                        request_id,
-                        action: ast_merge::ReviewDecisionAction::ApplyDelegatedChildGroup,
-                        context: None,
-                    },
-                }
-            })
-            .collect(),
-    };
-    let applied_children = nested_outputs
-        .iter()
-        .map(|nested_output| {
-            let operation = operations_by_surface_address
-                .get(&nested_output.surface_address)
-                .expect("operation should exist");
-            AppliedChildOutput {
-                operation_id: operation.operation_id.clone(),
-                output: nested_output.output.clone(),
-            }
-        })
+    let apply_plan = resolution.apply_plan.expect("apply plan should be present");
+    let applied_children = resolution
+        .applied_children
+        .expect("applied children should be present")
+        .into_iter()
+        .map(|entry| AppliedChildOutput { operation_id: entry.operation_id, output: entry.output })
         .collect::<Vec<_>>();
 
     apply_ruby_delegated_child_outputs(&merged_output, &operations, &apply_plan, &applied_children)

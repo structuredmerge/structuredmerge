@@ -11,11 +11,10 @@ use ast_merge::{
 };
 use markdown_merge::{
     MarkdownBackend, MarkdownDialect, MarkdownOwnerKind, apply_markdown_delegated_child_outputs,
-    available_markdown_backends, markdown_backend_feature_profile, markdown_delegated_child_operations,
-    markdown_discovered_surfaces, markdown_embedded_families, markdown_feature_profile,
-    markdown_plan_context_with_backend, match_markdown_owners, merge_markdown,
-    merge_markdown_with_nested_outputs,
-    parse_markdown_with_backend,
+    available_markdown_backends, markdown_backend_feature_profile,
+    markdown_delegated_child_operations, markdown_discovered_surfaces, markdown_embedded_families,
+    markdown_feature_profile, markdown_plan_context_with_backend, match_markdown_owners,
+    merge_markdown, merge_markdown_with_nested_outputs, parse_markdown_with_backend,
 };
 use serde_json::Value;
 use tree_haver::registered_backends;
@@ -242,10 +241,7 @@ fn conforms_to_slice_286_markdown_merge() {
         MarkdownBackend::KreuzbergLanguagePack,
     );
     assert!(result.ok);
-    assert_eq!(
-        result.output,
-        fixture["expected"]["output"].as_str().map(str::to_string)
-    );
+    assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
 }
 
 #[test]
@@ -461,10 +457,9 @@ fn conforms_to_slice_288_markdown_delegated_child_apply_output() {
         fixture["delegated_operations"].clone(),
     )
     .expect("delegated operations should deserialize");
-    let apply_plan = serde_json::from_value::<ast_merge::DelegatedChildApplyPlan>(
-        fixture["apply_plan"].clone(),
-    )
-    .expect("apply plan should deserialize");
+    let apply_plan =
+        serde_json::from_value::<ast_merge::DelegatedChildApplyPlan>(fixture["apply_plan"].clone())
+            .expect("apply plan should deserialize");
     let applied_children = serde_json::from_value::<Vec<markdown_merge::AppliedChildOutput>>(
         fixture["applied_children"].clone(),
     )
@@ -482,7 +477,8 @@ fn conforms_to_slice_288_markdown_delegated_child_apply_output() {
 
 #[test]
 fn conforms_to_slice_290_markdown_nested_merge() {
-    let fixture = read_fixture(&["markdown", "slice-290-nested-merge", "fenced-code-nested-merge.json"]);
+    let fixture =
+        read_fixture(&["markdown", "slice-290-nested-merge", "fenced-code-nested-merge.json"]);
     let nested_outputs = fixture["nested_outputs"]
         .as_array()
         .expect("nested outputs should be an array")

@@ -7,27 +7,26 @@ use ast_merge::{
     ConformanceManifestReport, ConformanceManifestReviewOptions, ConformanceManifestReviewState,
     ConformanceManifestReviewStateEnvelope, ConformanceOutcome, ConformanceSelectionStatus,
     ConformanceSuiteDefinition, ConformanceSuitePlan, ConformanceSuiteReport,
-    ConformanceSuiteSelector, ConformanceSuiteSubject,
-    ConformanceSuiteSummary, DelegatedChildOperation, DiagnosticCategory, DiagnosticSeverity,
-    DiscoveredSurface, FamilyFeatureProfile, NamedConformanceSuitePlan,
-    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
-    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
-    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
-    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
-    conformance_family_feature_profile_path, conformance_fixture_path,
-    conformance_manifest_replay_context, conformance_manifest_review_request_ids,
-    conformance_manifest_review_state_envelope, conformance_review_host_hints,
-    conformance_suite_definition, conformance_suite_selectors,
-    default_conformance_family_context,
-    delegated_child_apply_plan, group_projected_child_review_cases,
-    import_conformance_manifest_review_state_envelope, import_review_replay_bundle_envelope,
-    plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
-    plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
-    projected_child_group_review_request, report_conformance_manifest, report_conformance_suite,
-    report_named_conformance_suite, report_named_conformance_suite_entry,
-    report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
-    report_planned_conformance_suite, report_planned_named_conformance_suites,
-    resolve_conformance_family_context, review_conformance_family_context,
+    ConformanceSuiteSelector, ConformanceSuiteSubject, ConformanceSuiteSummary,
+    DelegatedChildOperation, DiagnosticCategory, DiagnosticSeverity, DiscoveredSurface,
+    FamilyFeatureProfile, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
+    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults, PolicySurface,
+    ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
+    REVIEW_TRANSPORT_VERSION, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
+    ReviewReplayContext, ReviewRequest, conformance_family_feature_profile_path,
+    conformance_fixture_path, conformance_manifest_replay_context,
+    conformance_manifest_review_request_ids, conformance_manifest_review_state_envelope,
+    conformance_review_host_hints, conformance_suite_definition, conformance_suite_selectors,
+    default_conformance_family_context, delegated_child_apply_plan,
+    group_projected_child_review_cases, import_conformance_manifest_review_state_envelope,
+    import_review_replay_bundle_envelope, plan_conformance_suite, plan_named_conformance_suite,
+    plan_named_conformance_suite_entry, plan_named_conformance_suites,
+    plan_named_conformance_suites_with_diagnostics, projected_child_group_review_request,
+    report_conformance_manifest, report_conformance_suite, report_named_conformance_suite,
+    report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
+    report_named_conformance_suite_manifest, report_planned_conformance_suite,
+    report_planned_named_conformance_suites, resolve_conformance_family_context,
+    resolve_delegated_child_outputs, review_conformance_family_context,
     review_conformance_manifest, review_projected_child_groups, review_replay_bundle_envelope,
     review_replay_bundle_inputs, review_replay_context_compatible,
     review_request_id_for_family_context, review_request_id_for_projected_child_group,
@@ -1134,8 +1133,8 @@ fn conforms_to_slice_246_markdown_nested_suite_definitions_fixture() {
                 },
             },
         )
-            .expect("definition should exist")
-            .roles,
+        .expect("definition should exist")
+        .roles,
         vec![
             "analysis".to_string(),
             "matching".to_string(),
@@ -1235,8 +1234,8 @@ fn conforms_to_slice_249_ruby_nested_suite_definitions_fixture() {
                 },
             },
         )
-            .expect("definition should exist")
-            .roles,
+        .expect("definition should exist")
+        .roles,
         vec![
             "analysis".to_string(),
             "matching".to_string(),
@@ -2997,6 +2996,67 @@ fn conforms_to_slice_243_delegated_child_apply_plan_fixture() {
     .expect("expected plan should deserialize");
 
     assert_eq!(delegated_child_apply_plan(&state, family), expected);
+}
+
+#[test]
+fn conforms_to_slice_292_delegated_child_nested_output_resolution_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "delegated_child_nested_output_resolution",
+    ));
+    let operations = serde_json::from_value::<Vec<ast_merge::DelegatedChildOperation>>(
+        fixture["operations"].clone(),
+    )
+    .expect("operations should deserialize");
+    let nested_outputs = serde_json::from_value::<Vec<ast_merge::DelegatedChildSurfaceOutput>>(
+        fixture["nested_outputs"].clone(),
+    )
+    .expect("nested outputs should deserialize");
+    let options = ast_merge::DelegatedChildOutputResolutionOptions {
+        default_family: fixture["default_family"]
+            .as_str()
+            .expect("default family should be a string")
+            .to_string(),
+        request_id_prefix: fixture["request_id_prefix"]
+            .as_str()
+            .expect("request id prefix should be a string")
+            .to_string(),
+    };
+    let expected = serde_json::from_value::<ast_merge::DelegatedChildOutputResolution>(
+        fixture["expected"].clone(),
+    )
+    .expect("expected resolution should deserialize");
+
+    assert_eq!(resolve_delegated_child_outputs(&operations, &nested_outputs, &options), expected);
+}
+
+#[test]
+fn conforms_to_slice_293_delegated_child_nested_output_rejection_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("delegated_child_nested_output_rejection"));
+    let operations = serde_json::from_value::<Vec<ast_merge::DelegatedChildOperation>>(
+        fixture["operations"].clone(),
+    )
+    .expect("operations should deserialize");
+    let nested_outputs = serde_json::from_value::<Vec<ast_merge::DelegatedChildSurfaceOutput>>(
+        fixture["nested_outputs"].clone(),
+    )
+    .expect("nested outputs should deserialize");
+    let options = ast_merge::DelegatedChildOutputResolutionOptions {
+        default_family: fixture["default_family"]
+            .as_str()
+            .expect("default family should be a string")
+            .to_string(),
+        request_id_prefix: fixture["request_id_prefix"]
+            .as_str()
+            .expect("request id prefix should be a string")
+            .to_string(),
+    };
+    let expected = serde_json::from_value::<ast_merge::DelegatedChildOutputResolution>(
+        fixture["expected"].clone(),
+    )
+    .expect("expected rejection should deserialize");
+
+    assert_eq!(resolve_delegated_child_outputs(&operations, &nested_outputs, &options), expected);
 }
 
 #[test]

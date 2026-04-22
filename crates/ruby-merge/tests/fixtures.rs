@@ -10,8 +10,9 @@ use ast_merge::{
 };
 use ruby_merge::{
     RubyDialect, RubyOwnerKind, apply_ruby_delegated_child_outputs, available_ruby_backends,
-    match_ruby_owners, merge_ruby, merge_ruby_with_nested_outputs, parse_ruby, ruby_backend_feature_profile,
-    ruby_delegated_child_operations, ruby_discovered_surfaces, ruby_feature_profile, ruby_plan_context,
+    match_ruby_owners, merge_ruby, merge_ruby_with_nested_outputs, parse_ruby,
+    ruby_backend_feature_profile, ruby_delegated_child_operations, ruby_discovered_surfaces,
+    ruby_feature_profile, ruby_plan_context,
 };
 use serde_json::Value;
 
@@ -175,7 +176,8 @@ fn conforms_to_ruby_fixtures() {
         merge_fixture["expected"]["output"].as_str().map(str::to_string)
     );
 
-    let invalid_template_fixture = read_fixture(&["ruby", "slice-287-merge", "invalid-template.json"]);
+    let invalid_template_fixture =
+        read_fixture(&["ruby", "slice-287-merge", "invalid-template.json"]);
     let invalid_template_result = merge_ruby(
         invalid_template_fixture["template"].as_str().unwrap(),
         invalid_template_fixture["destination"].as_str().unwrap(),
@@ -190,7 +192,8 @@ fn conforms_to_ruby_fixtures() {
         invalid_template_fixture["expected"]["diagnostics"]
     );
 
-    let invalid_destination_fixture = read_fixture(&["ruby", "slice-287-merge", "invalid-destination.json"]);
+    let invalid_destination_fixture =
+        read_fixture(&["ruby", "slice-287-merge", "invalid-destination.json"]);
     let invalid_destination_result = merge_ruby(
         invalid_destination_fixture["template"].as_str().unwrap(),
         invalid_destination_fixture["destination"].as_str().unwrap(),
@@ -399,7 +402,8 @@ fn conforms_to_ruby_fixtures() {
         apply_output_fixture["expected"]["output"].as_str().map(str::to_string)
     );
 
-    let nested_merge_fixture = read_fixture(&["ruby", "slice-291-nested-merge", "yard-example-nested-merge.json"]);
+    let nested_merge_fixture =
+        read_fixture(&["ruby", "slice-291-nested-merge", "yard-example-nested-merge.json"]);
     let nested_outputs = nested_merge_fixture["nested_outputs"]
         .as_array()
         .expect("nested outputs should be an array")

@@ -387,6 +387,34 @@ pub struct DelegatedChildApplyPlan {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedChildSurfaceOutput {
+    pub surface_address: String,
+    pub output: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AppliedDelegatedChildOutput {
+    pub operation_id: String,
+    pub output: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedChildOutputResolutionOptions {
+    pub default_family: String,
+    pub request_id_prefix: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DelegatedChildOutputResolution {
+    pub ok: bool,
+    pub diagnostics: Vec<Diagnostic>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub apply_plan: Option<DelegatedChildApplyPlan>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub applied_children: Option<Vec<AppliedDelegatedChildOutput>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReviewReplayBundle {
     pub replay_context: ReviewReplayContext,
     pub decisions: Vec<ReviewDecision>,
@@ -551,7 +579,9 @@ fn compare_conformance_suite_selectors(
         .then_with(|| left.subject.variant.cmp(&right.subject.variant))
 }
 
-pub fn conformance_suite_selectors(manifest: &ConformanceManifest) -> Vec<ConformanceSuiteSelector> {
+pub fn conformance_suite_selectors(
+    manifest: &ConformanceManifest,
+) -> Vec<ConformanceSuiteSelector> {
     let mut selectors = manifest
         .suite_descriptors
         .iter()
@@ -797,6 +827,84 @@ pub fn delegated_child_apply_plan(
     DelegatedChildApplyPlan { entries }
 }
 
+pub fn resolve_delegated_child_outputs(
+    operations: &[DelegatedChildOperation],
+    nested_outputs: &[DelegatedChildSurfaceOutput],
+    options: &DelegatedChildOutputResolutionOptions,
+) -> DelegatedChildOutputResolution {
+    let operations_by_surface_address: HashMap<&str, &DelegatedChildOperation> = operations
+        .iter()
+        .map(|operation| (operation.surface.address.as_str(), operation))
+        .collect();
+
+    for nested_output in nested_outputs {
+        if operations_by_surface_address.contains_key(nested_output.surface_address.as_str()) {
+            continue;
+        }
+
+        return DelegatedChildOutputResolution {
+            ok: false,
+            diagnostics: vec![Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::ConfigurationError,
+                message: format!(
+                    "missing delegated child surface {}.",
+                    nested_output.surface_address
+                ),
+                path: None,
+                review: None,
+            }],
+            apply_plan: None,
+            applied_children: None,
+        };
+    }
+
+    let mut entries = Vec::with_capacity(nested_outputs.len());
+    let mut applied_children = Vec::with_capacity(nested_outputs.len());
+    for (index, nested_output) in nested_outputs.iter().enumerate() {
+        let operation = operations_by_surface_address
+            .get(nested_output.surface_address.as_str())
+            .expect("surface should be validated before resolution");
+        let request_id = format!("{}:{}", options.request_id_prefix, index);
+        let family = operation
+            .surface
+            .metadata
+            .get("family")
+            .and_then(|value| value.as_str())
+            .unwrap_or(options.default_family.as_str())
+            .to_string();
+
+        entries.push(DelegatedChildApplyPlanEntry {
+            request_id: request_id.clone(),
+            family,
+            delegated_group: ProjectedChildReviewGroup {
+                delegated_apply_group: request_id.clone(),
+                parent_operation_id: operation.parent_operation_id.clone(),
+                child_operation_id: operation.operation_id.clone(),
+                delegated_runtime_surface_path: nested_output.surface_address.clone(),
+                case_ids: vec![],
+                delegated_case_ids: vec![],
+            },
+            decision: ReviewDecision {
+                request_id,
+                action: ReviewDecisionAction::ApplyDelegatedChildGroup,
+                context: None,
+            },
+        });
+        applied_children.push(AppliedDelegatedChildOutput {
+            operation_id: operation.operation_id.clone(),
+            output: nested_output.output.clone(),
+        });
+    }
+
+    DelegatedChildOutputResolution {
+        ok: true,
+        diagnostics: vec![],
+        apply_plan: Some(DelegatedChildApplyPlan { entries }),
+        applied_children: Some(applied_children),
+    }
+}
+
 pub fn conformance_review_host_hints(
     options: &ConformanceManifestReviewOptions,
 ) -> ReviewHostHints {
@@ -810,13 +918,17 @@ pub fn conformance_manifest_replay_context(
     manifest: &ConformanceManifest,
     options: &ConformanceManifestReviewOptions,
 ) -> ReviewReplayContext {
-    let mut families: Vec<String> = conformance_suite_selectors(manifest)
-        .into_iter()
-        .filter_map(|selector| conformance_suite_definition(manifest, &selector))
-        .map(|definition| definition.subject.grammar.clone())
-        .collect();
-    families.sort();
-    families.dedup();
+    let mut families = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for selector in conformance_suite_selectors(manifest) {
+        let Some(definition) = conformance_suite_definition(manifest, &selector) else {
+            continue;
+        };
+        if !seen.insert(definition.subject.grammar.clone()) {
+            continue;
+        }
+        families.push(definition.subject.grammar.clone());
+    }
 
     ReviewReplayContext {
         surface: "conformance_manifest".to_string(),
@@ -1314,13 +1426,8 @@ pub fn run_named_conformance_suite_entry(
     execute: impl Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
     feature_profile: Option<&ConformanceFeatureProfileView>,
 ) -> Option<NamedConformanceSuiteResults> {
-    let results = run_named_conformance_suite(
-        manifest,
-        selector,
-        family_profile,
-        execute,
-        feature_profile,
-    )?;
+    let results =
+        run_named_conformance_suite(manifest, selector, family_profile, execute, feature_profile)?;
     let definition = conformance_suite_definition(manifest, selector)?;
     Some(NamedConformanceSuiteResults { suite: definition.clone(), results })
 }
@@ -1534,8 +1641,7 @@ pub fn review_conformance_manifest(
             continue;
         };
 
-        let Some(entry) = plan_named_conformance_suite_entry(manifest, &selector, &context)
-        else {
+        let Some(entry) = plan_named_conformance_suite_entry(manifest, &selector, &context) else {
             continue;
         };
 
@@ -1692,8 +1798,7 @@ pub fn plan_named_conformance_suites_with_diagnostics(
             continue;
         };
 
-        let Some(entry) = plan_named_conformance_suite_entry(manifest, &selector, &context)
-        else {
+        let Some(entry) = plan_named_conformance_suite_entry(manifest, &selector, &context) else {
             continue;
         };
 
