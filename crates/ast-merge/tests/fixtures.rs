@@ -14,7 +14,8 @@ use ast_merge::{
     PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
-    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, classify_template_target_path,
+    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, TemplateDestinationContext,
+    TemplateStrategy, TemplateStrategyOverride, classify_template_target_path,
     conformance_family_feature_profile_path, conformance_fixture_path,
     conformance_manifest_replay_context, conformance_manifest_review_request_ids,
     conformance_manifest_review_state_envelope, conformance_review_host_hints,
@@ -32,6 +33,7 @@ use ast_merge::{
     report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
     report_planned_conformance_suite, report_planned_named_conformance_suites,
     resolve_conformance_family_context, resolve_delegated_child_outputs,
+    resolve_template_destination_path,
     review_and_execute_conformance_manifest_with_replay_bundle_envelope,
     review_conformance_family_context, review_conformance_manifest,
     review_conformance_manifest_with_replay_bundle_envelope, review_projected_child_groups,
@@ -41,8 +43,9 @@ use ast_merge::{
     run_conformance_suite, run_named_conformance_suite, run_named_conformance_suite_entry,
     run_planned_conformance_suite, run_planned_named_conformance_suites, select_conformance_case,
     select_projected_child_review_groups_accepted_for_apply,
-    select_projected_child_review_groups_ready_for_apply, summarize_conformance_results,
-    summarize_named_conformance_suite_reports, summarize_projected_child_review_group_progress,
+    select_projected_child_review_groups_ready_for_apply, select_template_strategy,
+    summarize_conformance_results, summarize_named_conformance_suite_reports,
+    summarize_projected_child_review_group_progress,
 };
 use serde_json::Value;
 
@@ -273,6 +276,59 @@ fn conforms_to_template_target_classification_fixture() {
             .expect("classification should serialize");
 
         assert_eq!(actual, entry["expected"]);
+    }
+}
+
+#[test]
+fn conforms_to_template_destination_mapping_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("template_destination_mapping"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for entry in cases {
+        let logical_destination_path = entry["logical_destination_path"]
+            .as_str()
+            .expect("logical_destination_path should be a string");
+        let context =
+            serde_json::from_value::<TemplateDestinationContext>(entry["context"].clone())
+                .expect("context should deserialize");
+        let actual = resolve_template_destination_path(logical_destination_path, &context);
+        let expected = if entry["expected_destination_path"].is_null() {
+            None
+        } else {
+            Some(
+                entry["expected_destination_path"]
+                    .as_str()
+                    .expect("expected_destination_path should be a string")
+                    .to_string(),
+            )
+        };
+
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
+fn conforms_to_template_strategy_selection_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("template_strategy_selection"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for entry in cases {
+        let destination_path =
+            entry["destination_path"].as_str().expect("destination_path should be a string");
+        let default_strategy =
+            serde_json::from_value::<TemplateStrategy>(entry["default_strategy"].clone())
+                .expect("default_strategy should deserialize");
+        let overrides =
+            serde_json::from_value::<Vec<TemplateStrategyOverride>>(entry["overrides"].clone())
+                .expect("overrides should deserialize");
+        let expected_strategy =
+            serde_json::from_value::<TemplateStrategy>(entry["expected_strategy"].clone())
+                .expect("expected_strategy should deserialize");
+
+        assert_eq!(
+            select_template_strategy(destination_path, default_strategy, &overrides),
+            expected_strategy
+        );
     }
 }
 

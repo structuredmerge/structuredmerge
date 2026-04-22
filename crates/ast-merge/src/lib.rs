@@ -176,6 +176,27 @@ pub struct TemplateTargetClassification {
     pub dialect: String,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateDestinationContext {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_name: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TemplateStrategy {
+    Merge,
+    AcceptTemplate,
+    KeepDestination,
+    RawCopy,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateStrategyOverride {
+    pub path: String,
+    pub strategy: TemplateStrategy,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConformanceOutcome {
@@ -710,6 +731,39 @@ pub fn classify_template_target_path(path: &str) -> TemplateTargetClassification
     }
 
     classify("text", "text", "text")
+}
+
+pub fn resolve_template_destination_path(
+    path: &str,
+    context: &TemplateDestinationContext,
+) -> Option<String> {
+    match path {
+        ".kettle-jem.yml" => None,
+        ".env.local" => Some(".env.local.example".to_string()),
+        "gem.gemspec" => context
+            .project_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(|name| format!("{name}.gemspec"))
+            .or_else(|| Some(path.to_string())),
+        _ => Some(path.to_string()),
+    }
+}
+
+pub fn select_template_strategy(
+    path: &str,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+) -> TemplateStrategy {
+    let normalized_path = path.trim_start_matches("./");
+    for entry in overrides {
+        if entry.path.trim_start_matches("./") == normalized_path {
+            return entry.strategy;
+        }
+    }
+
+    default_strategy
 }
 
 pub fn conformance_suite_definition<'a>(
