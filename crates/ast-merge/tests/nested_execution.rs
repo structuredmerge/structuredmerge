@@ -1,8 +1,11 @@
 use ast_merge::{
+    DelegatedChildApplyPlan, DelegatedChildApplyPlanEntry, DelegatedChildGroupReviewState,
     AppliedDelegatedChildOutput, DelegatedChildOperation, DelegatedChildOutputResolutionOptions,
     DelegatedChildSurfaceOutput, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
     DiscoveredSurface, MergeResult, NestedMergeDiscoveryResult, NestedMergeExecutionCallbacks,
-    SurfaceOwnerKind, SurfaceOwnerRef, execute_nested_merge,
+    ProjectedChildReviewGroup, ReviewDecision, ReviewDecisionAction, SurfaceOwnerKind,
+    SurfaceOwnerRef, execute_delegated_child_apply_plan, execute_nested_merge,
+    execute_reviewed_nested_merge,
 };
 
 fn nested_operation(address: &str, family: Option<&str>) -> DelegatedChildOperation {
@@ -186,4 +189,115 @@ fn execute_nested_merge_returns_discovery_failure_and_skips_apply() {
 
     assert!(!result.ok);
     assert!(!applied.get());
+}
+
+#[test]
+fn execute_delegated_child_apply_plan_orchestrates_stages() {
+    let address = "document[0] > fenced_code_block[/code_fence/0]";
+    let result = execute_delegated_child_apply_plan(
+        &DelegatedChildApplyPlan {
+            entries: vec![DelegatedChildApplyPlanEntry {
+                request_id: "projected_child_group:markdown:fence:typescript".to_string(),
+                family: "markdown".to_string(),
+                delegated_group: ProjectedChildReviewGroup {
+                    delegated_apply_group: "markdown:fence:typescript".to_string(),
+                    parent_operation_id: "parent:merge".to_string(),
+                    child_operation_id: format!("operation:{address}"),
+                    delegated_runtime_surface_path: address.to_string(),
+                    case_ids: vec![],
+                    delegated_case_ids: vec![],
+                },
+                decision: ReviewDecision {
+                    request_id: "projected_child_group:markdown:fence:typescript".to_string(),
+                    action: ReviewDecisionAction::ApplyDelegatedChildGroup,
+                    context: None,
+                },
+            }],
+        },
+        &[AppliedDelegatedChildOutput {
+            operation_id: format!("operation:{address}"),
+            output: "child-output\n".to_string(),
+        }],
+        NestedMergeExecutionCallbacks {
+            merge_parent: || MergeResult {
+                ok: true,
+                diagnostics: vec![],
+                output: Some("merged-parent".to_string()),
+                policies: vec![],
+            },
+            discover_operations: |_| NestedMergeDiscoveryResult {
+                ok: true,
+                diagnostics: vec![],
+                operations: Some(vec![nested_operation(address, None)]),
+            },
+            apply_resolved_outputs: |_, _, apply_plan, applied_children| {
+                assert_eq!(apply_plan.entries.len(), 1);
+                assert_eq!(applied_children.len(), 1);
+                MergeResult {
+                    ok: true,
+                    diagnostics: vec![],
+                    output: Some("final-parent".to_string()),
+                    policies: vec![],
+                }
+            },
+        },
+    );
+
+    assert_eq!(result.output, Some("final-parent".to_string()));
+}
+
+#[test]
+fn execute_reviewed_nested_merge_uses_accepted_review_state() {
+    let address = "document[0] > fenced_code_block[/code_fence/0]";
+    let result = execute_reviewed_nested_merge(
+        &DelegatedChildGroupReviewState {
+            requests: vec![],
+            accepted_groups: vec![ProjectedChildReviewGroup {
+                delegated_apply_group: "markdown:fence:typescript".to_string(),
+                parent_operation_id: "parent:merge".to_string(),
+                child_operation_id: format!("operation:{address}"),
+                delegated_runtime_surface_path: address.to_string(),
+                case_ids: vec![],
+                delegated_case_ids: vec![],
+            }],
+            applied_decisions: vec![ReviewDecision {
+                request_id: "projected_child_group:markdown:fence:typescript".to_string(),
+                action: ReviewDecisionAction::ApplyDelegatedChildGroup,
+                context: None,
+            }],
+            diagnostics: vec![],
+        },
+        "markdown",
+        &[AppliedDelegatedChildOutput {
+            operation_id: format!("operation:{address}"),
+            output: "child-output\n".to_string(),
+        }],
+        NestedMergeExecutionCallbacks {
+            merge_parent: || MergeResult {
+                ok: true,
+                diagnostics: vec![],
+                output: Some("merged-parent".to_string()),
+                policies: vec![],
+            },
+            discover_operations: |_| NestedMergeDiscoveryResult {
+                ok: true,
+                diagnostics: vec![],
+                operations: Some(vec![nested_operation(address, None)]),
+            },
+            apply_resolved_outputs: |_, _, apply_plan, _| {
+                assert_eq!(
+                    apply_plan.entries[0].request_id,
+                    "projected_child_group:markdown:fence:typescript"
+                );
+                MergeResult {
+                    ok: true,
+                    diagnostics: vec![],
+                    output: Some("final-parent".to_string()),
+                    policies: vec![],
+                }
+            },
+        },
+    );
+
+    assert_eq!(result.output, Some("final-parent".to_string()));
 }

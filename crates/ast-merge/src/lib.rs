@@ -1008,6 +1008,90 @@ where
     (callbacks.apply_resolved_outputs)(merged_output, operations, apply_plan, applied_children)
 }
 
+pub fn execute_delegated_child_apply_plan<
+    TOutput,
+    MergeParent,
+    DiscoverOperations,
+    ApplyResolvedOutputs,
+>(
+    apply_plan: &DelegatedChildApplyPlan,
+    applied_children: &[AppliedDelegatedChildOutput],
+    callbacks: NestedMergeExecutionCallbacks<
+        TOutput,
+        MergeParent,
+        DiscoverOperations,
+        ApplyResolvedOutputs,
+    >,
+) -> MergeResult<TOutput>
+where
+    MergeParent: Fn() -> MergeResult<TOutput>,
+    DiscoverOperations: Fn(&TOutput) -> NestedMergeDiscoveryResult,
+    ApplyResolvedOutputs: Fn(
+        &TOutput,
+        &[DelegatedChildOperation],
+        &DelegatedChildApplyPlan,
+        &[AppliedDelegatedChildOutput],
+    ) -> MergeResult<TOutput>,
+{
+    let merged = (callbacks.merge_parent)();
+    let Some(merged_output) = merged.output.as_ref() else {
+        return merged;
+    };
+    if !merged.ok {
+        return merged;
+    }
+
+    let discovery = (callbacks.discover_operations)(merged_output);
+    let Some(operations) = discovery.operations.as_ref() else {
+        return MergeResult {
+            ok: false,
+            diagnostics: discovery.diagnostics,
+            output: None,
+            policies: vec![],
+        };
+    };
+    if !discovery.ok {
+        return MergeResult {
+            ok: false,
+            diagnostics: discovery.diagnostics,
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    (callbacks.apply_resolved_outputs)(merged_output, operations, apply_plan, applied_children)
+}
+
+pub fn execute_reviewed_nested_merge<
+    TOutput,
+    MergeParent,
+    DiscoverOperations,
+    ApplyResolvedOutputs,
+>(
+    state: &DelegatedChildGroupReviewState,
+    family: &str,
+    applied_children: &[AppliedDelegatedChildOutput],
+    callbacks: NestedMergeExecutionCallbacks<
+        TOutput,
+        MergeParent,
+        DiscoverOperations,
+        ApplyResolvedOutputs,
+    >,
+) -> MergeResult<TOutput>
+where
+    MergeParent: Fn() -> MergeResult<TOutput>,
+    DiscoverOperations: Fn(&TOutput) -> NestedMergeDiscoveryResult,
+    ApplyResolvedOutputs: Fn(
+        &TOutput,
+        &[DelegatedChildOperation],
+        &DelegatedChildApplyPlan,
+        &[AppliedDelegatedChildOutput],
+    ) -> MergeResult<TOutput>,
+{
+    let apply_plan = delegated_child_apply_plan(state, family);
+    execute_delegated_child_apply_plan(&apply_plan, applied_children, callbacks)
+}
+
 pub fn conformance_review_host_hints(
     options: &ConformanceManifestReviewOptions,
 ) -> ReviewHostHints {
