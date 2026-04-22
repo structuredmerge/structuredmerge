@@ -14,7 +14,7 @@ use ast_merge::{
     PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
-    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
+    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, classify_template_target_path,
     conformance_family_feature_profile_path, conformance_fixture_path,
     conformance_manifest_replay_context, conformance_manifest_review_request_ids,
     conformance_manifest_review_state_envelope, conformance_review_host_hints,
@@ -24,8 +24,8 @@ use ast_merge::{
     execute_review_state_envelope_reviewed_nested_executions,
     execute_review_state_reviewed_nested_executions, group_projected_child_review_cases,
     import_conformance_manifest_review_state_envelope, import_review_replay_bundle_envelope,
-    import_reviewed_nested_execution_envelope, plan_conformance_suite,
-    plan_named_conformance_suite, plan_named_conformance_suite_entry,
+    import_reviewed_nested_execution_envelope, normalize_template_source_path,
+    plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
     plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
     projected_child_group_review_request, report_conformance_manifest, report_conformance_suite,
     report_named_conformance_suite, report_named_conformance_suite_entry,
@@ -241,6 +241,39 @@ fn conforms_to_slice_22_shared_family_feature_profile_fixture() {
     });
 
     assert_eq!(rendered, fixture["feature_profile"]);
+}
+
+#[test]
+fn conforms_to_template_source_path_mapping_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("template_source_path_mapping"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for entry in cases {
+        let template_source_path = entry["template_source_path"]
+            .as_str()
+            .expect("template_source_path should be a string");
+        let expected_destination_path = entry["expected_destination_path"]
+            .as_str()
+            .expect("expected_destination_path should be a string");
+
+        assert_eq!(normalize_template_source_path(template_source_path), expected_destination_path);
+    }
+}
+
+#[test]
+fn conforms_to_template_target_classification_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("template_target_classification"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for entry in cases {
+        let destination_path =
+            entry["destination_path"].as_str().expect("destination_path should be a string");
+        let actual = serde_json::to_value(classify_template_target_path(destination_path))
+            .expect("classification should serialize");
+
+        assert_eq!(actual, entry["expected"]);
+    }
 }
 
 #[test]

@@ -168,6 +168,14 @@ pub struct FamilyFeatureProfile {
     pub supported_policies: Vec<PolicyReference>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateTargetClassification {
+    pub destination_path: String,
+    pub file_type: String,
+    pub family: String,
+    pub dialect: String,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConformanceOutcome {
@@ -624,6 +632,84 @@ pub fn conformance_family_feature_profile_path<'a>(
         .iter()
         .find(|entry| entry.family == family)
         .map(|entry| entry.path.as_slice())
+}
+
+pub fn normalize_template_source_path(path: &str) -> String {
+    if let Some(stripped) = path.strip_suffix(".no-osc.example") {
+        return stripped.to_string();
+    }
+
+    if let Some(stripped) = path.strip_suffix(".example") {
+        return stripped.to_string();
+    }
+
+    path.to_string()
+}
+
+pub fn classify_template_target_path(path: &str) -> TemplateTargetClassification {
+    let normalized_path = path.trim_start_matches("./");
+    let lower_path = normalized_path.to_ascii_lowercase();
+    let base = normalized_path.rsplit('/').next().unwrap_or(normalized_path);
+    let lower_base = base.to_ascii_lowercase();
+
+    let classify = |file_type: &str, family: &str, dialect: &str| TemplateTargetClassification {
+        destination_path: path.to_string(),
+        file_type: file_type.to_string(),
+        family: family.to_string(),
+        dialect: dialect.to_string(),
+    };
+
+    match normalized_path {
+        ".git-hooks/commit-msg" => return classify("ruby", "ruby", "ruby"),
+        ".git-hooks/prepare-commit-msg" => return classify("bash", "bash", "bash"),
+        _ => {}
+    }
+
+    match base {
+        "Gemfile" | "Appraisal.root.gemfile" => return classify("gemfile", "ruby", "ruby"),
+        "Appraisals" => return classify("appraisals", "ruby", "ruby"),
+        "Rakefile" | ".simplecov" => return classify("ruby", "ruby", "ruby"),
+        ".envrc" => return classify("bash", "bash", "bash"),
+        ".tool-versions" => return classify("tool_versions", "text", "tool_versions"),
+        "CITATION.cff" => return classify("yaml", "yaml", "yaml"),
+        _ => {}
+    }
+
+    if lower_base.ends_with(".gemspec") {
+        return classify("gemspec", "ruby", "ruby");
+    }
+    if lower_base.ends_with(".gemfile") {
+        return classify("gemfile", "ruby", "ruby");
+    }
+    if lower_base.ends_with(".rb") || lower_base.ends_with(".rake") {
+        return classify("ruby", "ruby", "ruby");
+    }
+    if lower_path.ends_with(".yml") || lower_path.ends_with(".yaml") {
+        return classify("yaml", "yaml", "yaml");
+    }
+    if lower_path.ends_with(".md") || lower_path.ends_with(".markdown") {
+        return classify("markdown", "markdown", "markdown");
+    }
+    if lower_path.ends_with(".sh") || lower_path.ends_with(".bash") {
+        return classify("bash", "bash", "bash");
+    }
+    if lower_base == ".env" || lower_base.starts_with(".env.") {
+        return classify("dotenv", "dotenv", "dotenv");
+    }
+    if lower_path.ends_with(".jsonc") {
+        return classify("json", "json", "jsonc");
+    }
+    if lower_path.ends_with(".json") {
+        return classify("json", "json", "json");
+    }
+    if lower_path.ends_with(".toml") {
+        return classify("toml", "toml", "toml");
+    }
+    if lower_path.ends_with(".rbs") {
+        return classify("rbs", "rbs", "rbs");
+    }
+
+    classify("text", "text", "text")
 }
 
 pub fn conformance_suite_definition<'a>(
