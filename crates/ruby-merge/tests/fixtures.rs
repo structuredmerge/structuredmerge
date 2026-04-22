@@ -10,7 +10,7 @@ use ast_merge::{
 };
 use ruby_merge::{
     RubyDialect, RubyOwnerKind, apply_ruby_delegated_child_outputs, available_ruby_backends,
-    match_ruby_owners, merge_ruby, parse_ruby, ruby_backend_feature_profile,
+    match_ruby_owners, merge_ruby, merge_ruby_with_nested_outputs, parse_ruby, ruby_backend_feature_profile,
     ruby_delegated_child_operations, ruby_discovered_surfaces, ruby_feature_profile, ruby_plan_context,
 };
 use serde_json::Value;
@@ -397,5 +397,27 @@ fn conforms_to_ruby_fixtures() {
     assert_eq!(
         apply_output_result.output,
         apply_output_fixture["expected"]["output"].as_str().map(str::to_string)
+    );
+
+    let nested_merge_fixture = read_fixture(&["ruby", "slice-291-nested-merge", "yard-example-nested-merge.json"]);
+    let nested_outputs = nested_merge_fixture["nested_outputs"]
+        .as_array()
+        .expect("nested outputs should be an array")
+        .iter()
+        .map(|entry| ruby_merge::NestedChildOutput {
+            surface_address: entry["surface_address"].as_str().unwrap().to_string(),
+            output: entry["output"].as_str().unwrap().to_string(),
+        })
+        .collect::<Vec<_>>();
+    let nested_merge_result = merge_ruby_with_nested_outputs(
+        nested_merge_fixture["template"].as_str().unwrap(),
+        nested_merge_fixture["destination"].as_str().unwrap(),
+        RubyDialect::Ruby,
+        &nested_outputs,
+    );
+    assert!(nested_merge_result.ok);
+    assert_eq!(
+        nested_merge_result.output,
+        nested_merge_fixture["expected"]["output"].as_str().map(str::to_string)
     );
 }

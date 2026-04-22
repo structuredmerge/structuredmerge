@@ -14,6 +14,7 @@ use markdown_merge::{
     available_markdown_backends, markdown_backend_feature_profile, markdown_delegated_child_operations,
     markdown_discovered_surfaces, markdown_embedded_families, markdown_feature_profile,
     markdown_plan_context_with_backend, match_markdown_owners, merge_markdown,
+    merge_markdown_with_nested_outputs,
     parse_markdown_with_backend,
 };
 use serde_json::Value;
@@ -474,6 +475,29 @@ fn conforms_to_slice_288_markdown_delegated_child_apply_output() {
         &operations,
         &apply_plan,
         &applied_children,
+    );
+    assert!(result.ok);
+    assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
+}
+
+#[test]
+fn conforms_to_slice_290_markdown_nested_merge() {
+    let fixture = read_fixture(&["markdown", "slice-290-nested-merge", "fenced-code-nested-merge.json"]);
+    let nested_outputs = fixture["nested_outputs"]
+        .as_array()
+        .expect("nested outputs should be an array")
+        .iter()
+        .map(|entry| markdown_merge::NestedChildOutput {
+            surface_address: entry["surface_address"].as_str().unwrap().to_string(),
+            output: entry["output"].as_str().unwrap().to_string(),
+        })
+        .collect::<Vec<_>>();
+    let result = merge_markdown_with_nested_outputs(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        &nested_outputs,
+        MarkdownBackend::KreuzbergLanguagePack,
     );
     assert!(result.ok);
     assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));

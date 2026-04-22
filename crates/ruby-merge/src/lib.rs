@@ -55,6 +55,12 @@ pub struct AppliedChildOutput {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NestedChildOutput {
+    pub surface_address: String,
+    pub output: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RubyFeatureProfile {
     pub family: &'static str,
     pub supported_dialects: Vec<RubyDialect>,
@@ -667,6 +673,92 @@ pub fn apply_ruby_delegated_child_outputs(
         output: Some(format!("{}\n", lines.join("\n").trim_end_matches('\n'))),
         policies: vec![destination_wins_array_policy()],
     }
+}
+
+pub fn merge_ruby_with_nested_outputs(
+    template_source: &str,
+    destination_source: &str,
+    dialect: RubyDialect,
+    nested_outputs: &[NestedChildOutput],
+) -> MergeResult<String> {
+    let merged = merge_ruby(template_source, destination_source, dialect);
+    if !merged.ok || merged.output.is_none() {
+        return merged;
+    }
+
+    let merged_output = merged.output.clone().expect("merged output");
+    let analysis = parse_ruby(&merged_output, dialect);
+    if !analysis.ok || analysis.analysis.is_none() {
+        return MergeResult {
+            ok: false,
+            diagnostics: analysis.diagnostics,
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    let operations =
+        ruby_delegated_child_operations(analysis.analysis.as_ref().expect("analysis"), "ruby-document-0");
+    let operations_by_surface_address =
+        operations.iter().map(|operation| (operation.surface.address.clone(), operation.clone())).collect::<HashMap<_, _>>();
+
+    for nested_output in nested_outputs {
+        if !operations_by_surface_address.contains_key(&nested_output.surface_address) {
+            return MergeResult {
+                ok: false,
+                diagnostics: vec![configuration_error(&format!(
+                    "missing delegated child surface {}.",
+                    nested_output.surface_address
+                ))],
+                output: None,
+                policies: vec![],
+            };
+        }
+    }
+
+    let apply_plan = ast_merge::DelegatedChildApplyPlan {
+        entries: nested_outputs
+            .iter()
+            .enumerate()
+            .map(|(index, nested_output)| {
+                let operation = operations_by_surface_address
+                    .get(&nested_output.surface_address)
+                    .expect("operation should exist");
+                let request_id = format!("nested_ruby_child:{index}");
+                ast_merge::DelegatedChildApplyPlanEntry {
+                    request_id: request_id.clone(),
+                    family: "ruby".to_string(),
+                    delegated_group: ast_merge::ProjectedChildReviewGroup {
+                        delegated_apply_group: request_id.clone(),
+                        parent_operation_id: operation.parent_operation_id.clone(),
+                        child_operation_id: operation.operation_id.clone(),
+                        delegated_runtime_surface_path: nested_output.surface_address.clone(),
+                        case_ids: vec![],
+                        delegated_case_ids: vec![],
+                    },
+                    decision: ast_merge::ReviewDecision {
+                        request_id,
+                        action: ast_merge::ReviewDecisionAction::ApplyDelegatedChildGroup,
+                        context: None,
+                    },
+                }
+            })
+            .collect(),
+    };
+    let applied_children = nested_outputs
+        .iter()
+        .map(|nested_output| {
+            let operation = operations_by_surface_address
+                .get(&nested_output.surface_address)
+                .expect("operation should exist");
+            AppliedChildOutput {
+                operation_id: operation.operation_id.clone(),
+                output: nested_output.output.clone(),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    apply_ruby_delegated_child_outputs(&merged_output, &operations, &apply_plan, &applied_children)
 }
 
 pub fn ruby_discovered_surfaces(analysis: &RubyAnalysis) -> Vec<DiscoveredSurface> {

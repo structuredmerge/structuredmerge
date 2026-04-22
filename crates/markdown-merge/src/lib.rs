@@ -80,6 +80,12 @@ pub struct AppliedChildOutput {
     pub output: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NestedChildOutput {
+    pub surface_address: String,
+    pub output: String,
+}
+
 impl tree_haver::AnalysisHandle for MarkdownAnalysis {
     fn kind(&self) -> &'static str {
         "markdown"
@@ -530,6 +536,100 @@ pub fn apply_markdown_delegated_child_outputs(
         output: Some(format!("{}\n", lines.join("\n").trim_end_matches('\n'))),
         policies: vec![],
     }
+}
+
+pub fn merge_markdown_with_nested_outputs(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    nested_outputs: &[NestedChildOutput],
+    backend: MarkdownBackend,
+) -> MergeResult<String> {
+    let merged = merge_markdown(template_source, destination_source, dialect, backend);
+    if !merged.ok || merged.output.is_none() {
+        return merged;
+    }
+
+    let merged_output = merged.output.clone().expect("merged output");
+    let analysis = parse_markdown_with_backend(&merged_output, dialect, backend);
+    if !analysis.ok || analysis.analysis.is_none() {
+        return MergeResult {
+            ok: false,
+            diagnostics: analysis.diagnostics,
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    let operations =
+        markdown_delegated_child_operations(analysis.analysis.as_ref().expect("analysis"), "markdown-document-0");
+    let operations_by_surface_address =
+        operations.iter().map(|operation| (operation.surface.address.clone(), operation.clone())).collect::<HashMap<_, _>>();
+
+    for nested_output in nested_outputs {
+        if !operations_by_surface_address.contains_key(&nested_output.surface_address) {
+            return MergeResult {
+                ok: false,
+                diagnostics: vec![configuration_error(&format!(
+                    "missing delegated child surface {}.",
+                    nested_output.surface_address
+                ))],
+                output: None,
+                policies: vec![],
+            };
+        }
+    }
+
+    let apply_plan = ast_merge::DelegatedChildApplyPlan {
+        entries: nested_outputs
+            .iter()
+            .enumerate()
+            .map(|(index, nested_output)| {
+                let operation = operations_by_surface_address
+                    .get(&nested_output.surface_address)
+                    .expect("operation should exist");
+                let request_id = format!("nested_markdown_child:{index}");
+                let family = operation
+                    .surface
+                    .metadata
+                    .get("family")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("markdown")
+                    .to_string();
+                ast_merge::DelegatedChildApplyPlanEntry {
+                    request_id: request_id.clone(),
+                    family,
+                    delegated_group: ast_merge::ProjectedChildReviewGroup {
+                        delegated_apply_group: request_id.clone(),
+                        parent_operation_id: operation.parent_operation_id.clone(),
+                        child_operation_id: operation.operation_id.clone(),
+                        delegated_runtime_surface_path: nested_output.surface_address.clone(),
+                        case_ids: vec![],
+                        delegated_case_ids: vec![],
+                    },
+                    decision: ast_merge::ReviewDecision {
+                        request_id,
+                        action: ast_merge::ReviewDecisionAction::ApplyDelegatedChildGroup,
+                        context: None,
+                    },
+                }
+            })
+            .collect(),
+    };
+    let applied_children = nested_outputs
+        .iter()
+        .map(|nested_output| {
+            let operation = operations_by_surface_address
+                .get(&nested_output.surface_address)
+                .expect("operation should exist");
+            AppliedChildOutput {
+                operation_id: operation.operation_id.clone(),
+                output: nested_output.output.clone(),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    apply_markdown_delegated_child_outputs(&merged_output, &operations, &apply_plan, &applied_children)
 }
 
 pub fn merge_markdown(
