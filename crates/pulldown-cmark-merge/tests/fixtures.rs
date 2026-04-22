@@ -262,12 +262,21 @@ fn conforms_to_slice_326_markdown_provider_reviewed_nested_review_artifact_appli
 }
 
 #[test]
-fn conforms_to_slice_311_reviewed_nested_review_artifact_rejection_fixture() {
-    let fixture = read_fixture(&[
-        "markdown",
-        "slice-311-reviewed-nested-review-artifact-rejection",
-        "fenced-code-reviewed-nested-review-artifact-rejection.json",
+fn conforms_to_slice_327_markdown_provider_reviewed_nested_review_artifact_rejection_fixture() {
+    let provider_fixture = read_fixture(&[
+        "diagnostics",
+        "slice-327-markdown-provider-reviewed-nested-review-artifact-rejection",
+        "rust-markdown-provider-reviewed-nested-review-artifact-rejection.json",
     ]);
+    let shared_fixture_path = provider_fixture["shared_fixture_path"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|value| value.as_str().unwrap())
+        .collect::<Vec<_>>();
+    let fixture = read_fixture(&shared_fixture_path);
+    let expected_replay = &provider_fixture["providers"]["pulldown-cmark"]["expected_replay_bundle"];
+    let expected_state = &provider_fixture["providers"]["pulldown-cmark"]["expected_review_state"];
     let replay_bundle = serde_json::from_value::<ast_merge::ReviewReplayBundle>(
         fixture["replay_bundle"].clone(),
     )
@@ -287,7 +296,7 @@ fn conforms_to_slice_311_reviewed_nested_review_artifact_rejection_fixture() {
     assert!(!replay_result.ok);
     assert_eq!(
         replay_result.diagnostics[0].message,
-        fixture["expected"]["diagnostics"][0]["message"].as_str().unwrap()
+        expected_replay["diagnostics"][0]["message"].as_str().unwrap()
     );
 
     let state_result = merge_markdown_with_reviewed_nested_outputs_from_review_state(
@@ -300,7 +309,7 @@ fn conforms_to_slice_311_reviewed_nested_review_artifact_rejection_fixture() {
     assert!(!state_result.ok);
     assert_eq!(
         state_result.diagnostics[0].message,
-        fixture["expected_review_state"]["diagnostics"][0]["message"]
+        expected_state["diagnostics"][0]["message"]
             .as_str()
             .unwrap()
     );
