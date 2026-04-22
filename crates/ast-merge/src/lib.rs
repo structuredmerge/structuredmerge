@@ -197,6 +197,17 @@ pub struct TemplateStrategyOverride {
     pub strategy: TemplateStrategy,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplatePlanEntry {
+    pub template_source_path: String,
+    pub logical_destination_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination_path: Option<String>,
+    pub classification: TemplateTargetClassification,
+    pub strategy: TemplateStrategy,
+    pub action: String,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConformanceOutcome {
@@ -764,6 +775,43 @@ pub fn select_template_strategy(
     }
 
     default_strategy
+}
+
+pub fn plan_template_entries(
+    template_source_paths: &[String],
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+) -> Vec<TemplatePlanEntry> {
+    template_source_paths
+        .iter()
+        .map(|template_source_path| {
+            let logical_destination_path = normalize_template_source_path(template_source_path);
+            let destination_path =
+                resolve_template_destination_path(&logical_destination_path, context);
+            let classification = classify_template_target_path(&logical_destination_path);
+            let strategy =
+                select_template_strategy(&logical_destination_path, default_strategy, overrides);
+            let action = if destination_path.is_none() {
+                "omit".to_string()
+            } else {
+                serde_json::to_value(strategy)
+                    .expect("strategy should serialize")
+                    .as_str()
+                    .expect("strategy should serialize as string")
+                    .to_string()
+            };
+
+            TemplatePlanEntry {
+                template_source_path: template_source_path.clone(),
+                logical_destination_path,
+                destination_path,
+                classification,
+                strategy,
+                action,
+            }
+        })
+        .collect()
 }
 
 pub fn conformance_suite_definition<'a>(
