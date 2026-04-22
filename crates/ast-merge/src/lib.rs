@@ -336,6 +336,23 @@ pub struct TemplatePreviewResult {
     pub omitted_paths: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateApplyResult {
+    pub result_files: HashMap<String, String>,
+    pub created_paths: Vec<String>,
+    pub updated_paths: Vec<String>,
+    pub kept_paths: Vec<String>,
+    pub blocked_paths: Vec<String>,
+    pub omitted_paths: Vec<String>,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateConvergenceResult {
+    pub converged: bool,
+    pub pending_paths: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConformanceOutcome {
@@ -1378,6 +1395,152 @@ pub fn preview_template_execution(entries: &[TemplateExecutionPlanEntry]) -> Tem
     }
 
     result
+}
+
+pub fn apply_template_execution<F>(
+    entries: &[TemplateExecutionPlanEntry],
+    merge_prepared_content: F,
+) -> TemplateApplyResult
+where
+    F: Fn(&TemplateExecutionPlanEntry) -> MergeResult<String>,
+{
+    let mut result = TemplateApplyResult {
+        result_files: HashMap::new(),
+        created_paths: Vec::new(),
+        updated_paths: Vec::new(),
+        kept_paths: Vec::new(),
+        blocked_paths: Vec::new(),
+        omitted_paths: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+
+    for entry in entries {
+        match entry.execution_action {
+            TemplateExecutionAction::Blocked => {
+                if let Some(destination_path) = entry.destination_path.as_ref() {
+                    result.blocked_paths.push(destination_path.clone());
+                }
+            }
+            TemplateExecutionAction::Omit => {
+                result.omitted_paths.push(entry.logical_destination_path.clone());
+            }
+            TemplateExecutionAction::Keep => {
+                if let (Some(destination_path), Some(destination_content)) =
+                    (entry.destination_path.as_ref(), entry.destination_content.as_ref())
+                {
+                    result
+                        .result_files
+                        .insert(destination_path.clone(), destination_content.clone());
+                    result.kept_paths.push(destination_path.clone());
+                }
+            }
+            TemplateExecutionAction::RawCopy | TemplateExecutionAction::WritePreparedContent => {
+                if let (Some(destination_path), Some(prepared_template_content)) =
+                    (entry.destination_path.as_ref(), entry.prepared_template_content.as_ref())
+                {
+                    result
+                        .result_files
+                        .insert(destination_path.clone(), prepared_template_content.clone());
+                    if entry.destination_exists {
+                        result.updated_paths.push(destination_path.clone());
+                    } else {
+                        result.created_paths.push(destination_path.clone());
+                    }
+                }
+            }
+            TemplateExecutionAction::MergePreparedContent => {
+                let Some(destination_path) = entry.destination_path.as_ref() else {
+                    continue;
+                };
+                let Some(prepared_template_content) = entry.prepared_template_content.as_ref()
+                else {
+                    continue;
+                };
+
+                if entry.destination_content.is_none() {
+                    result
+                        .result_files
+                        .insert(destination_path.clone(), prepared_template_content.clone());
+                    if entry.destination_exists {
+                        result.updated_paths.push(destination_path.clone());
+                    } else {
+                        result.created_paths.push(destination_path.clone());
+                    }
+                    continue;
+                }
+
+                let merge_result = merge_prepared_content(entry);
+                result.diagnostics.extend(merge_result.diagnostics.clone());
+                let Some(output) = merge_result.output else {
+                    result.blocked_paths.push(destination_path.clone());
+                    continue;
+                };
+                if !merge_result.ok {
+                    result.blocked_paths.push(destination_path.clone());
+                    continue;
+                }
+
+                result.result_files.insert(destination_path.clone(), output);
+                if entry.destination_exists {
+                    result.updated_paths.push(destination_path.clone());
+                } else {
+                    result.created_paths.push(destination_path.clone());
+                }
+            }
+        }
+    }
+
+    result
+}
+
+pub fn evaluate_template_tree_convergence(
+    template_source_paths: &[String],
+    template_contents: &HashMap<String, String>,
+    destination_contents: &HashMap<String, String>,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    config: &TemplateTokenConfig,
+) -> TemplateConvergenceResult {
+    let mut existing_destination_paths = destination_contents.keys().cloned().collect::<Vec<_>>();
+    existing_destination_paths.sort();
+    let execution_plan = plan_template_tree_execution(
+        template_source_paths,
+        template_contents,
+        &existing_destination_paths,
+        destination_contents,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        config,
+    );
+    let pending_paths = execution_plan
+        .iter()
+        .filter(|entry| {
+            if entry.blocked {
+                return true;
+            }
+            if !entry.ready {
+                return false;
+            }
+
+            !matches!(
+                (
+                    entry.destination_content.as_ref(),
+                    entry.prepared_template_content.as_ref(),
+                ),
+                (Some(destination_content), Some(prepared_template_content))
+                    if destination_content == prepared_template_content
+            )
+        })
+        .map(|entry| {
+            entry.destination_path.clone().unwrap_or_else(|| entry.logical_destination_path.clone())
+        })
+        .collect::<Vec<_>>();
+
+    TemplateConvergenceResult { converged: pending_paths.is_empty(), pending_paths }
 }
 
 pub fn conformance_suite_definition<'a>(
