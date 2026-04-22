@@ -501,6 +501,12 @@ pub struct ReviewedNestedExecutionApplication<TOutput> {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConformanceManifestReviewedNestedApplication<TOutput> {
+    pub state: ConformanceManifestReviewState,
+    pub results: Vec<ReviewedNestedExecutionResult<TOutput>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReviewedNestedExecutionEnvelope {
     pub kind: String,
     pub version: u32,
@@ -2236,6 +2242,54 @@ pub fn review_conformance_manifest_with_replay_bundle_envelope(
             });
             state
         }
+    }
+}
+
+pub fn review_and_execute_conformance_manifest_with_replay_bundle_envelope<
+    TOutput,
+    CallbacksForExecution,
+    TMergeParent,
+    TDiscoverOperations,
+    TApplyResolvedOutputs,
+    TExecute,
+>(
+    manifest: &ConformanceManifest,
+    options: &ConformanceManifestReviewOptions,
+    replay_bundle_envelope: &ReviewReplayBundleEnvelope,
+    execute: TExecute,
+    callbacks_for_execution: CallbacksForExecution,
+) -> ConformanceManifestReviewedNestedApplication<TOutput>
+where
+    TOutput: Clone,
+    CallbacksForExecution: Fn(
+        &ReviewedNestedExecution,
+        usize,
+    ) -> NestedMergeExecutionCallbacks<
+        TOutput,
+        TMergeParent,
+        TDiscoverOperations,
+        TApplyResolvedOutputs,
+    >,
+    TMergeParent: Fn() -> MergeResult<TOutput>,
+    TDiscoverOperations: Fn(&TOutput) -> NestedMergeDiscoveryResult,
+    TApplyResolvedOutputs: Fn(
+        &TOutput,
+        &[DelegatedChildOperation],
+        &DelegatedChildApplyPlan,
+        &[AppliedDelegatedChildOutput],
+    ) -> MergeResult<TOutput>,
+    TExecute: Fn(&ConformanceCaseRun) -> ConformanceCaseExecution + Copy,
+{
+    let state = review_conformance_manifest_with_replay_bundle_envelope(
+        manifest,
+        options,
+        replay_bundle_envelope,
+        execute,
+    );
+
+    ConformanceManifestReviewedNestedApplication {
+        results: execute_review_state_reviewed_nested_executions(&state, callbacks_for_execution),
+        state,
     }
 }
 

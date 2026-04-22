@@ -5,15 +5,16 @@ use ast_merge::{
     ConformanceCaseResult, ConformanceCaseRun, ConformanceFamilyPlanContext,
     ConformanceFeatureProfileView, ConformanceManifest, ConformanceManifestPlanningOptions,
     ConformanceManifestReport, ConformanceManifestReviewOptions, ConformanceManifestReviewState,
-    ConformanceManifestReviewStateEnvelope, ConformanceOutcome, ConformanceSelectionStatus,
-    ConformanceSuiteDefinition, ConformanceSuitePlan, ConformanceSuiteReport,
-    ConformanceSuiteSelector, ConformanceSuiteSubject, ConformanceSuiteSummary,
-    DelegatedChildOperation, DiagnosticCategory, DiagnosticSeverity, DiscoveredSurface,
-    FamilyFeatureProfile, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
-    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults, PolicySurface,
-    ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
-    REVIEW_TRANSPORT_VERSION, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
-    ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
+    ConformanceManifestReviewStateEnvelope, ConformanceManifestReviewedNestedApplication,
+    ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuiteDefinition,
+    ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSelector,
+    ConformanceSuiteSubject, ConformanceSuiteSummary, DelegatedChildOperation, DiagnosticCategory,
+    DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, NamedConformanceSuitePlan,
+    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
+    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
+    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
+    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
     conformance_family_feature_profile_path, conformance_fixture_path,
     conformance_manifest_replay_context, conformance_manifest_review_request_ids,
     conformance_manifest_review_state_envelope, conformance_review_host_hints,
@@ -31,6 +32,7 @@ use ast_merge::{
     report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
     report_planned_conformance_suite, report_planned_named_conformance_suites,
     resolve_conformance_family_context, resolve_delegated_child_outputs,
+    review_and_execute_conformance_manifest_with_replay_bundle_envelope,
     review_conformance_family_context, review_conformance_manifest,
     review_conformance_manifest_with_replay_bundle_envelope, review_projected_child_groups,
     review_replay_bundle_envelope, review_replay_bundle_inputs, review_replay_context_compatible,
@@ -3573,6 +3575,115 @@ fn conforms_to_slice_323_review_state_envelope_reviewed_nested_execution_rejecti
 
         assert_eq!(application.diagnostics, expected_diagnostics);
         assert!(application.results.is_empty());
+    }
+}
+
+#[test]
+fn conforms_to_slice_324_review_replay_bundle_envelope_reviewed_nested_manifest_application_fixture()
+ {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "review_replay_bundle_envelope_reviewed_nested_manifest_application",
+    ));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let options =
+        serde_json::from_value::<ConformanceManifestReviewOptions>(fixture["options"].clone())
+            .expect("review options should deserialize");
+    let envelope = serde_json::from_value::<ReviewReplayBundleEnvelope>(
+        fixture["review_replay_bundle_envelope"].clone(),
+    )
+    .expect("replay bundle envelope should deserialize");
+    let expected_state =
+        serde_json::from_value::<ConformanceManifestReviewState>(fixture["expected_state"].clone())
+            .expect("expected review state should deserialize");
+    let expected_application = fixture["expected_application"]
+        .as_object()
+        .expect("expected_application should be an object");
+    let expected =
+        expected_application["results"].as_array().expect("expected results should be an array");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+
+    let application: ConformanceManifestReviewedNestedApplication<String> =
+        review_and_execute_conformance_manifest_with_replay_bundle_envelope(
+            &manifest,
+            &options,
+            &envelope,
+            |run| {
+                let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+                serde_json::from_value::<ConformanceCaseExecution>(
+                    executions.get(&key).cloned().unwrap_or_else(
+                        || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+                    ),
+                )
+                .expect("execution should deserialize")
+            },
+            |execution, index| {
+                reviewed_nested_execution_callbacks_from_fixture(
+                    execution.clone(),
+                    expected[index]["result"]["output"].as_str().map(str::to_string),
+                )
+            },
+        );
+
+    assert_eq!(application.state, expected_state);
+    assert_reviewed_nested_execution_runs(&application.results, expected);
+}
+
+#[test]
+fn conforms_to_slice_325_review_replay_bundle_envelope_reviewed_nested_manifest_rejection_fixture()
+{
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "review_replay_bundle_envelope_reviewed_nested_manifest_rejection",
+    ));
+    let manifest = serde_json::from_value::<ConformanceManifest>(fixture["manifest"].clone())
+        .expect("manifest should deserialize");
+    let options =
+        serde_json::from_value::<ConformanceManifestReviewOptions>(fixture["options"].clone())
+            .expect("review options should deserialize");
+    let executions = fixture["executions"].as_object().expect("executions should be an object");
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let envelope = serde_json::from_value::<ReviewReplayBundleEnvelope>(
+            case["review_replay_bundle_envelope"].clone(),
+        )
+        .expect("replay bundle envelope should deserialize");
+        let expected_state = serde_json::from_value::<ConformanceManifestReviewState>(
+            case["expected_state"].clone(),
+        )
+        .expect("expected review state should deserialize");
+        let application: ConformanceManifestReviewedNestedApplication<String> =
+            review_and_execute_conformance_manifest_with_replay_bundle_envelope(
+                &manifest,
+                &options,
+                &envelope,
+                |run| {
+                    let key = format!("{}:{}:{}", run.ref_.family, run.ref_.role, run.ref_.case);
+                    serde_json::from_value::<ConformanceCaseExecution>(
+                        executions
+                            .get(&key)
+                            .cloned()
+                            .unwrap_or_else(
+                                || serde_json::json!({"outcome":"failed","messages":["missing execution"]}),
+                            ),
+                    )
+                    .expect("execution should deserialize")
+                },
+                |execution, _| {
+                    reviewed_nested_execution_callbacks_from_fixture(
+                        execution.clone(),
+                        Some("unused".to_string()),
+                    )
+                },
+            );
+
+        assert_eq!(
+            application,
+            ConformanceManifestReviewedNestedApplication {
+                state: expected_state,
+                results: Vec::new(),
+            }
+        );
     }
 }
 
