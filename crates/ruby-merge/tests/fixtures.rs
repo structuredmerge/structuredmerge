@@ -494,4 +494,42 @@ fn conforms_to_ruby_fixtures() {
         state_result.output,
         review_artifact_fixture["expected"]["output"].as_str().map(str::to_string)
     );
+
+    let rejection_fixture = read_fixture(&[
+        "ruby",
+        "slice-312-reviewed-nested-review-artifact-rejection",
+        "yard-example-reviewed-nested-review-artifact-rejection.json",
+    ]);
+    let replay_bundle = serde_json::from_value::<ast_merge::ReviewReplayBundle>(
+        rejection_fixture["replay_bundle"].clone(),
+    )
+    .expect("replay bundle should deserialize");
+    let review_state = serde_json::from_value::<ast_merge::ConformanceManifestReviewState>(
+        rejection_fixture["review_state"].clone(),
+    )
+    .expect("review state should deserialize");
+    let replay_rejection = merge_ruby_with_reviewed_nested_outputs_from_replay_bundle(
+        rejection_fixture["template"].as_str().unwrap(),
+        rejection_fixture["destination"].as_str().unwrap(),
+        RubyDialect::Ruby,
+        &replay_bundle,
+    );
+    assert!(!replay_rejection.ok);
+    assert_eq!(
+        replay_rejection.diagnostics[0].message,
+        rejection_fixture["expected"]["diagnostics"][0]["message"].as_str().unwrap()
+    );
+    let state_rejection = merge_ruby_with_reviewed_nested_outputs_from_review_state(
+        rejection_fixture["template"].as_str().unwrap(),
+        rejection_fixture["destination"].as_str().unwrap(),
+        RubyDialect::Ruby,
+        &review_state,
+    );
+    assert!(!state_rejection.ok);
+    assert_eq!(
+        state_rejection.diagnostics[0].message,
+        rejection_fixture["expected_review_state"]["diagnostics"][0]["message"]
+            .as_str()
+            .unwrap()
+    );
 }

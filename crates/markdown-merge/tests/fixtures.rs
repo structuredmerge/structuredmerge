@@ -565,3 +565,46 @@ fn conforms_to_slice_309_markdown_reviewed_nested_review_artifact_application() 
     assert!(state_result.ok);
     assert_eq!(state_result.output, fixture["expected"]["output"].as_str().map(str::to_string));
 }
+
+#[test]
+fn conforms_to_slice_311_markdown_reviewed_nested_review_artifact_rejection() {
+    let fixture = read_fixture(&[
+        "markdown",
+        "slice-311-reviewed-nested-review-artifact-rejection",
+        "fenced-code-reviewed-nested-review-artifact-rejection.json",
+    ]);
+    let replay_bundle = serde_json::from_value::<ast_merge::ReviewReplayBundle>(
+        fixture["replay_bundle"].clone(),
+    )
+    .expect("replay bundle should deserialize");
+    let review_state = serde_json::from_value::<ast_merge::ConformanceManifestReviewState>(
+        fixture["review_state"].clone(),
+    )
+    .expect("review state should deserialize");
+    let replay_result = merge_markdown_with_reviewed_nested_outputs_from_replay_bundle(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        &replay_bundle,
+        MarkdownBackend::KreuzbergLanguagePack,
+    );
+    assert!(!replay_result.ok);
+    assert_eq!(
+        replay_result.diagnostics[0].message,
+        fixture["expected"]["diagnostics"][0]["message"].as_str().unwrap()
+    );
+    let state_result = merge_markdown_with_reviewed_nested_outputs_from_review_state(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        &review_state,
+        MarkdownBackend::KreuzbergLanguagePack,
+    );
+    assert!(!state_result.ok);
+    assert_eq!(
+        state_result.diagnostics[0].message,
+        fixture["expected_review_state"]["diagnostics"][0]["message"]
+            .as_str()
+            .unwrap()
+    );
+}
