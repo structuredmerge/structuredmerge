@@ -9,6 +9,8 @@ use markdown_merge::MarkdownDialect;
 use pulldown_cmark_merge::{
     available_markdown_backends, markdown_backend_feature_profile, markdown_embedded_families,
     markdown_plan_context, match_markdown_owners, merge_markdown,
+    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle,
+    merge_markdown_with_reviewed_nested_outputs_from_review_state,
     merge_markdown_with_reviewed_nested_outputs, parse_markdown,
     provider_markdown_feature_profile,
 };
@@ -210,6 +212,43 @@ fn conforms_to_slice_298_reviewed_nested_merge_fixture() {
     );
     assert!(result.ok);
     assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
+}
+
+#[test]
+fn conforms_to_slice_309_reviewed_nested_review_artifact_application_fixture() {
+    let fixture = read_fixture(&[
+        "markdown",
+        "slice-309-reviewed-nested-review-artifact-application",
+        "fenced-code-reviewed-nested-review-artifact-application.json",
+    ]);
+    let replay_bundle = serde_json::from_value::<ast_merge::ReviewReplayBundle>(
+        fixture["replay_bundle"].clone(),
+    )
+    .expect("replay bundle should deserialize");
+    let review_state = serde_json::from_value::<ast_merge::ConformanceManifestReviewState>(
+        fixture["review_state"].clone(),
+    )
+    .expect("review state should deserialize");
+
+    let replay_result = merge_markdown_with_reviewed_nested_outputs_from_replay_bundle(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        &replay_bundle,
+        None,
+    );
+    assert!(replay_result.ok);
+    assert_eq!(replay_result.output, fixture["expected"]["output"].as_str().map(str::to_string));
+
+    let state_result = merge_markdown_with_reviewed_nested_outputs_from_review_state(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        MarkdownDialect::Markdown,
+        &review_state,
+        None,
+    );
+    assert!(state_result.ok);
+    assert_eq!(state_result.output, fixture["expected"]["output"].as_str().map(str::to_string));
 }
 
 #[test]
