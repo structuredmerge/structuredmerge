@@ -156,6 +156,14 @@ pub struct SessionRunnerPayload {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionEntrypoint {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payload: Option<SessionRunnerPayload>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request: Option<SessionRunnerRequest>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AnySessionOutcomeReport {
     Plan(SessionOutcomeReport<TemplateDirectorySessionReport>),
@@ -1213,6 +1221,26 @@ pub fn run_template_directory_session_runner_payload(
     let input = report_template_directory_session_runner_payload(payload);
     let request = report_template_directory_session_runner_input(&input);
     run_template_directory_session_runner_request(&request, profiles)
+}
+
+pub fn run_template_directory_session_entrypoint(
+    entrypoint: &SessionEntrypoint,
+    profiles: &HashMap<String, DirectorySessionProfile>,
+) -> std::io::Result<AnySessionOutcomeReport> {
+    if let Some(payload) = &entrypoint.payload {
+        return run_template_directory_session_runner_payload(payload, profiles);
+    }
+    if let Some(request) = &entrypoint.request {
+        return run_template_directory_session_runner_request(request, profiles);
+    }
+    Ok(report_template_directory_session_configuration_outcome(
+        DirectorySessionMode::Plan,
+        SessionDiagnosticsReport {
+            mode: DirectorySessionMode::Plan,
+            ready: false,
+            diagnostics: Vec::new(),
+        },
+    ))
 }
 
 fn session_runner_input_options_value(input: &SessionRunnerInput) -> Value {

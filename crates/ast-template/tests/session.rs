@@ -24,6 +24,7 @@ use ast_template::{
     report_template_directory_session_profile_request,
     report_template_directory_session_runner_input,
     report_template_directory_session_runner_payload,
+    run_template_directory_session_entrypoint,
     run_template_directory_session_runner_payload,
     run_template_directory_session_runner_request,
     run_template_directory_session_request,
@@ -897,6 +898,62 @@ fn conforms_to_template_directory_session_runner_payload_outcome_report_fixture(
     );
 }
 
+#[test]
+fn conforms_to_template_directory_session_entrypoint_outcome_report_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-373-template-directory-session-entrypoint-outcome-report/template-directory-session-entrypoint-outcome-report.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture should have parent");
+    let profiles = decode_session_profiles(&fixture["profiles"]);
+
+    let payload_ready =
+        decode_session_entrypoint_from_fixture(&fixture["payload_ready"]["input"], fixture_root);
+    assert_eq!(
+        serde_json::to_value(
+            run_template_directory_session_entrypoint(&payload_ready, &profiles)
+                .expect("payload ready entrypoint should succeed")
+        )
+        .expect("report should serialize"),
+        fixture["payload_ready"]["expected"]
+    );
+
+    let request_blocked =
+        decode_session_entrypoint_from_fixture(&fixture["request_blocked"]["input"], fixture_root);
+    assert_eq!(
+        serde_json::to_value(
+            run_template_directory_session_entrypoint(&request_blocked, &profiles)
+                .expect("request blocked entrypoint should succeed")
+        )
+        .expect("report should serialize"),
+        fixture["request_blocked"]["expected"]
+    );
+
+    let request_ready =
+        decode_session_entrypoint_from_fixture(&fixture["request_ready"]["input"], fixture_root);
+    assert_eq!(
+        serde_json::to_value(
+            run_template_directory_session_entrypoint(&request_ready, &profiles)
+                .expect("request ready entrypoint should succeed")
+        )
+        .expect("report should serialize"),
+        fixture["request_ready"]["expected"]
+    );
+
+    let payload_blocked =
+        decode_session_entrypoint_from_fixture(&fixture["payload_blocked"]["input"], fixture_root);
+    assert_eq!(
+        serde_json::to_value(
+            run_template_directory_session_entrypoint(&payload_blocked, &profiles)
+                .expect("payload blocked entrypoint should succeed")
+        )
+        .expect("report should serialize"),
+        fixture["payload_blocked"]["expected"]
+    );
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -1500,6 +1557,20 @@ fn decode_session_runner_payload_from_fixture(
             .into_owned();
     }
     payload
+}
+
+fn decode_session_entrypoint_from_fixture(
+    fixture: &Value,
+    fixture_root: &std::path::Path,
+) -> ast_template::SessionEntrypoint {
+    ast_template::SessionEntrypoint {
+        payload: fixture
+            .get("payload")
+            .and_then(|value| (!value.is_null()).then(|| decode_session_runner_payload_from_fixture(value, fixture_root))),
+        request: fixture
+            .get("request")
+            .and_then(|value| (!value.is_null()).then(|| decode_session_runner_request_from_fixture(value, fixture_root))),
+    }
 }
 
 fn resolve_runner_request_fixture_paths(value: &Value, fixture_root: &std::path::Path) -> Value {
