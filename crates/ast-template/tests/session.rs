@@ -8,7 +8,8 @@ use ast_template::{
     apply_template_directory_session_with_default_registry_to_directory,
     apply_template_directory_session_with_registry_to_directory,
     plan_template_directory_session_from_directories,
-    reapply_template_directory_session_to_directory,
+    reapply_template_directory_session_to_directory, report_adapter_capabilities_from_directories,
+    report_default_adapter_capabilities_from_directories,
 };
 use markdown_merge::{MarkdownDialect, merge_markdown};
 use ruby_merge::{RubyDialect, merge_ruby};
@@ -135,6 +136,30 @@ fn conforms_to_template_directory_default_adapter_discovery_report_fixture() {
     assert_default_discovery_fixture_case(&fixture["filtered_discovery"], fixture_root);
 }
 
+#[test]
+fn conforms_to_template_directory_adapter_capability_report_fixture() {
+    let fixture_path = repo_root()
+        .join("fixtures/diagnostics/slice-356-template-directory-adapter-capability-report/template-directory-adapter-capability-report.json");
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture should have parent");
+
+    let full_registry = HashMap::from([
+        ("markdown".to_string(), markdown_adapter as FamilyMergeAdapter),
+        ("ruby".to_string(), ruby_adapter as FamilyMergeAdapter),
+        ("toml".to_string(), toml_adapter as FamilyMergeAdapter),
+    ]);
+    let partial_registry = HashMap::from([
+        ("markdown".to_string(), markdown_adapter as FamilyMergeAdapter),
+        ("toml".to_string(), toml_adapter as FamilyMergeAdapter),
+    ]);
+
+    assert_capability_fixture_case(&fixture["full_registry"], fixture_root, &full_registry);
+    assert_capability_fixture_case(&fixture["partial_registry"], fixture_root, &partial_registry);
+    assert_default_capability_fixture_case(&fixture["filtered_discovery"], fixture_root);
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -207,12 +232,57 @@ fn assert_default_discovery_fixture_case(fixture: &Value, fixture_root: &std::pa
         &default_template_token_config(),
     )
     .expect("discovery session should succeed");
-    assert_eq!(
-        serde_json::to_value(actual).expect("report should serialize"),
-        fixture["expected"]
-    );
+    assert_eq!(serde_json::to_value(actual).expect("report should serialize"), fixture["expected"]);
 
     fs::remove_dir_all(temp_root).expect("temp dir should be removable");
+}
+
+fn assert_capability_fixture_case(
+    fixture: &Value,
+    fixture_root: &std::path::Path,
+    registry: &FamilyMergeAdapterRegistry,
+) {
+    let actual = report_adapter_capabilities_from_directories(
+        &fixture_root.join("apply-run/template"),
+        &fixture_root.join("apply-run/destination"),
+        &serde_json::from_value::<TemplateDestinationContext>(fixture["context"].clone())
+            .expect("context should deserialize"),
+        serde_json::from_value::<TemplateStrategy>(fixture["default_strategy"].clone())
+            .expect("strategy should deserialize"),
+        &serde_json::from_value::<Vec<TemplateStrategyOverride>>(fixture["overrides"].clone())
+            .expect("overrides should deserialize"),
+        &serde_json::from_value::<HashMap<String, String>>(fixture["replacements"].clone())
+            .expect("replacements should deserialize"),
+        registry,
+        &default_template_token_config(),
+    )
+    .expect("capability report should succeed");
+    assert_eq!(serde_json::to_value(actual).expect("report should serialize"), fixture["expected"]);
+}
+
+fn assert_default_capability_fixture_case(fixture: &Value, fixture_root: &std::path::Path) {
+    let allowed_families = fixture["allowed_families"].as_array().map(|families| {
+        families
+            .iter()
+            .map(|family| family.as_str().expect("family should be string"))
+            .collect::<Vec<_>>()
+    });
+    let actual = report_default_adapter_capabilities_from_directories(
+        &fixture_root.join("apply-run/template"),
+        &fixture_root.join("apply-run/destination"),
+        &serde_json::from_value::<TemplateDestinationContext>(fixture["context"].clone())
+            .expect("context should deserialize"),
+        serde_json::from_value::<TemplateStrategy>(fixture["default_strategy"].clone())
+            .expect("strategy should deserialize"),
+        &serde_json::from_value::<Vec<TemplateStrategyOverride>>(fixture["overrides"].clone())
+            .expect("overrides should deserialize"),
+        &serde_json::from_value::<HashMap<String, String>>(fixture["replacements"].clone())
+            .expect("replacements should deserialize"),
+        allowed_families.as_deref(),
+        &default_template_token_config(),
+    )
+    .expect("default capability report should succeed");
+    assert_eq!(serde_json::to_value(actual).expect("report should serialize"), fixture["expected"]);
 }
 
 fn multi_family_merge_callback(
