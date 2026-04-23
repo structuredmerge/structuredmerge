@@ -895,6 +895,13 @@ pub fn run_template_directory_session_with_default_registry_to_directory(
 pub fn run_template_directory_session_with_options(
     options: &DirectorySessionOptions,
 ) -> std::io::Result<AnySessionOutcomeReport> {
+    let configuration = report_template_directory_session_options_configuration(options);
+    if !configuration.ready {
+        return Ok(report_template_directory_session_configuration_outcome(
+            configuration.mode,
+            configuration,
+        ));
+    }
     let allowed = options
         .allowed_families
         .as_ref()

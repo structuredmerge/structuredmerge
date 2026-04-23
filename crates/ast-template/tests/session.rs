@@ -548,6 +548,37 @@ fn conforms_to_template_directory_session_profile_configuration_outcome_report_f
     );
 }
 
+#[test]
+fn conforms_to_template_directory_session_options_configuration_outcome_report_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-366-template-directory-session-options-configuration-outcome-report/template-directory-session-options-configuration-outcome-report.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+
+    let missing_both_roots = decode_session_options_direct(&fixture["missing_both_roots"]["options"]);
+    assert_eq!(
+        serde_json::to_value(
+            run_template_directory_session_with_options(&missing_both_roots)
+                .expect("missing both roots outcome should succeed")
+        )
+        .expect("report should serialize"),
+        fixture["missing_both_roots"]["expected"]
+    );
+
+    let missing_destination_root =
+        decode_session_options_direct(&fixture["missing_destination_root"]["options"]);
+    assert_eq!(
+        serde_json::to_value(
+            run_template_directory_session_with_options(&missing_destination_root)
+                .expect("missing destination root outcome should succeed")
+        )
+        .expect("report should serialize"),
+        fixture["missing_destination_root"]["expected"]
+    );
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
