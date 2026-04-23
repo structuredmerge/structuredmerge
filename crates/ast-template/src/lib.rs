@@ -193,6 +193,15 @@ pub struct SessionDispatchReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionCommand {
+    pub operation: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payload: Option<SessionRunnerPayload>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request: Option<SessionRunnerRequest>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AnySessionOutcomeReport {
     Plan(SessionOutcomeReport<TemplateDirectorySessionReport>),
@@ -1438,6 +1447,17 @@ pub fn run_template_directory_session_dispatch(
             outcome: Some(run_template_directory_session_entrypoint(entrypoint, profiles)?),
         }),
     }
+}
+
+pub fn run_template_directory_session_command(
+    command: &SessionCommand,
+    profiles: &HashMap<String, DirectorySessionProfile>,
+) -> std::io::Result<SessionDispatchReport> {
+    run_template_directory_session_dispatch(
+        &command.operation,
+        &SessionEntrypoint { payload: command.payload.clone(), request: command.request.clone() },
+        profiles,
+    )
 }
 
 fn session_runner_input_options_value(input: &SessionRunnerInput) -> Value {
