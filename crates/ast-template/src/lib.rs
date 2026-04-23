@@ -913,6 +913,73 @@ pub fn run_template_directory_session_with_options(
     )
 }
 
+fn normalize_session_mode(mode: DirectorySessionMode) -> DirectorySessionMode {
+    match mode {
+        DirectorySessionMode::Apply | DirectorySessionMode::Reapply => mode,
+        DirectorySessionMode::Plan => DirectorySessionMode::Plan,
+    }
+}
+
+pub fn report_template_directory_session_options_configuration(
+    options: &DirectorySessionOptions,
+) -> SessionDiagnosticsReport {
+    let mut diagnostics = Vec::new();
+    if options.destination_root.as_os_str().is_empty() {
+        diagnostics.push(SessionDiagnostic {
+            severity: ast_merge::DiagnosticSeverity::Error,
+            category: ast_merge::DiagnosticCategory::ConfigurationError,
+            reason: "missing_destination_root".to_string(),
+            path: None,
+            family: None,
+            message: "missing destination_root for template session".to_string(),
+        });
+    }
+    if options.template_root.as_os_str().is_empty() {
+        diagnostics.push(SessionDiagnostic {
+            severity: ast_merge::DiagnosticSeverity::Error,
+            category: ast_merge::DiagnosticCategory::ConfigurationError,
+            reason: "missing_template_root".to_string(),
+            path: None,
+            family: None,
+            message: "missing template_root for template session".to_string(),
+        });
+    }
+    diagnostics.sort_by(|a, b| a.reason.cmp(&b.reason));
+    SessionDiagnosticsReport {
+        mode: normalize_session_mode(options.mode),
+        ready: diagnostics.is_empty(),
+        diagnostics,
+    }
+}
+
+pub fn report_template_directory_session_profile_configuration(
+    profiles: &HashMap<String, DirectorySessionProfile>,
+    profile_name: &str,
+    overrides: &DirectorySessionOptions,
+) -> SessionDiagnosticsReport {
+    let mut report = report_template_directory_session_options_configuration(overrides);
+    if let Some(profile) = profiles.get(profile_name) {
+        report.mode = normalize_session_mode(match overrides.mode {
+            DirectorySessionMode::Plan if !matches!(profile.mode, DirectorySessionMode::Plan) => {
+                profile.mode
+            }
+            _ => overrides.mode,
+        });
+    } else {
+        report.diagnostics.push(SessionDiagnostic {
+            severity: ast_merge::DiagnosticSeverity::Error,
+            category: ast_merge::DiagnosticCategory::ConfigurationError,
+            reason: "missing_profile".to_string(),
+            path: None,
+            family: None,
+            message: format!("unknown template session profile: {profile_name}"),
+        });
+    }
+    report.diagnostics.sort_by(|a, b| a.reason.cmp(&b.reason));
+    report.ready = report.diagnostics.is_empty();
+    report
+}
+
 pub fn resolve_template_directory_session_options(
     profiles: &HashMap<String, DirectorySessionProfile>,
     profile_name: &str,
