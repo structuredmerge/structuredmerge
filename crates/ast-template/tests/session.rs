@@ -428,8 +428,7 @@ fn conforms_to_template_directory_session_profile_report_fixture() {
         fixture["plan_run"]["profile"].as_str().expect("profile should be string"),
         &plan_overrides,
     )
-    .expect("plan profile should succeed")
-    .expect("profile should exist");
+    .expect("plan profile should succeed");
     assert_eq!(
         serde_json::to_value(plan_actual).expect("report should serialize"),
         fixture["plan_run"]["expected"]
@@ -507,6 +506,45 @@ fn conforms_to_template_directory_session_configuration_report_fixture() {
         ))
         .expect("report should serialize"),
         fixture["profile_missing_roots"]["expected"]
+    );
+}
+
+#[test]
+fn conforms_to_template_directory_session_profile_configuration_outcome_report_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-365-template-directory-session-profile-configuration-outcome-report/template-directory-session-profile-configuration-outcome-report.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let profiles = decode_session_profiles(&fixture["profiles"]);
+
+    let missing_profile = decode_session_options_direct(&fixture["missing_profile"]["overrides"]);
+    assert_eq!(
+        serde_json::to_value(run_template_directory_session_with_profile(
+            &profiles,
+            fixture["missing_profile"]["profile"]
+                .as_str()
+                .expect("profile should be string"),
+            &missing_profile,
+        )
+        .expect("missing profile outcome should succeed"))
+        .expect("report should serialize"),
+        fixture["missing_profile"]["expected"]
+    );
+
+    let missing_roots = decode_session_options_direct(&fixture["missing_roots"]["overrides"]);
+    assert_eq!(
+        serde_json::to_value(run_template_directory_session_with_profile(
+            &profiles,
+            fixture["missing_roots"]["profile"]
+                .as_str()
+                .expect("profile should be string"),
+            &missing_roots,
+        )
+        .expect("missing roots outcome should succeed"))
+        .expect("report should serialize"),
+        fixture["missing_roots"]["expected"]
     );
 }
 
@@ -964,8 +1002,7 @@ fn assert_session_profile_apply_case(
         fixture["profile"].as_str().expect("profile should be string"),
         &overrides,
     )
-    .expect("apply profile should succeed")
-    .expect("profile should exist");
+    .expect("apply profile should succeed");
     assert_eq!(serde_json::to_value(actual).expect("report should serialize"), fixture["expected"]);
 }
 
@@ -989,8 +1026,7 @@ fn assert_session_profile_reapply_case(
         ..Default::default()
     };
     let _ = run_template_directory_session_with_profile(profiles, "apply_run", &priming)
-        .expect("apply priming should succeed")
-        .expect("profile should exist");
+        .expect("apply priming should succeed");
 
     let mut overrides = decode_session_options(
         &serde_json::json!({
@@ -1011,8 +1047,7 @@ fn assert_session_profile_reapply_case(
         fixture["profile"].as_str().expect("profile should be string"),
         &overrides,
     )
-    .expect("reapply profile should succeed")
-    .expect("profile should exist");
+    .expect("reapply profile should succeed");
     assert_eq!(serde_json::to_value(actual).expect("report should serialize"), fixture["expected"]);
 }
 

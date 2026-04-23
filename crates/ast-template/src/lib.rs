@@ -980,6 +980,24 @@ pub fn report_template_directory_session_profile_configuration(
     report
 }
 
+fn report_template_directory_session_configuration_outcome(
+    mode: DirectorySessionMode,
+    diagnostics: SessionDiagnosticsReport,
+) -> AnySessionOutcomeReport {
+    AnySessionOutcomeReport::Plan(report_template_directory_session_outcome(
+        report_template_directory_session(mode, &[], None),
+        SessionStatusReport {
+            mode,
+            ready: false,
+            missing_families: Vec::new(),
+            blocked_paths: Vec::new(),
+            planned_write_count: 0,
+            written_count: 0,
+        },
+        diagnostics,
+    ))
+}
+
 pub fn resolve_template_directory_session_options(
     profiles: &HashMap<String, DirectorySessionProfile>,
     profile_name: &str,
@@ -1030,11 +1048,34 @@ pub fn run_template_directory_session_with_profile(
     profiles: &HashMap<String, DirectorySessionProfile>,
     profile_name: &str,
     overrides: &DirectorySessionOptions,
-) -> std::io::Result<Option<AnySessionOutcomeReport>> {
+) -> std::io::Result<AnySessionOutcomeReport> {
+    let configuration =
+        report_template_directory_session_profile_configuration(profiles, profile_name, overrides);
+    if !configuration.ready {
+        return Ok(report_template_directory_session_configuration_outcome(
+            configuration.mode,
+            configuration,
+        ));
+    }
     let Some(options) =
         resolve_template_directory_session_options(profiles, profile_name, overrides)
     else {
-        return Ok(None);
+        let diagnostics = SessionDiagnosticsReport {
+            mode: normalize_session_mode(overrides.mode),
+            ready: false,
+            diagnostics: vec![SessionDiagnostic {
+                severity: ast_merge::DiagnosticSeverity::Error,
+                category: ast_merge::DiagnosticCategory::ConfigurationError,
+                reason: "missing_profile".to_string(),
+                path: None,
+                family: None,
+                message: format!("unknown template session profile: {profile_name}"),
+            }],
+        };
+        return Ok(report_template_directory_session_configuration_outcome(
+            diagnostics.mode,
+            diagnostics,
+        ));
     };
-    Ok(Some(run_template_directory_session_with_options(&options)?))
+    run_template_directory_session_with_options(&options)
 }
