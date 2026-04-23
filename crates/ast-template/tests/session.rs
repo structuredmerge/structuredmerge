@@ -1,10 +1,11 @@
 use ast_merge::{
-    Diagnostic, DiagnosticCategory, DiagnosticSeverity, TemplateDestinationContext,
-    TemplateExecutionPlanEntry, TemplateStrategy, TemplateStrategyOverride,
-    default_template_token_config, read_relative_file_tree, write_relative_file_tree,
+    TemplateDestinationContext, TemplateExecutionPlanEntry, TemplateStrategy,
+    TemplateStrategyOverride, default_template_token_config, read_relative_file_tree,
+    write_relative_file_tree,
 };
 use ast_template::{
-    apply_template_directory_session_to_directory,
+    FamilyMergeAdapter, FamilyMergeAdapterRegistry, apply_template_directory_session_to_directory,
+    apply_template_directory_session_with_registry_to_directory,
     plan_template_directory_session_from_directories,
     reapply_template_directory_session_to_directory,
 };
@@ -97,6 +98,29 @@ fn conforms_to_template_directory_session_report_fixture() {
     fs::remove_dir_all(temp_root).expect("temp dir should be removable");
 }
 
+#[test]
+fn conforms_to_template_directory_adapter_registry_report_fixture() {
+    let fixture_path = repo_root()
+        .join("fixtures/diagnostics/slice-354-template-directory-adapter-registry-report/template-directory-adapter-registry-report.json");
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture should have parent");
+
+    let full_registry = HashMap::from([
+        ("markdown".to_string(), markdown_adapter as FamilyMergeAdapter),
+        ("ruby".to_string(), ruby_adapter as FamilyMergeAdapter),
+        ("toml".to_string(), toml_adapter as FamilyMergeAdapter),
+    ]);
+    let partial_registry = HashMap::from([
+        ("markdown".to_string(), markdown_adapter as FamilyMergeAdapter),
+        ("toml".to_string(), toml_adapter as FamilyMergeAdapter),
+    ]);
+
+    assert_registry_fixture_case(&fixture["full_registry"], fixture_root, &full_registry);
+    assert_registry_fixture_case(&fixture["partial_registry"], fixture_root, &partial_registry);
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -104,26 +128,67 @@ fn repo_root() -> PathBuf {
         .expect("repo root should resolve")
 }
 
+fn assert_registry_fixture_case(
+    fixture: &Value,
+    fixture_root: &std::path::Path,
+    registry: &FamilyMergeAdapterRegistry,
+) {
+    let temp_root = repo_root().join("rust/crates/ast-template/tmp/registry");
+    let _ = fs::remove_dir_all(&temp_root);
+    write_relative_file_tree(
+        &temp_root,
+        &read_relative_file_tree(&fixture_root.join("apply-run/destination"))
+            .expect("apply-run destination should read"),
+    )
+    .expect("apply-run destination should write");
+
+    let actual = apply_template_directory_session_with_registry_to_directory(
+        &fixture_root.join("apply-run/template"),
+        &temp_root,
+        &serde_json::from_value::<TemplateDestinationContext>(fixture["context"].clone())
+            .expect("context should deserialize"),
+        serde_json::from_value::<TemplateStrategy>(fixture["default_strategy"].clone())
+            .expect("strategy should deserialize"),
+        &serde_json::from_value::<Vec<TemplateStrategyOverride>>(fixture["overrides"].clone())
+            .expect("overrides should deserialize"),
+        &serde_json::from_value::<HashMap<String, String>>(fixture["replacements"].clone())
+            .expect("replacements should deserialize"),
+        registry,
+        &default_template_token_config(),
+    )
+    .expect("registry session should succeed");
+    assert_eq!(serde_json::to_value(actual).expect("report should serialize"), fixture["expected"]);
+
+    fs::remove_dir_all(temp_root).expect("temp dir should be removable");
+}
+
 fn multi_family_merge_callback(
     entry: &TemplateExecutionPlanEntry,
 ) -> ast_merge::MergeResult<String> {
+    ast_template::merge_prepared_content_from_registry(
+        &HashMap::from([
+            ("markdown".to_string(), markdown_adapter as FamilyMergeAdapter),
+            ("ruby".to_string(), ruby_adapter as FamilyMergeAdapter),
+            ("toml".to_string(), toml_adapter as FamilyMergeAdapter),
+        ]),
+        entry,
+    )
+}
+
+fn markdown_adapter(entry: &TemplateExecutionPlanEntry) -> ast_merge::MergeResult<String> {
     let template = entry.prepared_template_content.clone().unwrap_or_default();
     let destination = entry.destination_content.clone().unwrap_or_default();
-    match entry.classification.family.as_str() {
-        "markdown" => merge_markdown(&template, &destination, MarkdownDialect::Markdown),
-        "toml" => merge_toml(&template, &destination, TomlDialect::Toml, None),
-        "ruby" => merge_ruby(&template, &destination, RubyDialect::Ruby),
-        family => ast_merge::MergeResult {
-            ok: false,
-            diagnostics: vec![Diagnostic {
-                severity: DiagnosticSeverity::Error,
-                category: DiagnosticCategory::ConfigurationError,
-                message: format!("missing family merge adapter for {family}"),
-                path: None,
-                review: None,
-            }],
-            output: None,
-            policies: vec![],
-        },
-    }
+    merge_markdown(&template, &destination, MarkdownDialect::Markdown)
+}
+
+fn toml_adapter(entry: &TemplateExecutionPlanEntry) -> ast_merge::MergeResult<String> {
+    let template = entry.prepared_template_content.clone().unwrap_or_default();
+    let destination = entry.destination_content.clone().unwrap_or_default();
+    merge_toml(&template, &destination, TomlDialect::Toml, None)
+}
+
+fn ruby_adapter(entry: &TemplateExecutionPlanEntry) -> ast_merge::MergeResult<String> {
+    let template = entry.prepared_template_content.clone().unwrap_or_default();
+    let destination = entry.destination_content.clone().unwrap_or_default();
+    merge_ruby(&template, &destination, RubyDialect::Ruby)
 }

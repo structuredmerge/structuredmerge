@@ -5,7 +5,7 @@ use ast_merge::{
     report_template_directory_runner,
 };
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -19,6 +19,24 @@ pub enum DirectorySessionMode {
 pub struct TemplateDirectorySessionReport {
     pub mode: DirectorySessionMode,
     pub runner_report: ast_merge::TemplateDirectoryRunnerReport,
+}
+
+pub type FamilyMergeAdapter = fn(&TemplateExecutionPlanEntry) -> ast_merge::MergeResult<String>;
+pub type FamilyMergeAdapterRegistry = HashMap<String, FamilyMergeAdapter>;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TemplateDirectoryRegistrySessionReport {
+    pub mode: DirectorySessionMode,
+    pub adapter_families: Vec<String>,
+    pub diagnostics: Vec<TemplateDirectoryRegistryDiagnostic>,
+    pub runner_report: ast_merge::TemplateDirectoryRunnerReport,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TemplateDirectoryRegistryDiagnostic {
+    pub severity: ast_merge::DiagnosticSeverity,
+    pub category: ast_merge::DiagnosticCategory,
+    pub message: String,
 }
 
 pub fn report_template_directory_session(
@@ -110,5 +128,88 @@ where
         DirectorySessionMode::Reapply,
         &result.execution_plan,
         Some(&result),
+    ))
+}
+
+pub fn merge_prepared_content_from_registry(
+    registry: &FamilyMergeAdapterRegistry,
+    entry: &TemplateExecutionPlanEntry,
+) -> ast_merge::MergeResult<String> {
+    let family = entry.classification.family.clone();
+    match registry.get(&family) {
+        Some(adapter) => adapter(entry),
+        None => ast_merge::MergeResult {
+            ok: false,
+            diagnostics: vec![ast_merge::Diagnostic {
+                severity: ast_merge::DiagnosticSeverity::Error,
+                category: ast_merge::DiagnosticCategory::ConfigurationError,
+                message: format!("missing family adapter for {family}"),
+                path: None,
+                review: None,
+            }],
+            output: None,
+            policies: vec![],
+        },
+    }
+}
+
+pub fn registered_adapter_families(registry: &FamilyMergeAdapterRegistry) -> Vec<String> {
+    let mut families = registry.keys().cloned().collect::<Vec<_>>();
+    families.sort();
+    families
+}
+
+pub fn report_template_directory_registry_session(
+    mode: DirectorySessionMode,
+    entries: &[TemplateExecutionPlanEntry],
+    result: Option<&TemplateTreeRunResult>,
+    registry: &FamilyMergeAdapterRegistry,
+) -> TemplateDirectoryRegistrySessionReport {
+    TemplateDirectoryRegistrySessionReport {
+        mode,
+        adapter_families: registered_adapter_families(registry),
+        diagnostics: result
+            .map(|value| {
+                value
+                    .apply_result
+                    .diagnostics
+                    .iter()
+                    .map(|diagnostic| TemplateDirectoryRegistryDiagnostic {
+                        severity: diagnostic.severity,
+                        category: diagnostic.category,
+                        message: diagnostic.message.clone(),
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default(),
+        runner_report: report_template_directory_runner(entries, result),
+    }
+}
+
+pub fn apply_template_directory_session_with_registry_to_directory(
+    template_root: &Path,
+    destination_root: &Path,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    registry: &FamilyMergeAdapterRegistry,
+    config: &TemplateTokenConfig,
+) -> std::io::Result<TemplateDirectoryRegistrySessionReport> {
+    let result = apply_template_tree_execution_to_directory(
+        template_root,
+        destination_root,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        |entry| merge_prepared_content_from_registry(registry, entry),
+        config,
+    )?;
+    Ok(report_template_directory_registry_session(
+        DirectorySessionMode::Apply,
+        &result.execution_plan,
+        Some(&result),
+        registry,
     ))
 }
