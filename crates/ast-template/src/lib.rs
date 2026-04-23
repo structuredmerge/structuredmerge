@@ -109,6 +109,34 @@ pub struct DirectorySessionOptions {
     pub config: Option<TemplateTokenConfig>,
 }
 
+impl Default for DirectorySessionOptions {
+    fn default() -> Self {
+        Self {
+            mode: DirectorySessionMode::Plan,
+            template_root: PathBuf::new(),
+            destination_root: PathBuf::new(),
+            context: TemplateDestinationContext::default(),
+            default_strategy: TemplateStrategy::Merge,
+            overrides: Vec::new(),
+            replacements: HashMap::new(),
+            allowed_families: None,
+            config: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DirectorySessionProfile {
+    pub mode: DirectorySessionMode,
+    pub context: TemplateDestinationContext,
+    pub default_strategy: TemplateStrategy,
+    pub overrides: Vec<TemplateStrategyOverride>,
+    pub replacements: HashMap<String, String>,
+    pub allowed_families: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config: Option<TemplateTokenConfig>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TemplateDirectoryRegistryDiagnostic {
     pub severity: ast_merge::DiagnosticSeverity,
@@ -883,4 +911,63 @@ pub fn run_template_directory_session_with_options(
         allowed.as_deref(),
         options.config.as_ref().unwrap_or(&default_config),
     )
+}
+
+pub fn resolve_template_directory_session_options(
+    profiles: &HashMap<String, DirectorySessionProfile>,
+    profile_name: &str,
+    overrides: &DirectorySessionOptions,
+) -> Option<DirectorySessionOptions> {
+    let profile = profiles.get(profile_name)?;
+    Some(DirectorySessionOptions {
+        mode: if matches!(overrides.mode, DirectorySessionMode::Plan)
+            && !matches!(profile.mode, DirectorySessionMode::Plan)
+        {
+            profile.mode
+        } else {
+            overrides.mode
+        },
+        template_root: overrides.template_root.clone(),
+        destination_root: overrides.destination_root.clone(),
+        context: if overrides.context == TemplateDestinationContext::default() {
+            profile.context.clone()
+        } else {
+            overrides.context.clone()
+        },
+        default_strategy: if overrides.default_strategy == TemplateStrategy::Merge
+            && profile.default_strategy != TemplateStrategy::Merge
+        {
+            profile.default_strategy
+        } else {
+            overrides.default_strategy
+        },
+        overrides: if overrides.overrides.is_empty() {
+            profile.overrides.clone()
+        } else {
+            overrides.overrides.clone()
+        },
+        replacements: if overrides.replacements.is_empty() {
+            profile.replacements.clone()
+        } else {
+            overrides.replacements.clone()
+        },
+        allowed_families: overrides
+            .allowed_families
+            .clone()
+            .or_else(|| profile.allowed_families.clone()),
+        config: overrides.config.clone().or_else(|| profile.config.clone()),
+    })
+}
+
+pub fn run_template_directory_session_with_profile(
+    profiles: &HashMap<String, DirectorySessionProfile>,
+    profile_name: &str,
+    overrides: &DirectorySessionOptions,
+) -> std::io::Result<Option<AnySessionOutcomeReport>> {
+    let Some(options) =
+        resolve_template_directory_session_options(profiles, profile_name, overrides)
+    else {
+        return Ok(None);
+    };
+    Ok(Some(run_template_directory_session_with_options(&options)?))
 }

@@ -4,7 +4,8 @@ use ast_merge::{
     write_relative_file_tree,
 };
 use ast_template::{
-    DirectorySessionOptions, FamilyMergeAdapter, FamilyMergeAdapterRegistry,
+    DirectorySessionOptions, DirectorySessionProfile, FamilyMergeAdapter,
+    FamilyMergeAdapterRegistry,
     apply_template_directory_session_diagnostics_with_default_registry_to_directory,
     apply_template_directory_session_envelope_with_default_registry_to_directory,
     apply_template_directory_session_outcome_with_default_registry_to_directory,
@@ -18,7 +19,7 @@ use ast_template::{
     reapply_template_directory_session_to_directory, report_adapter_capabilities_from_directories,
     report_default_adapter_capabilities_from_directories, report_template_directory_session_status,
     run_template_directory_session_with_default_registry_to_directory,
-    run_template_directory_session_with_options,
+    run_template_directory_session_with_options, run_template_directory_session_with_profile,
 };
 use markdown_merge::{MarkdownDialect, merge_markdown};
 use ruby_merge::{RubyDialect, merge_ruby};
@@ -397,6 +398,43 @@ fn conforms_to_template_directory_session_options_report_fixture() {
 
     assert_session_options_apply_case(&fixture["apply_run"], fixture_root);
     assert_session_options_reapply_case(&fixture["reapply_run"], fixture_root);
+}
+
+#[test]
+fn conforms_to_template_directory_session_profile_report_fixture() {
+    let fixture_path = repo_root()
+        .join("fixtures/diagnostics/slice-363-template-directory-session-profile-report/template-directory-session-profile-report.json");
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture should have parent");
+    let profiles = decode_session_profiles(&fixture["profiles"]);
+
+    let plan_overrides = DirectorySessionOptions {
+        mode: ast_template::DirectorySessionMode::Plan,
+        template_root: fixture_root.join("dry-run/template"),
+        destination_root: fixture_root.join("dry-run/destination"),
+        context: serde_json::from_value(serde_json::json!({})).expect("context should deserialize"),
+        default_strategy: TemplateStrategy::Merge,
+        overrides: vec![],
+        replacements: HashMap::new(),
+        allowed_families: None,
+        config: None,
+    };
+    let plan_actual = run_template_directory_session_with_profile(
+        &profiles,
+        fixture["plan_run"]["profile"].as_str().expect("profile should be string"),
+        &plan_overrides,
+    )
+    .expect("plan profile should succeed")
+    .expect("profile should exist");
+    assert_eq!(
+        serde_json::to_value(plan_actual).expect("report should serialize"),
+        fixture["plan_run"]["expected"]
+    );
+
+    assert_session_profile_apply_case(&fixture["apply_run"], fixture_root, &profiles);
+    assert_session_profile_reapply_case(&fixture["reapply_run"], fixture_root, &profiles);
 }
 
 fn repo_root() -> PathBuf {
@@ -796,6 +834,96 @@ fn decode_session_options(
         }),
         config: None,
     }
+}
+
+fn assert_session_profile_apply_case(
+    fixture: &Value,
+    fixture_root: &std::path::Path,
+    profiles: &HashMap<String, DirectorySessionProfile>,
+) {
+    let temp_root = repo_root().join("rust/crates/ast-template/tmp/profiles");
+    let _ = fs::remove_dir_all(&temp_root);
+    write_relative_file_tree(
+        &temp_root,
+        &read_relative_file_tree(&fixture_root.join("apply-run/destination"))
+            .expect("apply-run destination should read"),
+    )
+    .expect("apply-run destination should write");
+
+    let overrides = DirectorySessionOptions {
+        template_root: fixture_root.join("apply-run/template"),
+        destination_root: temp_root.clone(),
+        ..Default::default()
+    };
+    let actual = run_template_directory_session_with_profile(
+        profiles,
+        fixture["profile"].as_str().expect("profile should be string"),
+        &overrides,
+    )
+    .expect("apply profile should succeed")
+    .expect("profile should exist");
+    assert_eq!(serde_json::to_value(actual).expect("report should serialize"), fixture["expected"]);
+}
+
+fn assert_session_profile_reapply_case(
+    fixture: &Value,
+    fixture_root: &std::path::Path,
+    profiles: &HashMap<String, DirectorySessionProfile>,
+) {
+    let temp_root = repo_root().join("rust/crates/ast-template/tmp/profiles-reapply");
+    let _ = fs::remove_dir_all(&temp_root);
+    write_relative_file_tree(
+        &temp_root,
+        &read_relative_file_tree(&fixture_root.join("apply-run/destination"))
+            .expect("apply-run destination should read"),
+    )
+    .expect("apply-run destination should write");
+
+    let priming = DirectorySessionOptions {
+        template_root: fixture_root.join("apply-run/template"),
+        destination_root: temp_root.clone(),
+        ..Default::default()
+    };
+    let _ = run_template_directory_session_with_profile(profiles, "apply_run", &priming)
+        .expect("apply priming should succeed")
+        .expect("profile should exist");
+
+    let mut overrides = decode_session_options(
+        &serde_json::json!({
+            "mode": fixture["overrides"]["mode"].clone(),
+            "context": {},
+            "default_strategy": "merge",
+            "overrides": [],
+            "replacements": {},
+            "allowed_families": null
+        }),
+        fixture_root.join("apply-run/template"),
+        temp_root.clone(),
+    );
+    overrides.template_root = fixture_root.join("apply-run/template");
+    overrides.destination_root = temp_root;
+    let actual = run_template_directory_session_with_profile(
+        profiles,
+        fixture["profile"].as_str().expect("profile should be string"),
+        &overrides,
+    )
+    .expect("reapply profile should succeed")
+    .expect("profile should exist");
+    assert_eq!(serde_json::to_value(actual).expect("report should serialize"), fixture["expected"]);
+}
+
+fn decode_session_profiles(fixture: &Value) -> HashMap<String, DirectorySessionProfile> {
+    fixture
+        .as_object()
+        .expect("profiles should be object")
+        .iter()
+        .map(|(name, profile)| {
+            (
+                name.clone(),
+                serde_json::from_value(profile.clone()).expect("profile should deserialize"),
+            )
+        })
+        .collect()
 }
 
 fn multi_family_merge_callback(
