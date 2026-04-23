@@ -44,6 +44,12 @@ pub struct AdapterCapabilityReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionEnvelopeReport<T> {
+    pub session_report: T,
+    pub adapter_capabilities: AdapterCapabilityReport,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TemplateDirectoryRegistryDiagnostic {
     pub severity: ast_merge::DiagnosticSeverity,
     pub category: ast_merge::DiagnosticCategory,
@@ -357,4 +363,76 @@ pub fn report_default_adapter_capabilities_from_directories(
         &registry,
         config,
     )
+}
+
+pub fn report_template_directory_session_envelope<T>(
+    session_report: T,
+    adapter_capabilities: AdapterCapabilityReport,
+) -> SessionEnvelopeReport<T> {
+    SessionEnvelopeReport { session_report, adapter_capabilities }
+}
+
+pub fn plan_template_directory_session_envelope_from_directories(
+    template_root: &Path,
+    destination_root: &Path,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    allowed_families: Option<&[&str]>,
+    config: &TemplateTokenConfig,
+) -> std::io::Result<SessionEnvelopeReport<TemplateDirectorySessionReport>> {
+    let session_report = plan_template_directory_session_from_directories(
+        template_root,
+        destination_root,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        config,
+    )?;
+    let adapter_capabilities = report_default_adapter_capabilities_from_directories(
+        template_root,
+        destination_root,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        allowed_families,
+        config,
+    )?;
+    Ok(report_template_directory_session_envelope(session_report, adapter_capabilities))
+}
+
+pub fn apply_template_directory_session_envelope_with_default_registry_to_directory(
+    template_root: &Path,
+    destination_root: &Path,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    allowed_families: Option<&[&str]>,
+    config: &TemplateTokenConfig,
+) -> std::io::Result<SessionEnvelopeReport<TemplateDirectoryRegistrySessionReport>> {
+    let session_report = apply_template_directory_session_with_default_registry_to_directory(
+        template_root,
+        destination_root,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        allowed_families,
+        config,
+    )?;
+    let adapter_capabilities = report_default_adapter_capabilities_from_directories(
+        template_root,
+        destination_root,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        allowed_families,
+        config,
+    )?;
+    Ok(report_template_directory_session_envelope(session_report, adapter_capabilities))
 }
