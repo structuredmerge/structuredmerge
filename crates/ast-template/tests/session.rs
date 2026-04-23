@@ -5,6 +5,7 @@ use ast_merge::{
 };
 use ast_template::{
     FamilyMergeAdapter, FamilyMergeAdapterRegistry, apply_template_directory_session_to_directory,
+    apply_template_directory_session_with_default_registry_to_directory,
     apply_template_directory_session_with_registry_to_directory,
     plan_template_directory_session_from_directories,
     reapply_template_directory_session_to_directory,
@@ -121,6 +122,19 @@ fn conforms_to_template_directory_adapter_registry_report_fixture() {
     assert_registry_fixture_case(&fixture["partial_registry"], fixture_root, &partial_registry);
 }
 
+#[test]
+fn conforms_to_template_directory_default_adapter_discovery_report_fixture() {
+    let fixture_path = repo_root()
+        .join("fixtures/diagnostics/slice-355-template-directory-default-adapter-discovery-report/template-directory-default-adapter-discovery-report.json");
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture should have parent");
+
+    assert_default_discovery_fixture_case(&fixture["default_discovery"], fixture_root);
+    assert_default_discovery_fixture_case(&fixture["filtered_discovery"], fixture_root);
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -158,6 +172,45 @@ fn assert_registry_fixture_case(
     )
     .expect("registry session should succeed");
     assert_eq!(serde_json::to_value(actual).expect("report should serialize"), fixture["expected"]);
+
+    fs::remove_dir_all(temp_root).expect("temp dir should be removable");
+}
+
+fn assert_default_discovery_fixture_case(fixture: &Value, fixture_root: &std::path::Path) {
+    let temp_root = repo_root().join("rust/crates/ast-template/tmp/discovery");
+    let _ = fs::remove_dir_all(&temp_root);
+    write_relative_file_tree(
+        &temp_root,
+        &read_relative_file_tree(&fixture_root.join("apply-run/destination"))
+            .expect("apply-run destination should read"),
+    )
+    .expect("apply-run destination should write");
+
+    let allowed_families = fixture["allowed_families"].as_array().map(|families| {
+        families
+            .iter()
+            .map(|family| family.as_str().expect("family should be string"))
+            .collect::<Vec<_>>()
+    });
+    let actual = apply_template_directory_session_with_default_registry_to_directory(
+        &fixture_root.join("apply-run/template"),
+        &temp_root,
+        &serde_json::from_value::<TemplateDestinationContext>(fixture["context"].clone())
+            .expect("context should deserialize"),
+        serde_json::from_value::<TemplateStrategy>(fixture["default_strategy"].clone())
+            .expect("strategy should deserialize"),
+        &serde_json::from_value::<Vec<TemplateStrategyOverride>>(fixture["overrides"].clone())
+            .expect("overrides should deserialize"),
+        &serde_json::from_value::<HashMap<String, String>>(fixture["replacements"].clone())
+            .expect("replacements should deserialize"),
+        allowed_families.as_deref(),
+        &default_template_token_config(),
+    )
+    .expect("discovery session should succeed");
+    assert_eq!(
+        serde_json::to_value(actual).expect("report should serialize"),
+        fixture["expected"]
+    );
 
     fs::remove_dir_all(temp_root).expect("temp dir should be removable");
 }

@@ -4,8 +4,11 @@ use ast_merge::{
     apply_template_tree_execution_to_directory, plan_template_tree_execution_from_directories,
     report_template_directory_runner,
 };
+use markdown_merge::{merge_markdown, MarkdownDialect};
+use ruby_merge::{merge_ruby, RubyDialect};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::Path};
+use toml_merge::{merge_toml, TomlDialect};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -212,4 +215,67 @@ pub fn apply_template_directory_session_with_registry_to_directory(
         Some(&result),
         registry,
     ))
+}
+
+pub fn default_family_merge_adapter_registry(
+    allowed_families: Option<&[&str]>,
+) -> FamilyMergeAdapterRegistry {
+    let include = |family: &str| {
+        allowed_families
+            .map(|families| families.contains(&family))
+            .unwrap_or(true)
+    };
+
+    let mut registry = FamilyMergeAdapterRegistry::new();
+    if include("markdown") {
+        registry.insert("markdown".to_string(), markdown_family_adapter);
+    }
+    if include("toml") {
+        registry.insert("toml".to_string(), toml_family_adapter);
+    }
+    if include("ruby") {
+        registry.insert("ruby".to_string(), ruby_family_adapter);
+    }
+    registry
+}
+
+pub fn apply_template_directory_session_with_default_registry_to_directory(
+    template_root: &Path,
+    destination_root: &Path,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    allowed_families: Option<&[&str]>,
+    config: &TemplateTokenConfig,
+) -> std::io::Result<TemplateDirectoryRegistrySessionReport> {
+    let registry = default_family_merge_adapter_registry(allowed_families);
+    apply_template_directory_session_with_registry_to_directory(
+        template_root,
+        destination_root,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        &registry,
+        config,
+    )
+}
+
+fn markdown_family_adapter(entry: &TemplateExecutionPlanEntry) -> ast_merge::MergeResult<String> {
+    let template = entry.prepared_template_content.clone().unwrap_or_default();
+    let destination = entry.destination_content.clone().unwrap_or_default();
+    merge_markdown(&template, &destination, MarkdownDialect::Markdown)
+}
+
+fn toml_family_adapter(entry: &TemplateExecutionPlanEntry) -> ast_merge::MergeResult<String> {
+    let template = entry.prepared_template_content.clone().unwrap_or_default();
+    let destination = entry.destination_content.clone().unwrap_or_default();
+    merge_toml(&template, &destination, TomlDialect::Toml, None)
+}
+
+fn ruby_family_adapter(entry: &TemplateExecutionPlanEntry) -> ast_merge::MergeResult<String> {
+    let template = entry.prepared_template_content.clone().unwrap_or_default();
+    let destination = entry.destination_content.clone().unwrap_or_default();
+    merge_ruby(&template, &destination, RubyDialect::Ruby)
 }
