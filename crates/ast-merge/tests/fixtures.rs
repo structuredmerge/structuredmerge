@@ -132,6 +132,53 @@ fn read_relative_file_tree(root: &Path) -> HashMap<String, String> {
     files
 }
 
+fn multi_family_merge_callback(
+    entry: &TemplateExecutionPlanEntry,
+) -> ast_merge::MergeResult<String> {
+    match entry.classification.family.as_str() {
+        "markdown" => merge_markdown(
+            entry.prepared_template_content.as_ref().expect("prepared content should exist"),
+            entry.destination_content.as_ref().expect("destination content should exist"),
+            MarkdownDialect::Markdown,
+        ),
+        "toml" => merge_toml(
+            entry.prepared_template_content.as_ref().expect("prepared content should exist"),
+            entry.destination_content.as_ref().expect("destination content should exist"),
+            TomlDialect::Toml,
+            None,
+        ),
+        "ruby" => merge_ruby(
+            entry.prepared_template_content.as_ref().expect("prepared content should exist"),
+            entry.destination_content.as_ref().expect("destination content should exist"),
+            RubyDialect::Ruby,
+        ),
+        family => ast_merge::MergeResult {
+            ok: false,
+            diagnostics: vec![ast_merge::Diagnostic {
+                severity: ast_merge::DiagnosticSeverity::Error,
+                category: ast_merge::DiagnosticCategory::ConfigurationError,
+                message: format!("missing family merge adapter for {family}"),
+                path: None,
+                review: None,
+            }],
+            output: None,
+            policies: vec![],
+        },
+    }
+}
+
+fn repo_temp_dir() -> PathBuf {
+    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("tmp");
+    fs::create_dir_all(&base).expect("tmp root should be creatable");
+    let suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock should be valid")
+        .as_nanos();
+    let path = base.join(format!("ast-merge-{suffix}"));
+    fs::create_dir_all(&path).expect("temp dir should be creatable");
+    path
+}
+
 fn fixture_suite_selector(fixture: &Value) -> ConformanceSuiteSelector {
     serde_json::from_value::<ConformanceSuiteSelector>(fixture["suite_selector"].clone())
         .expect("suite selector should deserialize")
@@ -939,36 +986,7 @@ fn conforms_to_mini_template_tree_multi_family_merge_callback_fixture() {
         default_strategy,
         &overrides,
         &replacements,
-        |entry| match entry.classification.family.as_str() {
-            "markdown" => merge_markdown(
-                entry.prepared_template_content.as_ref().expect("prepared content should exist"),
-                entry.destination_content.as_ref().expect("destination content should exist"),
-                MarkdownDialect::Markdown,
-            ),
-            "toml" => merge_toml(
-                entry.prepared_template_content.as_ref().expect("prepared content should exist"),
-                entry.destination_content.as_ref().expect("destination content should exist"),
-                TomlDialect::Toml,
-                None,
-            ),
-            "ruby" => merge_ruby(
-                entry.prepared_template_content.as_ref().expect("prepared content should exist"),
-                entry.destination_content.as_ref().expect("destination content should exist"),
-                RubyDialect::Ruby,
-            ),
-            family => ast_merge::MergeResult {
-                ok: false,
-                diagnostics: vec![ast_merge::Diagnostic {
-                    severity: ast_merge::DiagnosticSeverity::Error,
-                    category: ast_merge::DiagnosticCategory::ConfigurationError,
-                    message: format!("missing family merge adapter for {family}"),
-                    path: None,
-                    review: None,
-                }],
-                output: None,
-                policies: vec![],
-            },
-        },
+        multi_family_merge_callback,
         &ast_merge::default_template_token_config(),
     );
     let expected = serde_json::from_value::<TemplateTreeRunResult>(fixture["expected"].clone())
@@ -1013,36 +1031,7 @@ fn conforms_to_mini_template_tree_multi_family_run_report_fixture() {
         default_strategy,
         &overrides,
         &replacements,
-        |entry| match entry.classification.family.as_str() {
-            "markdown" => merge_markdown(
-                entry.prepared_template_content.as_ref().expect("prepared content should exist"),
-                entry.destination_content.as_ref().expect("destination content should exist"),
-                MarkdownDialect::Markdown,
-            ),
-            "toml" => merge_toml(
-                entry.prepared_template_content.as_ref().expect("prepared content should exist"),
-                entry.destination_content.as_ref().expect("destination content should exist"),
-                TomlDialect::Toml,
-                None,
-            ),
-            "ruby" => merge_ruby(
-                entry.prepared_template_content.as_ref().expect("prepared content should exist"),
-                entry.destination_content.as_ref().expect("destination content should exist"),
-                RubyDialect::Ruby,
-            ),
-            family => ast_merge::MergeResult {
-                ok: false,
-                diagnostics: vec![ast_merge::Diagnostic {
-                    severity: ast_merge::DiagnosticSeverity::Error,
-                    category: ast_merge::DiagnosticCategory::ConfigurationError,
-                    message: format!("missing family merge adapter for {family}"),
-                    path: None,
-                    review: None,
-                }],
-                output: None,
-                policies: vec![],
-            },
-        },
+        multi_family_merge_callback,
         &ast_merge::default_template_token_config(),
     );
     let actual = report_template_tree_run(&run_result);
@@ -1051,6 +1040,115 @@ fn conforms_to_mini_template_tree_multi_family_run_report_fixture() {
             .expect("expected should deserialize");
 
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn conforms_to_mini_template_tree_directory_run_report_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("mini_template_tree_directory_run_report"));
+    let fixture_dir = diagnostics_fixture_path("mini_template_tree_directory_run_report")
+        .parent()
+        .expect("fixture should have parent")
+        .to_path_buf();
+    let context = serde_json::from_value::<TemplateDestinationContext>(fixture["context"].clone())
+        .expect("context should deserialize");
+    let default_strategy =
+        serde_json::from_value::<TemplateStrategy>(fixture["default_strategy"].clone())
+            .expect("default_strategy should deserialize");
+    let overrides =
+        serde_json::from_value::<Vec<TemplateStrategyOverride>>(fixture["overrides"].clone())
+            .expect("overrides should deserialize");
+    let replacements =
+        serde_json::from_value::<HashMap<String, String>>(fixture["replacements"].clone())
+            .expect("replacements should deserialize");
+
+    let run_result = ast_merge::run_template_tree_execution_from_directories(
+        &fixture_dir.join("template"),
+        &fixture_dir.join("destination"),
+        &context,
+        default_strategy,
+        &overrides,
+        &replacements,
+        multi_family_merge_callback,
+        &ast_merge::default_template_token_config(),
+    )
+    .expect("directory-backed run should succeed");
+    let actual = report_template_tree_run(&run_result);
+    let expected = serde_json::from_value::<TemplateTreeRunReport>(fixture["expected"].clone())
+        .expect("expected should deserialize");
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn conforms_to_mini_template_tree_directory_apply_convergence_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "mini_template_tree_directory_apply_convergence",
+    ));
+    let fixture_dir = diagnostics_fixture_path("mini_template_tree_directory_apply_convergence")
+        .parent()
+        .expect("fixture should have parent")
+        .to_path_buf();
+    let context = serde_json::from_value::<TemplateDestinationContext>(fixture["context"].clone())
+        .expect("context should deserialize");
+    let default_strategy =
+        serde_json::from_value::<TemplateStrategy>(fixture["default_strategy"].clone())
+            .expect("default_strategy should deserialize");
+    let overrides =
+        serde_json::from_value::<Vec<TemplateStrategyOverride>>(fixture["overrides"].clone())
+            .expect("overrides should deserialize");
+    let replacements =
+        serde_json::from_value::<HashMap<String, String>>(fixture["replacements"].clone())
+            .expect("replacements should deserialize");
+    let temp_root = repo_temp_dir();
+    let destination_root = temp_root.join("destination");
+    let initial_destination = read_relative_file_tree(&fixture_dir.join("destination"));
+    ast_merge::write_relative_file_tree(&destination_root, &initial_destination)
+        .expect("destination tree should be writable");
+
+    let first_run = ast_merge::apply_template_tree_execution_to_directory(
+        &fixture_dir.join("template"),
+        &destination_root,
+        &context,
+        default_strategy,
+        &overrides,
+        &replacements,
+        multi_family_merge_callback,
+        &ast_merge::default_template_token_config(),
+    )
+    .expect("first directory apply should succeed");
+    let first_actual = report_template_tree_run(&first_run);
+    let first_expected =
+        serde_json::from_value::<TemplateTreeRunReport>(fixture["expected_first_report"].clone())
+            .expect("expected_first_report should deserialize");
+    assert_eq!(first_actual, first_expected);
+
+    let actual_files = ast_merge::read_relative_file_tree(&destination_root)
+        .expect("applied destination tree should be readable");
+    let expected_files = serde_json::from_value::<HashMap<String, String>>(
+        fixture["expected_destination_files"].clone(),
+    )
+    .expect("expected_destination_files should deserialize");
+    assert_eq!(actual_files, expected_files);
+
+    let second_run = ast_merge::apply_template_tree_execution_to_directory(
+        &fixture_dir.join("template"),
+        &destination_root,
+        &context,
+        default_strategy,
+        &overrides,
+        &replacements,
+        multi_family_merge_callback,
+        &ast_merge::default_template_token_config(),
+    )
+    .expect("second directory apply should succeed");
+    let second_actual = report_template_tree_run(&second_run);
+    let second_expected =
+        serde_json::from_value::<TemplateTreeRunReport>(fixture["expected_second_report"].clone())
+            .expect("expected_second_report should deserialize");
+    assert_eq!(second_actual, second_expected);
+
+    fs::remove_dir_all(temp_root).expect("temp dir should be removable");
 }
 
 #[test]

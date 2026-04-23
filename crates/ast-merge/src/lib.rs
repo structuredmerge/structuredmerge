@@ -1,4 +1,8 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -1408,7 +1412,13 @@ pub fn preview_template_execution(entries: &[TemplateExecutionPlanEntry]) -> Tem
                     result
                         .result_files
                         .insert(destination_path.clone(), prepared_template_content.clone());
-                    if entry.destination_exists {
+                    if entry.destination_exists
+                        && entry.destination_content.as_ref().is_some_and(|destination_content| {
+                            destination_content == prepared_template_content
+                        })
+                    {
+                        result.kept_paths.push(destination_path.clone());
+                    } else if entry.destination_exists {
                         result.updated_paths.push(destination_path.clone());
                     } else {
                         result.created_paths.push(destination_path.clone());
@@ -1478,14 +1488,12 @@ where
                 if let (Some(destination_path), Some(prepared_template_content)) =
                     (entry.destination_path.as_ref(), entry.prepared_template_content.as_ref())
                 {
-                    result
-                        .result_files
-                        .insert(destination_path.clone(), prepared_template_content.clone());
-                    if entry.destination_exists {
-                        result.updated_paths.push(destination_path.clone());
-                    } else {
-                        result.created_paths.push(destination_path.clone());
-                    }
+                    record_template_apply_output(
+                        &mut result,
+                        entry,
+                        destination_path.clone(),
+                        prepared_template_content.clone(),
+                    );
                 }
             }
             TemplateExecutionAction::MergePreparedContent => {
@@ -1498,14 +1506,12 @@ where
                 };
 
                 if entry.destination_content.is_none() {
-                    result
-                        .result_files
-                        .insert(destination_path.clone(), prepared_template_content.clone());
-                    if entry.destination_exists {
-                        result.updated_paths.push(destination_path.clone());
-                    } else {
-                        result.created_paths.push(destination_path.clone());
-                    }
+                    record_template_apply_output(
+                        &mut result,
+                        entry,
+                        destination_path.clone(),
+                        prepared_template_content.clone(),
+                    );
                     continue;
                 }
 
@@ -1520,12 +1526,7 @@ where
                     continue;
                 }
 
-                result.result_files.insert(destination_path.clone(), output);
-                if entry.destination_exists {
-                    result.updated_paths.push(destination_path.clone());
-                } else {
-                    result.created_paths.push(destination_path.clone());
-                }
+                record_template_apply_output(&mut result, entry, destination_path.clone(), output);
             }
         }
     }
@@ -1617,6 +1618,131 @@ where
     }
 }
 
+pub fn read_relative_file_tree(root: &Path) -> io::Result<HashMap<String, String>> {
+    let mut files = HashMap::new();
+    let metadata = match fs::metadata(root) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(files),
+        Err(error) => return Err(error),
+    };
+    if !metadata.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("{} is not a directory", root.display()),
+        ));
+    }
+
+    fn walk(root: &Path, current: &Path, files: &mut HashMap<String, String>) -> io::Result<()> {
+        for entry in fs::read_dir(current)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                walk(root, &path, files)?;
+                continue;
+            }
+
+            let relative_path = path
+                .strip_prefix(root)
+                .expect("path should be under root")
+                .to_string_lossy()
+                .replace('\\', "/");
+            files.insert(relative_path, fs::read_to_string(&path)?);
+        }
+        Ok(())
+    }
+
+    walk(root, root, &mut files)?;
+    Ok(files)
+}
+
+pub fn write_relative_file_tree(root: &Path, files: &HashMap<String, String>) -> io::Result<()> {
+    fs::create_dir_all(root)?;
+
+    let mut paths = files.keys().cloned().collect::<Vec<_>>();
+    paths.sort();
+    for relative_path in paths {
+        let full_path =
+            root.join(PathBuf::from(relative_path.replace('/', std::path::MAIN_SEPARATOR_STR)));
+        if let Some(parent) = full_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(full_path, files.get(&relative_path).expect("path should exist"))?;
+    }
+
+    Ok(())
+}
+
+pub fn run_template_tree_execution_from_directories<F>(
+    template_root: &Path,
+    destination_root: &Path,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    merge_prepared_content: F,
+    config: &TemplateTokenConfig,
+) -> io::Result<TemplateTreeRunResult>
+where
+    F: Fn(&TemplateExecutionPlanEntry) -> MergeResult<String>,
+{
+    let template_contents = read_relative_file_tree(template_root)?;
+    let destination_contents = read_relative_file_tree(destination_root)?;
+    let mut template_source_paths = template_contents.keys().cloned().collect::<Vec<_>>();
+    template_source_paths.sort();
+
+    Ok(run_template_tree_execution(
+        &template_source_paths,
+        &template_contents,
+        &destination_contents,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        merge_prepared_content,
+        config,
+    ))
+}
+
+pub fn apply_template_tree_execution_to_directory<F>(
+    template_root: &Path,
+    destination_root: &Path,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    merge_prepared_content: F,
+    config: &TemplateTokenConfig,
+) -> io::Result<TemplateTreeRunResult>
+where
+    F: Fn(&TemplateExecutionPlanEntry) -> MergeResult<String>,
+{
+    let run_result = run_template_tree_execution_from_directories(
+        template_root,
+        destination_root,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        merge_prepared_content,
+        config,
+    )?;
+
+    let mut files_to_write = HashMap::new();
+    for path in run_result
+        .apply_result
+        .created_paths
+        .iter()
+        .chain(run_result.apply_result.updated_paths.iter())
+    {
+        if let Some(content) = run_result.apply_result.result_files.get(path) {
+            files_to_write.insert(path.clone(), content.clone());
+        }
+    }
+    write_relative_file_tree(destination_root, &files_to_write)?;
+
+    Ok(run_result)
+}
+
 pub fn report_template_tree_run(result: &TemplateTreeRunResult) -> TemplateTreeRunReport {
     let created =
         result.apply_result.created_paths.iter().cloned().collect::<std::collections::HashSet<_>>();
@@ -1670,6 +1796,27 @@ pub fn report_template_tree_run(result: &TemplateTreeRunResult) -> TemplateTreeR
         .collect::<Vec<_>>();
 
     TemplateTreeRunReport { entries, summary }
+}
+
+fn record_template_apply_output(
+    result: &mut TemplateApplyResult,
+    entry: &TemplateExecutionPlanEntry,
+    destination_path: String,
+    output: String,
+) {
+    result.result_files.insert(destination_path.clone(), output.clone());
+    if entry.destination_exists
+        && entry
+            .destination_content
+            .as_ref()
+            .is_some_and(|destination_content| destination_content == &output)
+    {
+        result.kept_paths.push(destination_path);
+    } else if entry.destination_exists {
+        result.updated_paths.push(destination_path);
+    } else {
+        result.created_paths.push(destination_path);
+    }
 }
 
 pub fn conformance_suite_definition<'a>(
