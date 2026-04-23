@@ -50,6 +50,16 @@ pub struct SessionEnvelopeReport<T> {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionStatusReport {
+    pub mode: DirectorySessionMode,
+    pub ready: bool,
+    pub missing_families: Vec<String>,
+    pub blocked_paths: Vec<String>,
+    pub planned_write_count: usize,
+    pub written_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TemplateDirectoryRegistryDiagnostic {
     pub severity: ast_merge::DiagnosticSeverity,
     pub category: ast_merge::DiagnosticCategory,
@@ -435,4 +445,71 @@ pub fn apply_template_directory_session_envelope_with_default_registry_to_direct
         config,
     )?;
     Ok(report_template_directory_session_envelope(session_report, adapter_capabilities))
+}
+
+pub fn report_template_directory_session_status<T>(
+    envelope: &SessionEnvelopeReport<T>,
+) -> SessionStatusReport
+where
+    T: SessionReportView,
+{
+    let session_report = envelope.session_report.runner_report();
+    let mut blocked_paths = session_report
+        .plan_report
+        .entries
+        .iter()
+        .filter(|entry| entry.status == ast_merge::TemplateDirectoryPlanStatus::Blocked)
+        .filter_map(|entry| entry.destination_path.clone())
+        .collect::<Vec<_>>();
+    if let Some(apply_report) = &session_report.apply_report {
+        blocked_paths.extend(
+            apply_report
+                .entries
+                .iter()
+                .filter(|entry| entry.status == ast_merge::TemplateTreeRunStatus::Blocked)
+                .filter_map(|entry| entry.destination_path.clone()),
+        );
+    }
+    blocked_paths.sort();
+    blocked_paths.dedup();
+    let mut missing_families = envelope.adapter_capabilities.missing_families.clone();
+    missing_families.sort();
+    SessionStatusReport {
+        mode: envelope.session_report.mode(),
+        ready: envelope.adapter_capabilities.ready && blocked_paths.is_empty(),
+        missing_families,
+        blocked_paths,
+        planned_write_count: session_report.plan_report.summary.create
+            + session_report.plan_report.summary.update,
+        written_count: session_report
+            .apply_report
+            .as_ref()
+            .map(|report| report.summary.written)
+            .unwrap_or(0),
+    }
+}
+
+pub trait SessionReportView {
+    fn mode(&self) -> DirectorySessionMode;
+    fn runner_report(&self) -> &ast_merge::TemplateDirectoryRunnerReport;
+}
+
+impl SessionReportView for TemplateDirectorySessionReport {
+    fn mode(&self) -> DirectorySessionMode {
+        self.mode
+    }
+
+    fn runner_report(&self) -> &ast_merge::TemplateDirectoryRunnerReport {
+        &self.runner_report
+    }
+}
+
+impl SessionReportView for TemplateDirectoryRegistrySessionReport {
+    fn mode(&self) -> DirectorySessionMode {
+        self.mode
+    }
+
+    fn runner_report(&self) -> &ast_merge::TemplateDirectoryRunnerReport {
+        &self.runner_report
+    }
 }

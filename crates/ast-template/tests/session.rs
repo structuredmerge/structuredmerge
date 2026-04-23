@@ -12,7 +12,7 @@ use ast_template::{
     plan_template_directory_session_envelope_from_directories,
     plan_template_directory_session_from_directories,
     reapply_template_directory_session_to_directory, report_adapter_capabilities_from_directories,
-    report_default_adapter_capabilities_from_directories,
+    report_default_adapter_capabilities_from_directories, report_template_directory_session_status,
 };
 use markdown_merge::{MarkdownDialect, merge_markdown};
 use ruby_merge::{RubyDialect, merge_ruby};
@@ -202,6 +202,46 @@ fn conforms_to_template_directory_session_envelope_report_fixture() {
     assert_session_envelope_apply_case(&fixture["filtered_discovery"], fixture_root);
 }
 
+#[test]
+fn conforms_to_template_directory_session_status_report_fixture() {
+    let fixture_path = repo_root()
+        .join("fixtures/diagnostics/slice-358-template-directory-session-status-report/template-directory-session-status-report.json");
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture should have parent");
+
+    let dry_run_actual = plan_template_directory_session_envelope_from_directories(
+        &fixture_root.join("dry-run/template"),
+        &fixture_root.join("dry-run/destination"),
+        &serde_json::from_value::<TemplateDestinationContext>(
+            fixture["dry_run"]["context"].clone(),
+        )
+        .expect("context should deserialize"),
+        serde_json::from_value::<TemplateStrategy>(fixture["dry_run"]["default_strategy"].clone())
+            .expect("strategy should deserialize"),
+        &serde_json::from_value::<Vec<TemplateStrategyOverride>>(
+            fixture["dry_run"]["overrides"].clone(),
+        )
+        .expect("overrides should deserialize"),
+        &serde_json::from_value::<HashMap<String, String>>(
+            fixture["dry_run"]["replacements"].clone(),
+        )
+        .expect("replacements should deserialize"),
+        None,
+        &default_template_token_config(),
+    )
+    .expect("dry-run status should succeed");
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_status(&dry_run_actual))
+            .expect("status should serialize"),
+        fixture["dry_run"]["expected"]
+    );
+
+    assert_session_status_apply_case(&fixture["apply_run"], fixture_root);
+    assert_session_status_apply_case(&fixture["filtered_discovery"], fixture_root);
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -359,6 +399,44 @@ fn assert_session_envelope_apply_case(fixture: &Value, fixture_root: &std::path:
     )
     .expect("apply envelope should succeed");
     assert_eq!(serde_json::to_value(actual).expect("report should serialize"), fixture["expected"]);
+}
+
+fn assert_session_status_apply_case(fixture: &Value, fixture_root: &std::path::Path) {
+    let temp_root = repo_root().join("rust/crates/ast-template/tmp/status");
+    let _ = fs::remove_dir_all(&temp_root);
+    write_relative_file_tree(
+        &temp_root,
+        &read_relative_file_tree(&fixture_root.join("apply-run/destination"))
+            .expect("apply-run destination should read"),
+    )
+    .expect("apply-run destination should write");
+
+    let allowed_families = fixture["allowed_families"].as_array().map(|families| {
+        families
+            .iter()
+            .map(|family| family.as_str().expect("family should be string"))
+            .collect::<Vec<_>>()
+    });
+    let actual = apply_template_directory_session_envelope_with_default_registry_to_directory(
+        &fixture_root.join("apply-run/template"),
+        &temp_root,
+        &serde_json::from_value::<TemplateDestinationContext>(fixture["context"].clone())
+            .expect("context should deserialize"),
+        serde_json::from_value::<TemplateStrategy>(fixture["default_strategy"].clone())
+            .expect("strategy should deserialize"),
+        &serde_json::from_value::<Vec<TemplateStrategyOverride>>(fixture["overrides"].clone())
+            .expect("overrides should deserialize"),
+        &serde_json::from_value::<HashMap<String, String>>(fixture["replacements"].clone())
+            .expect("replacements should deserialize"),
+        allowed_families.as_deref(),
+        &default_template_token_config(),
+    )
+    .expect("apply status should succeed");
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_status(&actual))
+            .expect("status should serialize"),
+        fixture["expected"]
+    );
 }
 
 fn multi_family_merge_callback(
