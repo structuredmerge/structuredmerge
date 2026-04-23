@@ -186,6 +186,13 @@ pub struct SessionInspectionReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionDispatchReport {
+    pub operation: String,
+    pub inspection: Option<SessionInspectionReport>,
+    pub outcome: Option<AnySessionOutcomeReport>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AnySessionOutcomeReport {
     Plan(SessionOutcomeReport<TemplateDirectorySessionReport>),
@@ -1407,6 +1414,30 @@ pub fn report_template_directory_session_inspection(
         status,
         diagnostics,
     })
+}
+
+pub fn run_template_directory_session_dispatch(
+    operation: &str,
+    entrypoint: &SessionEntrypoint,
+    profiles: &HashMap<String, DirectorySessionProfile>,
+) -> std::io::Result<SessionDispatchReport> {
+    match operation {
+        "inspect" => Ok(SessionDispatchReport {
+            operation: operation.to_string(),
+            inspection: Some(report_template_directory_session_inspection(entrypoint, profiles)?),
+            outcome: None,
+        }),
+        "run" => Ok(SessionDispatchReport {
+            operation: operation.to_string(),
+            inspection: None,
+            outcome: Some(run_template_directory_session_entrypoint(entrypoint, profiles)?),
+        }),
+        _ => Ok(SessionDispatchReport {
+            operation: operation.to_string(),
+            inspection: None,
+            outcome: Some(run_template_directory_session_entrypoint(entrypoint, profiles)?),
+        }),
+    }
 }
 
 fn session_runner_input_options_value(input: &SessionRunnerInput) -> Value {

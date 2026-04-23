@@ -25,8 +25,9 @@ use ast_template::{
     report_template_directory_session_profile_request,
     report_template_directory_session_resolution, report_template_directory_session_runner_input,
     report_template_directory_session_runner_payload, report_template_directory_session_status,
-    run_template_directory_session_entrypoint, run_template_directory_session_request,
-    run_template_directory_session_runner_payload, run_template_directory_session_runner_request,
+    run_template_directory_session_dispatch, run_template_directory_session_entrypoint,
+    run_template_directory_session_request, run_template_directory_session_runner_payload,
+    run_template_directory_session_runner_request,
     run_template_directory_session_with_default_registry_to_directory,
     run_template_directory_session_with_options, run_template_directory_session_with_profile,
 };
@@ -1125,6 +1126,38 @@ fn conforms_to_template_directory_session_inspection_report_fixture() {
     );
 }
 
+#[test]
+fn conforms_to_template_directory_session_dispatch_report_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-377-template-directory-session-dispatch-report/template-directory-session-dispatch-report.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture root should exist");
+    let profiles = decode_session_profiles(&fixture["profiles"]);
+
+    for key in [
+        "inspect_payload_ready",
+        "inspect_request_blocked",
+        "run_request_ready",
+        "run_payload_blocked",
+    ] {
+        let case = &fixture[key];
+        let input = case["input"].as_object().expect("input should be object");
+        let operation = input["operation"].as_str().expect("operation should be string");
+        let entrypoint = decode_session_entrypoint_from_fixture(&input["entrypoint"], fixture_root);
+        assert_eq!(
+            serde_json::to_value(
+                run_template_directory_session_dispatch(operation, &entrypoint, &profiles)
+                    .expect("dispatch should succeed")
+            )
+            .expect("report should serialize"),
+            resolve_session_dispatch_expected_paths(&case["expected"], fixture_root)
+        );
+    }
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -1834,6 +1867,18 @@ fn resolve_session_inspection_expected_paths(
                             resolve_runner_request_fixture_paths(resolved_options, fixture_root);
                     }
                 }
+            }
+        }
+    }
+    resolved
+}
+
+fn resolve_session_dispatch_expected_paths(value: &Value, fixture_root: &std::path::Path) -> Value {
+    let mut resolved = value.clone();
+    if let Some(section) = resolved.as_object_mut() {
+        if let Some(inspection) = section.get_mut("inspection") {
+            if !inspection.is_null() {
+                *inspection = resolve_session_inspection_expected_paths(inspection, fixture_root);
             }
         }
     }
