@@ -19,7 +19,9 @@ use ast_template::{
     reapply_template_directory_session_to_directory, report_adapter_capabilities_from_directories,
     report_default_adapter_capabilities_from_directories, report_template_directory_session_status,
     report_template_directory_session_options_configuration,
+    report_template_directory_session_options_request,
     report_template_directory_session_profile_configuration,
+    report_template_directory_session_profile_request,
     run_template_directory_session_with_default_registry_to_directory,
     run_template_directory_session_with_options, run_template_directory_session_with_profile,
 };
@@ -579,6 +581,57 @@ fn conforms_to_template_directory_session_options_configuration_outcome_report_f
     );
 }
 
+#[test]
+fn conforms_to_template_directory_session_request_report_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-367-template-directory-session-request-report/template-directory-session-request-report.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let profiles = decode_session_profiles(&fixture["profiles"]);
+
+    let options_valid = decode_session_options_direct(&fixture["options_valid"]["options"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_options_request(&options_valid))
+            .expect("report should serialize"),
+        fixture["options_valid"]["expected"]
+    );
+
+    let options_invalid = decode_session_options_direct(&fixture["options_invalid"]["options"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_options_request(&options_invalid))
+            .expect("report should serialize"),
+        fixture["options_invalid"]["expected"]
+    );
+
+    let profile_valid = decode_session_options_direct(&fixture["profile_valid"]["overrides"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_profile_request(
+            &profiles,
+            fixture["profile_valid"]["profile"]
+                .as_str()
+                .expect("profile should be string"),
+            &profile_valid,
+        ))
+        .expect("report should serialize"),
+        fixture["profile_valid"]["expected"]
+    );
+
+    let profile_invalid = decode_session_options_direct(&fixture["profile_invalid"]["overrides"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_profile_request(
+            &profiles,
+            fixture["profile_invalid"]["profile"]
+                .as_str()
+                .expect("profile should be string"),
+            &profile_invalid,
+        ))
+        .expect("report should serialize"),
+        fixture["profile_invalid"]["expected"]
+    );
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -991,15 +1044,23 @@ fn decode_session_options_direct(fixture: &Value) -> DirectorySessionOptions {
                 .as_str()
                 .expect("destination_root should be string"),
         ),
-        context: serde_json::from_value(fixture["context"].clone())
-            .expect("context should deserialize"),
-        default_strategy: serde_json::from_value(fixture["default_strategy"].clone())
-            .expect("strategy should deserialize"),
-        overrides: serde_json::from_value(fixture["overrides"].clone())
-            .expect("overrides should deserialize"),
-        replacements: serde_json::from_value(fixture["replacements"].clone())
-            .expect("replacements should deserialize"),
-        allowed_families: fixture["allowed_families"].as_array().map(|families| {
+        context: fixture
+            .get("context")
+            .map(|value| serde_json::from_value(value.clone()).expect("context should deserialize"))
+            .unwrap_or_default(),
+        default_strategy: fixture
+            .get("default_strategy")
+            .map(|value| serde_json::from_value(value.clone()).expect("strategy should deserialize"))
+            .unwrap_or(TemplateStrategy::Merge),
+        overrides: fixture
+            .get("overrides")
+            .map(|value| serde_json::from_value(value.clone()).expect("overrides should deserialize"))
+            .unwrap_or_default(),
+        replacements: fixture
+            .get("replacements")
+            .map(|value| serde_json::from_value(value.clone()).expect("replacements should deserialize"))
+            .unwrap_or_default(),
+        allowed_families: fixture.get("allowed_families").and_then(|value| value.as_array()).map(|families| {
             families
                 .iter()
                 .map(|family| family.as_str().expect("family should be string").to_string())

@@ -89,6 +89,17 @@ pub struct SessionOutcomeReport<T> {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionRequestReport {
+    pub request_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_name: Option<String>,
+    pub mode: DirectorySessionMode,
+    pub ready: bool,
+    pub diagnostics: Vec<SessionDiagnostic>,
+    pub resolved_options: Option<DirectorySessionOptions>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AnySessionOutcomeReport {
     Plan(SessionOutcomeReport<TemplateDirectorySessionReport>),
@@ -895,28 +906,35 @@ pub fn run_template_directory_session_with_default_registry_to_directory(
 pub fn run_template_directory_session_with_options(
     options: &DirectorySessionOptions,
 ) -> std::io::Result<AnySessionOutcomeReport> {
-    let configuration = report_template_directory_session_options_configuration(options);
-    if !configuration.ready {
+    let request = report_template_directory_session_options_request(options);
+    if !request.ready {
         return Ok(report_template_directory_session_configuration_outcome(
-            configuration.mode,
-            configuration,
+            request.mode,
+            SessionDiagnosticsReport {
+                mode: request.mode,
+                ready: request.ready,
+                diagnostics: request.diagnostics,
+            },
         ));
     }
-    let allowed = options
+    let resolved = request
+        .resolved_options
+        .expect("ready options request should resolve options");
+    let allowed = resolved
         .allowed_families
         .as_ref()
         .map(|families| families.iter().map(|family| family.as_str()).collect::<Vec<_>>());
     let default_config = default_template_token_config();
     run_template_directory_session_with_default_registry_to_directory(
-        options.mode,
-        &options.template_root,
-        &options.destination_root,
-        &options.context,
-        options.default_strategy,
-        &options.overrides,
-        &options.replacements,
+        resolved.mode,
+        &resolved.template_root,
+        &resolved.destination_root,
+        &resolved.context,
+        resolved.default_strategy,
+        &resolved.overrides,
+        &resolved.replacements,
         allowed.as_deref(),
-        options.config.as_ref().unwrap_or(&default_config),
+        resolved.config.as_ref().unwrap_or(&default_config),
     )
 }
 
@@ -985,6 +1003,42 @@ pub fn report_template_directory_session_profile_configuration(
     report.diagnostics.sort_by(|a, b| a.reason.cmp(&b.reason));
     report.ready = report.diagnostics.is_empty();
     report
+}
+
+pub fn report_template_directory_session_options_request(
+    options: &DirectorySessionOptions,
+) -> SessionRequestReport {
+    let configuration = report_template_directory_session_options_configuration(options);
+    SessionRequestReport {
+        request_kind: "options".to_string(),
+        profile_name: None,
+        mode: configuration.mode,
+        ready: configuration.ready,
+        diagnostics: configuration.diagnostics,
+        resolved_options: configuration.ready.then(|| options.clone()),
+    }
+}
+
+pub fn report_template_directory_session_profile_request(
+    profiles: &HashMap<String, DirectorySessionProfile>,
+    profile_name: &str,
+    overrides: &DirectorySessionOptions,
+) -> SessionRequestReport {
+    let configuration =
+        report_template_directory_session_profile_configuration(profiles, profile_name, overrides);
+    let resolved_options = if configuration.ready {
+        resolve_template_directory_session_options(profiles, profile_name, overrides)
+    } else {
+        None
+    };
+    SessionRequestReport {
+        request_kind: "profile".to_string(),
+        profile_name: Some(profile_name.to_string()),
+        mode: configuration.mode,
+        ready: configuration.ready,
+        diagnostics: configuration.diagnostics,
+        resolved_options,
+    }
 }
 
 fn report_template_directory_session_configuration_outcome(
@@ -1056,33 +1110,19 @@ pub fn run_template_directory_session_with_profile(
     profile_name: &str,
     overrides: &DirectorySessionOptions,
 ) -> std::io::Result<AnySessionOutcomeReport> {
-    let configuration =
-        report_template_directory_session_profile_configuration(profiles, profile_name, overrides);
-    if !configuration.ready {
+    let request = report_template_directory_session_profile_request(profiles, profile_name, overrides);
+    if !request.ready {
         return Ok(report_template_directory_session_configuration_outcome(
-            configuration.mode,
-            configuration,
+            request.mode,
+            SessionDiagnosticsReport {
+                mode: request.mode,
+                ready: request.ready,
+                diagnostics: request.diagnostics,
+            },
         ));
     }
-    let Some(options) =
-        resolve_template_directory_session_options(profiles, profile_name, overrides)
-    else {
-        let diagnostics = SessionDiagnosticsReport {
-            mode: normalize_session_mode(overrides.mode),
-            ready: false,
-            diagnostics: vec![SessionDiagnostic {
-                severity: ast_merge::DiagnosticSeverity::Error,
-                category: ast_merge::DiagnosticCategory::ConfigurationError,
-                reason: "missing_profile".to_string(),
-                path: None,
-                family: None,
-                message: format!("unknown template session profile: {profile_name}"),
-            }],
-        };
-        return Ok(report_template_directory_session_configuration_outcome(
-            diagnostics.mode,
-            diagnostics,
-        ));
-    };
+    let options = request
+        .resolved_options
+        .expect("ready profile request should resolve options");
     run_template_directory_session_with_options(&options)
 }
