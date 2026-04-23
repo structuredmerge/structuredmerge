@@ -86,6 +86,13 @@ pub struct SessionOutcomeReport<T> {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AnySessionOutcomeReport {
+    Plan(SessionOutcomeReport<TemplateDirectorySessionReport>),
+    Registry(SessionOutcomeReport<TemplateDirectoryRegistrySessionReport>),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TemplateDirectoryRegistryDiagnostic {
     pub severity: ast_merge::DiagnosticSeverity,
     pub category: ast_merge::DiagnosticCategory,
@@ -747,4 +754,95 @@ pub fn apply_template_directory_session_outcome_with_default_registry_to_directo
         Some(&result),
     );
     Ok(report_template_directory_session_outcome(session_report, status, diagnostics))
+}
+
+pub fn reapply_template_directory_session_outcome_with_default_registry_to_directory(
+    template_root: &Path,
+    destination_root: &Path,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    allowed_families: Option<&[&str]>,
+    config: &TemplateTokenConfig,
+) -> std::io::Result<SessionOutcomeReport<TemplateDirectoryRegistrySessionReport>> {
+    let registry = default_family_merge_adapter_registry(allowed_families);
+    let result = apply_template_tree_execution_to_directory(
+        template_root,
+        destination_root,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        |entry| merge_prepared_content_from_registry(&registry, entry),
+        config,
+    )?;
+    let session_report = report_template_directory_registry_session(
+        DirectorySessionMode::Reapply,
+        &result.execution_plan,
+        Some(&result),
+        &registry,
+    );
+    let capabilities = report_adapter_capabilities(&result.execution_plan, &registry);
+    let status = report_template_directory_session_status(
+        &report_template_directory_session_envelope(session_report.clone(), capabilities.clone()),
+    );
+    let diagnostics = report_template_directory_session_diagnostics(
+        DirectorySessionMode::Reapply,
+        &result.execution_plan,
+        &capabilities,
+        Some(&result),
+    );
+    Ok(report_template_directory_session_outcome(session_report, status, diagnostics))
+}
+
+pub fn run_template_directory_session_with_default_registry_to_directory(
+    mode: DirectorySessionMode,
+    template_root: &Path,
+    destination_root: &Path,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    allowed_families: Option<&[&str]>,
+    config: &TemplateTokenConfig,
+) -> std::io::Result<AnySessionOutcomeReport> {
+    match mode {
+        DirectorySessionMode::Plan => Ok(AnySessionOutcomeReport::Plan(
+            plan_template_directory_session_outcome_from_directories(
+                template_root,
+                destination_root,
+                context,
+                default_strategy,
+                overrides,
+                replacements,
+                allowed_families,
+                config,
+            )?,
+        )),
+        DirectorySessionMode::Apply => Ok(AnySessionOutcomeReport::Registry(
+            apply_template_directory_session_outcome_with_default_registry_to_directory(
+                template_root,
+                destination_root,
+                context,
+                default_strategy,
+                overrides,
+                replacements,
+                allowed_families,
+                config,
+            )?,
+        )),
+        DirectorySessionMode::Reapply => Ok(AnySessionOutcomeReport::Registry(
+            reapply_template_directory_session_outcome_with_default_registry_to_directory(
+                template_root,
+                destination_root,
+                context,
+                default_strategy,
+                overrides,
+                replacements,
+                allowed_families,
+                config,
+            )?,
+        )),
+    }
 }
