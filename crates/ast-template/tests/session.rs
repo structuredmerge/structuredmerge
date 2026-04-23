@@ -22,6 +22,7 @@ use ast_template::{
     report_template_directory_session_options_request,
     report_template_directory_session_profile_configuration,
     report_template_directory_session_profile_request,
+    run_template_directory_session_runner_request,
     run_template_directory_session_request,
     run_template_directory_session_with_default_registry_to_directory,
     run_template_directory_session_with_options, run_template_directory_session_with_profile,
@@ -688,6 +689,62 @@ fn conforms_to_template_directory_session_request_outcome_report_fixture() {
     );
 }
 
+#[test]
+fn conforms_to_template_directory_session_request_runner_report_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-369-template-directory-session-request-runner-report/template-directory-session-request-runner-report.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture should have parent");
+    let profiles = decode_session_profiles(&fixture["profiles"]);
+
+    let options_ready =
+        decode_session_runner_request_from_fixture(&fixture["options_ready"]["request"], fixture_root);
+    assert_eq!(
+        serde_json::to_value(
+            run_template_directory_session_runner_request(&options_ready, &profiles)
+                .expect("options ready runner should succeed")
+        )
+        .expect("report should serialize"),
+        fixture["options_ready"]["expected"]
+    );
+
+    let options_blocked =
+        decode_session_runner_request_from_fixture(&fixture["options_blocked"]["request"], fixture_root);
+    assert_eq!(
+        serde_json::to_value(
+            run_template_directory_session_runner_request(&options_blocked, &profiles)
+                .expect("options blocked runner should succeed")
+        )
+        .expect("report should serialize"),
+        fixture["options_blocked"]["expected"]
+    );
+
+    let profile_ready =
+        decode_session_runner_request_from_fixture(&fixture["profile_ready"]["request"], fixture_root);
+    assert_eq!(
+        serde_json::to_value(
+            run_template_directory_session_runner_request(&profile_ready, &profiles)
+                .expect("profile ready runner should succeed")
+        )
+        .expect("report should serialize"),
+        fixture["profile_ready"]["expected"]
+    );
+
+    let profile_blocked =
+        decode_session_runner_request_from_fixture(&fixture["profile_blocked"]["request"], fixture_root);
+    assert_eq!(
+        serde_json::to_value(
+            run_template_directory_session_runner_request(&profile_blocked, &profiles)
+                .expect("profile blocked runner should succeed")
+        )
+        .expect("report should serialize"),
+        fixture["profile_blocked"]["expected"]
+    );
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -1240,6 +1297,43 @@ fn decode_session_request_report_from_fixture(
         options.destination_root = fixture_root.join(&options.destination_root);
     }
     report
+}
+
+fn decode_session_runner_request_from_fixture(
+    fixture: &Value,
+    fixture_root: &std::path::Path,
+) -> ast_template::SessionRunnerRequest {
+    ast_template::SessionRunnerRequest {
+        request_kind: fixture["request_kind"]
+            .as_str()
+            .expect("request_kind should be string")
+            .to_string(),
+        profile_name: fixture["profile_name"].as_str().map(|value| value.to_string()),
+        options: fixture.get("options").and_then(|value| {
+            (!value.is_null()).then(|| {
+                let mut options = decode_session_options_direct(value);
+                if !options.template_root.as_os_str().is_empty() {
+                    options.template_root = fixture_root.join(&options.template_root);
+                }
+                if !options.destination_root.as_os_str().is_empty() {
+                    options.destination_root = fixture_root.join(&options.destination_root);
+                }
+                options
+            })
+        }),
+        overrides: fixture.get("overrides").and_then(|value| {
+            (!value.is_null()).then(|| {
+                let mut options = decode_session_options_direct(value);
+                if !options.template_root.as_os_str().is_empty() {
+                    options.template_root = fixture_root.join(&options.template_root);
+                }
+                if !options.destination_root.as_os_str().is_empty() {
+                    options.destination_root = fixture_root.join(&options.destination_root);
+                }
+                options
+            })
+        }),
+    }
 }
 
 fn multi_family_merge_callback(

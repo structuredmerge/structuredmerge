@@ -100,6 +100,17 @@ pub struct SessionRequestReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionRunnerRequest {
+    pub request_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub options: Option<DirectorySessionOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overrides: Option<DirectorySessionOptions>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AnySessionOutcomeReport {
     Plan(SessionOutcomeReport<TemplateDirectorySessionReport>),
@@ -1077,6 +1088,24 @@ pub fn run_template_directory_session_request(
         .clone()
         .expect("ready session request should include resolved options");
     run_template_directory_session_with_options(&options)
+}
+
+pub fn run_template_directory_session_runner_request(
+    request: &SessionRunnerRequest,
+    profiles: &HashMap<String, DirectorySessionProfile>,
+) -> std::io::Result<AnySessionOutcomeReport> {
+    if request.request_kind == "profile" {
+        let report = report_template_directory_session_profile_request(
+            profiles,
+            request.profile_name.as_deref().unwrap_or(""),
+            request.overrides.as_ref().unwrap_or(&DirectorySessionOptions::default()),
+        );
+        return run_template_directory_session_request(&report);
+    }
+    let report = report_template_directory_session_options_request(
+        request.options.as_ref().unwrap_or(&DirectorySessionOptions::default()),
+    );
+    run_template_directory_session_request(&report)
 }
 
 pub fn resolve_template_directory_session_options(
