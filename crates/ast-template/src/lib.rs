@@ -170,6 +170,13 @@ pub struct SessionEntrypointReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionResolutionReport {
+    pub source_kind: String,
+    pub runner_request: SessionRunnerRequest,
+    pub session_request: SessionRequestReport,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AnySessionOutcomeReport {
     Plan(SessionOutcomeReport<TemplateDirectorySessionReport>),
@@ -1275,6 +1282,37 @@ pub fn report_template_directory_session_entrypoint(
             overrides: None,
         },
     }
+}
+
+pub fn report_template_directory_session_resolution(
+    entrypoint: &SessionEntrypoint,
+    profiles: &HashMap<String, DirectorySessionProfile>,
+) -> SessionResolutionReport {
+    let entrypoint_report = report_template_directory_session_entrypoint(entrypoint);
+    SessionResolutionReport {
+        source_kind: entrypoint_report.source_kind.clone(),
+        session_request: report_session_request_from_runner_request(
+            &entrypoint_report.runner_request,
+            profiles,
+        ),
+        runner_request: entrypoint_report.runner_request,
+    }
+}
+
+fn report_session_request_from_runner_request(
+    request: &SessionRunnerRequest,
+    profiles: &HashMap<String, DirectorySessionProfile>,
+) -> SessionRequestReport {
+    if request.request_kind == "profile" {
+        return report_template_directory_session_profile_request(
+            profiles,
+            request.profile_name.as_deref().unwrap_or(""),
+            &decode_session_runner_options(request.overrides.as_ref()),
+        );
+    }
+    report_template_directory_session_options_request(
+        &decode_session_runner_options(request.options.as_ref()),
+    )
 }
 
 fn session_runner_input_options_value(input: &SessionRunnerInput) -> Value {

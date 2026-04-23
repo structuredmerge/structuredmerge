@@ -23,6 +23,7 @@ use ast_template::{
     report_template_directory_session_profile_configuration,
     report_template_directory_session_profile_request,
     report_template_directory_session_entrypoint,
+    report_template_directory_session_resolution,
     report_template_directory_session_runner_input,
     report_template_directory_session_runner_payload,
     run_template_directory_session_entrypoint,
@@ -989,6 +990,57 @@ fn conforms_to_template_directory_session_entrypoint_report_fixture() {
     assert_eq!(
         serde_json::to_value(report_template_directory_session_entrypoint(&payload_blocked))
             .expect("report should serialize"),
+        fixture["payload_blocked"]["expected"]
+    );
+}
+
+#[test]
+fn conforms_to_template_directory_session_resolution_report_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-375-template-directory-session-resolution-report/template-directory-session-resolution-report.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let profiles = decode_session_profiles(&fixture["profiles"]);
+
+    let payload_ready = decode_session_entrypoint(&fixture["payload_ready"]["input"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_resolution(
+            &payload_ready,
+            &profiles
+        ))
+        .expect("report should serialize"),
+        fixture["payload_ready"]["expected"]
+    );
+
+    let request_blocked = decode_session_entrypoint(&fixture["request_blocked"]["input"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_resolution(
+            &request_blocked,
+            &profiles
+        ))
+        .expect("report should serialize"),
+        fixture["request_blocked"]["expected"]
+    );
+
+    let request_ready = decode_session_entrypoint(&fixture["request_ready"]["input"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_resolution(
+            &request_ready,
+            &profiles
+        ))
+        .expect("report should serialize"),
+        fixture["request_ready"]["expected"]
+    );
+
+    let payload_blocked = decode_session_entrypoint(&fixture["payload_blocked"]["input"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_resolution(
+            &payload_blocked,
+            &profiles
+        ))
+        .expect("report should serialize"),
         fixture["payload_blocked"]["expected"]
     );
 }
