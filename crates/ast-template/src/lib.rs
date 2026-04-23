@@ -1,13 +1,16 @@
 use ast_merge::{
     TemplateDestinationContext, TemplateExecutionPlanEntry, TemplateStrategy,
     TemplateStrategyOverride, TemplateTokenConfig, TemplateTreeRunResult,
-    apply_template_tree_execution_to_directory, plan_template_tree_execution_from_directories,
-    report_template_directory_runner,
+    apply_template_tree_execution_to_directory, default_template_token_config,
+    plan_template_tree_execution_from_directories, report_template_directory_runner,
 };
 use markdown_merge::{MarkdownDialect, merge_markdown};
 use ruby_merge::{RubyDialect, merge_ruby};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 use toml_merge::{TomlDialect, merge_toml};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,6 +93,20 @@ pub struct SessionOutcomeReport<T> {
 pub enum AnySessionOutcomeReport {
     Plan(SessionOutcomeReport<TemplateDirectorySessionReport>),
     Registry(SessionOutcomeReport<TemplateDirectoryRegistrySessionReport>),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DirectorySessionOptions {
+    pub mode: DirectorySessionMode,
+    pub template_root: PathBuf,
+    pub destination_root: PathBuf,
+    pub context: TemplateDestinationContext,
+    pub default_strategy: TemplateStrategy,
+    pub overrides: Vec<TemplateStrategyOverride>,
+    pub replacements: HashMap<String, String>,
+    pub allowed_families: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config: Option<TemplateTokenConfig>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -845,4 +862,25 @@ pub fn run_template_directory_session_with_default_registry_to_directory(
             )?,
         )),
     }
+}
+
+pub fn run_template_directory_session_with_options(
+    options: &DirectorySessionOptions,
+) -> std::io::Result<AnySessionOutcomeReport> {
+    let allowed = options
+        .allowed_families
+        .as_ref()
+        .map(|families| families.iter().map(|family| family.as_str()).collect::<Vec<_>>());
+    let default_config = default_template_token_config();
+    run_template_directory_session_with_default_registry_to_directory(
+        options.mode,
+        &options.template_root,
+        &options.destination_root,
+        &options.context,
+        options.default_strategy,
+        &options.overrides,
+        &options.replacements,
+        allowed.as_deref(),
+        options.config.as_ref().unwrap_or(&default_config),
+    )
 }

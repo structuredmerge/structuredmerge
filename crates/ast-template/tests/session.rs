@@ -4,7 +4,7 @@ use ast_merge::{
     write_relative_file_tree,
 };
 use ast_template::{
-    FamilyMergeAdapter, FamilyMergeAdapterRegistry,
+    DirectorySessionOptions, FamilyMergeAdapter, FamilyMergeAdapterRegistry,
     apply_template_directory_session_diagnostics_with_default_registry_to_directory,
     apply_template_directory_session_envelope_with_default_registry_to_directory,
     apply_template_directory_session_outcome_with_default_registry_to_directory,
@@ -18,6 +18,7 @@ use ast_template::{
     reapply_template_directory_session_to_directory, report_adapter_capabilities_from_directories,
     report_default_adapter_capabilities_from_directories, report_template_directory_session_status,
     run_template_directory_session_with_default_registry_to_directory,
+    run_template_directory_session_with_options,
 };
 use markdown_merge::{MarkdownDialect, merge_markdown};
 use ruby_merge::{RubyDialect, merge_ruby};
@@ -373,6 +374,31 @@ fn conforms_to_template_directory_session_runner_report_fixture() {
     );
 }
 
+#[test]
+fn conforms_to_template_directory_session_options_report_fixture() {
+    let fixture_path = repo_root()
+        .join("fixtures/diagnostics/slice-362-template-directory-session-options-report/template-directory-session-options-report.json");
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture should have parent");
+
+    let plan_options = decode_session_options(
+        &fixture["plan_run"]["options"],
+        fixture_root.join("dry-run/template"),
+        fixture_root.join("dry-run/destination"),
+    );
+    let plan_actual = run_template_directory_session_with_options(&plan_options)
+        .expect("plan options should succeed");
+    assert_eq!(
+        serde_json::to_value(plan_actual).expect("report should serialize"),
+        fixture["plan_run"]["expected"]
+    );
+
+    assert_session_options_apply_case(&fixture["apply_run"], fixture_root);
+    assert_session_options_reapply_case(&fixture["reapply_run"], fixture_root);
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -688,6 +714,88 @@ fn assert_session_runner_apply_case(
     )
     .expect("runner should succeed");
     assert_eq!(serde_json::to_value(actual).expect("report should serialize"), fixture["expected"]);
+}
+
+fn assert_session_options_apply_case(fixture: &Value, fixture_root: &std::path::Path) {
+    let temp_root = repo_root().join("rust/crates/ast-template/tmp/options");
+    let _ = fs::remove_dir_all(&temp_root);
+    write_relative_file_tree(
+        &temp_root,
+        &read_relative_file_tree(&fixture_root.join("apply-run/destination"))
+            .expect("apply-run destination should read"),
+    )
+    .expect("apply-run destination should write");
+
+    let options = decode_session_options(
+        &fixture["options"],
+        fixture_root.join("apply-run/template"),
+        temp_root.clone(),
+    );
+    let actual = run_template_directory_session_with_options(&options)
+        .expect("apply options should succeed");
+    assert_eq!(serde_json::to_value(actual).expect("report should serialize"), fixture["expected"]);
+}
+
+fn assert_session_options_reapply_case(fixture: &Value, fixture_root: &std::path::Path) {
+    let temp_root = repo_root().join("rust/crates/ast-template/tmp/options-reapply");
+    let _ = fs::remove_dir_all(&temp_root);
+    write_relative_file_tree(
+        &temp_root,
+        &read_relative_file_tree(&fixture_root.join("apply-run/destination"))
+            .expect("apply-run destination should read"),
+    )
+    .expect("apply-run destination should write");
+
+    let priming_options = decode_session_options(
+        &serde_json::json!({
+            "mode": "apply",
+            "context": fixture["options"]["context"].clone(),
+            "default_strategy": fixture["options"]["default_strategy"].clone(),
+            "overrides": fixture["options"]["overrides"].clone(),
+            "replacements": fixture["options"]["replacements"].clone(),
+            "allowed_families": fixture["options"]["allowed_families"].clone()
+        }),
+        fixture_root.join("apply-run/template"),
+        temp_root.clone(),
+    );
+    let _ = run_template_directory_session_with_options(&priming_options)
+        .expect("apply priming should succeed");
+
+    let options = decode_session_options(
+        &fixture["options"],
+        fixture_root.join("apply-run/template"),
+        temp_root.clone(),
+    );
+    let actual = run_template_directory_session_with_options(&options)
+        .expect("reapply options should succeed");
+    assert_eq!(serde_json::to_value(actual).expect("report should serialize"), fixture["expected"]);
+}
+
+fn decode_session_options(
+    fixture: &Value,
+    template_root: PathBuf,
+    destination_root: PathBuf,
+) -> DirectorySessionOptions {
+    DirectorySessionOptions {
+        mode: serde_json::from_value(fixture["mode"].clone()).expect("mode should deserialize"),
+        template_root,
+        destination_root,
+        context: serde_json::from_value(fixture["context"].clone())
+            .expect("context should deserialize"),
+        default_strategy: serde_json::from_value(fixture["default_strategy"].clone())
+            .expect("strategy should deserialize"),
+        overrides: serde_json::from_value(fixture["overrides"].clone())
+            .expect("overrides should deserialize"),
+        replacements: serde_json::from_value(fixture["replacements"].clone())
+            .expect("replacements should deserialize"),
+        allowed_families: fixture["allowed_families"].as_array().map(|families| {
+            families
+                .iter()
+                .map(|family| family.as_str().expect("family should be string").to_string())
+                .collect()
+        }),
+        config: None,
+    }
 }
 
 fn multi_family_merge_callback(
