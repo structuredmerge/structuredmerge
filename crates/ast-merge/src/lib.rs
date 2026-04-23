@@ -397,6 +397,32 @@ pub struct TemplateTreeRunReport {
     pub summary: TemplateTreeRunReportSummary,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateDirectoryApplyReportEntry {
+    pub template_source_path: String,
+    pub logical_destination_path: String,
+    pub destination_path: Option<String>,
+    pub execution_action: TemplateExecutionAction,
+    pub status: TemplateTreeRunStatus,
+    pub written: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateDirectoryApplyReportSummary {
+    pub created: usize,
+    pub updated: usize,
+    pub kept: usize,
+    pub blocked: usize,
+    pub omitted: usize,
+    pub written: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateDirectoryApplyReport {
+    pub entries: Vec<TemplateDirectoryApplyReportEntry>,
+    pub summary: TemplateDirectoryApplyReportSummary,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConformanceOutcome {
@@ -1796,6 +1822,54 @@ pub fn report_template_tree_run(result: &TemplateTreeRunResult) -> TemplateTreeR
         .collect::<Vec<_>>();
 
     TemplateTreeRunReport { entries, summary }
+}
+
+pub fn report_template_directory_apply(
+    result: &TemplateTreeRunResult,
+) -> TemplateDirectoryApplyReport {
+    let run_report = report_template_tree_run(result);
+    let created =
+        result.apply_result.created_paths.iter().cloned().collect::<std::collections::HashSet<_>>();
+    let updated =
+        result.apply_result.updated_paths.iter().cloned().collect::<std::collections::HashSet<_>>();
+
+    let mut entries = Vec::with_capacity(run_report.entries.len());
+    let mut summary = TemplateDirectoryApplyReportSummary {
+        created: 0,
+        updated: 0,
+        kept: 0,
+        blocked: 0,
+        omitted: 0,
+        written: 0,
+    };
+    for entry in run_report.entries {
+        let written = entry
+            .destination_path
+            .as_ref()
+            .is_some_and(|path| created.contains(path) || updated.contains(path));
+        if written {
+            summary.written += 1;
+        }
+
+        match entry.status {
+            TemplateTreeRunStatus::Created => summary.created += 1,
+            TemplateTreeRunStatus::Updated => summary.updated += 1,
+            TemplateTreeRunStatus::Kept => summary.kept += 1,
+            TemplateTreeRunStatus::Blocked => summary.blocked += 1,
+            TemplateTreeRunStatus::Omitted => summary.omitted += 1,
+        }
+
+        entries.push(TemplateDirectoryApplyReportEntry {
+            template_source_path: entry.template_source_path,
+            logical_destination_path: entry.logical_destination_path,
+            destination_path: entry.destination_path,
+            execution_action: entry.execution_action,
+            status: entry.status,
+            written,
+        });
+    }
+
+    TemplateDirectoryApplyReport { entries, summary }
 }
 
 fn record_template_apply_output(

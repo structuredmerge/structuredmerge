@@ -42,8 +42,8 @@ use ast_merge::{
     report_conformance_manifest, report_conformance_suite, report_named_conformance_suite,
     report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
     report_named_conformance_suite_manifest, report_planned_conformance_suite,
-    report_planned_named_conformance_suites, report_template_tree_run,
-    resolve_conformance_family_context, resolve_delegated_child_outputs,
+    report_planned_named_conformance_suites, report_template_directory_apply,
+    report_template_tree_run, resolve_conformance_family_context, resolve_delegated_child_outputs,
     resolve_template_destination_path,
     review_and_execute_conformance_manifest_with_replay_bundle_envelope,
     review_conformance_family_context, review_conformance_manifest,
@@ -1146,6 +1146,67 @@ fn conforms_to_mini_template_tree_directory_apply_convergence_fixture() {
     let second_expected =
         serde_json::from_value::<TemplateTreeRunReport>(fixture["expected_second_report"].clone())
             .expect("expected_second_report should deserialize");
+    assert_eq!(second_actual, second_expected);
+
+    fs::remove_dir_all(temp_root).expect("temp dir should be removable");
+}
+
+#[test]
+fn conforms_to_mini_template_tree_directory_apply_report_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "mini_template_tree_directory_apply_report",
+    ));
+    let fixture_dir = diagnostics_fixture_path("mini_template_tree_directory_apply_report")
+        .parent()
+        .expect("fixture should have parent")
+        .to_path_buf();
+    let context = serde_json::from_value::<TemplateDestinationContext>(fixture["context"].clone())
+        .expect("context should deserialize");
+    let default_strategy =
+        serde_json::from_value::<TemplateStrategy>(fixture["default_strategy"].clone())
+            .expect("default_strategy should deserialize");
+    let overrides =
+        serde_json::from_value::<Vec<TemplateStrategyOverride>>(fixture["overrides"].clone())
+            .expect("overrides should deserialize");
+    let replacements =
+        serde_json::from_value::<HashMap<String, String>>(fixture["replacements"].clone())
+            .expect("replacements should deserialize");
+    let temp_root = repo_temp_dir();
+    let destination_root = temp_root.join("destination");
+    let initial_destination = read_relative_file_tree(&fixture_dir.join("destination"));
+    ast_merge::write_relative_file_tree(&destination_root, &initial_destination)
+        .expect("destination tree should be writable");
+
+    let first_run = ast_merge::apply_template_tree_execution_to_directory(
+        &fixture_dir.join("template"),
+        &destination_root,
+        &context,
+        default_strategy,
+        &overrides,
+        &replacements,
+        multi_family_merge_callback,
+        &ast_merge::default_template_token_config(),
+    )
+    .expect("first directory apply should succeed");
+    let first_actual = report_template_directory_apply(&first_run);
+    let first_expected = serde_json::from_value(fixture["expected_first_report"].clone())
+        .expect("expected_first_report should deserialize");
+    assert_eq!(first_actual, first_expected);
+
+    let second_run = ast_merge::apply_template_tree_execution_to_directory(
+        &fixture_dir.join("template"),
+        &destination_root,
+        &context,
+        default_strategy,
+        &overrides,
+        &replacements,
+        multi_family_merge_callback,
+        &ast_merge::default_template_token_config(),
+    )
+    .expect("second directory apply should succeed");
+    let second_actual = report_template_directory_apply(&second_run);
+    let second_expected = serde_json::from_value(fixture["expected_second_report"].clone())
+        .expect("expected_second_report should deserialize");
     assert_eq!(second_actual, second_expected);
 
     fs::remove_dir_all(temp_root).expect("temp dir should be removable");
