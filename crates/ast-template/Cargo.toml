@@ -8,10 +8,9 @@ ast-merge = { path = "../ast-merge" }
 markdown-merge = { path = "../markdown-merge" }
 ruby-merge = { path = "../ruby-merge" }
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 toml-merge = { path = "../toml-merge" }
 
 [dev-dependencies]
-serde_json = "1.0"
-
 [lib]
 path = "src/lib.rs"

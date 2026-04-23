@@ -22,6 +22,7 @@ use ast_template::{
     report_template_directory_session_options_request,
     report_template_directory_session_profile_configuration,
     report_template_directory_session_profile_request,
+    report_template_directory_session_runner_input,
     run_template_directory_session_runner_request,
     run_template_directory_session_request,
     run_template_directory_session_with_default_registry_to_directory,
@@ -745,6 +746,49 @@ fn conforms_to_template_directory_session_request_runner_report_fixture() {
     );
 }
 
+#[test]
+fn conforms_to_template_directory_session_runner_input_report_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-370-template-directory-session-runner-input-report/template-directory-session-runner-input-report.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture should have parent");
+
+    let options_ready =
+        decode_session_runner_input_from_fixture(&fixture["options_ready"]["input"], fixture_root);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_runner_input(&options_ready))
+            .expect("report should serialize"),
+        fixture["options_ready"]["expected"]
+    );
+
+    let options_blocked =
+        decode_session_runner_input_from_fixture(&fixture["options_blocked"]["input"], fixture_root);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_runner_input(&options_blocked))
+            .expect("report should serialize"),
+        fixture["options_blocked"]["expected"]
+    );
+
+    let profile_ready =
+        decode_session_runner_input_from_fixture(&fixture["profile_ready"]["input"], fixture_root);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_runner_input(&profile_ready))
+            .expect("report should serialize"),
+        fixture["profile_ready"]["expected"]
+    );
+
+    let profile_blocked =
+        decode_session_runner_input_from_fixture(&fixture["profile_blocked"]["input"], fixture_root);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_runner_input(&profile_blocked))
+            .expect("report should serialize"),
+        fixture["profile_blocked"]["expected"]
+    );
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -1310,30 +1354,41 @@ fn decode_session_runner_request_from_fixture(
             .to_string(),
         profile_name: fixture["profile_name"].as_str().map(|value| value.to_string()),
         options: fixture.get("options").and_then(|value| {
-            (!value.is_null()).then(|| {
-                let mut options = decode_session_options_direct(value);
-                if !options.template_root.as_os_str().is_empty() {
-                    options.template_root = fixture_root.join(&options.template_root);
-                }
-                if !options.destination_root.as_os_str().is_empty() {
-                    options.destination_root = fixture_root.join(&options.destination_root);
-                }
-                options
-            })
+            (!value.is_null()).then(|| resolve_runner_request_fixture_paths(value, fixture_root))
         }),
         overrides: fixture.get("overrides").and_then(|value| {
-            (!value.is_null()).then(|| {
-                let mut options = decode_session_options_direct(value);
-                if !options.template_root.as_os_str().is_empty() {
-                    options.template_root = fixture_root.join(&options.template_root);
-                }
-                if !options.destination_root.as_os_str().is_empty() {
-                    options.destination_root = fixture_root.join(&options.destination_root);
-                }
-                options
-            })
+            (!value.is_null()).then(|| resolve_runner_request_fixture_paths(value, fixture_root))
         }),
     }
+}
+
+fn decode_session_runner_input_from_fixture(
+    fixture: &Value,
+    _fixture_root: &std::path::Path,
+) -> ast_template::SessionRunnerInput {
+    serde_json::from_value(fixture.clone()).expect("runner input should deserialize")
+}
+
+fn resolve_runner_request_fixture_paths(value: &Value, fixture_root: &std::path::Path) -> Value {
+    let mut resolved = value.clone();
+    if let Some(section) = resolved.as_object_mut() {
+        if let Some(template_root) = section.get_mut("template_root") {
+            if let Some(path) = template_root.as_str() {
+                if !path.is_empty() {
+                    *template_root = Value::String(fixture_root.join(path).to_string_lossy().into_owned());
+                }
+            }
+        }
+        if let Some(destination_root) = section.get_mut("destination_root") {
+            if let Some(path) = destination_root.as_str() {
+                if !path.is_empty() {
+                    *destination_root =
+                        Value::String(fixture_root.join(path).to_string_lossy().into_owned());
+                }
+            }
+        }
+    }
+    resolved
 }
 
 fn multi_family_merge_callback(

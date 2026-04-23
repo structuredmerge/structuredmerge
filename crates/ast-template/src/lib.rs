@@ -7,6 +7,7 @@ use ast_merge::{
 use markdown_merge::{MarkdownDialect, merge_markdown};
 use ruby_merge::{RubyDialect, merge_ruby};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -105,9 +106,29 @@ pub struct SessionRunnerRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub profile_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub options: Option<DirectorySessionOptions>,
+    pub options: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub overrides: Option<DirectorySessionOptions>,
+    pub overrides: Option<Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionRunnerInput {
+    pub request_kind: String,
+    #[serde(default)]
+    pub profile_name: Option<String>,
+    pub mode: DirectorySessionMode,
+    pub template_root: String,
+    pub destination_root: String,
+    #[serde(default)]
+    pub context: TemplateDestinationContext,
+    #[serde(default = "default_template_strategy")]
+    pub default_strategy: TemplateStrategy,
+    #[serde(default)]
+    pub overrides: Vec<TemplateStrategyOverride>,
+    #[serde(default)]
+    pub replacements: HashMap<String, String>,
+    #[serde(default)]
+    pub allowed_families: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1098,14 +1119,137 @@ pub fn run_template_directory_session_runner_request(
         let report = report_template_directory_session_profile_request(
             profiles,
             request.profile_name.as_deref().unwrap_or(""),
-            request.overrides.as_ref().unwrap_or(&DirectorySessionOptions::default()),
+            &decode_session_runner_options(request.overrides.as_ref()),
         );
         return run_template_directory_session_request(&report);
     }
     let report = report_template_directory_session_options_request(
-        request.options.as_ref().unwrap_or(&DirectorySessionOptions::default()),
+        &decode_session_runner_options(request.options.as_ref()),
     );
     run_template_directory_session_request(&report)
+}
+
+pub fn report_template_directory_session_runner_input(
+    input: &SessionRunnerInput,
+) -> SessionRunnerRequest {
+    if input.request_kind == "profile" {
+        SessionRunnerRequest {
+            request_kind: input.request_kind.clone(),
+            profile_name: input.profile_name.clone(),
+            options: None,
+            overrides: Some(session_runner_input_overrides_value(input)),
+        }
+    } else {
+        SessionRunnerRequest {
+            request_kind: input.request_kind.clone(),
+            profile_name: None,
+            options: Some(session_runner_input_options_value(input)),
+            overrides: None,
+        }
+    }
+}
+
+fn session_runner_input_options_value(input: &SessionRunnerInput) -> Value {
+    let mut options = Map::new();
+    options.insert("mode".to_string(), serde_json::to_value(input.mode).expect("mode should serialize"));
+    options.insert("template_root".to_string(), Value::String(input.template_root.clone()));
+    options.insert("destination_root".to_string(), Value::String(input.destination_root.clone()));
+    options.insert("context".to_string(), serde_json::to_value(&input.context).expect("context should serialize"));
+    options.insert(
+        "default_strategy".to_string(),
+        serde_json::to_value(if input.default_strategy == default_template_strategy() {
+            TemplateStrategy::Merge
+        } else {
+            input.default_strategy
+        })
+        .expect("strategy should serialize"),
+    );
+    options.insert(
+        "overrides".to_string(),
+        serde_json::to_value(&input.overrides).expect("overrides should serialize"),
+    );
+    options.insert(
+        "replacements".to_string(),
+        serde_json::to_value(&input.replacements).expect("replacements should serialize"),
+    );
+    options.insert(
+        "allowed_families".to_string(),
+        serde_json::to_value(&input.allowed_families).expect("families should serialize"),
+    );
+    Value::Object(options)
+}
+
+fn session_runner_input_overrides_value(input: &SessionRunnerInput) -> Value {
+    let mut overrides = Map::new();
+    overrides.insert("mode".to_string(), serde_json::to_value(input.mode).expect("mode should serialize"));
+    overrides.insert("template_root".to_string(), Value::String(input.template_root.clone()));
+    overrides.insert("destination_root".to_string(), Value::String(input.destination_root.clone()));
+    if input.context != TemplateDestinationContext::default() {
+        overrides.insert("context".to_string(), serde_json::to_value(&input.context).expect("context should serialize"));
+    }
+    if input.default_strategy != default_template_strategy() {
+        overrides.insert(
+            "default_strategy".to_string(),
+            serde_json::to_value(input.default_strategy).expect("strategy should serialize"),
+        );
+    }
+    if !input.overrides.is_empty() {
+        overrides.insert(
+            "overrides".to_string(),
+            serde_json::to_value(&input.overrides).expect("overrides should serialize"),
+        );
+    }
+    if !input.replacements.is_empty() {
+        overrides.insert(
+            "replacements".to_string(),
+            serde_json::to_value(&input.replacements).expect("replacements should serialize"),
+        );
+    }
+    if let Some(allowed_families) = &input.allowed_families {
+        overrides.insert(
+            "allowed_families".to_string(),
+            serde_json::to_value(allowed_families).expect("families should serialize"),
+        );
+    }
+    Value::Object(overrides)
+}
+
+fn decode_session_runner_options(value: Option<&Value>) -> DirectorySessionOptions {
+    let mut options = DirectorySessionOptions::default();
+    if let Some(Value::Object(section)) = value {
+        if let Some(mode) = section.get("mode") {
+            options.mode = serde_json::from_value(mode.clone()).expect("mode should deserialize");
+        }
+        if let Some(template_root) = section.get("template_root").and_then(Value::as_str) {
+            options.template_root = PathBuf::from(template_root);
+        }
+        if let Some(destination_root) = section.get("destination_root").and_then(Value::as_str) {
+            options.destination_root = PathBuf::from(destination_root);
+        }
+        if let Some(context) = section.get("context") {
+            options.context = serde_json::from_value(context.clone()).expect("context should deserialize");
+        }
+        if let Some(default_strategy) = section.get("default_strategy") {
+            options.default_strategy =
+                serde_json::from_value(default_strategy.clone()).expect("strategy should deserialize");
+        }
+        if let Some(overrides) = section.get("overrides") {
+            options.overrides = serde_json::from_value(overrides.clone()).expect("overrides should deserialize");
+        }
+        if let Some(replacements) = section.get("replacements") {
+            options.replacements =
+                serde_json::from_value(replacements.clone()).expect("replacements should deserialize");
+        }
+        if let Some(allowed_families) = section.get("allowed_families") {
+            options.allowed_families =
+                serde_json::from_value(allowed_families.clone()).expect("families should deserialize");
+        }
+    }
+    options
+}
+
+fn default_template_strategy() -> TemplateStrategy {
+    TemplateStrategy::Merge
 }
 
 pub fn resolve_template_directory_session_options(
