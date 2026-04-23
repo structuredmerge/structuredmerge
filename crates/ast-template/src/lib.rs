@@ -1059,6 +1059,26 @@ fn report_template_directory_session_configuration_outcome(
     ))
 }
 
+pub fn run_template_directory_session_request(
+    request: &SessionRequestReport,
+) -> std::io::Result<AnySessionOutcomeReport> {
+    if !request.ready {
+        return Ok(report_template_directory_session_configuration_outcome(
+            request.mode,
+            SessionDiagnosticsReport {
+                mode: request.mode,
+                ready: request.ready,
+                diagnostics: request.diagnostics.clone(),
+            },
+        ));
+    }
+    let options = request
+        .resolved_options
+        .clone()
+        .expect("ready session request should include resolved options");
+    run_template_directory_session_with_options(&options)
+}
+
 pub fn resolve_template_directory_session_options(
     profiles: &HashMap<String, DirectorySessionProfile>,
     profile_name: &str,
