@@ -24,6 +24,7 @@ use ast_template::{
     report_template_directory_session_profile_request,
     report_template_directory_session_runner_input,
     report_template_directory_session_runner_payload,
+    run_template_directory_session_runner_payload,
     run_template_directory_session_runner_request,
     run_template_directory_session_request,
     run_template_directory_session_with_default_registry_to_directory,
@@ -800,7 +801,7 @@ fn conforms_to_template_directory_session_runner_payload_report_fixture() {
             .expect("fixture should deserialize");
 
     let options_explicit =
-        decode_session_runner_payload_from_fixture(&fixture["options_explicit"]["input"]);
+        decode_session_runner_payload(&fixture["options_explicit"]["input"]);
     assert_eq!(
         serde_json::to_value(report_template_directory_session_runner_payload(&options_explicit))
             .expect("report should serialize"),
@@ -808,7 +809,7 @@ fn conforms_to_template_directory_session_runner_payload_report_fixture() {
     );
 
     let options_inferred =
-        decode_session_runner_payload_from_fixture(&fixture["options_inferred"]["input"]);
+        decode_session_runner_payload(&fixture["options_inferred"]["input"]);
     assert_eq!(
         serde_json::to_value(report_template_directory_session_runner_payload(&options_inferred))
             .expect("report should serialize"),
@@ -816,7 +817,7 @@ fn conforms_to_template_directory_session_runner_payload_report_fixture() {
     );
 
     let profile_default_name =
-        decode_session_runner_payload_from_fixture(&fixture["profile_default_name"]["input"]);
+        decode_session_runner_payload(&fixture["profile_default_name"]["input"]);
     assert_eq!(
         serde_json::to_value(report_template_directory_session_runner_payload(
             &profile_default_name
@@ -826,13 +827,73 @@ fn conforms_to_template_directory_session_runner_payload_report_fixture() {
     );
 
     let profile_explicit_name =
-        decode_session_runner_payload_from_fixture(&fixture["profile_explicit_name"]["input"]);
+        decode_session_runner_payload(&fixture["profile_explicit_name"]["input"]);
     assert_eq!(
         serde_json::to_value(report_template_directory_session_runner_payload(
             &profile_explicit_name
         ))
         .expect("report should serialize"),
         fixture["profile_explicit_name"]["expected"]
+    );
+}
+
+#[test]
+fn conforms_to_template_directory_session_runner_payload_outcome_report_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-372-template-directory-session-runner-payload-outcome-report/template-directory-session-runner-payload-outcome-report.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture should have parent");
+    let profiles = decode_session_profiles(&fixture["profiles"]);
+
+    let options_ready =
+        decode_session_runner_payload_from_fixture(&fixture["options_ready"]["payload"], fixture_root);
+    assert_eq!(
+        serde_json::to_value(
+            run_template_directory_session_runner_payload(&options_ready, &profiles)
+                .expect("options ready payload runner should succeed")
+        )
+        .expect("report should serialize"),
+        fixture["options_ready"]["expected"]
+    );
+
+    let options_blocked = decode_session_runner_payload_from_fixture(
+        &fixture["options_blocked"]["payload"],
+        fixture_root,
+    );
+    assert_eq!(
+        serde_json::to_value(
+            run_template_directory_session_runner_payload(&options_blocked, &profiles)
+                .expect("options blocked payload runner should succeed")
+        )
+        .expect("report should serialize"),
+        fixture["options_blocked"]["expected"]
+    );
+
+    let profile_ready =
+        decode_session_runner_payload_from_fixture(&fixture["profile_ready"]["payload"], fixture_root);
+    assert_eq!(
+        serde_json::to_value(
+            run_template_directory_session_runner_payload(&profile_ready, &profiles)
+                .expect("profile ready payload runner should succeed")
+        )
+        .expect("report should serialize"),
+        fixture["profile_ready"]["expected"]
+    );
+
+    let profile_blocked = decode_session_runner_payload_from_fixture(
+        &fixture["profile_blocked"]["payload"],
+        fixture_root,
+    );
+    assert_eq!(
+        serde_json::to_value(
+            run_template_directory_session_runner_payload(&profile_blocked, &profiles)
+                .expect("profile blocked payload runner should succeed")
+        )
+        .expect("report should serialize"),
+        fixture["profile_blocked"]["expected"]
     );
 }
 
@@ -1416,8 +1477,29 @@ fn decode_session_runner_input_from_fixture(
     serde_json::from_value(fixture.clone()).expect("runner input should deserialize")
 }
 
-fn decode_session_runner_payload_from_fixture(fixture: &Value) -> ast_template::SessionRunnerPayload {
+fn decode_session_runner_payload(fixture: &Value) -> ast_template::SessionRunnerPayload {
     serde_json::from_value(fixture.clone()).expect("runner payload should deserialize")
+}
+
+fn decode_session_runner_payload_from_fixture(
+    fixture: &Value,
+    fixture_root: &std::path::Path,
+) -> ast_template::SessionRunnerPayload {
+    let mut payload: ast_template::SessionRunnerPayload =
+        serde_json::from_value(fixture.clone()).expect("runner payload should deserialize");
+    if !payload.template_root.is_empty() {
+        payload.template_root = fixture_root
+            .join(&payload.template_root)
+            .to_string_lossy()
+            .into_owned();
+    }
+    if !payload.destination_root.is_empty() {
+        payload.destination_root = fixture_root
+            .join(&payload.destination_root)
+            .to_string_lossy()
+            .into_owned();
+    }
+    payload
 }
 
 fn resolve_runner_request_fixture_paths(value: &Value, fixture_root: &std::path::Path) -> Value {

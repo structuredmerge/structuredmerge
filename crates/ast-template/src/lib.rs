@@ -1206,6 +1206,15 @@ pub fn report_template_directory_session_runner_payload(
     }
 }
 
+pub fn run_template_directory_session_runner_payload(
+    payload: &SessionRunnerPayload,
+    profiles: &HashMap<String, DirectorySessionProfile>,
+) -> std::io::Result<AnySessionOutcomeReport> {
+    let input = report_template_directory_session_runner_payload(payload);
+    let request = report_template_directory_session_runner_input(&input);
+    run_template_directory_session_runner_request(&request, profiles)
+}
+
 fn session_runner_input_options_value(input: &SessionRunnerInput) -> Value {
     let mut options = Map::new();
     options.insert("mode".to_string(), serde_json::to_value(input.mode).expect("mode should serialize"));
