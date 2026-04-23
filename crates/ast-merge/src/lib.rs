@@ -425,6 +425,42 @@ pub struct TemplateDirectoryApplyReport {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
+pub enum TemplateDirectoryPlanStatus {
+    Create,
+    Update,
+    Keep,
+    Blocked,
+    Omitted,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateDirectoryPlanReportEntry {
+    pub template_source_path: String,
+    pub logical_destination_path: String,
+    pub destination_path: Option<String>,
+    pub execution_action: TemplateExecutionAction,
+    pub write_action: String,
+    pub status: TemplateDirectoryPlanStatus,
+    pub previewable: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateDirectoryPlanReportSummary {
+    pub create: usize,
+    pub update: usize,
+    pub keep: usize,
+    pub blocked: usize,
+    pub omitted: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateDirectoryPlanReport {
+    pub entries: Vec<TemplateDirectoryPlanReportEntry>,
+    pub summary: TemplateDirectoryPlanReportSummary,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ConformanceOutcome {
     Passed,
     Failed,
@@ -1729,6 +1765,35 @@ where
     ))
 }
 
+pub fn plan_template_tree_execution_from_directories(
+    template_root: &Path,
+    destination_root: &Path,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    config: &TemplateTokenConfig,
+) -> io::Result<Vec<TemplateExecutionPlanEntry>> {
+    let template_contents = read_relative_file_tree(template_root)?;
+    let destination_contents = read_relative_file_tree(destination_root)?;
+    let mut template_source_paths = template_contents.keys().cloned().collect::<Vec<_>>();
+    template_source_paths.sort();
+    let mut existing_destination_paths = destination_contents.keys().cloned().collect::<Vec<_>>();
+    existing_destination_paths.sort();
+
+    Ok(plan_template_tree_execution(
+        &template_source_paths,
+        &template_contents,
+        &existing_destination_paths,
+        &destination_contents,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        config,
+    ))
+}
+
 pub fn apply_template_tree_execution_to_directory<F>(
     template_root: &Path,
     destination_root: &Path,
@@ -1870,6 +1935,63 @@ pub fn report_template_directory_apply(
     }
 
     TemplateDirectoryApplyReport { entries, summary }
+}
+
+pub fn report_template_directory_plan(
+    entries: &[TemplateExecutionPlanEntry],
+) -> TemplateDirectoryPlanReport {
+    let mut report_entries = Vec::with_capacity(entries.len());
+    let mut summary = TemplateDirectoryPlanReportSummary {
+        create: 0,
+        update: 0,
+        keep: 0,
+        blocked: 0,
+        omitted: 0,
+    };
+
+    for entry in entries {
+        let (status, previewable) = match entry.execution_action {
+            TemplateExecutionAction::Blocked => (TemplateDirectoryPlanStatus::Blocked, false),
+            TemplateExecutionAction::Omit => (TemplateDirectoryPlanStatus::Omitted, true),
+            TemplateExecutionAction::Keep => (TemplateDirectoryPlanStatus::Keep, true),
+            TemplateExecutionAction::RawCopy | TemplateExecutionAction::WritePreparedContent => (
+                if entry.write_action == "create" {
+                    TemplateDirectoryPlanStatus::Create
+                } else {
+                    TemplateDirectoryPlanStatus::Update
+                },
+                true,
+            ),
+            TemplateExecutionAction::MergePreparedContent => (
+                if entry.write_action == "create" {
+                    TemplateDirectoryPlanStatus::Create
+                } else {
+                    TemplateDirectoryPlanStatus::Update
+                },
+                entry.write_action == "create",
+            ),
+        };
+
+        match status {
+            TemplateDirectoryPlanStatus::Create => summary.create += 1,
+            TemplateDirectoryPlanStatus::Update => summary.update += 1,
+            TemplateDirectoryPlanStatus::Keep => summary.keep += 1,
+            TemplateDirectoryPlanStatus::Blocked => summary.blocked += 1,
+            TemplateDirectoryPlanStatus::Omitted => summary.omitted += 1,
+        }
+
+        report_entries.push(TemplateDirectoryPlanReportEntry {
+            template_source_path: entry.template_source_path.clone(),
+            logical_destination_path: entry.logical_destination_path.clone(),
+            destination_path: entry.destination_path.clone(),
+            execution_action: entry.execution_action,
+            write_action: entry.write_action.clone(),
+            status,
+            previewable,
+        });
+    }
+
+    TemplateDirectoryPlanReport { entries: report_entries, summary }
 }
 
 fn record_template_apply_output(

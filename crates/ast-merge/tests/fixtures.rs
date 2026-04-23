@@ -43,8 +43,8 @@ use ast_merge::{
     report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
     report_named_conformance_suite_manifest, report_planned_conformance_suite,
     report_planned_named_conformance_suites, report_template_directory_apply,
-    report_template_tree_run, resolve_conformance_family_context, resolve_delegated_child_outputs,
-    resolve_template_destination_path,
+    report_template_directory_plan, report_template_tree_run, resolve_conformance_family_context,
+    resolve_delegated_child_outputs, resolve_template_destination_path,
     review_and_execute_conformance_manifest_with_replay_bundle_envelope,
     review_conformance_family_context, review_conformance_manifest,
     review_conformance_manifest_with_replay_bundle_envelope, review_projected_child_groups,
@@ -4687,6 +4687,43 @@ fn assert_reviewed_nested_execution_runs(
                 .len()
         );
     }
+}
+
+#[test]
+fn conforms_to_mini_template_tree_directory_plan_report_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "mini_template_tree_directory_plan_report",
+    ));
+    let fixture_dir = diagnostics_fixture_path("mini_template_tree_directory_plan_report")
+        .parent()
+        .expect("fixture should have parent")
+        .to_path_buf();
+    let context = serde_json::from_value::<TemplateDestinationContext>(fixture["context"].clone())
+        .expect("context should deserialize");
+    let default_strategy =
+        serde_json::from_value::<TemplateStrategy>(fixture["default_strategy"].clone())
+            .expect("default_strategy should deserialize");
+    let overrides =
+        serde_json::from_value::<Vec<TemplateStrategyOverride>>(fixture["overrides"].clone())
+            .expect("overrides should deserialize");
+    let replacements =
+        serde_json::from_value::<HashMap<String, String>>(fixture["replacements"].clone())
+            .expect("replacements should deserialize");
+
+    let execution_plan = ast_merge::plan_template_tree_execution_from_directories(
+        &fixture_dir.join("template"),
+        &fixture_dir.join("destination"),
+        &context,
+        default_strategy,
+        &overrides,
+        &replacements,
+        &ast_merge::default_template_token_config(),
+    )
+    .expect("directory-backed plan should succeed");
+    let actual = report_template_directory_plan(&execution_plan);
+    let expected =
+        serde_json::from_value(fixture["expected"].clone()).expect("expected should deserialize");
+    assert_eq!(actual, expected);
 }
 
 fn reviewed_nested_execution_callbacks_from_fixture(
