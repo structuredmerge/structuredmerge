@@ -1,0 +1,17 @@
+[package]
+name = "ast-template"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+ast-merge = { path = "../ast-merge" }
+serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+markdown-merge = { path = "../markdown-merge" }
+ruby-merge = { path = "../ruby-merge" }
+serde_json = "1.0"
+toml-merge = { path = "../toml-merge" }
+
+[lib]
+path = "src/lib.rs"
