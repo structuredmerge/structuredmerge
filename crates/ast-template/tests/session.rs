@@ -23,6 +23,7 @@ use ast_template::{
     report_template_directory_session_profile_configuration,
     report_template_directory_session_profile_request,
     report_template_directory_session_runner_input,
+    report_template_directory_session_runner_payload,
     run_template_directory_session_runner_request,
     run_template_directory_session_request,
     run_template_directory_session_with_default_registry_to_directory,
@@ -789,6 +790,52 @@ fn conforms_to_template_directory_session_runner_input_report_fixture() {
     );
 }
 
+#[test]
+fn conforms_to_template_directory_session_runner_payload_report_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-371-template-directory-session-runner-payload-report/template-directory-session-runner-payload-report.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+
+    let options_explicit =
+        decode_session_runner_payload_from_fixture(&fixture["options_explicit"]["input"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_runner_payload(&options_explicit))
+            .expect("report should serialize"),
+        fixture["options_explicit"]["expected"]
+    );
+
+    let options_inferred =
+        decode_session_runner_payload_from_fixture(&fixture["options_inferred"]["input"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_runner_payload(&options_inferred))
+            .expect("report should serialize"),
+        fixture["options_inferred"]["expected"]
+    );
+
+    let profile_default_name =
+        decode_session_runner_payload_from_fixture(&fixture["profile_default_name"]["input"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_runner_payload(
+            &profile_default_name
+        ))
+        .expect("report should serialize"),
+        fixture["profile_default_name"]["expected"]
+    );
+
+    let profile_explicit_name =
+        decode_session_runner_payload_from_fixture(&fixture["profile_explicit_name"]["input"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_runner_payload(
+            &profile_explicit_name
+        ))
+        .expect("report should serialize"),
+        fixture["profile_explicit_name"]["expected"]
+    );
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -1367,6 +1414,10 @@ fn decode_session_runner_input_from_fixture(
     _fixture_root: &std::path::Path,
 ) -> ast_template::SessionRunnerInput {
     serde_json::from_value(fixture.clone()).expect("runner input should deserialize")
+}
+
+fn decode_session_runner_payload_from_fixture(fixture: &Value) -> ast_template::SessionRunnerPayload {
+    serde_json::from_value(fixture.clone()).expect("runner payload should deserialize")
 }
 
 fn resolve_runner_request_fixture_paths(value: &Value, fixture_root: &std::path::Path) -> Value {

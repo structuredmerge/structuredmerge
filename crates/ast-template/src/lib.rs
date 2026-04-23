@@ -114,6 +114,30 @@ pub struct SessionRunnerRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionRunnerInput {
     pub request_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub profile_name: Option<String>,
+    pub mode: DirectorySessionMode,
+    pub template_root: String,
+    pub destination_root: String,
+    #[serde(default)]
+    pub context: TemplateDestinationContext,
+    #[serde(default = "default_template_strategy")]
+    pub default_strategy: TemplateStrategy,
+    #[serde(default)]
+    pub overrides: Vec<TemplateStrategyOverride>,
+    #[serde(default)]
+    pub replacements: HashMap<String, String>,
+    #[serde(default)]
+    pub allowed_families: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionRunnerPayload {
+    #[serde(default)]
+    pub request_kind: String,
+    #[serde(default)]
+    pub default_profile_name: Option<String>,
     #[serde(default)]
     pub profile_name: Option<String>,
     pub mode: DirectorySessionMode,
@@ -1146,6 +1170,39 @@ pub fn report_template_directory_session_runner_input(
             options: Some(session_runner_input_options_value(input)),
             overrides: None,
         }
+    }
+}
+
+pub fn report_template_directory_session_runner_payload(
+    payload: &SessionRunnerPayload,
+) -> SessionRunnerInput {
+    let request_kind = if payload.request_kind.is_empty() {
+        if payload.profile_name.is_some() || payload.default_profile_name.is_some() {
+            "profile".to_string()
+        } else {
+            "options".to_string()
+        }
+    } else {
+        payload.request_kind.clone()
+    };
+    SessionRunnerInput {
+        request_kind,
+        profile_name: payload
+            .profile_name
+            .clone()
+            .or_else(|| payload.default_profile_name.clone()),
+        mode: payload.mode,
+        template_root: payload.template_root.clone(),
+        destination_root: payload.destination_root.clone(),
+        context: payload.context.clone(),
+        default_strategy: if payload.default_strategy == default_template_strategy() {
+            default_template_strategy()
+        } else {
+            payload.default_strategy
+        },
+        overrides: payload.overrides.clone(),
+        replacements: payload.replacements.clone(),
+        allowed_families: payload.allowed_families.clone(),
     }
 }
 
