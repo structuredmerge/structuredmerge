@@ -60,6 +60,25 @@ pub struct SessionStatusReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionDiagnostic {
+    pub severity: ast_merge::DiagnosticSeverity,
+    pub category: ast_merge::DiagnosticCategory,
+    pub reason: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionDiagnosticsReport {
+    pub mode: DirectorySessionMode,
+    pub ready: bool,
+    pub diagnostics: Vec<SessionDiagnostic>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TemplateDirectoryRegistryDiagnostic {
     pub severity: ast_merge::DiagnosticSeverity,
     pub category: ast_merge::DiagnosticCategory,
@@ -512,4 +531,119 @@ impl SessionReportView for TemplateDirectoryRegistrySessionReport {
     fn runner_report(&self) -> &ast_merge::TemplateDirectoryRunnerReport {
         &self.runner_report
     }
+}
+
+pub fn report_template_directory_session_diagnostics(
+    mode: DirectorySessionMode,
+    entries: &[TemplateExecutionPlanEntry],
+    capabilities: &AdapterCapabilityReport,
+    result: Option<&TemplateTreeRunResult>,
+) -> SessionDiagnosticsReport {
+    let missing_families = capabilities.missing_families.iter().cloned().collect::<Vec<_>>();
+    let blocked_apply_paths =
+        result.map(|value| value.apply_result.blocked_paths.clone()).unwrap_or_default();
+    let mut diagnostics = entries
+        .iter()
+        .flat_map(|entry| {
+            let path = entry
+                .destination_path
+                .clone()
+                .unwrap_or_else(|| entry.logical_destination_path.clone());
+            let mut output = Vec::new();
+            if entry.blocked
+                && entry.block_reason == Some(ast_merge::TemplatePlanBlockReason::UnresolvedTokens)
+            {
+                output.push(SessionDiagnostic {
+                    severity: ast_merge::DiagnosticSeverity::Error,
+                    category: ast_merge::DiagnosticCategory::ConfigurationError,
+                    reason: "unresolved_tokens".to_string(),
+                    path: Some(path.clone()),
+                    family: None,
+                    message: format!("unresolved template tokens block {path}"),
+                });
+            }
+            if entry.execution_action == ast_merge::TemplateExecutionAction::MergePreparedContent
+                && missing_families.contains(&entry.classification.family)
+                && (result.is_none()
+                    || blocked_apply_paths.is_empty()
+                    || blocked_apply_paths.contains(&path))
+            {
+                output.push(SessionDiagnostic {
+                    severity: ast_merge::DiagnosticSeverity::Error,
+                    category: ast_merge::DiagnosticCategory::ConfigurationError,
+                    reason: "missing_family_adapter".to_string(),
+                    path: Some(path.clone()),
+                    family: Some(entry.classification.family.clone()),
+                    message: format!(
+                        "missing family adapter for {} blocks {path}",
+                        entry.classification.family
+                    ),
+                });
+            }
+            output
+        })
+        .collect::<Vec<_>>();
+    diagnostics.sort_by(|a, b| {
+        a.path.cmp(&b.path).then(a.reason.cmp(&b.reason)).then(a.family.cmp(&b.family))
+    });
+    SessionDiagnosticsReport { mode, ready: diagnostics.is_empty(), diagnostics }
+}
+
+pub fn plan_template_directory_session_diagnostics_from_directories(
+    template_root: &Path,
+    destination_root: &Path,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    allowed_families: Option<&[&str]>,
+    config: &TemplateTokenConfig,
+) -> std::io::Result<SessionDiagnosticsReport> {
+    let entries = plan_template_tree_execution_from_directories(
+        template_root,
+        destination_root,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        config,
+    )?;
+    let registry = default_family_merge_adapter_registry(allowed_families);
+    let capabilities = report_adapter_capabilities(&entries, &registry);
+    Ok(report_template_directory_session_diagnostics(
+        DirectorySessionMode::Plan,
+        &entries,
+        &capabilities,
+        None,
+    ))
+}
+
+pub fn apply_template_directory_session_diagnostics_with_default_registry_to_directory(
+    template_root: &Path,
+    destination_root: &Path,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    allowed_families: Option<&[&str]>,
+    config: &TemplateTokenConfig,
+) -> std::io::Result<SessionDiagnosticsReport> {
+    let registry = default_family_merge_adapter_registry(allowed_families);
+    let result = apply_template_tree_execution_to_directory(
+        template_root,
+        destination_root,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        |entry| merge_prepared_content_from_registry(&registry, entry),
+        config,
+    )?;
+    let capabilities = report_adapter_capabilities(&result.execution_plan, &registry);
+    Ok(report_template_directory_session_diagnostics(
+        DirectorySessionMode::Apply,
+        &result.execution_plan,
+        &capabilities,
+        Some(&result),
+    ))
 }
