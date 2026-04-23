@@ -43,8 +43,9 @@ use ast_merge::{
     report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
     report_named_conformance_suite_manifest, report_planned_conformance_suite,
     report_planned_named_conformance_suites, report_template_directory_apply,
-    report_template_directory_plan, report_template_tree_run, resolve_conformance_family_context,
-    resolve_delegated_child_outputs, resolve_template_destination_path,
+    report_template_directory_plan, report_template_directory_runner, report_template_tree_run,
+    resolve_conformance_family_context, resolve_delegated_child_outputs,
+    resolve_template_destination_path,
     review_and_execute_conformance_manifest_with_replay_bundle_envelope,
     review_conformance_family_context, review_conformance_manifest,
     review_conformance_manifest_with_replay_bundle_envelope, review_projected_child_groups,
@@ -4724,6 +4725,95 @@ fn conforms_to_mini_template_tree_directory_plan_report_fixture() {
     let expected =
         serde_json::from_value(fixture["expected"].clone()).expect("expected should deserialize");
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn conforms_to_mini_template_tree_directory_runner_report_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "mini_template_tree_directory_runner_report",
+    ));
+
+    let dry_run = fixture["dry_run"].clone();
+    let dry_run_dir = diagnostics_fixture_path("mini_template_tree_directory_runner_report")
+        .parent()
+        .expect("fixture should have parent")
+        .join("dry-run");
+    let dry_run_context =
+        serde_json::from_value::<TemplateDestinationContext>(dry_run["context"].clone())
+            .expect("context should deserialize");
+    let dry_run_default_strategy =
+        serde_json::from_value::<TemplateStrategy>(dry_run["default_strategy"].clone())
+            .expect("default_strategy should deserialize");
+    let dry_run_overrides =
+        serde_json::from_value::<Vec<TemplateStrategyOverride>>(dry_run["overrides"].clone())
+            .expect("overrides should deserialize");
+    let dry_run_replacements =
+        serde_json::from_value::<HashMap<String, String>>(dry_run["replacements"].clone())
+            .expect("replacements should deserialize");
+    let dry_run_plan = ast_merge::plan_template_tree_execution_from_directories(
+        &dry_run_dir.join("template"),
+        &dry_run_dir.join("destination"),
+        &dry_run_context,
+        dry_run_default_strategy,
+        &dry_run_overrides,
+        &dry_run_replacements,
+        &ast_merge::default_template_token_config(),
+    )
+    .expect("dry-run plan should succeed");
+    let dry_run_actual = report_template_directory_runner(&dry_run_plan, None);
+    let dry_run_expected =
+        serde_json::from_value(dry_run["expected"].clone()).expect("expected should deserialize");
+    assert_eq!(dry_run_actual, dry_run_expected);
+
+    let apply_run = fixture["apply_run"].clone();
+    let apply_run_dir = diagnostics_fixture_path("mini_template_tree_directory_runner_report")
+        .parent()
+        .expect("fixture should have parent")
+        .join("apply-run");
+    let apply_context =
+        serde_json::from_value::<TemplateDestinationContext>(apply_run["context"].clone())
+            .expect("context should deserialize");
+    let apply_default_strategy =
+        serde_json::from_value::<TemplateStrategy>(apply_run["default_strategy"].clone())
+            .expect("default_strategy should deserialize");
+    let apply_overrides =
+        serde_json::from_value::<Vec<TemplateStrategyOverride>>(apply_run["overrides"].clone())
+            .expect("overrides should deserialize");
+    let apply_replacements =
+        serde_json::from_value::<HashMap<String, String>>(apply_run["replacements"].clone())
+            .expect("replacements should deserialize");
+    let temp_root = repo_temp_dir();
+    let destination_root = temp_root.join("destination");
+    let initial_destination = read_relative_file_tree(&apply_run_dir.join("destination"));
+    ast_merge::write_relative_file_tree(&destination_root, &initial_destination)
+        .expect("destination tree should be writable");
+    let apply_plan = ast_merge::plan_template_tree_execution_from_directories(
+        &apply_run_dir.join("template"),
+        &destination_root,
+        &apply_context,
+        apply_default_strategy,
+        &apply_overrides,
+        &apply_replacements,
+        &ast_merge::default_template_token_config(),
+    )
+    .expect("apply-run plan should succeed");
+    let apply_result = ast_merge::apply_template_tree_execution_to_directory(
+        &apply_run_dir.join("template"),
+        &destination_root,
+        &apply_context,
+        apply_default_strategy,
+        &apply_overrides,
+        &apply_replacements,
+        multi_family_merge_callback,
+        &ast_merge::default_template_token_config(),
+    )
+    .expect("apply-run execution should succeed");
+    let apply_actual = report_template_directory_runner(&apply_plan, Some(&apply_result));
+    let apply_expected =
+        serde_json::from_value(apply_run["expected"].clone()).expect("expected should deserialize");
+    assert_eq!(apply_actual, apply_expected);
+
+    fs::remove_dir_all(temp_root).expect("temp dir should be removable");
 }
 
 fn reviewed_nested_execution_callbacks_from_fixture(

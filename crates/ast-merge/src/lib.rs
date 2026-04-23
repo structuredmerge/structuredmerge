@@ -459,6 +459,14 @@ pub struct TemplateDirectoryPlanReport {
     pub summary: TemplateDirectoryPlanReportSummary,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TemplateDirectoryRunnerReport {
+    pub plan_report: TemplateDirectoryPlanReport,
+    pub preview: Option<TemplatePreviewResult>,
+    pub run_report: Option<TemplateTreeRunReport>,
+    pub apply_report: Option<TemplateDirectoryApplyReport>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConformanceOutcome {
@@ -1992,6 +2000,18 @@ pub fn report_template_directory_plan(
     }
 
     TemplateDirectoryPlanReport { entries: report_entries, summary }
+}
+
+pub fn report_template_directory_runner(
+    entries: &[TemplateExecutionPlanEntry],
+    result: Option<&TemplateTreeRunResult>,
+) -> TemplateDirectoryRunnerReport {
+    TemplateDirectoryRunnerReport {
+        plan_report: report_template_directory_plan(entries),
+        preview: Some(preview_template_execution(entries)),
+        run_report: result.map(report_template_tree_run),
+        apply_report: result.map(report_template_directory_apply),
+    }
 }
 
 fn record_template_apply_output(
