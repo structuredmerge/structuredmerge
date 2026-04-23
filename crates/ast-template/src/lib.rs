@@ -202,6 +202,30 @@ pub struct SessionCommand {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionCommandPayload {
+    pub operation: String,
+    #[serde(default)]
+    pub request_kind: String,
+    #[serde(default)]
+    pub default_profile_name: Option<String>,
+    #[serde(default)]
+    pub profile_name: Option<String>,
+    pub mode: DirectorySessionMode,
+    pub template_root: String,
+    pub destination_root: String,
+    #[serde(default)]
+    pub context: TemplateDestinationContext,
+    #[serde(default = "default_template_strategy")]
+    pub default_strategy: TemplateStrategy,
+    #[serde(default)]
+    pub overrides: Vec<TemplateStrategyOverride>,
+    #[serde(default)]
+    pub replacements: HashMap<String, String>,
+    #[serde(default)]
+    pub allowed_families: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AnySessionOutcomeReport {
     Plan(SessionOutcomeReport<TemplateDirectorySessionReport>),
@@ -1456,6 +1480,32 @@ pub fn run_template_directory_session_command(
     run_template_directory_session_dispatch(
         &command.operation,
         &SessionEntrypoint { payload: command.payload.clone(), request: command.request.clone() },
+        profiles,
+    )
+}
+
+pub fn run_template_directory_session_command_payload(
+    command: &SessionCommandPayload,
+    profiles: &HashMap<String, DirectorySessionProfile>,
+) -> std::io::Result<SessionDispatchReport> {
+    run_template_directory_session_command(
+        &SessionCommand {
+            operation: command.operation.clone(),
+            payload: Some(SessionRunnerPayload {
+                request_kind: command.request_kind.clone(),
+                default_profile_name: command.default_profile_name.clone(),
+                profile_name: command.profile_name.clone(),
+                mode: command.mode,
+                template_root: command.template_root.clone(),
+                destination_root: command.destination_root.clone(),
+                context: command.context.clone(),
+                default_strategy: command.default_strategy,
+                overrides: command.overrides.clone(),
+                replacements: command.replacements.clone(),
+                allowed_families: command.allowed_families.clone(),
+            }),
+            request: None,
+        },
         profiles,
     )
 }

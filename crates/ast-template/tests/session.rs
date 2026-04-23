@@ -25,9 +25,10 @@ use ast_template::{
     report_template_directory_session_profile_request,
     report_template_directory_session_resolution, report_template_directory_session_runner_input,
     report_template_directory_session_runner_payload, report_template_directory_session_status,
-    run_template_directory_session_command, run_template_directory_session_dispatch,
-    run_template_directory_session_entrypoint, run_template_directory_session_request,
-    run_template_directory_session_runner_payload, run_template_directory_session_runner_request,
+    run_template_directory_session_command, run_template_directory_session_command_payload,
+    run_template_directory_session_dispatch, run_template_directory_session_entrypoint,
+    run_template_directory_session_request, run_template_directory_session_runner_payload,
+    run_template_directory_session_runner_request,
     run_template_directory_session_with_default_registry_to_directory,
     run_template_directory_session_with_options, run_template_directory_session_with_profile,
 };
@@ -1183,6 +1184,31 @@ fn conforms_to_template_directory_session_command_report_fixture() {
     }
 }
 
+#[test]
+fn conforms_to_template_directory_session_command_payload_report_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-379-template-directory-session-command-payload-report/template-directory-session-command-payload-report.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture root should exist");
+    let profiles = decode_session_profiles(&fixture["profiles"]);
+
+    for key in ["inspect_ready", "run_profile_ready", "run_profile_blocked"] {
+        let case = &fixture[key];
+        let command = decode_session_command_payload_from_fixture(&case["input"], fixture_root);
+        assert_eq!(
+            serde_json::to_value(
+                run_template_directory_session_command_payload(&command, &profiles)
+                    .expect("command payload should succeed")
+            )
+            .expect("command payload should serialize"),
+            resolve_session_dispatch_expected_paths(&case["expected"], fixture_root)
+        );
+    }
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -1844,6 +1870,23 @@ fn decode_session_command_from_fixture(
                 .then(|| decode_session_runner_request_from_fixture(value, fixture_root))
         }),
     }
+}
+
+fn decode_session_command_payload_from_fixture(
+    fixture: &Value,
+    fixture_root: &std::path::Path,
+) -> ast_template::SessionCommandPayload {
+    let mut payload: ast_template::SessionCommandPayload =
+        serde_json::from_value(fixture.clone()).expect("command payload should deserialize");
+    if !payload.template_root.is_empty() {
+        payload.template_root =
+            fixture_root.join(&payload.template_root).to_string_lossy().into_owned();
+    }
+    if !payload.destination_root.is_empty() {
+        payload.destination_root =
+            fixture_root.join(&payload.destination_root).to_string_lossy().into_owned();
+    }
+    payload
 }
 
 fn resolve_runner_request_fixture_paths(value: &Value, fixture_root: &std::path::Path) -> Value {
