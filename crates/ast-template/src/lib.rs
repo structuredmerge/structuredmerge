@@ -79,6 +79,13 @@ pub struct SessionDiagnosticsReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionOutcomeReport<T> {
+    pub session_report: T,
+    pub status: SessionStatusReport,
+    pub diagnostics: SessionDiagnosticsReport,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TemplateDirectoryRegistryDiagnostic {
     pub severity: ast_merge::DiagnosticSeverity,
     pub category: ast_merge::DiagnosticCategory,
@@ -646,4 +653,98 @@ pub fn apply_template_directory_session_diagnostics_with_default_registry_to_dir
         &capabilities,
         Some(&result),
     ))
+}
+
+pub fn report_template_directory_session_outcome<T>(
+    session_report: T,
+    status: SessionStatusReport,
+    diagnostics: SessionDiagnosticsReport,
+) -> SessionOutcomeReport<T> {
+    SessionOutcomeReport { session_report, status, diagnostics }
+}
+
+pub fn plan_template_directory_session_outcome_from_directories(
+    template_root: &Path,
+    destination_root: &Path,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    allowed_families: Option<&[&str]>,
+    config: &TemplateTokenConfig,
+) -> std::io::Result<SessionOutcomeReport<TemplateDirectorySessionReport>> {
+    let session_report = plan_template_directory_session_from_directories(
+        template_root,
+        destination_root,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        config,
+    )?;
+    let envelope = plan_template_directory_session_envelope_from_directories(
+        template_root,
+        destination_root,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        allowed_families,
+        config,
+    )?;
+    let diagnostics = plan_template_directory_session_diagnostics_from_directories(
+        template_root,
+        destination_root,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        allowed_families,
+        config,
+    )?;
+    Ok(report_template_directory_session_outcome(
+        session_report,
+        report_template_directory_session_status(&envelope),
+        diagnostics,
+    ))
+}
+
+pub fn apply_template_directory_session_outcome_with_default_registry_to_directory(
+    template_root: &Path,
+    destination_root: &Path,
+    context: &TemplateDestinationContext,
+    default_strategy: TemplateStrategy,
+    overrides: &[TemplateStrategyOverride],
+    replacements: &HashMap<String, String>,
+    allowed_families: Option<&[&str]>,
+    config: &TemplateTokenConfig,
+) -> std::io::Result<SessionOutcomeReport<TemplateDirectoryRegistrySessionReport>> {
+    let registry = default_family_merge_adapter_registry(allowed_families);
+    let result = apply_template_tree_execution_to_directory(
+        template_root,
+        destination_root,
+        context,
+        default_strategy,
+        overrides,
+        replacements,
+        |entry| merge_prepared_content_from_registry(&registry, entry),
+        config,
+    )?;
+    let session_report = report_template_directory_registry_session(
+        DirectorySessionMode::Apply,
+        &result.execution_plan,
+        Some(&result),
+        &registry,
+    );
+    let capabilities = report_adapter_capabilities(&result.execution_plan, &registry);
+    let status = report_template_directory_session_status(
+        &report_template_directory_session_envelope(session_report.clone(), capabilities.clone()),
+    );
+    let diagnostics = report_template_directory_session_diagnostics(
+        DirectorySessionMode::Apply,
+        &result.execution_plan,
+        &capabilities,
+        Some(&result),
+    );
+    Ok(report_template_directory_session_outcome(session_report, status, diagnostics))
 }
