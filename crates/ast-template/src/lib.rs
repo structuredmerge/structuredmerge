@@ -164,6 +164,12 @@ pub struct SessionEntrypoint {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionEntrypointReport {
+    pub source_kind: String,
+    pub runner_request: SessionRunnerRequest,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AnySessionOutcomeReport {
     Plan(SessionOutcomeReport<TemplateDirectorySessionReport>),
@@ -1241,6 +1247,34 @@ pub fn run_template_directory_session_entrypoint(
             diagnostics: Vec::new(),
         },
     ))
+}
+
+pub fn report_template_directory_session_entrypoint(
+    entrypoint: &SessionEntrypoint,
+) -> SessionEntrypointReport {
+    if let Some(payload) = &entrypoint.payload {
+        return SessionEntrypointReport {
+            source_kind: "payload".to_string(),
+            runner_request: report_template_directory_session_runner_input(
+                &report_template_directory_session_runner_payload(payload),
+            ),
+        };
+    }
+    if let Some(request) = &entrypoint.request {
+        return SessionEntrypointReport {
+            source_kind: "request".to_string(),
+            runner_request: request.clone(),
+        };
+    }
+    SessionEntrypointReport {
+        source_kind: String::new(),
+        runner_request: SessionRunnerRequest {
+            request_kind: String::new(),
+            profile_name: None,
+            options: None,
+            overrides: None,
+        },
+    }
 }
 
 fn session_runner_input_options_value(input: &SessionRunnerInput) -> Value {

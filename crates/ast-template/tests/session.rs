@@ -22,6 +22,7 @@ use ast_template::{
     report_template_directory_session_options_request,
     report_template_directory_session_profile_configuration,
     report_template_directory_session_profile_request,
+    report_template_directory_session_entrypoint,
     report_template_directory_session_runner_input,
     report_template_directory_session_runner_payload,
     run_template_directory_session_entrypoint,
@@ -954,6 +955,44 @@ fn conforms_to_template_directory_session_entrypoint_outcome_report_fixture() {
     );
 }
 
+#[test]
+fn conforms_to_template_directory_session_entrypoint_report_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-374-template-directory-session-entrypoint-report/template-directory-session-entrypoint-report.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+
+    let payload_ready = decode_session_entrypoint(&fixture["payload_ready"]["input"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_entrypoint(&payload_ready))
+            .expect("report should serialize"),
+        fixture["payload_ready"]["expected"]
+    );
+
+    let request_blocked = decode_session_entrypoint(&fixture["request_blocked"]["input"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_entrypoint(&request_blocked))
+            .expect("report should serialize"),
+        fixture["request_blocked"]["expected"]
+    );
+
+    let request_ready = decode_session_entrypoint(&fixture["request_ready"]["input"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_entrypoint(&request_ready))
+            .expect("report should serialize"),
+        fixture["request_ready"]["expected"]
+    );
+
+    let payload_blocked = decode_session_entrypoint(&fixture["payload_blocked"]["input"]);
+    assert_eq!(
+        serde_json::to_value(report_template_directory_session_entrypoint(&payload_blocked))
+            .expect("report should serialize"),
+        fixture["payload_blocked"]["expected"]
+    );
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -1527,6 +1566,22 @@ fn decode_session_runner_request_from_fixture(
     }
 }
 
+fn decode_session_runner_request(fixture: &Value) -> ast_template::SessionRunnerRequest {
+    ast_template::SessionRunnerRequest {
+        request_kind: fixture["request_kind"]
+            .as_str()
+            .expect("request_kind should be string")
+            .to_string(),
+        profile_name: fixture["profile_name"].as_str().map(|value| value.to_string()),
+        options: fixture
+            .get("options")
+            .and_then(|value| (!value.is_null()).then(|| value.clone())),
+        overrides: fixture
+            .get("overrides")
+            .and_then(|value| (!value.is_null()).then(|| value.clone())),
+    }
+}
+
 fn decode_session_runner_input_from_fixture(
     fixture: &Value,
     _fixture_root: &std::path::Path,
@@ -1570,6 +1625,17 @@ fn decode_session_entrypoint_from_fixture(
         request: fixture
             .get("request")
             .and_then(|value| (!value.is_null()).then(|| decode_session_runner_request_from_fixture(value, fixture_root))),
+    }
+}
+
+fn decode_session_entrypoint(fixture: &Value) -> ast_template::SessionEntrypoint {
+    ast_template::SessionEntrypoint {
+        payload: fixture
+            .get("payload")
+            .and_then(|value| (!value.is_null()).then(|| decode_session_runner_payload(value))),
+        request: fixture
+            .get("request")
+            .and_then(|value| (!value.is_null()).then(|| decode_session_runner_request(value))),
     }
 }
 
