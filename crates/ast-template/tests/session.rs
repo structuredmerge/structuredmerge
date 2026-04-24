@@ -1209,6 +1209,32 @@ fn conforms_to_template_directory_session_command_payload_report_fixture() {
     }
 }
 
+#[test]
+fn conforms_to_template_directory_session_dispatch_rejection_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-380-template-directory-session-dispatch-rejection/template-directory-session-dispatch-rejection.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture root should exist");
+
+    for case in fixture["cases"].as_array().expect("cases should be array") {
+        let label = case["label"].as_str().expect("label should be string");
+        let input = case["input"].as_object().expect("input should be object");
+        let operation = input["operation"].as_str().expect("operation should be string");
+        let entrypoint = decode_session_entrypoint_from_fixture(&input["entrypoint"], fixture_root);
+        let error =
+            run_template_directory_session_dispatch(operation, &entrypoint, &HashMap::new())
+                .expect_err("dispatch rejection should fail");
+        assert_eq!(
+            error.to_string(),
+            case["expected_error"].as_str().expect("expected_error should be string"),
+            "{label}"
+        );
+    }
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")

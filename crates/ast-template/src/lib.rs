@@ -1465,11 +1465,9 @@ pub fn run_template_directory_session_dispatch(
             inspection: None,
             outcome: Some(run_template_directory_session_entrypoint(entrypoint, profiles)?),
         }),
-        _ => Ok(SessionDispatchReport {
-            operation: operation.to_string(),
-            inspection: None,
-            outcome: Some(run_template_directory_session_entrypoint(entrypoint, profiles)?),
-        }),
+        _ => Err(std::io::Error::other(format!(
+            "unsupported template directory session operation: {operation}"
+        ))),
     }
 }
 
