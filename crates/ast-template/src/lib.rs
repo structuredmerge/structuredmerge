@@ -226,6 +226,37 @@ pub struct SessionCommandPayload {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionInvocation {
+    pub operation: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payload: Option<SessionRunnerPayload>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request: Option<SessionRunnerRequest>,
+    #[serde(default)]
+    pub request_kind: String,
+    #[serde(default)]
+    pub default_profile_name: Option<String>,
+    #[serde(default)]
+    pub profile_name: Option<String>,
+    #[serde(default)]
+    pub mode: Option<DirectorySessionMode>,
+    #[serde(default)]
+    pub template_root: String,
+    #[serde(default)]
+    pub destination_root: String,
+    #[serde(default)]
+    pub context: TemplateDestinationContext,
+    #[serde(default = "default_template_strategy")]
+    pub default_strategy: TemplateStrategy,
+    #[serde(default)]
+    pub overrides: Vec<TemplateStrategyOverride>,
+    #[serde(default)]
+    pub replacements: HashMap<String, String>,
+    #[serde(default)]
+    pub allowed_families: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AnySessionOutcomeReport {
     Plan(SessionOutcomeReport<TemplateDirectorySessionReport>),
@@ -1503,6 +1534,40 @@ pub fn run_template_directory_session_command_payload(
                 allowed_families: command.allowed_families.clone(),
             }),
             request: None,
+        },
+        profiles,
+    )
+}
+
+pub fn run_template_directory_session(
+    invocation: &SessionInvocation,
+    profiles: &HashMap<String, DirectorySessionProfile>,
+) -> std::io::Result<SessionDispatchReport> {
+    if invocation.payload.is_some() || invocation.request.is_some() {
+        return run_template_directory_session_command(
+            &SessionCommand {
+                operation: invocation.operation.clone(),
+                payload: invocation.payload.clone(),
+                request: invocation.request.clone(),
+            },
+            profiles,
+        );
+    }
+
+    run_template_directory_session_command_payload(
+        &SessionCommandPayload {
+            operation: invocation.operation.clone(),
+            request_kind: invocation.request_kind.clone(),
+            default_profile_name: invocation.default_profile_name.clone(),
+            profile_name: invocation.profile_name.clone(),
+            mode: invocation.mode.unwrap_or(DirectorySessionMode::Plan),
+            template_root: invocation.template_root.clone(),
+            destination_root: invocation.destination_root.clone(),
+            context: invocation.context.clone(),
+            default_strategy: invocation.default_strategy,
+            overrides: invocation.overrides.clone(),
+            replacements: invocation.replacements.clone(),
+            allowed_families: invocation.allowed_families.clone(),
         },
         profiles,
     )
