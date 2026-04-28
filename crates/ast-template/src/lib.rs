@@ -163,6 +163,59 @@ pub struct SessionEntrypoint {
     pub request: Option<SessionRunnerRequest>,
 }
 
+pub const SESSION_ENTRYPOINT_TRANSPORT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionEntrypointTransportImportErrorCategory {
+    KindMismatch,
+    UnsupportedVersion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionEntrypointTransportImportError {
+    pub category: SessionEntrypointTransportImportErrorCategory,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionEntrypointEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub entrypoint: SessionEntrypoint,
+}
+
+pub fn session_entrypoint_envelope(entrypoint: &SessionEntrypoint) -> SessionEntrypointEnvelope {
+    SessionEntrypointEnvelope {
+        kind: "template_directory_session_entrypoint".to_string(),
+        version: SESSION_ENTRYPOINT_TRANSPORT_VERSION,
+        entrypoint: entrypoint.clone(),
+    }
+}
+
+pub fn import_session_entrypoint_envelope(
+    envelope: &SessionEntrypointEnvelope,
+) -> Result<SessionEntrypoint, SessionEntrypointTransportImportError> {
+    if envelope.kind != "template_directory_session_entrypoint" {
+        return Err(SessionEntrypointTransportImportError {
+            category: SessionEntrypointTransportImportErrorCategory::KindMismatch,
+            message: "expected template_directory_session_entrypoint envelope kind.".to_string(),
+        });
+    }
+
+    if envelope.version != SESSION_ENTRYPOINT_TRANSPORT_VERSION {
+        return Err(SessionEntrypointTransportImportError {
+            category: SessionEntrypointTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported template_directory_session_entrypoint envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.entrypoint.clone())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionEntrypointReport {
     pub source_kind: String,
