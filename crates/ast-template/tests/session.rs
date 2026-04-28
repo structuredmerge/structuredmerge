@@ -13,9 +13,9 @@ use ast_template::{
     apply_template_directory_session_with_default_registry_to_directory,
     apply_template_directory_session_with_registry_to_directory, import_session_command_envelope,
     import_session_command_payload_envelope, import_session_entrypoint_envelope,
-    import_session_invocation_envelope, import_session_outcome_envelope,
-    import_session_request_envelope, import_session_runner_payload_envelope,
-    import_session_runner_request_envelope,
+    import_session_inspection_envelope, import_session_invocation_envelope,
+    import_session_outcome_envelope, import_session_request_envelope,
+    import_session_runner_payload_envelope, import_session_runner_request_envelope,
     plan_template_directory_session_diagnostics_from_directories,
     plan_template_directory_session_envelope_from_directories,
     plan_template_directory_session_from_directories,
@@ -36,8 +36,8 @@ use ast_template::{
     run_template_directory_session_with_default_registry_to_directory,
     run_template_directory_session_with_options, run_template_directory_session_with_profile,
     session_command_envelope, session_command_payload_envelope, session_entrypoint_envelope,
-    session_invocation_envelope, session_outcome_envelope, session_request_envelope,
-    session_runner_payload_envelope, session_runner_request_envelope,
+    session_inspection_envelope, session_invocation_envelope, session_outcome_envelope,
+    session_request_envelope, session_runner_payload_envelope, session_runner_request_envelope,
 };
 use markdown_merge::{MarkdownDialect, merge_markdown};
 use ruby_merge::{RubyDialect, merge_ruby};
@@ -1293,6 +1293,33 @@ fn conforms_to_template_directory_session_inspection_report_fixture() {
             fixture_root
         )
     );
+}
+
+#[test]
+fn conforms_to_template_directory_session_inspection_transport_envelope_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-410-template-directory-session-inspection-transport-envelope/template-directory-session-inspection-envelope.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture root should exist");
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let inspection: ast_template::SessionInspectionReport = serde_json::from_value(
+            resolve_session_inspection_expected_paths(&test_case["input"], fixture_root),
+        )
+        .expect("inspection should deserialize");
+        let expected: ast_template::SessionInspectionEnvelope =
+            serde_json::from_value(resolve_session_inspection_envelope_fixture_paths(
+                &test_case["expected_envelope"],
+                fixture_root,
+            ))
+            .expect("expected envelope should deserialize");
+
+        assert_eq!(session_inspection_envelope(&inspection), expected);
+        assert_eq!(import_session_inspection_envelope(&expected), Ok(inspection));
+    }
 }
 
 #[test]
@@ -2956,6 +2983,19 @@ fn resolve_session_dispatch_expected_paths(value: &Value, fixture_root: &std::pa
             if !inspection.is_null() {
                 *inspection = resolve_session_inspection_expected_paths(inspection, fixture_root);
             }
+        }
+    }
+    resolved
+}
+
+fn resolve_session_inspection_envelope_fixture_paths(
+    fixture: &Value,
+    fixture_root: &std::path::Path,
+) -> Value {
+    let mut resolved = fixture.clone();
+    if let Some(section) = resolved.as_object_mut() {
+        if let Some(inspection) = section.get_mut("inspection") {
+            *inspection = resolve_session_inspection_expected_paths(inspection, fixture_root);
         }
     }
     resolved

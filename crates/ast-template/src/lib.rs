@@ -456,6 +456,61 @@ pub struct SessionInspectionReport {
     pub diagnostics: SessionDiagnosticsReport,
 }
 
+pub const SESSION_INSPECTION_TRANSPORT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionInspectionTransportImportErrorCategory {
+    KindMismatch,
+    UnsupportedVersion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionInspectionTransportImportError {
+    pub category: SessionInspectionTransportImportErrorCategory,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionInspectionEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub inspection: SessionInspectionReport,
+}
+
+pub fn session_inspection_envelope(
+    inspection: &SessionInspectionReport,
+) -> SessionInspectionEnvelope {
+    SessionInspectionEnvelope {
+        kind: "template_directory_session_inspection".to_string(),
+        version: SESSION_INSPECTION_TRANSPORT_VERSION,
+        inspection: inspection.clone(),
+    }
+}
+
+pub fn import_session_inspection_envelope(
+    envelope: &SessionInspectionEnvelope,
+) -> Result<SessionInspectionReport, SessionInspectionTransportImportError> {
+    if envelope.kind != "template_directory_session_inspection" {
+        return Err(SessionInspectionTransportImportError {
+            category: SessionInspectionTransportImportErrorCategory::KindMismatch,
+            message: "expected template_directory_session_inspection envelope kind.".to_string(),
+        });
+    }
+
+    if envelope.version != SESSION_INSPECTION_TRANSPORT_VERSION {
+        return Err(SessionInspectionTransportImportError {
+            category: SessionInspectionTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported template_directory_session_inspection envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.inspection.clone())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionDispatchReport {
     pub operation: String,
