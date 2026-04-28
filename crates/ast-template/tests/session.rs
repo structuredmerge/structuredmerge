@@ -1400,6 +1400,44 @@ fn conforms_to_template_directory_session_invocation_transport_rejection_fixture
     }
 }
 
+#[test]
+fn conforms_to_template_directory_session_invocation_envelope_application_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-388-template-directory-session-invocation-envelope-application/template-directory-session-invocation-envelope-application.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture root should exist");
+    let profiles = decode_session_profiles(&fixture["profiles"]);
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let envelope: ast_template::SessionInvocationEnvelope = serde_json::from_value(
+            resolve_session_invocation_envelope_fixture_paths(&test_case["envelope"], fixture_root),
+        )
+        .expect("envelope should deserialize");
+        let invocation =
+            import_session_invocation_envelope(&envelope).expect("envelope import should succeed");
+        let actual = run_template_directory_session(&invocation, &profiles)
+            .expect("invocation envelope application should succeed");
+        assert_eq!(
+            serde_json::to_value(actual).expect("dispatch report should serialize"),
+            resolve_session_dispatch_expected_paths(&test_case["expected"], fixture_root)
+        );
+    }
+
+    for test_case in fixture["rejections"].as_array().expect("rejections should be array") {
+        let envelope: ast_template::SessionInvocationEnvelope = serde_json::from_value(
+            resolve_session_invocation_envelope_fixture_paths(&test_case["envelope"], fixture_root),
+        )
+        .expect("envelope should deserialize");
+        let expected: ast_template::SessionInvocationTransportImportError =
+            serde_json::from_value(test_case["expected_error"].clone())
+                .expect("expected error should deserialize");
+        assert_eq!(import_session_invocation_envelope(&envelope), Err(expected));
+    }
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
