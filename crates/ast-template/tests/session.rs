@@ -1419,6 +1419,48 @@ fn conforms_to_template_directory_session_command_envelope_application_fixture()
 }
 
 #[test]
+fn conforms_to_template_directory_session_command_payload_envelope_application_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-394-template-directory-session-command-payload-envelope-application/template-directory-session-command-payload-envelope-application.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture root should exist");
+    let profiles = decode_session_profiles(&fixture["profiles"]);
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let envelope: ast_template::SessionCommandPayloadEnvelope =
+            serde_json::from_value(resolve_session_command_payload_envelope_fixture_paths(
+                &test_case["envelope"],
+                fixture_root,
+            ))
+            .expect("envelope should deserialize");
+        let payload = import_session_command_payload_envelope(&envelope)
+            .expect("envelope import should succeed");
+        let actual = run_template_directory_session_command_payload(&payload, &profiles)
+            .expect("command payload envelope application should succeed");
+        assert_eq!(
+            serde_json::to_value(actual).expect("dispatch report should serialize"),
+            resolve_session_dispatch_expected_paths(&test_case["expected"], fixture_root)
+        );
+    }
+
+    for test_case in fixture["rejections"].as_array().expect("rejections should be array") {
+        let envelope: ast_template::SessionCommandPayloadEnvelope =
+            serde_json::from_value(resolve_session_command_payload_envelope_fixture_paths(
+                &test_case["envelope"],
+                fixture_root,
+            ))
+            .expect("envelope should deserialize");
+        let expected: ast_template::SessionCommandPayloadTransportImportError =
+            serde_json::from_value(test_case["expected_error"].clone())
+                .expect("expected error should deserialize");
+        assert_eq!(import_session_command_payload_envelope(&envelope), Err(expected));
+    }
+}
+
+#[test]
 fn conforms_to_template_directory_session_invocation_report_fixture() {
     let fixture_path = repo_root().join(
         "fixtures/diagnostics/slice-383-template-directory-session-invocation-report/template-directory-session-invocation-report.json",
