@@ -1329,6 +1329,28 @@ fn conforms_to_template_directory_session_invocation_rejection_fixture() {
     }
 }
 
+#[test]
+fn conforms_to_template_directory_session_invocation_json_roundtrip_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-385-template-directory-session-invocation-json-roundtrip/template-directory-session-invocation-json-roundtrip.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture root should exist");
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let invocation = decode_session_invocation_from_fixture(&test_case["input"], fixture_root);
+        let payload = serde_json::to_vec(&invocation).expect("invocation should serialize");
+        let round_tripped: ast_template::SessionInvocation =
+            serde_json::from_slice(&payload).expect("invocation should deserialize");
+        assert_eq!(
+            serde_json::to_value(round_tripped).expect("invocation should serialize"),
+            serde_json::to_value(invocation).expect("invocation should serialize")
+        );
+    }
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
