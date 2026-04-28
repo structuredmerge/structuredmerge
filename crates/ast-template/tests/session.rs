@@ -329,6 +329,59 @@ fn conforms_to_template_directory_session_status_transport_envelope_fixture() {
 }
 
 #[test]
+fn conforms_to_template_directory_session_status_transport_rejection_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-414-template-directory-session-status-transport-rejection/template-directory-session-status-envelope-rejection.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let envelope: ast_template::SessionStatusEnvelope =
+            serde_json::from_value(test_case["envelope"].clone())
+                .expect("envelope should deserialize");
+        let expected: ast_template::SessionStatusTransportImportError =
+            serde_json::from_value(test_case["expected_error"].clone())
+                .expect("expected error should deserialize");
+
+        assert_eq!(import_session_status_envelope(&envelope), Err(expected));
+    }
+}
+
+#[test]
+fn conforms_to_template_directory_session_status_envelope_application_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-415-template-directory-session-status-envelope-application/template-directory-session-status-envelope-application.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let envelope: ast_template::SessionStatusEnvelope =
+            serde_json::from_value(test_case["envelope"].clone())
+                .expect("envelope should deserialize");
+        let actual =
+            import_session_status_envelope(&envelope).expect("envelope import should succeed");
+        let expected: ast_template::SessionStatusReport =
+            serde_json::from_value(test_case["expected"].clone())
+                .expect("expected status should deserialize");
+        assert_eq!(actual, expected);
+    }
+
+    for test_case in fixture["rejections"].as_array().expect("rejections should be array") {
+        let envelope: ast_template::SessionStatusEnvelope =
+            serde_json::from_value(test_case["envelope"].clone())
+                .expect("envelope should deserialize");
+        let expected: ast_template::SessionStatusTransportImportError =
+            serde_json::from_value(test_case["expected_error"].clone())
+                .expect("expected error should deserialize");
+        assert_eq!(import_session_status_envelope(&envelope), Err(expected));
+    }
+}
+
+#[test]
 fn conforms_to_template_directory_session_outcome_report_fixture() {
     let fixture_path = repo_root()
         .join("fixtures/diagnostics/slice-360-template-directory-session-outcome-report/template-directory-session-outcome-report.json");
