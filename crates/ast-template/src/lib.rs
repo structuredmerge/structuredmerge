@@ -278,6 +278,62 @@ pub struct SessionCommandPayload {
     pub allowed_families: Option<Vec<String>>,
 }
 
+pub const SESSION_COMMAND_PAYLOAD_TRANSPORT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionCommandPayloadTransportImportErrorCategory {
+    KindMismatch,
+    UnsupportedVersion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionCommandPayloadTransportImportError {
+    pub category: SessionCommandPayloadTransportImportErrorCategory,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionCommandPayloadEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub payload: SessionCommandPayload,
+}
+
+pub fn session_command_payload_envelope(
+    payload: &SessionCommandPayload,
+) -> SessionCommandPayloadEnvelope {
+    SessionCommandPayloadEnvelope {
+        kind: "template_directory_session_command_payload".to_string(),
+        version: SESSION_COMMAND_PAYLOAD_TRANSPORT_VERSION,
+        payload: payload.clone(),
+    }
+}
+
+pub fn import_session_command_payload_envelope(
+    envelope: &SessionCommandPayloadEnvelope,
+) -> Result<SessionCommandPayload, SessionCommandPayloadTransportImportError> {
+    if envelope.kind != "template_directory_session_command_payload" {
+        return Err(SessionCommandPayloadTransportImportError {
+            category: SessionCommandPayloadTransportImportErrorCategory::KindMismatch,
+            message: "expected template_directory_session_command_payload envelope kind."
+                .to_string(),
+        });
+    }
+
+    if envelope.version != SESSION_COMMAND_PAYLOAD_TRANSPORT_VERSION {
+        return Err(SessionCommandPayloadTransportImportError {
+            category: SessionCommandPayloadTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported template_directory_session_command_payload envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.payload.clone())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionInvocation {
     pub operation: String,

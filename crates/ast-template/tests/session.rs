@@ -12,7 +12,7 @@ use ast_template::{
     apply_template_directory_session_to_directory,
     apply_template_directory_session_with_default_registry_to_directory,
     apply_template_directory_session_with_registry_to_directory, import_session_command_envelope,
-    import_session_invocation_envelope,
+    import_session_command_payload_envelope, import_session_invocation_envelope,
     plan_template_directory_session_diagnostics_from_directories,
     plan_template_directory_session_envelope_from_directories,
     plan_template_directory_session_from_directories,
@@ -32,7 +32,7 @@ use ast_template::{
     run_template_directory_session_runner_payload, run_template_directory_session_runner_request,
     run_template_directory_session_with_default_registry_to_directory,
     run_template_directory_session_with_options, run_template_directory_session_with_profile,
-    session_command_envelope, session_invocation_envelope,
+    session_command_envelope, session_command_payload_envelope, session_invocation_envelope,
 };
 use markdown_merge::{MarkdownDialect, merge_markdown};
 use ruby_merge::{RubyDialect, merge_ruby};
@@ -1331,6 +1331,31 @@ fn conforms_to_template_directory_session_command_transport_rejection_fixture() 
 }
 
 #[test]
+fn conforms_to_template_directory_session_command_payload_transport_envelope_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-392-template-directory-session-command-payload-transport-envelope/template-directory-session-command-payload-envelope.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture root should exist");
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let payload =
+            decode_session_command_payload_from_fixture(&test_case["input"], fixture_root);
+        let expected: ast_template::SessionCommandPayloadEnvelope =
+            serde_json::from_value(resolve_session_command_payload_envelope_fixture_paths(
+                &test_case["expected_envelope"],
+                fixture_root,
+            ))
+            .expect("expected envelope should deserialize");
+
+        assert_eq!(session_command_payload_envelope(&payload), expected);
+        assert_eq!(import_session_command_payload_envelope(&expected), Ok(payload));
+    }
+}
+
+#[test]
 fn conforms_to_template_directory_session_command_envelope_application_fixture() {
     let fixture_path = repo_root().join(
         "fixtures/diagnostics/slice-391-template-directory-session-command-envelope-application/template-directory-session-command-envelope-application.json",
@@ -2196,6 +2221,23 @@ fn resolve_session_command_envelope_fixture_paths(
             *command =
                 serde_json::to_value(decode_session_command_from_fixture(command, fixture_root))
                     .expect("command should serialize");
+        }
+    }
+    resolved
+}
+
+fn resolve_session_command_payload_envelope_fixture_paths(
+    fixture: &Value,
+    fixture_root: &std::path::Path,
+) -> Value {
+    let mut resolved = fixture.clone();
+    if let Some(section) = resolved.as_object_mut() {
+        if let Some(payload) = section.get_mut("payload") {
+            *payload = serde_json::to_value(decode_session_command_payload_from_fixture(
+                payload,
+                fixture_root,
+            ))
+            .expect("payload should serialize");
         }
     }
     resolved
