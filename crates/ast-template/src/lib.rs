@@ -111,6 +111,62 @@ pub struct SessionRunnerRequest {
     pub overrides: Option<Value>,
 }
 
+pub const SESSION_RUNNER_REQUEST_TRANSPORT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionRunnerRequestTransportImportErrorCategory {
+    KindMismatch,
+    UnsupportedVersion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionRunnerRequestTransportImportError {
+    pub category: SessionRunnerRequestTransportImportErrorCategory,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionRunnerRequestEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub request: SessionRunnerRequest,
+}
+
+pub fn session_runner_request_envelope(
+    request: &SessionRunnerRequest,
+) -> SessionRunnerRequestEnvelope {
+    SessionRunnerRequestEnvelope {
+        kind: "template_directory_session_runner_request".to_string(),
+        version: SESSION_RUNNER_REQUEST_TRANSPORT_VERSION,
+        request: request.clone(),
+    }
+}
+
+pub fn import_session_runner_request_envelope(
+    envelope: &SessionRunnerRequestEnvelope,
+) -> Result<SessionRunnerRequest, SessionRunnerRequestTransportImportError> {
+    if envelope.kind != "template_directory_session_runner_request" {
+        return Err(SessionRunnerRequestTransportImportError {
+            category: SessionRunnerRequestTransportImportErrorCategory::KindMismatch,
+            message: "expected template_directory_session_runner_request envelope kind."
+                .to_string(),
+        });
+    }
+
+    if envelope.version != SESSION_RUNNER_REQUEST_TRANSPORT_VERSION {
+        return Err(SessionRunnerRequestTransportImportError {
+            category: SessionRunnerRequestTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported template_directory_session_runner_request envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.request.clone())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionRunnerInput {
     pub request_kind: String,
