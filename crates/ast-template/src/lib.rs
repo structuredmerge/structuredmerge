@@ -211,6 +211,62 @@ pub struct SessionRunnerPayload {
     pub allowed_families: Option<Vec<String>>,
 }
 
+pub const SESSION_RUNNER_PAYLOAD_TRANSPORT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionRunnerPayloadTransportImportErrorCategory {
+    KindMismatch,
+    UnsupportedVersion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionRunnerPayloadTransportImportError {
+    pub category: SessionRunnerPayloadTransportImportErrorCategory,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionRunnerPayloadEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub payload: SessionRunnerPayload,
+}
+
+pub fn session_runner_payload_envelope(
+    payload: &SessionRunnerPayload,
+) -> SessionRunnerPayloadEnvelope {
+    SessionRunnerPayloadEnvelope {
+        kind: "template_directory_session_runner_payload".to_string(),
+        version: SESSION_RUNNER_PAYLOAD_TRANSPORT_VERSION,
+        payload: payload.clone(),
+    }
+}
+
+pub fn import_session_runner_payload_envelope(
+    envelope: &SessionRunnerPayloadEnvelope,
+) -> Result<SessionRunnerPayload, SessionRunnerPayloadTransportImportError> {
+    if envelope.kind != "template_directory_session_runner_payload" {
+        return Err(SessionRunnerPayloadTransportImportError {
+            category: SessionRunnerPayloadTransportImportErrorCategory::KindMismatch,
+            message: "expected template_directory_session_runner_payload envelope kind."
+                .to_string(),
+        });
+    }
+
+    if envelope.version != SESSION_RUNNER_PAYLOAD_TRANSPORT_VERSION {
+        return Err(SessionRunnerPayloadTransportImportError {
+            category: SessionRunnerPayloadTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported template_directory_session_runner_payload envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.payload.clone())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionEntrypoint {
     #[serde(skip_serializing_if = "Option::is_none")]
