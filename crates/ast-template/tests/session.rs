@@ -1323,6 +1323,65 @@ fn conforms_to_template_directory_session_inspection_transport_envelope_fixture(
 }
 
 #[test]
+fn conforms_to_template_directory_session_inspection_transport_rejection_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-411-template-directory-session-inspection-transport-rejection/template-directory-session-inspection-envelope-rejection.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture root should exist");
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let envelope: ast_template::SessionInspectionEnvelope = serde_json::from_value(
+            resolve_session_inspection_envelope_fixture_paths(&test_case["envelope"], fixture_root),
+        )
+        .expect("envelope should deserialize");
+        let expected: ast_template::SessionInspectionTransportImportError =
+            serde_json::from_value(test_case["expected_error"].clone())
+                .expect("expected error should deserialize");
+
+        assert_eq!(import_session_inspection_envelope(&envelope), Err(expected));
+    }
+}
+
+#[test]
+fn conforms_to_template_directory_session_inspection_envelope_application_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-412-template-directory-session-inspection-envelope-application/template-directory-session-inspection-envelope-application.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture root should exist");
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let envelope: ast_template::SessionInspectionEnvelope = serde_json::from_value(
+            resolve_session_inspection_envelope_fixture_paths(&test_case["envelope"], fixture_root),
+        )
+        .expect("envelope should deserialize");
+        let actual =
+            import_session_inspection_envelope(&envelope).expect("envelope import should succeed");
+        let expected: ast_template::SessionInspectionReport = serde_json::from_value(
+            resolve_session_inspection_expected_paths(&test_case["expected"], fixture_root),
+        )
+        .expect("expected inspection should deserialize");
+        assert_eq!(actual, expected);
+    }
+
+    for test_case in fixture["rejections"].as_array().expect("rejections should be array") {
+        let envelope: ast_template::SessionInspectionEnvelope = serde_json::from_value(
+            resolve_session_inspection_envelope_fixture_paths(&test_case["envelope"], fixture_root),
+        )
+        .expect("envelope should deserialize");
+        let expected: ast_template::SessionInspectionTransportImportError =
+            serde_json::from_value(test_case["expected_error"].clone())
+                .expect("expected error should deserialize");
+        assert_eq!(import_session_inspection_envelope(&envelope), Err(expected));
+    }
+}
+
+#[test]
 fn conforms_to_template_directory_session_dispatch_report_fixture() {
     let fixture_path = repo_root().join(
         "fixtures/diagnostics/slice-377-template-directory-session-dispatch-report/template-directory-session-dispatch-report.json",
