@@ -100,6 +100,59 @@ pub struct SessionRequestReport {
     pub resolved_options: Option<DirectorySessionOptions>,
 }
 
+pub const SESSION_REQUEST_TRANSPORT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionRequestTransportImportErrorCategory {
+    KindMismatch,
+    UnsupportedVersion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionRequestTransportImportError {
+    pub category: SessionRequestTransportImportErrorCategory,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionRequestEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub request: SessionRequestReport,
+}
+
+pub fn session_request_envelope(request: &SessionRequestReport) -> SessionRequestEnvelope {
+    SessionRequestEnvelope {
+        kind: "template_directory_session_request".to_string(),
+        version: SESSION_REQUEST_TRANSPORT_VERSION,
+        request: request.clone(),
+    }
+}
+
+pub fn import_session_request_envelope(
+    envelope: &SessionRequestEnvelope,
+) -> Result<SessionRequestReport, SessionRequestTransportImportError> {
+    if envelope.kind != "template_directory_session_request" {
+        return Err(SessionRequestTransportImportError {
+            category: SessionRequestTransportImportErrorCategory::KindMismatch,
+            message: "expected template_directory_session_request envelope kind.".to_string(),
+        });
+    }
+
+    if envelope.version != SESSION_REQUEST_TRANSPORT_VERSION {
+        return Err(SessionRequestTransportImportError {
+            category: SessionRequestTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported template_directory_session_request envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.request.clone())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionRunnerRequest {
     pub request_kind: String,
