@@ -12,6 +12,7 @@ use ast_template::{
     apply_template_directory_session_to_directory,
     apply_template_directory_session_with_default_registry_to_directory,
     apply_template_directory_session_with_registry_to_directory,
+    import_session_invocation_envelope,
     plan_template_directory_session_diagnostics_from_directories,
     plan_template_directory_session_envelope_from_directories,
     plan_template_directory_session_from_directories,
@@ -31,6 +32,7 @@ use ast_template::{
     run_template_directory_session_runner_payload, run_template_directory_session_runner_request,
     run_template_directory_session_with_default_registry_to_directory,
     run_template_directory_session_with_options, run_template_directory_session_with_profile,
+    session_invocation_envelope,
 };
 use markdown_merge::{MarkdownDialect, merge_markdown};
 use ruby_merge::{RubyDialect, merge_ruby};
@@ -1351,6 +1353,30 @@ fn conforms_to_template_directory_session_invocation_json_roundtrip_fixture() {
     }
 }
 
+#[test]
+fn conforms_to_template_directory_session_invocation_transport_envelope_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-386-template-directory-session-invocation-transport-envelope/template-directory-session-invocation-envelope.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture root should exist");
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let invocation = decode_session_invocation_from_fixture(&test_case["input"], fixture_root);
+        let expected: ast_template::SessionInvocationEnvelope =
+            serde_json::from_value(resolve_session_invocation_envelope_fixture_paths(
+                &test_case["expected_envelope"],
+                fixture_root,
+            ))
+            .expect("expected envelope should deserialize");
+
+        assert_eq!(session_invocation_envelope(&invocation), expected);
+        assert_eq!(import_session_invocation_envelope(&expected), Ok(invocation));
+    }
+}
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -2064,6 +2090,23 @@ fn decode_session_invocation_from_fixture(
             fixture_root.join(&invocation.destination_root).to_string_lossy().into_owned();
     }
     invocation
+}
+
+fn resolve_session_invocation_envelope_fixture_paths(
+    fixture: &Value,
+    fixture_root: &std::path::Path,
+) -> Value {
+    let mut resolved = fixture.clone();
+    if let Some(section) = resolved.as_object_mut() {
+        if let Some(invocation) = section.get_mut("invocation") {
+            *invocation = serde_json::to_value(decode_session_invocation_from_fixture(
+                invocation,
+                fixture_root,
+            ))
+            .expect("invocation should serialize");
+        }
+    }
+    resolved
 }
 
 fn resolve_runner_request_fixture_paths(value: &Value, fixture_root: &std::path::Path) -> Value {

@@ -256,6 +256,59 @@ pub struct SessionInvocation {
     pub allowed_families: Option<Vec<String>>,
 }
 
+pub const SESSION_INVOCATION_TRANSPORT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionInvocationTransportImportErrorCategory {
+    KindMismatch,
+    UnsupportedVersion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionInvocationTransportImportError {
+    pub category: SessionInvocationTransportImportErrorCategory,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionInvocationEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub invocation: SessionInvocation,
+}
+
+pub fn session_invocation_envelope(invocation: &SessionInvocation) -> SessionInvocationEnvelope {
+    SessionInvocationEnvelope {
+        kind: "template_directory_session_invocation".to_string(),
+        version: SESSION_INVOCATION_TRANSPORT_VERSION,
+        invocation: invocation.clone(),
+    }
+}
+
+pub fn import_session_invocation_envelope(
+    envelope: &SessionInvocationEnvelope,
+) -> Result<SessionInvocation, SessionInvocationTransportImportError> {
+    if envelope.kind != "template_directory_session_invocation" {
+        return Err(SessionInvocationTransportImportError {
+            category: SessionInvocationTransportImportErrorCategory::KindMismatch,
+            message: "expected template_directory_session_invocation envelope kind.".to_string(),
+        });
+    }
+
+    if envelope.version != SESSION_INVOCATION_TRANSPORT_VERSION {
+        return Err(SessionInvocationTransportImportError {
+            category: SessionInvocationTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported template_directory_session_invocation envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.invocation.clone())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AnySessionOutcomeReport {
