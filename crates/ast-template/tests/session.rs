@@ -16,7 +16,7 @@ use ast_template::{
     import_session_inspection_envelope, import_session_invocation_envelope,
     import_session_outcome_envelope, import_session_request_envelope,
     import_session_runner_payload_envelope, import_session_runner_request_envelope,
-    plan_template_directory_session_diagnostics_from_directories,
+    import_session_status_envelope, plan_template_directory_session_diagnostics_from_directories,
     plan_template_directory_session_envelope_from_directories,
     plan_template_directory_session_from_directories,
     plan_template_directory_session_outcome_from_directories,
@@ -38,6 +38,7 @@ use ast_template::{
     session_command_envelope, session_command_payload_envelope, session_entrypoint_envelope,
     session_inspection_envelope, session_invocation_envelope, session_outcome_envelope,
     session_request_envelope, session_runner_payload_envelope, session_runner_request_envelope,
+    session_status_envelope,
 };
 use markdown_merge::{MarkdownDialect, merge_markdown};
 use ruby_merge::{RubyDialect, merge_ruby};
@@ -304,6 +305,27 @@ fn conforms_to_template_directory_session_diagnostics_report_fixture() {
 
     assert_session_diagnostics_apply_case(&fixture["apply_run"], fixture_root);
     assert_session_diagnostics_apply_case(&fixture["filtered_discovery"], fixture_root);
+}
+
+#[test]
+fn conforms_to_template_directory_session_status_transport_envelope_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-413-template-directory-session-status-transport-envelope/template-directory-session-status-envelope.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let status: ast_template::SessionStatusReport =
+            serde_json::from_value(test_case["input"].clone()).expect("status should deserialize");
+        let expected: ast_template::SessionStatusEnvelope =
+            serde_json::from_value(test_case["expected_envelope"].clone())
+                .expect("expected envelope should deserialize");
+
+        assert_eq!(session_status_envelope(&status), expected);
+        assert_eq!(import_session_status_envelope(&expected), Ok(status));
+    }
 }
 
 #[test]

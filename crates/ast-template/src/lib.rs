@@ -63,6 +63,59 @@ pub struct SessionStatusReport {
     pub written_count: usize,
 }
 
+pub const SESSION_STATUS_TRANSPORT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionStatusTransportImportErrorCategory {
+    KindMismatch,
+    UnsupportedVersion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionStatusTransportImportError {
+    pub category: SessionStatusTransportImportErrorCategory,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionStatusEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub status: SessionStatusReport,
+}
+
+pub fn session_status_envelope(status: &SessionStatusReport) -> SessionStatusEnvelope {
+    SessionStatusEnvelope {
+        kind: "template_directory_session_status".to_string(),
+        version: SESSION_STATUS_TRANSPORT_VERSION,
+        status: status.clone(),
+    }
+}
+
+pub fn import_session_status_envelope(
+    envelope: &SessionStatusEnvelope,
+) -> Result<SessionStatusReport, SessionStatusTransportImportError> {
+    if envelope.kind != "template_directory_session_status" {
+        return Err(SessionStatusTransportImportError {
+            category: SessionStatusTransportImportErrorCategory::KindMismatch,
+            message: "expected template_directory_session_status envelope kind.".to_string(),
+        });
+    }
+
+    if envelope.version != SESSION_STATUS_TRANSPORT_VERSION {
+        return Err(SessionStatusTransportImportError {
+            category: SessionStatusTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported template_directory_session_status envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.status.clone())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionDiagnostic {
     pub severity: ast_merge::DiagnosticSeverity,
