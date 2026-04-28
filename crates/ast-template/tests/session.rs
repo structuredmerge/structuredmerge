@@ -1431,6 +1431,31 @@ fn conforms_to_template_directory_session_runner_request_transport_envelope_fixt
 }
 
 #[test]
+fn conforms_to_template_directory_session_runner_request_transport_rejection_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-399-template-directory-session-runner-request-transport-rejection/template-directory-session-runner-request-envelope-rejection.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture root should exist");
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let envelope: ast_template::SessionRunnerRequestEnvelope =
+            serde_json::from_value(resolve_session_runner_request_envelope_fixture_paths(
+                &test_case["envelope"],
+                fixture_root,
+            ))
+            .expect("envelope should deserialize");
+        let expected: ast_template::SessionRunnerRequestTransportImportError =
+            serde_json::from_value(test_case["expected_error"].clone())
+                .expect("expected error should deserialize");
+
+        assert_eq!(import_session_runner_request_envelope(&envelope), Err(expected));
+    }
+}
+
+#[test]
 fn conforms_to_template_directory_session_entrypoint_transport_rejection_fixture() {
     let fixture_path = repo_root().join(
         "fixtures/diagnostics/slice-396-template-directory-session-entrypoint-transport-rejection/template-directory-session-entrypoint-envelope-rejection.json",
@@ -1568,6 +1593,48 @@ fn conforms_to_template_directory_session_entrypoint_envelope_application_fixtur
             serde_json::from_value(test_case["expected_error"].clone())
                 .expect("expected error should deserialize");
         assert_eq!(import_session_entrypoint_envelope(&envelope), Err(expected));
+    }
+}
+
+#[test]
+fn conforms_to_template_directory_session_runner_request_envelope_application_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-400-template-directory-session-runner-request-envelope-application/template-directory-session-runner-request-envelope-application.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture root should exist");
+    let profiles = decode_session_profiles(&fixture["profiles"]);
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let envelope: ast_template::SessionRunnerRequestEnvelope =
+            serde_json::from_value(resolve_session_runner_request_envelope_fixture_paths(
+                &test_case["envelope"],
+                fixture_root,
+            ))
+            .expect("envelope should deserialize");
+        let request = import_session_runner_request_envelope(&envelope)
+            .expect("envelope import should succeed");
+        let actual = run_template_directory_session_runner_request(&request, &profiles)
+            .expect("runner request envelope application should succeed");
+        assert_eq!(
+            serde_json::to_value(actual).expect("outcome should serialize"),
+            resolve_session_outcome_expected_paths(&test_case["expected"], fixture_root)
+        );
+    }
+
+    for test_case in fixture["rejections"].as_array().expect("rejections should be array") {
+        let envelope: ast_template::SessionRunnerRequestEnvelope =
+            serde_json::from_value(resolve_session_runner_request_envelope_fixture_paths(
+                &test_case["envelope"],
+                fixture_root,
+            ))
+            .expect("envelope should deserialize");
+        let expected: ast_template::SessionRunnerRequestTransportImportError =
+            serde_json::from_value(test_case["expected_error"].clone())
+                .expect("expected error should deserialize");
+        assert_eq!(import_session_runner_request_envelope(&envelope), Err(expected));
     }
 }
 
