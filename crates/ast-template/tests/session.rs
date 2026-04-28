@@ -26,10 +26,9 @@ use ast_template::{
     report_template_directory_session_resolution, report_template_directory_session_runner_input,
     report_template_directory_session_runner_payload, report_template_directory_session_status,
     run_template_directory_session, run_template_directory_session_command,
-    run_template_directory_session_command_payload,
-    run_template_directory_session_dispatch, run_template_directory_session_entrypoint,
-    run_template_directory_session_request, run_template_directory_session_runner_payload,
-    run_template_directory_session_runner_request,
+    run_template_directory_session_command_payload, run_template_directory_session_dispatch,
+    run_template_directory_session_entrypoint, run_template_directory_session_request,
+    run_template_directory_session_runner_payload, run_template_directory_session_runner_request,
     run_template_directory_session_with_default_registry_to_directory,
     run_template_directory_session_with_options, run_template_directory_session_with_profile,
 };
@@ -1305,6 +1304,27 @@ fn conforms_to_template_directory_session_invocation_report_fixture() {
             )
             .expect("invocation should serialize"),
             resolve_session_dispatch_expected_paths(&case["expected"], fixture_root)
+        );
+    }
+}
+
+#[test]
+fn conforms_to_template_directory_session_invocation_rejection_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-384-template-directory-session-invocation-rejection/template-directory-session-invocation-rejection.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture root should exist");
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let invocation = decode_session_invocation_from_fixture(&test_case["input"], fixture_root);
+        let error = run_template_directory_session(&invocation, &HashMap::new())
+            .expect_err("invocation rejection should fail");
+        assert_eq!(
+            error.to_string(),
+            test_case["expected_error"].as_str().expect("expected error should be string")
         );
     }
 }
