@@ -135,6 +135,61 @@ pub struct SessionDiagnosticsReport {
     pub diagnostics: Vec<SessionDiagnostic>,
 }
 
+pub const SESSION_DIAGNOSTICS_TRANSPORT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionDiagnosticsTransportImportErrorCategory {
+    KindMismatch,
+    UnsupportedVersion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionDiagnosticsTransportImportError {
+    pub category: SessionDiagnosticsTransportImportErrorCategory,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionDiagnosticsEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub diagnostics: SessionDiagnosticsReport,
+}
+
+pub fn session_diagnostics_envelope(
+    diagnostics: &SessionDiagnosticsReport,
+) -> SessionDiagnosticsEnvelope {
+    SessionDiagnosticsEnvelope {
+        kind: "template_directory_session_diagnostics".to_string(),
+        version: SESSION_DIAGNOSTICS_TRANSPORT_VERSION,
+        diagnostics: diagnostics.clone(),
+    }
+}
+
+pub fn import_session_diagnostics_envelope(
+    envelope: &SessionDiagnosticsEnvelope,
+) -> Result<SessionDiagnosticsReport, SessionDiagnosticsTransportImportError> {
+    if envelope.kind != "template_directory_session_diagnostics" {
+        return Err(SessionDiagnosticsTransportImportError {
+            category: SessionDiagnosticsTransportImportErrorCategory::KindMismatch,
+            message: "expected template_directory_session_diagnostics envelope kind.".to_string(),
+        });
+    }
+
+    if envelope.version != SESSION_DIAGNOSTICS_TRANSPORT_VERSION {
+        return Err(SessionDiagnosticsTransportImportError {
+            category: SessionDiagnosticsTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported template_directory_session_diagnostics envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.diagnostics.clone())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionOutcomeReport<T> {
     pub session_report: T,
