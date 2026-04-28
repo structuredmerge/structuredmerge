@@ -89,6 +89,59 @@ pub struct SessionOutcomeReport<T> {
     pub diagnostics: SessionDiagnosticsReport,
 }
 
+pub const SESSION_OUTCOME_TRANSPORT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionOutcomeTransportImportErrorCategory {
+    KindMismatch,
+    UnsupportedVersion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionOutcomeTransportImportError {
+    pub category: SessionOutcomeTransportImportErrorCategory,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionOutcomeEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub outcome: AnySessionOutcomeReport,
+}
+
+pub fn session_outcome_envelope(outcome: &AnySessionOutcomeReport) -> SessionOutcomeEnvelope {
+    SessionOutcomeEnvelope {
+        kind: "template_directory_session_outcome".to_string(),
+        version: SESSION_OUTCOME_TRANSPORT_VERSION,
+        outcome: outcome.clone(),
+    }
+}
+
+pub fn import_session_outcome_envelope(
+    envelope: &SessionOutcomeEnvelope,
+) -> Result<AnySessionOutcomeReport, SessionOutcomeTransportImportError> {
+    if envelope.kind != "template_directory_session_outcome" {
+        return Err(SessionOutcomeTransportImportError {
+            category: SessionOutcomeTransportImportErrorCategory::KindMismatch,
+            message: "expected template_directory_session_outcome envelope kind.".to_string(),
+        });
+    }
+
+    if envelope.version != SESSION_OUTCOME_TRANSPORT_VERSION {
+        return Err(SessionOutcomeTransportImportError {
+            category: SessionOutcomeTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported template_directory_session_outcome envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.outcome.clone())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionRequestReport {
     pub request_kind: String,

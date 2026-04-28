@@ -13,8 +13,9 @@ use ast_template::{
     apply_template_directory_session_with_default_registry_to_directory,
     apply_template_directory_session_with_registry_to_directory, import_session_command_envelope,
     import_session_command_payload_envelope, import_session_entrypoint_envelope,
-    import_session_invocation_envelope, import_session_request_envelope,
-    import_session_runner_payload_envelope, import_session_runner_request_envelope,
+    import_session_invocation_envelope, import_session_outcome_envelope,
+    import_session_request_envelope, import_session_runner_payload_envelope,
+    import_session_runner_request_envelope,
     plan_template_directory_session_diagnostics_from_directories,
     plan_template_directory_session_envelope_from_directories,
     plan_template_directory_session_from_directories,
@@ -35,8 +36,8 @@ use ast_template::{
     run_template_directory_session_with_default_registry_to_directory,
     run_template_directory_session_with_options, run_template_directory_session_with_profile,
     session_command_envelope, session_command_payload_envelope, session_entrypoint_envelope,
-    session_invocation_envelope, session_request_envelope, session_runner_payload_envelope,
-    session_runner_request_envelope,
+    session_invocation_envelope, session_outcome_envelope, session_request_envelope,
+    session_runner_payload_envelope, session_runner_request_envelope,
 };
 use markdown_merge::{MarkdownDialect, merge_markdown};
 use ruby_merge::{RubyDialect, merge_ruby};
@@ -342,6 +343,29 @@ fn conforms_to_template_directory_session_outcome_report_fixture() {
 
     assert_session_outcome_apply_case(&fixture["apply_run"], fixture_root);
     assert_session_outcome_apply_case(&fixture["filtered_discovery"], fixture_root);
+}
+
+#[test]
+fn conforms_to_template_directory_session_outcome_transport_envelope_fixture() {
+    let fixture_path = repo_root()
+        .join("fixtures/diagnostics/slice-407-template-directory-session-outcome-transport-envelope/template-directory-session-outcome-envelope.json");
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+
+    for test_case in fixture["cases"].as_array().expect("cases should be array") {
+        let outcome = decode_session_outcome_report(&test_case["input"]);
+        let expected: ast_template::SessionOutcomeEnvelope =
+            serde_json::from_value(test_case["expected_envelope"].clone())
+                .expect("expected envelope should deserialize");
+
+        assert_eq!(session_outcome_envelope(&outcome), expected);
+        assert_eq!(import_session_outcome_envelope(&expected), Ok(outcome));
+    }
+}
+
+fn decode_session_outcome_report(fixture: &Value) -> ast_template::AnySessionOutcomeReport {
+    serde_json::from_value(fixture.clone()).expect("outcome should deserialize")
 }
 
 #[test]
