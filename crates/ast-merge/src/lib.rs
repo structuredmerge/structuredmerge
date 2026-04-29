@@ -276,6 +276,22 @@ pub struct StructuredEditRequest {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditResult {
+    pub operation_kind: String,
+    pub updated_content: String,
+    pub changed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub captured_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub match_count: Option<usize>,
+    pub operation_profile: StructuredEditOperationProfile,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination_profile: Option<StructuredEditDestinationProfile>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TemplateTargetClassification {
     pub destination_path: String,
     pub file_type: String,
