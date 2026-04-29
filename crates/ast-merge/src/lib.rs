@@ -331,6 +331,13 @@ pub struct StructuredEditExecutionReport {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditExecutionReportEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub report: StructuredEditExecutionReport,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TemplateTargetClassification {
     pub destination_path: String,
     pub file_type: String,
@@ -3174,6 +3181,39 @@ pub fn import_structured_edit_application_envelope(
     }
 
     Ok(envelope.application.clone())
+}
+
+pub fn structured_edit_execution_report_envelope(
+    report: &StructuredEditExecutionReport,
+) -> StructuredEditExecutionReportEnvelope {
+    StructuredEditExecutionReportEnvelope {
+        kind: "structured_edit_execution_report".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        report: report.clone(),
+    }
+}
+
+pub fn import_structured_edit_execution_report_envelope(
+    envelope: &StructuredEditExecutionReportEnvelope,
+) -> Result<StructuredEditExecutionReport, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_execution_report" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_execution_report envelope kind.".to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_execution_report envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.report.clone())
 }
 
 pub fn resolve_conformance_family_context(
