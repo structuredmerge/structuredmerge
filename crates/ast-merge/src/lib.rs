@@ -185,6 +185,25 @@ pub struct StructuredEditStructureProfile {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditSelectionProfile {
+    pub owner_scope: String,
+    pub owner_selector: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner_selector_family: Option<String>,
+    pub selector_kind: String,
+    pub selection_intent: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selection_intent_family: Option<String>,
+    pub known_selection_intent: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment_region: Option<String>,
+    pub include_trailing_gap: bool,
+    pub comment_anchored: bool,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TemplateTargetClassification {
     pub destination_path: String,
     pub file_type: String,
