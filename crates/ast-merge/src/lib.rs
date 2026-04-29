@@ -355,6 +355,21 @@ pub struct StructuredEditExecutionReportEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionApplication {
+    pub execution_request: StructuredEditProviderExecutionRequest,
+    pub report: StructuredEditExecutionReport,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionApplicationEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub provider_execution_application: StructuredEditProviderExecutionApplication,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditBatchRequest {
     pub requests: Vec<StructuredEditRequest>,
     #[serde(default)]
@@ -388,6 +403,21 @@ pub struct StructuredEditBatchReportEnvelope {
     pub kind: String,
     pub version: u32,
     pub batch_report: StructuredEditBatchReport,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionReport {
+    pub applications: Vec<StructuredEditProviderExecutionApplication>,
+    pub diagnostics: Vec<Diagnostic>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionReportEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub batch_report: StructuredEditProviderBatchExecutionReport,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -3303,6 +3333,40 @@ pub fn import_structured_edit_execution_report_envelope(
     Ok(envelope.report.clone())
 }
 
+pub fn structured_edit_provider_execution_application_envelope(
+    provider_execution_application: &StructuredEditProviderExecutionApplication,
+) -> StructuredEditProviderExecutionApplicationEnvelope {
+    StructuredEditProviderExecutionApplicationEnvelope {
+        kind: "structured_edit_provider_execution_application".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        provider_execution_application: provider_execution_application.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_execution_application_envelope(
+    envelope: &StructuredEditProviderExecutionApplicationEnvelope,
+) -> Result<StructuredEditProviderExecutionApplication, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_provider_execution_application" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_provider_execution_application envelope kind."
+                .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_execution_application envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.provider_execution_application.clone())
+}
+
 pub fn structured_edit_provider_batch_execution_request_envelope(
     batch_execution_request: &StructuredEditProviderBatchExecutionRequest,
 ) -> StructuredEditProviderBatchExecutionRequestEnvelope {
@@ -3335,6 +3399,40 @@ pub fn import_structured_edit_provider_batch_execution_request_envelope(
     }
 
     Ok(envelope.batch_execution_request.clone())
+}
+
+pub fn structured_edit_provider_batch_execution_report_envelope(
+    batch_report: &StructuredEditProviderBatchExecutionReport,
+) -> StructuredEditProviderBatchExecutionReportEnvelope {
+    StructuredEditProviderBatchExecutionReportEnvelope {
+        kind: "structured_edit_provider_batch_execution_report".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        batch_report: batch_report.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_batch_execution_report_envelope(
+    envelope: &StructuredEditProviderBatchExecutionReportEnvelope,
+) -> Result<StructuredEditProviderBatchExecutionReport, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_provider_batch_execution_report" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_provider_batch_execution_report envelope kind."
+                .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_batch_execution_report envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.batch_report.clone())
 }
 
 pub fn structured_edit_batch_report_envelope(
