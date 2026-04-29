@@ -299,6 +299,26 @@ pub struct StructuredEditApplication {
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StructuredEditTransportImportErrorCategory {
+    KindMismatch,
+    UnsupportedVersion,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditTransportImportError {
+    pub category: StructuredEditTransportImportErrorCategory,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditApplicationEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub application: StructuredEditApplication,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TemplateTargetClassification {
     pub destination_path: String,
@@ -879,6 +899,7 @@ pub struct ReviewReplayBundle {
 }
 
 pub const REVIEW_TRANSPORT_VERSION: u32 = 1;
+pub const STRUCTURED_EDIT_TRANSPORT_VERSION: u32 = 1;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -3109,6 +3130,39 @@ pub fn import_reviewed_nested_execution_envelope(
     }
 
     Ok(envelope.execution.clone())
+}
+
+pub fn structured_edit_application_envelope(
+    application: &StructuredEditApplication,
+) -> StructuredEditApplicationEnvelope {
+    StructuredEditApplicationEnvelope {
+        kind: "structured_edit_application".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        application: application.clone(),
+    }
+}
+
+pub fn import_structured_edit_application_envelope(
+    envelope: &StructuredEditApplicationEnvelope,
+) -> Result<StructuredEditApplication, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_application" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_application envelope kind.".to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_application envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.application.clone())
 }
 
 pub fn resolve_conformance_family_context(
