@@ -19,16 +19,17 @@ use ast_merge::{
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
     ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, StructuredEditMatchProfile,
-    StructuredEditSelectionProfile, StructuredEditStructureProfile, TemplateApplyResult,
-    TemplateConvergenceResult, TemplateDestinationContext, TemplateExecutionPlanEntry,
-    TemplatePlanEntry, TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
-    TemplatePreviewResult, TemplateStrategy, TemplateStrategyOverride, TemplateTokenConfig,
-    TemplateTreeRunReport, TemplateTreeRunResult, apply_template_execution,
-    classify_template_target_path, conformance_family_feature_profile_path,
-    conformance_fixture_path, conformance_manifest_replay_context,
-    conformance_manifest_review_request_ids, conformance_manifest_review_state_envelope,
-    conformance_review_host_hints, conformance_suite_definition, conformance_suite_selectors,
-    default_conformance_family_context, delegated_child_apply_plan, enrich_template_plan_entries,
+    StructuredEditOperationProfile, StructuredEditSelectionProfile, StructuredEditStructureProfile,
+    TemplateApplyResult, TemplateConvergenceResult, TemplateDestinationContext,
+    TemplateExecutionPlanEntry, TemplatePlanEntry, TemplatePlanStateEntry,
+    TemplatePlanTokenStateEntry, TemplatePreparedEntry, TemplatePreviewResult, TemplateStrategy,
+    TemplateStrategyOverride, TemplateTokenConfig, TemplateTreeRunReport, TemplateTreeRunResult,
+    apply_template_execution, classify_template_target_path,
+    conformance_family_feature_profile_path, conformance_fixture_path,
+    conformance_manifest_replay_context, conformance_manifest_review_request_ids,
+    conformance_manifest_review_state_envelope, conformance_review_host_hints,
+    conformance_suite_definition, conformance_suite_selectors, default_conformance_family_context,
+    delegated_child_apply_plan, enrich_template_plan_entries,
     enrich_template_plan_entries_with_token_state, evaluate_template_tree_convergence,
     execute_review_replay_bundle_envelope_reviewed_nested_executions,
     execute_review_replay_bundle_reviewed_nested_executions,
@@ -3908,6 +3909,25 @@ fn conforms_to_slice_421_structured_edit_match_profile_fixture() {
         let profile = serde_json::from_value::<StructuredEditMatchProfile>(case["profile"].clone())
             .expect("profile should deserialize");
         let round_tripped = serde_json::from_value::<StructuredEditMatchProfile>(
+            serde_json::to_value(&profile).expect("profile should serialize"),
+        )
+        .expect("profile should deserialize after roundtrip");
+
+        assert_eq!(round_tripped, profile);
+    }
+}
+
+#[test]
+fn conforms_to_slice_422_structured_edit_operation_profile_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("structured_edit_operation_profile"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let profile =
+            serde_json::from_value::<StructuredEditOperationProfile>(case["profile"].clone())
+                .expect("profile should deserialize");
+        let round_tripped = serde_json::from_value::<StructuredEditOperationProfile>(
             serde_json::to_value(&profile).expect("profile should serialize"),
         )
         .expect("profile should deserialize after roundtrip");

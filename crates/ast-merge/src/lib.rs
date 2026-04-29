@@ -224,6 +224,21 @@ pub struct StructuredEditMatchProfile {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditOperationProfile {
+    pub operation_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_family: Option<String>,
+    pub known_operation_kind: bool,
+    pub source_requirement: String,
+    pub destination_requirement: String,
+    pub replacement_source: String,
+    pub captures_source_text: bool,
+    pub supports_if_missing: bool,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TemplateTargetClassification {
     pub destination_path: String,
     pub file_type: String,
