@@ -239,6 +239,22 @@ pub struct StructuredEditOperationProfile {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditDestinationProfile {
+    pub resolution_kind: String,
+    pub resolution_source: String,
+    pub anchor_boundary: String,
+    pub resolution_family: String,
+    pub resolution_source_family: String,
+    pub anchor_boundary_family: String,
+    pub known_resolution_kind: bool,
+    pub known_resolution_source: bool,
+    pub known_anchor_boundary: bool,
+    pub used_if_missing: bool,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TemplateTargetClassification {
     pub destination_path: String,
     pub file_type: String,
