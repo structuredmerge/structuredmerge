@@ -19,10 +19,11 @@ use ast_merge::{
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
     ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, StructuredEditApplication,
-    StructuredEditApplicationEnvelope, StructuredEditDestinationProfile,
-    StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
-    StructuredEditMatchProfile, StructuredEditOperationProfile, StructuredEditRequest,
-    StructuredEditResult, StructuredEditSelectionProfile, StructuredEditStructureProfile,
+    StructuredEditApplicationEnvelope, StructuredEditBatchRequest,
+    StructuredEditDestinationProfile, StructuredEditExecutionReport,
+    StructuredEditExecutionReportEnvelope, StructuredEditMatchProfile,
+    StructuredEditOperationProfile, StructuredEditRequest, StructuredEditResult,
+    StructuredEditSelectionProfile, StructuredEditStructureProfile,
     StructuredEditTransportImportError, TemplateApplyResult, TemplateConvergenceResult,
     TemplateDestinationContext, TemplateExecutionPlanEntry, TemplatePlanEntry,
     TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
@@ -4170,6 +4171,24 @@ fn conforms_to_slice_441_structured_edit_execution_report_envelope_application_f
             import_structured_edit_execution_report_envelope(&rejected_envelope),
             Err(expected_error)
         );
+    }
+}
+
+#[test]
+fn conforms_to_slice_442_structured_edit_batch_request_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("structured_edit_batch_request"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let batch =
+            serde_json::from_value::<StructuredEditBatchRequest>(case["batch_request"].clone())
+                .expect("batch request should deserialize");
+        let round_tripped = serde_json::from_value::<StructuredEditBatchRequest>(
+            serde_json::to_value(&batch).expect("batch request should serialize"),
+        )
+        .expect("batch request should deserialize after roundtrip");
+
+        assert_eq!(round_tripped, batch);
     }
 }
 
