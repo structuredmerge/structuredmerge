@@ -204,6 +204,26 @@ pub struct StructuredEditSelectionProfile {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditMatchProfile {
+    pub start_boundary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_boundary_family: Option<String>,
+    pub known_start_boundary: bool,
+    pub end_boundary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_boundary_family: Option<String>,
+    pub known_end_boundary: bool,
+    pub payload_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payload_family: Option<String>,
+    pub known_payload_kind: bool,
+    pub comment_anchored: bool,
+    pub trailing_gap_extended: bool,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TemplateTargetClassification {
     pub destination_path: String,
     pub file_type: String,
