@@ -255,6 +255,27 @@ pub struct StructuredEditDestinationProfile {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditRequest {
+    pub operation_kind: String,
+    pub content: String,
+    pub source_label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_selector: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_selector_family: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination_selector: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination_selector_family: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payload_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub if_missing: Option<String>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TemplateTargetClassification {
     pub destination_path: String,
     pub file_type: String,

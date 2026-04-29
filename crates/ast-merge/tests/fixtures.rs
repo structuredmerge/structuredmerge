@@ -19,10 +19,10 @@ use ast_merge::{
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
     ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, StructuredEditDestinationProfile,
-    StructuredEditMatchProfile, StructuredEditOperationProfile, StructuredEditSelectionProfile,
-    StructuredEditStructureProfile, TemplateApplyResult, TemplateConvergenceResult,
-    TemplateDestinationContext, TemplateExecutionPlanEntry, TemplatePlanEntry,
-    TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
+    StructuredEditMatchProfile, StructuredEditOperationProfile, StructuredEditRequest,
+    StructuredEditSelectionProfile, StructuredEditStructureProfile, TemplateApplyResult,
+    TemplateConvergenceResult, TemplateDestinationContext, TemplateExecutionPlanEntry,
+    TemplatePlanEntry, TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
     TemplatePreviewResult, TemplateStrategy, TemplateStrategyOverride, TemplateTokenConfig,
     TemplateTreeRunReport, TemplateTreeRunResult, apply_template_execution,
     classify_template_target_path, conformance_family_feature_profile_path,
@@ -3952,6 +3952,23 @@ fn conforms_to_slice_423_structured_edit_destination_profile_fixture() {
         .expect("profile should deserialize after roundtrip");
 
         assert_eq!(round_tripped, profile);
+    }
+}
+
+#[test]
+fn conforms_to_slice_426_structured_edit_request_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("structured_edit_request"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let request = serde_json::from_value::<StructuredEditRequest>(case["request"].clone())
+            .expect("request should deserialize");
+        let round_tripped = serde_json::from_value::<StructuredEditRequest>(
+            serde_json::to_value(&request).expect("request should serialize"),
+        )
+        .expect("request should deserialize after roundtrip");
+
+        assert_eq!(round_tripped, request);
     }
 }
 
