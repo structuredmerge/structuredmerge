@@ -23,7 +23,9 @@ use ast_merge::{
     StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditDestinationProfile, StructuredEditExecutionReport,
     StructuredEditExecutionReportEnvelope, StructuredEditMatchProfile,
-    StructuredEditOperationProfile, StructuredEditRequest, StructuredEditResult,
+    StructuredEditOperationProfile, StructuredEditProviderBatchExecutionRequest,
+    StructuredEditProviderBatchExecutionRequestEnvelope, StructuredEditProviderExecutionRequest,
+    StructuredEditProviderExecutionRequestEnvelope, StructuredEditRequest, StructuredEditResult,
     StructuredEditSelectionProfile, StructuredEditStructureProfile,
     StructuredEditTransportImportError, TemplateApplyResult, TemplateConvergenceResult,
     TemplateDestinationContext, TemplateExecutionPlanEntry, TemplatePlanEntry,
@@ -43,17 +45,19 @@ use ast_merge::{
     import_conformance_manifest_review_state_envelope, import_review_replay_bundle_envelope,
     import_reviewed_nested_execution_envelope, import_structured_edit_application_envelope,
     import_structured_edit_batch_report_envelope, import_structured_edit_execution_report_envelope,
-    normalize_template_source_path, plan_conformance_suite, plan_named_conformance_suite,
-    plan_named_conformance_suite_entry, plan_named_conformance_suites,
-    plan_named_conformance_suites_with_diagnostics, plan_template_entries, plan_template_execution,
-    plan_template_tree_execution, prepare_template_entries, preview_template_execution,
-    projected_child_group_review_request, report_conformance_manifest, report_conformance_suite,
-    report_named_conformance_suite, report_named_conformance_suite_entry,
-    report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
-    report_planned_conformance_suite, report_planned_named_conformance_suites,
-    report_template_directory_apply, report_template_directory_plan,
-    report_template_directory_runner, report_template_tree_run, resolve_conformance_family_context,
-    resolve_delegated_child_outputs, resolve_template_destination_path,
+    import_structured_edit_provider_batch_execution_request_envelope,
+    import_structured_edit_provider_execution_request_envelope, normalize_template_source_path,
+    plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
+    plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
+    plan_template_entries, plan_template_execution, plan_template_tree_execution,
+    prepare_template_entries, preview_template_execution, projected_child_group_review_request,
+    report_conformance_manifest, report_conformance_suite, report_named_conformance_suite,
+    report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
+    report_named_conformance_suite_manifest, report_planned_conformance_suite,
+    report_planned_named_conformance_suites, report_template_directory_apply,
+    report_template_directory_plan, report_template_directory_runner, report_template_tree_run,
+    resolve_conformance_family_context, resolve_delegated_child_outputs,
+    resolve_template_destination_path,
     review_and_execute_conformance_manifest_with_replay_bundle_envelope,
     review_conformance_family_context, review_conformance_manifest,
     review_conformance_manifest_with_replay_bundle_envelope, review_projected_child_groups,
@@ -66,7 +70,9 @@ use ast_merge::{
     select_projected_child_review_groups_accepted_for_apply,
     select_projected_child_review_groups_ready_for_apply, select_template_strategy,
     structured_edit_application_envelope, structured_edit_batch_report_envelope,
-    structured_edit_execution_report_envelope, summarize_conformance_results,
+    structured_edit_execution_report_envelope,
+    structured_edit_provider_batch_execution_request_envelope,
+    structured_edit_provider_execution_request_envelope, summarize_conformance_results,
     summarize_named_conformance_suite_reports, summarize_projected_child_review_group_progress,
     template_token_keys,
 };
@@ -4105,6 +4111,107 @@ fn conforms_to_slice_438_structured_edit_execution_report_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_453_structured_edit_provider_execution_request_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_request",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let execution_request = serde_json::from_value::<StructuredEditProviderExecutionRequest>(
+            case["execution_request"].clone(),
+        )
+        .expect("provider execution request should deserialize");
+        let round_tripped = serde_json::from_value::<StructuredEditProviderExecutionRequest>(
+            serde_json::to_value(&execution_request)
+                .expect("provider execution request should serialize"),
+        )
+        .expect("provider execution request should deserialize after roundtrip");
+
+        assert_eq!(round_tripped, execution_request);
+    }
+}
+
+#[test]
+fn conforms_to_slice_454_structured_edit_provider_execution_request_transport_envelope_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_request_envelope",
+    ));
+    let execution_request = serde_json::from_value::<StructuredEditProviderExecutionRequest>(
+        fixture["structured_edit_provider_execution_request"].clone(),
+    )
+    .expect("provider execution request should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderExecutionRequestEnvelope>(
+        fixture["expected_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+
+    assert_eq!(structured_edit_provider_execution_request_envelope(&execution_request), expected);
+    assert_eq!(
+        import_structured_edit_provider_execution_request_envelope(&expected),
+        Ok(execution_request)
+    );
+}
+
+#[test]
+fn conforms_to_slice_455_structured_edit_provider_execution_request_transport_rejection_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_request_envelope_rejection",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let envelope = serde_json::from_value::<StructuredEditProviderExecutionRequestEnvelope>(
+            case["envelope"].clone(),
+        )
+        .expect("envelope should deserialize");
+        let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_execution_request_envelope(&envelope),
+            Err(expected)
+        );
+    }
+}
+
+#[test]
+fn conforms_to_slice_456_structured_edit_provider_execution_request_envelope_application_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_request_envelope_application",
+    ));
+    let envelope = serde_json::from_value::<StructuredEditProviderExecutionRequestEnvelope>(
+        fixture["structured_edit_provider_execution_request_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderExecutionRequest>(
+        fixture["expected_execution_request"].clone(),
+    )
+    .expect("expected execution request should deserialize");
+
+    assert_eq!(import_structured_edit_provider_execution_request_envelope(&envelope), Ok(expected));
+
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+    for case in cases {
+        let rejected_envelope = serde_json::from_value::<
+            StructuredEditProviderExecutionRequestEnvelope,
+        >(case["envelope"].clone())
+        .expect("rejected envelope should deserialize");
+        let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_execution_request_envelope(&rejected_envelope),
+            Err(expected_error)
+        );
+    }
+}
+
+#[test]
 fn conforms_to_slice_439_structured_edit_execution_report_transport_envelope_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_execution_report_envelope",
@@ -4191,6 +4298,114 @@ fn conforms_to_slice_442_structured_edit_batch_request_fixture() {
         .expect("batch request should deserialize after roundtrip");
 
         assert_eq!(round_tripped, batch);
+    }
+}
+
+#[test]
+fn conforms_to_slice_457_structured_edit_provider_batch_execution_request_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_batch_execution_request",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let batch = serde_json::from_value::<StructuredEditProviderBatchExecutionRequest>(
+            case["batch_execution_request"].clone(),
+        )
+        .expect("provider batch execution request should deserialize");
+        let round_tripped = serde_json::from_value::<StructuredEditProviderBatchExecutionRequest>(
+            serde_json::to_value(&batch)
+                .expect("provider batch execution request should serialize"),
+        )
+        .expect("provider batch execution request should deserialize after roundtrip");
+
+        assert_eq!(round_tripped, batch);
+    }
+}
+
+#[test]
+fn conforms_to_slice_458_structured_edit_provider_batch_execution_request_transport_envelope_fixture()
+ {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_batch_execution_request_envelope",
+    ));
+    let batch = serde_json::from_value::<StructuredEditProviderBatchExecutionRequest>(
+        fixture["structured_edit_provider_batch_execution_request"].clone(),
+    )
+    .expect("provider batch execution request should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderBatchExecutionRequestEnvelope>(
+        fixture["expected_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+
+    assert_eq!(structured_edit_provider_batch_execution_request_envelope(&batch), expected);
+    assert_eq!(
+        import_structured_edit_provider_batch_execution_request_envelope(&expected),
+        Ok(batch)
+    );
+}
+
+#[test]
+fn conforms_to_slice_459_structured_edit_provider_batch_execution_request_transport_rejection_fixture()
+ {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_batch_execution_request_envelope_rejection",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let envelope =
+            serde_json::from_value::<StructuredEditProviderBatchExecutionRequestEnvelope>(
+                case["envelope"].clone(),
+            )
+            .expect("envelope should deserialize");
+        let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_batch_execution_request_envelope(&envelope),
+            Err(expected)
+        );
+    }
+}
+
+#[test]
+fn conforms_to_slice_460_structured_edit_provider_batch_execution_request_envelope_application_fixture()
+ {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_batch_execution_request_envelope_application",
+    ));
+    let envelope = serde_json::from_value::<StructuredEditProviderBatchExecutionRequestEnvelope>(
+        fixture["structured_edit_provider_batch_execution_request_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderBatchExecutionRequest>(
+        fixture["expected_batch_execution_request"].clone(),
+    )
+    .expect("expected batch execution request should deserialize");
+
+    assert_eq!(
+        import_structured_edit_provider_batch_execution_request_envelope(&envelope),
+        Ok(expected)
+    );
+
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+    for case in cases {
+        let rejected_envelope = serde_json::from_value::<
+            StructuredEditProviderBatchExecutionRequestEnvelope,
+        >(case["envelope"].clone())
+        .expect("rejected envelope should deserialize");
+        let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_batch_execution_request_envelope(&rejected_envelope),
+            Err(expected_error)
+        );
     }
 }
 
