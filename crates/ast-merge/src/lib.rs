@@ -173,6 +173,18 @@ pub struct FamilyFeatureProfile {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditStructureProfile {
+    pub owner_scope: String,
+    pub owner_selector: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner_selector_family: Option<String>,
+    pub known_owner_selector: bool,
+    pub supported_comment_regions: Vec<String>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TemplateTargetClassification {
     pub destination_path: String,
     pub file_type: String,
