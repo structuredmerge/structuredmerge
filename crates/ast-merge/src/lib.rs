@@ -320,6 +320,17 @@ pub struct StructuredEditApplicationEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditExecutionReport {
+    pub application: StructuredEditApplication,
+    pub provider_family: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_backend: Option<String>,
+    pub diagnostics: Vec<Diagnostic>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TemplateTargetClassification {
     pub destination_path: String,
     pub file_type: String,
