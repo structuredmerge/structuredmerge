@@ -19,7 +19,7 @@ use ast_merge::{
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
     ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, StructuredEditApplication,
-    StructuredEditApplicationEnvelope, StructuredEditBatchRequest,
+    StructuredEditApplicationEnvelope, StructuredEditBatchReport, StructuredEditBatchRequest,
     StructuredEditDestinationProfile, StructuredEditExecutionReport,
     StructuredEditExecutionReportEnvelope, StructuredEditMatchProfile,
     StructuredEditOperationProfile, StructuredEditRequest, StructuredEditResult,
@@ -4187,6 +4187,24 @@ fn conforms_to_slice_442_structured_edit_batch_request_fixture() {
             serde_json::to_value(&batch).expect("batch request should serialize"),
         )
         .expect("batch request should deserialize after roundtrip");
+
+        assert_eq!(round_tripped, batch);
+    }
+}
+
+#[test]
+fn conforms_to_slice_443_structured_edit_batch_report_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("structured_edit_batch_report"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let batch =
+            serde_json::from_value::<StructuredEditBatchReport>(case["batch_report"].clone())
+                .expect("batch report should deserialize");
+        let round_tripped = serde_json::from_value::<StructuredEditBatchReport>(
+            serde_json::to_value(&batch).expect("batch report should serialize"),
+        )
+        .expect("batch report should deserialize after roundtrip");
 
         assert_eq!(round_tripped, batch);
     }
