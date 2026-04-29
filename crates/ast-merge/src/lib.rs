@@ -353,6 +353,13 @@ pub struct StructuredEditBatchReport {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditBatchReportEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub batch_report: StructuredEditBatchReport,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TemplateTargetClassification {
     pub destination_path: String,
     pub file_type: String,
@@ -3229,6 +3236,39 @@ pub fn import_structured_edit_execution_report_envelope(
     }
 
     Ok(envelope.report.clone())
+}
+
+pub fn structured_edit_batch_report_envelope(
+    batch_report: &StructuredEditBatchReport,
+) -> StructuredEditBatchReportEnvelope {
+    StructuredEditBatchReportEnvelope {
+        kind: "structured_edit_batch_report".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        batch_report: batch_report.clone(),
+    }
+}
+
+pub fn import_structured_edit_batch_report_envelope(
+    envelope: &StructuredEditBatchReportEnvelope,
+) -> Result<StructuredEditBatchReport, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_batch_report" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_batch_report envelope kind.".to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_batch_report envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.batch_report.clone())
 }
 
 pub fn resolve_conformance_family_context(
