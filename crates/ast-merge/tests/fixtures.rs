@@ -23,8 +23,9 @@ use ast_merge::{
     StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditDestinationProfile, StructuredEditExecutionReport,
     StructuredEditExecutionReportEnvelope, StructuredEditMatchProfile,
-    StructuredEditOperationProfile, StructuredEditProviderBatchExecutionReport,
-    StructuredEditProviderBatchExecutionReportEnvelope,
+    StructuredEditOperationProfile, StructuredEditProviderBatchExecutionDispatch,
+    StructuredEditProviderBatchExecutionDispatchEnvelope,
+    StructuredEditProviderBatchExecutionReport, StructuredEditProviderBatchExecutionReportEnvelope,
     StructuredEditProviderBatchExecutionRequest,
     StructuredEditProviderBatchExecutionRequestEnvelope,
     StructuredEditProviderExecutionApplication, StructuredEditProviderExecutionApplicationEnvelope,
@@ -49,6 +50,7 @@ use ast_merge::{
     import_conformance_manifest_review_state_envelope, import_review_replay_bundle_envelope,
     import_reviewed_nested_execution_envelope, import_structured_edit_application_envelope,
     import_structured_edit_batch_report_envelope, import_structured_edit_execution_report_envelope,
+    import_structured_edit_provider_batch_execution_dispatch_envelope,
     import_structured_edit_provider_batch_execution_report_envelope,
     import_structured_edit_provider_batch_execution_request_envelope,
     import_structured_edit_provider_execution_application_envelope,
@@ -78,6 +80,7 @@ use ast_merge::{
     select_projected_child_review_groups_ready_for_apply, select_template_strategy,
     structured_edit_application_envelope, structured_edit_batch_report_envelope,
     structured_edit_execution_report_envelope,
+    structured_edit_provider_batch_execution_dispatch_envelope,
     structured_edit_provider_batch_execution_report_envelope,
     structured_edit_provider_batch_execution_request_envelope,
     structured_edit_provider_execution_application_envelope,
@@ -4625,6 +4628,114 @@ fn conforms_to_slice_460_structured_edit_provider_batch_execution_request_envelo
 
         assert_eq!(
             import_structured_edit_provider_batch_execution_request_envelope(&rejected_envelope),
+            Err(expected_error)
+        );
+    }
+}
+
+#[test]
+fn conforms_to_slice_473_structured_edit_provider_batch_execution_dispatch_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_batch_execution_dispatch",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let batch = serde_json::from_value::<StructuredEditProviderBatchExecutionDispatch>(
+            case["batch_dispatch"].clone(),
+        )
+        .expect("provider batch execution dispatch should deserialize");
+        let round_tripped = serde_json::from_value::<StructuredEditProviderBatchExecutionDispatch>(
+            serde_json::to_value(&batch)
+                .expect("provider batch execution dispatch should serialize"),
+        )
+        .expect("provider batch execution dispatch should deserialize after roundtrip");
+
+        assert_eq!(round_tripped, batch);
+    }
+}
+
+#[test]
+fn conforms_to_slice_474_structured_edit_provider_batch_execution_dispatch_transport_envelope_fixture()
+ {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_batch_execution_dispatch_envelope",
+    ));
+    let batch = serde_json::from_value::<StructuredEditProviderBatchExecutionDispatch>(
+        fixture["structured_edit_provider_batch_execution_dispatch"].clone(),
+    )
+    .expect("provider batch execution dispatch should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderBatchExecutionDispatchEnvelope>(
+        fixture["expected_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+
+    assert_eq!(structured_edit_provider_batch_execution_dispatch_envelope(&batch), expected);
+    assert_eq!(
+        import_structured_edit_provider_batch_execution_dispatch_envelope(&expected),
+        Ok(batch)
+    );
+}
+
+#[test]
+fn conforms_to_slice_475_structured_edit_provider_batch_execution_dispatch_transport_rejection_fixture()
+ {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_batch_execution_dispatch_envelope_rejection",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let envelope =
+            serde_json::from_value::<StructuredEditProviderBatchExecutionDispatchEnvelope>(
+                case["envelope"].clone(),
+            )
+            .expect("envelope should deserialize");
+        let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_batch_execution_dispatch_envelope(&envelope),
+            Err(expected)
+        );
+    }
+}
+
+#[test]
+fn conforms_to_slice_476_structured_edit_provider_batch_execution_dispatch_envelope_application_fixture()
+ {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_batch_execution_dispatch_envelope_application",
+    ));
+    let envelope = serde_json::from_value::<StructuredEditProviderBatchExecutionDispatchEnvelope>(
+        fixture["structured_edit_provider_batch_execution_dispatch_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderBatchExecutionDispatch>(
+        fixture["expected_batch_dispatch"].clone(),
+    )
+    .expect("expected batch dispatch should deserialize");
+
+    assert_eq!(
+        import_structured_edit_provider_batch_execution_dispatch_envelope(&envelope),
+        Ok(expected)
+    );
+
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+    for case in cases {
+        let rejected_envelope = serde_json::from_value::<
+            StructuredEditProviderBatchExecutionDispatchEnvelope,
+        >(case["envelope"].clone())
+        .expect("rejected envelope should deserialize");
+        let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_batch_execution_dispatch_envelope(&rejected_envelope),
             Err(expected_error)
         );
     }
