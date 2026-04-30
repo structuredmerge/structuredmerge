@@ -28,12 +28,12 @@ use ast_merge::{
     StructuredEditProviderBatchExecutionRequest,
     StructuredEditProviderBatchExecutionRequestEnvelope,
     StructuredEditProviderExecutionApplication, StructuredEditProviderExecutionApplicationEnvelope,
-    StructuredEditProviderExecutionDispatch, StructuredEditProviderExecutionRequest,
-    StructuredEditProviderExecutionRequestEnvelope, StructuredEditRequest, StructuredEditResult,
-    StructuredEditSelectionProfile, StructuredEditStructureProfile,
-    StructuredEditTransportImportError, TemplateApplyResult, TemplateConvergenceResult,
-    TemplateDestinationContext, TemplateExecutionPlanEntry, TemplatePlanEntry,
-    TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
+    StructuredEditProviderExecutionDispatch, StructuredEditProviderExecutionDispatchEnvelope,
+    StructuredEditProviderExecutionRequest, StructuredEditProviderExecutionRequestEnvelope,
+    StructuredEditRequest, StructuredEditResult, StructuredEditSelectionProfile,
+    StructuredEditStructureProfile, StructuredEditTransportImportError, TemplateApplyResult,
+    TemplateConvergenceResult, TemplateDestinationContext, TemplateExecutionPlanEntry,
+    TemplatePlanEntry, TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
     TemplatePreviewResult, TemplateStrategy, TemplateStrategyOverride, TemplateTokenConfig,
     TemplateTreeRunReport, TemplateTreeRunResult, apply_template_execution,
     classify_template_target_path, conformance_family_feature_profile_path,
@@ -52,6 +52,7 @@ use ast_merge::{
     import_structured_edit_provider_batch_execution_report_envelope,
     import_structured_edit_provider_batch_execution_request_envelope,
     import_structured_edit_provider_execution_application_envelope,
+    import_structured_edit_provider_execution_dispatch_envelope,
     import_structured_edit_provider_execution_request_envelope, normalize_template_source_path,
     plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
     plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
@@ -80,6 +81,7 @@ use ast_merge::{
     structured_edit_provider_batch_execution_report_envelope,
     structured_edit_provider_batch_execution_request_envelope,
     structured_edit_provider_execution_application_envelope,
+    structured_edit_provider_execution_dispatch_envelope,
     structured_edit_provider_execution_request_envelope, summarize_conformance_results,
     summarize_named_conformance_suite_reports, summarize_projected_child_review_group_progress,
     template_token_keys,
@@ -4259,6 +4261,88 @@ fn conforms_to_slice_469_structured_edit_provider_execution_dispatch_fixture() {
         .expect("provider execution dispatch should deserialize after roundtrip");
 
         assert_eq!(round_tripped, dispatch);
+    }
+}
+
+#[test]
+fn conforms_to_slice_470_structured_edit_provider_execution_dispatch_transport_envelope_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_dispatch_envelope",
+    ));
+    let dispatch = serde_json::from_value::<StructuredEditProviderExecutionDispatch>(
+        fixture["structured_edit_provider_execution_dispatch"].clone(),
+    )
+    .expect("provider execution dispatch should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderExecutionDispatchEnvelope>(
+        fixture["expected_envelope"].clone(),
+    )
+    .expect("dispatch envelope should deserialize");
+
+    assert_eq!(structured_edit_provider_execution_dispatch_envelope(&dispatch), expected);
+    assert_eq!(
+        import_structured_edit_provider_execution_dispatch_envelope(&expected),
+        Ok(dispatch)
+    );
+}
+
+#[test]
+fn conforms_to_slice_471_structured_edit_provider_execution_dispatch_transport_rejection_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_dispatch_envelope_rejection",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let envelope = serde_json::from_value::<StructuredEditProviderExecutionDispatchEnvelope>(
+            case["envelope"].clone(),
+        )
+        .expect("dispatch envelope should deserialize");
+        let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_execution_dispatch_envelope(&envelope),
+            Err(expected)
+        );
+    }
+}
+
+#[test]
+fn conforms_to_slice_472_structured_edit_provider_execution_dispatch_envelope_application_fixture()
+{
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_dispatch_envelope_application",
+    ));
+    let envelope = serde_json::from_value::<StructuredEditProviderExecutionDispatchEnvelope>(
+        fixture["structured_edit_provider_execution_dispatch_envelope"].clone(),
+    )
+    .expect("dispatch envelope should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderExecutionDispatch>(
+        fixture["expected_dispatch"].clone(),
+    )
+    .expect("expected dispatch should deserialize");
+
+    assert_eq!(
+        import_structured_edit_provider_execution_dispatch_envelope(&envelope),
+        Ok(expected)
+    );
+
+    for case in fixture["cases"].as_array().expect("cases should be an array") {
+        let rejected_envelope = serde_json::from_value::<
+            StructuredEditProviderExecutionDispatchEnvelope,
+        >(case["envelope"].clone())
+        .expect("rejected envelope should deserialize");
+        let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_execution_dispatch_envelope(&rejected_envelope),
+            Err(expected_error)
+        );
     }
 }
 

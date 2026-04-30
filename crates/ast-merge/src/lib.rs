@@ -381,6 +381,13 @@ pub struct StructuredEditProviderExecutionApplicationEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionDispatchEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub provider_execution_dispatch: StructuredEditProviderExecutionDispatch,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditBatchRequest {
     pub requests: Vec<StructuredEditRequest>,
     #[serde(default)]
@@ -3376,6 +3383,40 @@ pub fn import_structured_edit_provider_execution_application_envelope(
     }
 
     Ok(envelope.provider_execution_application.clone())
+}
+
+pub fn structured_edit_provider_execution_dispatch_envelope(
+    provider_execution_dispatch: &StructuredEditProviderExecutionDispatch,
+) -> StructuredEditProviderExecutionDispatchEnvelope {
+    StructuredEditProviderExecutionDispatchEnvelope {
+        kind: "structured_edit_provider_execution_dispatch".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        provider_execution_dispatch: provider_execution_dispatch.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_execution_dispatch_envelope(
+    envelope: &StructuredEditProviderExecutionDispatchEnvelope,
+) -> Result<StructuredEditProviderExecutionDispatch, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_provider_execution_dispatch" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_provider_execution_dispatch envelope kind."
+                .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_execution_dispatch envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.provider_execution_dispatch.clone())
 }
 
 pub fn structured_edit_provider_batch_execution_request_envelope(
