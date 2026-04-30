@@ -388,6 +388,14 @@ pub struct StructuredEditProviderExecutionDispatchEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionOutcome {
+    pub dispatch: StructuredEditProviderExecutionDispatch,
+    pub application: StructuredEditProviderExecutionApplication,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditBatchRequest {
     pub requests: Vec<StructuredEditRequest>,
     #[serde(default)]

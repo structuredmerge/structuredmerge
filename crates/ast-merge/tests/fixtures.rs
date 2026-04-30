@@ -30,11 +30,12 @@ use ast_merge::{
     StructuredEditProviderBatchExecutionRequestEnvelope,
     StructuredEditProviderExecutionApplication, StructuredEditProviderExecutionApplicationEnvelope,
     StructuredEditProviderExecutionDispatch, StructuredEditProviderExecutionDispatchEnvelope,
-    StructuredEditProviderExecutionRequest, StructuredEditProviderExecutionRequestEnvelope,
-    StructuredEditRequest, StructuredEditResult, StructuredEditSelectionProfile,
-    StructuredEditStructureProfile, StructuredEditTransportImportError, TemplateApplyResult,
-    TemplateConvergenceResult, TemplateDestinationContext, TemplateExecutionPlanEntry,
-    TemplatePlanEntry, TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
+    StructuredEditProviderExecutionOutcome, StructuredEditProviderExecutionRequest,
+    StructuredEditProviderExecutionRequestEnvelope, StructuredEditRequest, StructuredEditResult,
+    StructuredEditSelectionProfile, StructuredEditStructureProfile,
+    StructuredEditTransportImportError, TemplateApplyResult, TemplateConvergenceResult,
+    TemplateDestinationContext, TemplateExecutionPlanEntry, TemplatePlanEntry,
+    TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
     TemplatePreviewResult, TemplateStrategy, TemplateStrategyOverride, TemplateTokenConfig,
     TemplateTreeRunReport, TemplateTreeRunResult, apply_template_execution,
     classify_template_target_path, conformance_family_feature_profile_path,
@@ -4346,6 +4347,27 @@ fn conforms_to_slice_472_structured_edit_provider_execution_dispatch_envelope_ap
             import_structured_edit_provider_execution_dispatch_envelope(&rejected_envelope),
             Err(expected_error)
         );
+    }
+}
+
+#[test]
+fn conforms_to_slice_477_structured_edit_provider_execution_outcome_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_outcome",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let outcome = serde_json::from_value::<StructuredEditProviderExecutionOutcome>(
+            case["outcome"].clone(),
+        )
+        .expect("provider execution outcome should deserialize");
+        let round_tripped = serde_json::from_value::<StructuredEditProviderExecutionOutcome>(
+            serde_json::to_value(&outcome).expect("provider execution outcome should serialize"),
+        )
+        .expect("provider execution outcome should deserialize after roundtrip");
+
+        assert_eq!(round_tripped, outcome);
     }
 }
 
