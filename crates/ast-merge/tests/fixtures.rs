@@ -28,11 +28,12 @@ use ast_merge::{
     StructuredEditProviderBatchExecutionRequest,
     StructuredEditProviderBatchExecutionRequestEnvelope,
     StructuredEditProviderExecutionApplication, StructuredEditProviderExecutionApplicationEnvelope,
-    StructuredEditProviderExecutionRequest, StructuredEditProviderExecutionRequestEnvelope,
-    StructuredEditRequest, StructuredEditResult, StructuredEditSelectionProfile,
-    StructuredEditStructureProfile, StructuredEditTransportImportError, TemplateApplyResult,
-    TemplateConvergenceResult, TemplateDestinationContext, TemplateExecutionPlanEntry,
-    TemplatePlanEntry, TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
+    StructuredEditProviderExecutionDispatch, StructuredEditProviderExecutionRequest,
+    StructuredEditProviderExecutionRequestEnvelope, StructuredEditRequest, StructuredEditResult,
+    StructuredEditSelectionProfile, StructuredEditStructureProfile,
+    StructuredEditTransportImportError, TemplateApplyResult, TemplateConvergenceResult,
+    TemplateDestinationContext, TemplateExecutionPlanEntry, TemplatePlanEntry,
+    TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
     TemplatePreviewResult, TemplateStrategy, TemplateStrategyOverride, TemplateTokenConfig,
     TemplateTreeRunReport, TemplateTreeRunResult, apply_template_execution,
     classify_template_target_path, conformance_family_feature_profile_path,
@@ -4237,6 +4238,27 @@ fn conforms_to_slice_461_structured_edit_provider_execution_application_fixture(
         .expect("provider execution application should deserialize after roundtrip");
 
         assert_eq!(round_tripped, application);
+    }
+}
+
+#[test]
+fn conforms_to_slice_469_structured_edit_provider_execution_dispatch_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_dispatch",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let dispatch = serde_json::from_value::<StructuredEditProviderExecutionDispatch>(
+            case["dispatch"].clone(),
+        )
+        .expect("provider execution dispatch should deserialize");
+        let round_tripped = serde_json::from_value::<StructuredEditProviderExecutionDispatch>(
+            serde_json::to_value(&dispatch).expect("provider execution dispatch should serialize"),
+        )
+        .expect("provider execution dispatch should deserialize after roundtrip");
+
+        assert_eq!(round_tripped, dispatch);
     }
 }
 

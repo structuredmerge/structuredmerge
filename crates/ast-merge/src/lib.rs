@@ -363,6 +363,17 @@ pub struct StructuredEditProviderExecutionApplication {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionDispatch {
+    pub execution_request: StructuredEditProviderExecutionRequest,
+    pub resolved_provider_family: String,
+    pub resolved_provider_backend: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub executor_label: Option<String>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditProviderExecutionApplicationEnvelope {
     pub kind: String,
     pub version: u32,
