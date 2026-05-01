@@ -42,11 +42,11 @@ use ast_merge::{
     StructuredEditProviderExecutionReplayBundleEnvelope, StructuredEditProviderExecutionRequest,
     StructuredEditProviderExecutionRequestEnvelope, StructuredEditProviderExecutorProfile,
     StructuredEditProviderExecutorProfileEnvelope, StructuredEditProviderExecutorRegistry,
-    StructuredEditProviderExecutorRegistryEnvelope, StructuredEditRequest, StructuredEditResult,
-    StructuredEditSelectionProfile, StructuredEditStructureProfile,
-    StructuredEditTransportImportError, TemplateApplyResult, TemplateConvergenceResult,
-    TemplateDestinationContext, TemplateExecutionPlanEntry, TemplatePlanEntry,
-    TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
+    StructuredEditProviderExecutorRegistryEnvelope, StructuredEditProviderExecutorSelectionPolicy,
+    StructuredEditRequest, StructuredEditResult, StructuredEditSelectionProfile,
+    StructuredEditStructureProfile, StructuredEditTransportImportError, TemplateApplyResult,
+    TemplateConvergenceResult, TemplateDestinationContext, TemplateExecutionPlanEntry,
+    TemplatePlanEntry, TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
     TemplatePreviewResult, TemplateStrategy, TemplateStrategyOverride, TemplateTokenConfig,
     TemplateTreeRunReport, TemplateTreeRunResult, apply_template_execution,
     classify_template_target_path, conformance_family_feature_profile_path,
@@ -5218,6 +5218,28 @@ fn conforms_to_slice_508_structured_edit_provider_executor_registry_envelope_app
             import_structured_edit_provider_executor_registry_envelope(&rejected_envelope),
             Err(expected_error)
         );
+    }
+}
+
+#[test]
+fn conforms_to_slice_509_structured_edit_provider_executor_selection_policy_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_executor_selection_policy",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let selection_policy = serde_json::from_value::<
+            StructuredEditProviderExecutorSelectionPolicy,
+        >(case["selection_policy"].clone())
+        .expect("selection policy should deserialize");
+        let roundtrip =
+            serde_json::to_value(&selection_policy).expect("roundtrip should serialize");
+        let decoded =
+            serde_json::from_value::<StructuredEditProviderExecutorSelectionPolicy>(roundtrip)
+                .expect("roundtrip should deserialize");
+
+        assert_eq!(decoded, selection_policy);
     }
 }
 

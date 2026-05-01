@@ -511,6 +511,19 @@ pub struct StructuredEditProviderExecutorRegistryEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutorSelectionPolicy {
+    pub provider_family: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_backend: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub executor_label: Option<String>,
+    pub selection_mode: String,
+    pub allow_registry_fallback: bool,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditBatchRequest {
     pub requests: Vec<StructuredEditRequest>,
     #[serde(default)]
