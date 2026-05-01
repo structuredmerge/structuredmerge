@@ -41,7 +41,8 @@ use ast_merge::{
     StructuredEditProviderExecutionReplayBundle,
     StructuredEditProviderExecutionReplayBundleEnvelope, StructuredEditProviderExecutionRequest,
     StructuredEditProviderExecutionRequestEnvelope, StructuredEditProviderExecutorProfile,
-    StructuredEditProviderExecutorProfileEnvelope, StructuredEditRequest, StructuredEditResult,
+    StructuredEditProviderExecutorProfileEnvelope, StructuredEditProviderExecutorRegistry,
+    StructuredEditProviderExecutorRegistryEnvelope, StructuredEditRequest, StructuredEditResult,
     StructuredEditSelectionProfile, StructuredEditStructureProfile,
     StructuredEditTransportImportError, TemplateApplyResult, TemplateConvergenceResult,
     TemplateDestinationContext, TemplateExecutionPlanEntry, TemplatePlanEntry,
@@ -73,7 +74,8 @@ use ast_merge::{
     import_structured_edit_provider_execution_provenance_envelope,
     import_structured_edit_provider_execution_replay_bundle_envelope,
     import_structured_edit_provider_execution_request_envelope,
-    import_structured_edit_provider_executor_profile_envelope, normalize_template_source_path,
+    import_structured_edit_provider_executor_profile_envelope,
+    import_structured_edit_provider_executor_registry_envelope, normalize_template_source_path,
     plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
     plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
     plan_template_entries, plan_template_execution, plan_template_tree_execution,
@@ -110,7 +112,8 @@ use ast_merge::{
     structured_edit_provider_execution_provenance_envelope,
     structured_edit_provider_execution_replay_bundle_envelope,
     structured_edit_provider_execution_request_envelope,
-    structured_edit_provider_executor_profile_envelope, summarize_conformance_results,
+    structured_edit_provider_executor_profile_envelope,
+    structured_edit_provider_executor_registry_envelope, summarize_conformance_results,
     summarize_named_conformance_suite_reports, summarize_projected_child_review_group_progress,
     template_token_keys,
 };
@@ -5113,6 +5116,106 @@ fn conforms_to_slice_504_structured_edit_provider_executor_profile_envelope_appl
 
         assert_eq!(
             import_structured_edit_provider_executor_profile_envelope(&rejected_envelope),
+            Err(expected_error)
+        );
+    }
+}
+
+#[test]
+fn conforms_to_slice_505_structured_edit_provider_executor_registry_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_executor_registry",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let executor_registry = serde_json::from_value::<StructuredEditProviderExecutorRegistry>(
+            case["executor_registry"].clone(),
+        )
+        .expect("executor registry should deserialize");
+        let roundtrip =
+            serde_json::to_value(&executor_registry).expect("roundtrip should serialize");
+        let decoded = serde_json::from_value::<StructuredEditProviderExecutorRegistry>(roundtrip)
+            .expect("roundtrip should deserialize");
+
+        assert_eq!(decoded, executor_registry);
+    }
+}
+
+#[test]
+fn conforms_to_slice_506_structured_edit_provider_executor_registry_transport_envelope_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_executor_registry_envelope",
+    ));
+    let executor_registry = serde_json::from_value::<StructuredEditProviderExecutorRegistry>(
+        fixture["structured_edit_provider_executor_registry"].clone(),
+    )
+    .expect("executor registry should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderExecutorRegistryEnvelope>(
+        fixture["expected_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+
+    assert_eq!(structured_edit_provider_executor_registry_envelope(&executor_registry), expected);
+    assert_eq!(
+        import_structured_edit_provider_executor_registry_envelope(&expected),
+        Ok(executor_registry)
+    );
+}
+
+#[test]
+fn conforms_to_slice_507_structured_edit_provider_executor_registry_transport_rejection_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_executor_registry_envelope_rejection",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let envelope = serde_json::from_value::<StructuredEditProviderExecutorRegistryEnvelope>(
+            case["envelope"].clone(),
+        )
+        .expect("envelope should deserialize");
+        let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_executor_registry_envelope(&envelope),
+            Err(expected)
+        );
+    }
+}
+
+#[test]
+fn conforms_to_slice_508_structured_edit_provider_executor_registry_envelope_application_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_executor_registry_envelope_application",
+    ));
+    let envelope = serde_json::from_value::<StructuredEditProviderExecutorRegistryEnvelope>(
+        fixture["structured_edit_provider_executor_registry_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderExecutorRegistry>(
+        fixture["expected_executor_registry"].clone(),
+    )
+    .expect("executor registry should deserialize");
+
+    assert_eq!(import_structured_edit_provider_executor_registry_envelope(&envelope), Ok(expected));
+
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+    for case in cases {
+        let rejected_envelope = serde_json::from_value::<
+            StructuredEditProviderExecutorRegistryEnvelope,
+        >(case["envelope"].clone())
+        .expect("rejected envelope should deserialize");
+        let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_executor_registry_envelope(&rejected_envelope),
             Err(expected_error)
         );
     }
