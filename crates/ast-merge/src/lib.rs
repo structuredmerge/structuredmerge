@@ -524,6 +524,13 @@ pub struct StructuredEditProviderExecutorSelectionPolicy {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutorSelectionPolicyEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub selection_policy: StructuredEditProviderExecutorSelectionPolicy,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditBatchRequest {
     pub requests: Vec<StructuredEditRequest>,
     #[serde(default)]
@@ -3840,6 +3847,40 @@ pub fn import_structured_edit_provider_executor_registry_envelope(
     }
 
     Ok(envelope.executor_registry.clone())
+}
+
+pub fn structured_edit_provider_executor_selection_policy_envelope(
+    selection_policy: &StructuredEditProviderExecutorSelectionPolicy,
+) -> StructuredEditProviderExecutorSelectionPolicyEnvelope {
+    StructuredEditProviderExecutorSelectionPolicyEnvelope {
+        kind: "structured_edit_provider_executor_selection_policy".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        selection_policy: selection_policy.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_executor_selection_policy_envelope(
+    envelope: &StructuredEditProviderExecutorSelectionPolicyEnvelope,
+) -> Result<StructuredEditProviderExecutorSelectionPolicy, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_provider_executor_selection_policy" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_provider_executor_selection_policy envelope kind."
+                .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_executor_selection_policy envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.selection_policy.clone())
 }
 
 pub fn structured_edit_provider_batch_execution_request_envelope(

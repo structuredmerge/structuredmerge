@@ -43,10 +43,11 @@ use ast_merge::{
     StructuredEditProviderExecutionRequestEnvelope, StructuredEditProviderExecutorProfile,
     StructuredEditProviderExecutorProfileEnvelope, StructuredEditProviderExecutorRegistry,
     StructuredEditProviderExecutorRegistryEnvelope, StructuredEditProviderExecutorSelectionPolicy,
-    StructuredEditRequest, StructuredEditResult, StructuredEditSelectionProfile,
-    StructuredEditStructureProfile, StructuredEditTransportImportError, TemplateApplyResult,
-    TemplateConvergenceResult, TemplateDestinationContext, TemplateExecutionPlanEntry,
-    TemplatePlanEntry, TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
+    StructuredEditProviderExecutorSelectionPolicyEnvelope, StructuredEditRequest,
+    StructuredEditResult, StructuredEditSelectionProfile, StructuredEditStructureProfile,
+    StructuredEditTransportImportError, TemplateApplyResult, TemplateConvergenceResult,
+    TemplateDestinationContext, TemplateExecutionPlanEntry, TemplatePlanEntry,
+    TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
     TemplatePreviewResult, TemplateStrategy, TemplateStrategyOverride, TemplateTokenConfig,
     TemplateTreeRunReport, TemplateTreeRunResult, apply_template_execution,
     classify_template_target_path, conformance_family_feature_profile_path,
@@ -75,18 +76,19 @@ use ast_merge::{
     import_structured_edit_provider_execution_replay_bundle_envelope,
     import_structured_edit_provider_execution_request_envelope,
     import_structured_edit_provider_executor_profile_envelope,
-    import_structured_edit_provider_executor_registry_envelope, normalize_template_source_path,
-    plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
-    plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
-    plan_template_entries, plan_template_execution, plan_template_tree_execution,
-    prepare_template_entries, preview_template_execution, projected_child_group_review_request,
-    report_conformance_manifest, report_conformance_suite, report_named_conformance_suite,
-    report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
-    report_named_conformance_suite_manifest, report_planned_conformance_suite,
-    report_planned_named_conformance_suites, report_template_directory_apply,
-    report_template_directory_plan, report_template_directory_runner, report_template_tree_run,
-    resolve_conformance_family_context, resolve_delegated_child_outputs,
-    resolve_template_destination_path,
+    import_structured_edit_provider_executor_registry_envelope,
+    import_structured_edit_provider_executor_selection_policy_envelope,
+    normalize_template_source_path, plan_conformance_suite, plan_named_conformance_suite,
+    plan_named_conformance_suite_entry, plan_named_conformance_suites,
+    plan_named_conformance_suites_with_diagnostics, plan_template_entries, plan_template_execution,
+    plan_template_tree_execution, prepare_template_entries, preview_template_execution,
+    projected_child_group_review_request, report_conformance_manifest, report_conformance_suite,
+    report_named_conformance_suite, report_named_conformance_suite_entry,
+    report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
+    report_planned_conformance_suite, report_planned_named_conformance_suites,
+    report_template_directory_apply, report_template_directory_plan,
+    report_template_directory_runner, report_template_tree_run, resolve_conformance_family_context,
+    resolve_delegated_child_outputs, resolve_template_destination_path,
     review_and_execute_conformance_manifest_with_replay_bundle_envelope,
     review_conformance_family_context, review_conformance_manifest,
     review_conformance_manifest_with_replay_bundle_envelope, review_projected_child_groups,
@@ -113,7 +115,8 @@ use ast_merge::{
     structured_edit_provider_execution_replay_bundle_envelope,
     structured_edit_provider_execution_request_envelope,
     structured_edit_provider_executor_profile_envelope,
-    structured_edit_provider_executor_registry_envelope, summarize_conformance_results,
+    structured_edit_provider_executor_registry_envelope,
+    structured_edit_provider_executor_selection_policy_envelope, summarize_conformance_results,
     summarize_named_conformance_suite_reports, summarize_projected_child_review_group_progress,
     template_token_keys,
 };
@@ -5240,6 +5243,94 @@ fn conforms_to_slice_509_structured_edit_provider_executor_selection_policy_fixt
                 .expect("roundtrip should deserialize");
 
         assert_eq!(decoded, selection_policy);
+    }
+}
+
+#[test]
+fn conforms_to_slice_510_structured_edit_provider_executor_selection_policy_transport_envelope_fixture()
+ {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_executor_selection_policy_envelope",
+    ));
+    let selection_policy = serde_json::from_value::<StructuredEditProviderExecutorSelectionPolicy>(
+        fixture["structured_edit_provider_executor_selection_policy"].clone(),
+    )
+    .expect("selection policy should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderExecutorSelectionPolicyEnvelope>(
+        fixture["expected_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+
+    assert_eq!(
+        structured_edit_provider_executor_selection_policy_envelope(&selection_policy),
+        expected
+    );
+    assert_eq!(
+        import_structured_edit_provider_executor_selection_policy_envelope(&expected),
+        Ok(selection_policy)
+    );
+}
+
+#[test]
+fn conforms_to_slice_511_structured_edit_provider_executor_selection_policy_transport_rejection_fixture()
+ {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_executor_selection_policy_envelope_rejection",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let envelope = serde_json::from_value::<
+            StructuredEditProviderExecutorSelectionPolicyEnvelope,
+        >(case["envelope"].clone())
+        .expect("envelope should deserialize");
+        let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_executor_selection_policy_envelope(&envelope),
+            Err(expected)
+        );
+    }
+}
+
+#[test]
+fn conforms_to_slice_512_structured_edit_provider_executor_selection_policy_envelope_application_fixture()
+ {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_executor_selection_policy_envelope_application",
+    ));
+    let envelope = serde_json::from_value::<StructuredEditProviderExecutorSelectionPolicyEnvelope>(
+        fixture["structured_edit_provider_executor_selection_policy_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderExecutorSelectionPolicy>(
+        fixture["expected_selection_policy"].clone(),
+    )
+    .expect("selection policy should deserialize");
+
+    assert_eq!(
+        import_structured_edit_provider_executor_selection_policy_envelope(&envelope),
+        Ok(expected)
+    );
+
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+    for case in cases {
+        let rejected_envelope = serde_json::from_value::<
+            StructuredEditProviderExecutorSelectionPolicyEnvelope,
+        >(case["envelope"].clone())
+        .expect("rejected envelope should deserialize");
+        let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_executor_selection_policy_envelope(&rejected_envelope),
+            Err(expected_error)
+        );
     }
 }
 
