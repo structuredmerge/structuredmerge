@@ -447,6 +447,35 @@ pub struct StructuredEditProviderBatchExecutionProvenanceEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionReplayBundle {
+    pub execution_request: StructuredEditProviderExecutionRequest,
+    pub provenance: StructuredEditProviderExecutionProvenance,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionReplayBundleEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub replay_bundle: StructuredEditProviderExecutionReplayBundle,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionReplayBundle {
+    pub replay_bundles: Vec<StructuredEditProviderExecutionReplayBundle>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionReplayBundleEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub batch_replay_bundle: StructuredEditProviderBatchExecutionReplayBundle,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditBatchRequest {
     pub requests: Vec<StructuredEditRequest>,
     #[serde(default)]
@@ -3626,6 +3655,75 @@ pub fn import_structured_edit_provider_batch_execution_provenance_envelope(
     }
 
     Ok(envelope.batch_provenance.clone())
+}
+
+pub fn structured_edit_provider_execution_replay_bundle_envelope(
+    replay_bundle: &StructuredEditProviderExecutionReplayBundle,
+) -> StructuredEditProviderExecutionReplayBundleEnvelope {
+    StructuredEditProviderExecutionReplayBundleEnvelope {
+        kind: "structured_edit_provider_execution_replay_bundle".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        replay_bundle: replay_bundle.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_execution_replay_bundle_envelope(
+    envelope: &StructuredEditProviderExecutionReplayBundleEnvelope,
+) -> Result<StructuredEditProviderExecutionReplayBundle, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_provider_execution_replay_bundle" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_provider_execution_replay_bundle envelope kind."
+                .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_execution_replay_bundle envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.replay_bundle.clone())
+}
+
+pub fn structured_edit_provider_batch_execution_replay_bundle_envelope(
+    batch_replay_bundle: &StructuredEditProviderBatchExecutionReplayBundle,
+) -> StructuredEditProviderBatchExecutionReplayBundleEnvelope {
+    StructuredEditProviderBatchExecutionReplayBundleEnvelope {
+        kind: "structured_edit_provider_batch_execution_replay_bundle".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        batch_replay_bundle: batch_replay_bundle.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_batch_execution_replay_bundle_envelope(
+    envelope: &StructuredEditProviderBatchExecutionReplayBundleEnvelope,
+) -> Result<StructuredEditProviderBatchExecutionReplayBundle, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_provider_batch_execution_replay_bundle" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message:
+                "expected structured_edit_provider_batch_execution_replay_bundle envelope kind."
+                    .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_batch_execution_replay_bundle envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.batch_replay_bundle.clone())
 }
 
 pub fn structured_edit_provider_batch_execution_request_envelope(
