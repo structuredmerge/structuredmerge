@@ -48,10 +48,10 @@ use ast_merge::{
     StructuredEditProviderExecutionProvenance, StructuredEditProviderExecutionProvenanceEnvelope,
     StructuredEditProviderExecutionReplayBundle,
     StructuredEditProviderExecutionReplayBundleEnvelope, StructuredEditProviderExecutionRequest,
-    StructuredEditProviderExecutionRequestEnvelope, StructuredEditProviderExecutorProfile,
-    StructuredEditProviderExecutorProfileEnvelope, StructuredEditProviderExecutorRegistry,
-    StructuredEditProviderExecutorRegistryEnvelope, StructuredEditProviderExecutorResolution,
-    StructuredEditProviderExecutorResolutionEnvelope,
+    StructuredEditProviderExecutionRequestEnvelope, StructuredEditProviderExecutionRunResult,
+    StructuredEditProviderExecutorProfile, StructuredEditProviderExecutorProfileEnvelope,
+    StructuredEditProviderExecutorRegistry, StructuredEditProviderExecutorRegistryEnvelope,
+    StructuredEditProviderExecutorResolution, StructuredEditProviderExecutorResolutionEnvelope,
     StructuredEditProviderExecutorSelectionPolicy,
     StructuredEditProviderExecutorSelectionPolicyEnvelope, StructuredEditRequest,
     StructuredEditResult, StructuredEditSelectionProfile, StructuredEditStructureProfile,
@@ -5806,6 +5806,28 @@ fn conforms_to_slice_540_structured_edit_provider_batch_execution_invocation_env
             import_structured_edit_provider_batch_execution_invocation_envelope(&rejected_envelope),
             Err(expected_error)
         );
+    }
+}
+
+#[test]
+fn conforms_to_slice_541_structured_edit_provider_execution_run_result_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_run_result",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let execution_run_result =
+            serde_json::from_value::<StructuredEditProviderExecutionRunResult>(
+                case["execution_run_result"].clone(),
+            )
+            .expect("execution run result should deserialize");
+        let roundtrip =
+            serde_json::to_value(&execution_run_result).expect("roundtrip should serialize");
+        let decoded = serde_json::from_value::<StructuredEditProviderExecutionRunResult>(roundtrip)
+            .expect("roundtrip should deserialize");
+
+        assert_eq!(decoded, execution_run_result);
     }
 }
 
