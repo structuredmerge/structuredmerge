@@ -371,6 +371,13 @@ pub struct StructuredEditProviderExecutionHandoff {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionHandoffEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub execution_handoff: StructuredEditProviderExecutionHandoff,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditExecutionReportEnvelope {
     pub kind: String,
     pub version: u32,
@@ -3559,6 +3566,40 @@ pub fn import_structured_edit_provider_execution_plan_envelope(
     }
 
     Ok(envelope.execution_plan.clone())
+}
+
+pub fn structured_edit_provider_execution_handoff_envelope(
+    execution_handoff: &StructuredEditProviderExecutionHandoff,
+) -> StructuredEditProviderExecutionHandoffEnvelope {
+    StructuredEditProviderExecutionHandoffEnvelope {
+        kind: "structured_edit_provider_execution_handoff".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        execution_handoff: execution_handoff.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_execution_handoff_envelope(
+    envelope: &StructuredEditProviderExecutionHandoffEnvelope,
+) -> Result<StructuredEditProviderExecutionHandoff, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_provider_execution_handoff" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_provider_execution_handoff envelope kind."
+                .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_execution_handoff envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.execution_handoff.clone())
 }
 
 pub fn structured_edit_provider_batch_execution_plan_envelope(

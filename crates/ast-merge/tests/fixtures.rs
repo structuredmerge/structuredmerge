@@ -37,10 +37,11 @@ use ast_merge::{
     StructuredEditProviderBatchExecutionRequestEnvelope,
     StructuredEditProviderExecutionApplication, StructuredEditProviderExecutionApplicationEnvelope,
     StructuredEditProviderExecutionDispatch, StructuredEditProviderExecutionDispatchEnvelope,
-    StructuredEditProviderExecutionHandoff, StructuredEditProviderExecutionOutcome,
-    StructuredEditProviderExecutionOutcomeEnvelope, StructuredEditProviderExecutionPlan,
-    StructuredEditProviderExecutionPlanEnvelope, StructuredEditProviderExecutionProvenance,
-    StructuredEditProviderExecutionProvenanceEnvelope, StructuredEditProviderExecutionReplayBundle,
+    StructuredEditProviderExecutionHandoff, StructuredEditProviderExecutionHandoffEnvelope,
+    StructuredEditProviderExecutionOutcome, StructuredEditProviderExecutionOutcomeEnvelope,
+    StructuredEditProviderExecutionPlan, StructuredEditProviderExecutionPlanEnvelope,
+    StructuredEditProviderExecutionProvenance, StructuredEditProviderExecutionProvenanceEnvelope,
+    StructuredEditProviderExecutionReplayBundle,
     StructuredEditProviderExecutionReplayBundleEnvelope, StructuredEditProviderExecutionRequest,
     StructuredEditProviderExecutionRequestEnvelope, StructuredEditProviderExecutorProfile,
     StructuredEditProviderExecutorProfileEnvelope, StructuredEditProviderExecutorRegistry,
@@ -76,6 +77,7 @@ use ast_merge::{
     import_structured_edit_provider_batch_execution_request_envelope,
     import_structured_edit_provider_execution_application_envelope,
     import_structured_edit_provider_execution_dispatch_envelope,
+    import_structured_edit_provider_execution_handoff_envelope,
     import_structured_edit_provider_execution_outcome_envelope,
     import_structured_edit_provider_execution_plan_envelope,
     import_structured_edit_provider_execution_provenance_envelope,
@@ -118,6 +120,7 @@ use ast_merge::{
     structured_edit_provider_batch_execution_request_envelope,
     structured_edit_provider_execution_application_envelope,
     structured_edit_provider_execution_dispatch_envelope,
+    structured_edit_provider_execution_handoff_envelope,
     structured_edit_provider_execution_outcome_envelope,
     structured_edit_provider_execution_plan_envelope,
     structured_edit_provider_execution_provenance_envelope,
@@ -5490,6 +5493,85 @@ fn conforms_to_slice_525_structured_edit_provider_execution_handoff_fixture() {
             .expect("roundtrip should deserialize");
 
         assert_eq!(decoded, execution_handoff);
+    }
+}
+
+#[test]
+fn conforms_to_slice_526_structured_edit_provider_execution_handoff_transport_envelope_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_handoff_envelope",
+    ));
+    let execution_handoff = serde_json::from_value::<StructuredEditProviderExecutionHandoff>(
+        fixture["structured_edit_provider_execution_handoff"].clone(),
+    )
+    .expect("execution handoff should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderExecutionHandoffEnvelope>(
+        fixture["expected_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+
+    assert_eq!(structured_edit_provider_execution_handoff_envelope(&execution_handoff), expected);
+    assert_eq!(
+        import_structured_edit_provider_execution_handoff_envelope(&expected),
+        Ok(execution_handoff)
+    );
+}
+
+#[test]
+fn conforms_to_slice_527_structured_edit_provider_execution_handoff_transport_rejection_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_handoff_envelope_rejection",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let envelope = serde_json::from_value::<StructuredEditProviderExecutionHandoffEnvelope>(
+            case["envelope"].clone(),
+        )
+        .expect("envelope should deserialize");
+        let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_execution_handoff_envelope(&envelope),
+            Err(expected)
+        );
+    }
+}
+
+#[test]
+fn conforms_to_slice_528_structured_edit_provider_execution_handoff_envelope_application_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_handoff_envelope_application",
+    ));
+    let envelope = serde_json::from_value::<StructuredEditProviderExecutionHandoffEnvelope>(
+        fixture["structured_edit_provider_execution_handoff_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderExecutionHandoff>(
+        fixture["expected_execution_handoff"].clone(),
+    )
+    .expect("execution handoff should deserialize");
+
+    assert_eq!(import_structured_edit_provider_execution_handoff_envelope(&envelope), Ok(expected));
+
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+    for case in cases {
+        let rejected_envelope = serde_json::from_value::<
+            StructuredEditProviderExecutionHandoffEnvelope,
+        >(case["envelope"].clone())
+        .expect("envelope should deserialize");
+        let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_execution_handoff_envelope(&rejected_envelope),
+            Err(expected_error)
+        );
     }
 }
 
