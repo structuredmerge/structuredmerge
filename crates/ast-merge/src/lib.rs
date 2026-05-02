@@ -414,6 +414,20 @@ pub struct StructuredEditProviderExecutionRunResult {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionRunResultEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub execution_run_result: StructuredEditProviderExecutionRunResult,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionRunResult {
+    pub run_results: Vec<StructuredEditProviderExecutionRunResult>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditExecutionReportEnvelope {
     pub kind: String,
     pub version: u32,
@@ -3718,6 +3732,40 @@ pub fn import_structured_edit_provider_batch_execution_invocation_envelope(
     }
 
     Ok(envelope.batch_execution_invocation.clone())
+}
+
+pub fn structured_edit_provider_execution_run_result_envelope(
+    execution_run_result: &StructuredEditProviderExecutionRunResult,
+) -> StructuredEditProviderExecutionRunResultEnvelope {
+    StructuredEditProviderExecutionRunResultEnvelope {
+        kind: "structured_edit_provider_execution_run_result".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        execution_run_result: execution_run_result.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_execution_run_result_envelope(
+    envelope: &StructuredEditProviderExecutionRunResultEnvelope,
+) -> Result<StructuredEditProviderExecutionRunResult, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_provider_execution_run_result" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_provider_execution_run_result envelope kind."
+                .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_execution_run_result envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.execution_run_result.clone())
 }
 
 pub fn structured_edit_provider_batch_execution_handoff_envelope(

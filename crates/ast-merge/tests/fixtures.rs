@@ -39,19 +39,20 @@ use ast_merge::{
     StructuredEditProviderBatchExecutionReport, StructuredEditProviderBatchExecutionReportEnvelope,
     StructuredEditProviderBatchExecutionRequest,
     StructuredEditProviderBatchExecutionRequestEnvelope,
-    StructuredEditProviderExecutionApplication, StructuredEditProviderExecutionApplicationEnvelope,
-    StructuredEditProviderExecutionDispatch, StructuredEditProviderExecutionDispatchEnvelope,
-    StructuredEditProviderExecutionHandoff, StructuredEditProviderExecutionHandoffEnvelope,
-    StructuredEditProviderExecutionInvocation, StructuredEditProviderExecutionInvocationEnvelope,
-    StructuredEditProviderExecutionOutcome, StructuredEditProviderExecutionOutcomeEnvelope,
-    StructuredEditProviderExecutionPlan, StructuredEditProviderExecutionPlanEnvelope,
-    StructuredEditProviderExecutionProvenance, StructuredEditProviderExecutionProvenanceEnvelope,
-    StructuredEditProviderExecutionReplayBundle,
+    StructuredEditProviderBatchExecutionRunResult, StructuredEditProviderExecutionApplication,
+    StructuredEditProviderExecutionApplicationEnvelope, StructuredEditProviderExecutionDispatch,
+    StructuredEditProviderExecutionDispatchEnvelope, StructuredEditProviderExecutionHandoff,
+    StructuredEditProviderExecutionHandoffEnvelope, StructuredEditProviderExecutionInvocation,
+    StructuredEditProviderExecutionInvocationEnvelope, StructuredEditProviderExecutionOutcome,
+    StructuredEditProviderExecutionOutcomeEnvelope, StructuredEditProviderExecutionPlan,
+    StructuredEditProviderExecutionPlanEnvelope, StructuredEditProviderExecutionProvenance,
+    StructuredEditProviderExecutionProvenanceEnvelope, StructuredEditProviderExecutionReplayBundle,
     StructuredEditProviderExecutionReplayBundleEnvelope, StructuredEditProviderExecutionRequest,
     StructuredEditProviderExecutionRequestEnvelope, StructuredEditProviderExecutionRunResult,
-    StructuredEditProviderExecutorProfile, StructuredEditProviderExecutorProfileEnvelope,
-    StructuredEditProviderExecutorRegistry, StructuredEditProviderExecutorRegistryEnvelope,
-    StructuredEditProviderExecutorResolution, StructuredEditProviderExecutorResolutionEnvelope,
+    StructuredEditProviderExecutionRunResultEnvelope, StructuredEditProviderExecutorProfile,
+    StructuredEditProviderExecutorProfileEnvelope, StructuredEditProviderExecutorRegistry,
+    StructuredEditProviderExecutorRegistryEnvelope, StructuredEditProviderExecutorResolution,
+    StructuredEditProviderExecutorResolutionEnvelope,
     StructuredEditProviderExecutorSelectionPolicy,
     StructuredEditProviderExecutorSelectionPolicyEnvelope, StructuredEditRequest,
     StructuredEditResult, StructuredEditSelectionProfile, StructuredEditStructureProfile,
@@ -91,6 +92,7 @@ use ast_merge::{
     import_structured_edit_provider_execution_provenance_envelope,
     import_structured_edit_provider_execution_replay_bundle_envelope,
     import_structured_edit_provider_execution_request_envelope,
+    import_structured_edit_provider_execution_run_result_envelope,
     import_structured_edit_provider_executor_profile_envelope,
     import_structured_edit_provider_executor_registry_envelope,
     import_structured_edit_provider_executor_resolution_envelope,
@@ -137,6 +139,7 @@ use ast_merge::{
     structured_edit_provider_execution_provenance_envelope,
     structured_edit_provider_execution_replay_bundle_envelope,
     structured_edit_provider_execution_request_envelope,
+    structured_edit_provider_execution_run_result_envelope,
     structured_edit_provider_executor_profile_envelope,
     structured_edit_provider_executor_registry_envelope,
     structured_edit_provider_executor_resolution_envelope,
@@ -5828,6 +5831,116 @@ fn conforms_to_slice_541_structured_edit_provider_execution_run_result_fixture()
             .expect("roundtrip should deserialize");
 
         assert_eq!(decoded, execution_run_result);
+    }
+}
+
+#[test]
+fn conforms_to_slice_542_structured_edit_provider_execution_run_result_transport_envelope_fixture()
+{
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_run_result_envelope",
+    ));
+    let execution_run_result = serde_json::from_value::<StructuredEditProviderExecutionRunResult>(
+        fixture["structured_edit_provider_execution_run_result"].clone(),
+    )
+    .expect("execution run result should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderExecutionRunResultEnvelope>(
+        fixture["expected_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+
+    assert_eq!(
+        structured_edit_provider_execution_run_result_envelope(&execution_run_result),
+        expected
+    );
+    assert_eq!(
+        import_structured_edit_provider_execution_run_result_envelope(&expected),
+        Ok(execution_run_result)
+    );
+}
+
+#[test]
+fn conforms_to_slice_543_structured_edit_provider_execution_run_result_transport_rejection_fixture()
+{
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_run_result_envelope_rejection",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let envelope = serde_json::from_value::<StructuredEditProviderExecutionRunResultEnvelope>(
+            case["envelope"].clone(),
+        )
+        .expect("envelope should deserialize");
+        let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_execution_run_result_envelope(&envelope),
+            Err(expected)
+        );
+    }
+}
+
+#[test]
+fn conforms_to_slice_544_structured_edit_provider_execution_run_result_envelope_application_fixture()
+ {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_run_result_envelope_application",
+    ));
+    let envelope = serde_json::from_value::<StructuredEditProviderExecutionRunResultEnvelope>(
+        fixture["structured_edit_provider_execution_run_result_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderExecutionRunResult>(
+        fixture["expected_execution_run_result"].clone(),
+    )
+    .expect("execution run result should deserialize");
+
+    assert_eq!(
+        import_structured_edit_provider_execution_run_result_envelope(&envelope),
+        Ok(expected)
+    );
+
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+    for case in cases {
+        let rejected_envelope = serde_json::from_value::<
+            StructuredEditProviderExecutionRunResultEnvelope,
+        >(case["envelope"].clone())
+        .expect("envelope should deserialize");
+        let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_execution_run_result_envelope(&rejected_envelope),
+            Err(expected_error)
+        );
+    }
+}
+
+#[test]
+fn conforms_to_slice_545_structured_edit_provider_batch_execution_run_result_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_batch_execution_run_result",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let batch_execution_run_result = serde_json::from_value::<
+            StructuredEditProviderBatchExecutionRunResult,
+        >(case["batch_execution_run_result"].clone())
+        .expect("batch execution run result should deserialize");
+        let roundtrip =
+            serde_json::to_value(&batch_execution_run_result).expect("roundtrip should serialize");
+        let decoded =
+            serde_json::from_value::<StructuredEditProviderBatchExecutionRunResult>(roundtrip)
+                .expect("roundtrip should deserialize");
+
+        assert_eq!(decoded, batch_execution_run_result);
     }
 }
 
