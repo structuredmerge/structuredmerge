@@ -363,6 +363,14 @@ pub struct StructuredEditProviderExecutionPlanEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionHandoff {
+    pub execution_plan: StructuredEditProviderExecutionPlan,
+    pub execution_dispatch: StructuredEditProviderExecutionDispatch,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditExecutionReportEnvelope {
     pub kind: String,
     pub version: u32,

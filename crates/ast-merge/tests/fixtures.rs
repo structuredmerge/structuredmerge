@@ -37,10 +37,10 @@ use ast_merge::{
     StructuredEditProviderBatchExecutionRequestEnvelope,
     StructuredEditProviderExecutionApplication, StructuredEditProviderExecutionApplicationEnvelope,
     StructuredEditProviderExecutionDispatch, StructuredEditProviderExecutionDispatchEnvelope,
-    StructuredEditProviderExecutionOutcome, StructuredEditProviderExecutionOutcomeEnvelope,
-    StructuredEditProviderExecutionPlan, StructuredEditProviderExecutionPlanEnvelope,
-    StructuredEditProviderExecutionProvenance, StructuredEditProviderExecutionProvenanceEnvelope,
-    StructuredEditProviderExecutionReplayBundle,
+    StructuredEditProviderExecutionHandoff, StructuredEditProviderExecutionOutcome,
+    StructuredEditProviderExecutionOutcomeEnvelope, StructuredEditProviderExecutionPlan,
+    StructuredEditProviderExecutionPlanEnvelope, StructuredEditProviderExecutionProvenance,
+    StructuredEditProviderExecutionProvenanceEnvelope, StructuredEditProviderExecutionReplayBundle,
     StructuredEditProviderExecutionReplayBundleEnvelope, StructuredEditProviderExecutionRequest,
     StructuredEditProviderExecutionRequestEnvelope, StructuredEditProviderExecutorProfile,
     StructuredEditProviderExecutorProfileEnvelope, StructuredEditProviderExecutorRegistry,
@@ -5469,6 +5469,27 @@ fn conforms_to_slice_517_structured_edit_provider_execution_plan_fixture() {
             .expect("roundtrip should deserialize");
 
         assert_eq!(decoded, execution_plan);
+    }
+}
+
+#[test]
+fn conforms_to_slice_525_structured_edit_provider_execution_handoff_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_handoff",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let execution_handoff = serde_json::from_value::<StructuredEditProviderExecutionHandoff>(
+            case["execution_handoff"].clone(),
+        )
+        .expect("execution handoff should deserialize");
+        let roundtrip =
+            serde_json::to_value(&execution_handoff).expect("roundtrip should serialize");
+        let decoded = serde_json::from_value::<StructuredEditProviderExecutionHandoff>(roundtrip)
+            .expect("roundtrip should deserialize");
+
+        assert_eq!(decoded, execution_handoff);
     }
 }
 
