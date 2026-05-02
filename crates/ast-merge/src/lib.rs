@@ -598,6 +598,20 @@ pub struct StructuredEditProviderBatchExecutionRequestEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionHandoff {
+    pub handoffs: Vec<StructuredEditProviderExecutionHandoff>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionHandoffEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub batch_execution_handoff: StructuredEditProviderBatchExecutionHandoff,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditProviderBatchExecutionPlan {
     pub plans: Vec<StructuredEditProviderExecutionPlan>,
     #[serde(default)]
@@ -3600,6 +3614,40 @@ pub fn import_structured_edit_provider_execution_handoff_envelope(
     }
 
     Ok(envelope.execution_handoff.clone())
+}
+
+pub fn structured_edit_provider_batch_execution_handoff_envelope(
+    batch_execution_handoff: &StructuredEditProviderBatchExecutionHandoff,
+) -> StructuredEditProviderBatchExecutionHandoffEnvelope {
+    StructuredEditProviderBatchExecutionHandoffEnvelope {
+        kind: "structured_edit_provider_batch_execution_handoff".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        batch_execution_handoff: batch_execution_handoff.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_batch_execution_handoff_envelope(
+    envelope: &StructuredEditProviderBatchExecutionHandoffEnvelope,
+) -> Result<StructuredEditProviderBatchExecutionHandoff, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_provider_batch_execution_handoff" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_provider_batch_execution_handoff envelope kind."
+                .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_batch_execution_handoff envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.batch_execution_handoff.clone())
 }
 
 pub fn structured_edit_provider_batch_execution_plan_envelope(
