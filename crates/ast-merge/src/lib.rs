@@ -540,6 +540,13 @@ pub struct StructuredEditProviderExecutorResolution {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutorResolutionEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub executor_resolution: StructuredEditProviderExecutorResolution,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditBatchRequest {
     pub requests: Vec<StructuredEditRequest>,
     #[serde(default)]
@@ -3890,6 +3897,40 @@ pub fn import_structured_edit_provider_executor_selection_policy_envelope(
     }
 
     Ok(envelope.selection_policy.clone())
+}
+
+pub fn structured_edit_provider_executor_resolution_envelope(
+    executor_resolution: &StructuredEditProviderExecutorResolution,
+) -> StructuredEditProviderExecutorResolutionEnvelope {
+    StructuredEditProviderExecutorResolutionEnvelope {
+        kind: "structured_edit_provider_executor_resolution".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        executor_resolution: executor_resolution.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_executor_resolution_envelope(
+    envelope: &StructuredEditProviderExecutorResolutionEnvelope,
+) -> Result<StructuredEditProviderExecutorResolution, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_provider_executor_resolution" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_provider_executor_resolution envelope kind."
+                .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_executor_resolution envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.executor_resolution.clone())
 }
 
 pub fn structured_edit_provider_batch_execution_request_envelope(
