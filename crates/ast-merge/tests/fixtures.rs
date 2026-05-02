@@ -51,6 +51,7 @@ use ast_merge::{
     StructuredEditProviderExecutionPlan, StructuredEditProviderExecutionPlanEnvelope,
     StructuredEditProviderExecutionProvenance, StructuredEditProviderExecutionProvenanceEnvelope,
     StructuredEditProviderExecutionReceipt, StructuredEditProviderExecutionReceiptEnvelope,
+    StructuredEditProviderExecutionReceiptReplayRequest,
     StructuredEditProviderExecutionReplayBundle,
     StructuredEditProviderExecutionReplayBundleEnvelope, StructuredEditProviderExecutionRequest,
     StructuredEditProviderExecutionRequestEnvelope, StructuredEditProviderExecutionRunResult,
@@ -6256,6 +6257,30 @@ fn conforms_to_slice_556_structured_edit_provider_batch_execution_receipt_envelo
             import_structured_edit_provider_batch_execution_receipt_envelope(&rejected_envelope),
             Err(expected_error)
         );
+    }
+}
+
+#[test]
+fn conforms_to_slice_557_structured_edit_provider_execution_receipt_replay_request_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_receipt_replay_request",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let receipt_replay_request = serde_json::from_value::<
+            StructuredEditProviderExecutionReceiptReplayRequest,
+        >(case["receipt_replay_request"].clone())
+        .expect("receipt replay request should deserialize");
+        let roundtrip =
+            serde_json::to_value(&receipt_replay_request).expect("roundtrip should serialize");
+        let decoded =
+            serde_json::from_value::<StructuredEditProviderExecutionReceiptReplayRequest>(
+                roundtrip,
+            )
+            .expect("roundtrip should deserialize");
+
+        assert_eq!(decoded, receipt_replay_request);
     }
 }
 

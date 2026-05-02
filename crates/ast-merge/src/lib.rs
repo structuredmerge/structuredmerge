@@ -467,6 +467,14 @@ pub struct StructuredEditProviderBatchExecutionReceiptEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionReceiptReplayRequest {
+    pub execution_receipt: StructuredEditProviderExecutionReceipt,
+    pub replay_mode: String,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditExecutionReportEnvelope {
     pub kind: String,
     pub version: u32,
