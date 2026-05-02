@@ -40,10 +40,10 @@ use ast_merge::{
     StructuredEditProviderExecutionApplication, StructuredEditProviderExecutionApplicationEnvelope,
     StructuredEditProviderExecutionDispatch, StructuredEditProviderExecutionDispatchEnvelope,
     StructuredEditProviderExecutionHandoff, StructuredEditProviderExecutionHandoffEnvelope,
-    StructuredEditProviderExecutionOutcome, StructuredEditProviderExecutionOutcomeEnvelope,
-    StructuredEditProviderExecutionPlan, StructuredEditProviderExecutionPlanEnvelope,
-    StructuredEditProviderExecutionProvenance, StructuredEditProviderExecutionProvenanceEnvelope,
-    StructuredEditProviderExecutionReplayBundle,
+    StructuredEditProviderExecutionInvocation, StructuredEditProviderExecutionOutcome,
+    StructuredEditProviderExecutionOutcomeEnvelope, StructuredEditProviderExecutionPlan,
+    StructuredEditProviderExecutionPlanEnvelope, StructuredEditProviderExecutionProvenance,
+    StructuredEditProviderExecutionProvenanceEnvelope, StructuredEditProviderExecutionReplayBundle,
     StructuredEditProviderExecutionReplayBundleEnvelope, StructuredEditProviderExecutionRequest,
     StructuredEditProviderExecutionRequestEnvelope, StructuredEditProviderExecutorProfile,
     StructuredEditProviderExecutorProfileEnvelope, StructuredEditProviderExecutorRegistry,
@@ -5576,6 +5576,28 @@ fn conforms_to_slice_528_structured_edit_provider_execution_handoff_envelope_app
             import_structured_edit_provider_execution_handoff_envelope(&rejected_envelope),
             Err(expected_error)
         );
+    }
+}
+
+#[test]
+fn conforms_to_slice_533_structured_edit_provider_execution_invocation_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_invocation",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let execution_invocation = serde_json::from_value::<
+            StructuredEditProviderExecutionInvocation,
+        >(case["execution_invocation"].clone())
+        .expect("execution invocation should deserialize");
+        let roundtrip =
+            serde_json::to_value(&execution_invocation).expect("roundtrip should serialize");
+        let decoded =
+            serde_json::from_value::<StructuredEditProviderExecutionInvocation>(roundtrip)
+                .expect("roundtrip should deserialize");
+
+        assert_eq!(decoded, execution_invocation);
     }
 }
 
