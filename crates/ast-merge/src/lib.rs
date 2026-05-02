@@ -531,6 +531,15 @@ pub struct StructuredEditProviderExecutorSelectionPolicyEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutorResolution {
+    pub executor_registry: StructuredEditProviderExecutorRegistry,
+    pub selection_policy: StructuredEditProviderExecutorSelectionPolicy,
+    pub selected_executor_profile: StructuredEditProviderExecutorProfile,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditBatchRequest {
     pub requests: Vec<StructuredEditRequest>,
     #[serde(default)]

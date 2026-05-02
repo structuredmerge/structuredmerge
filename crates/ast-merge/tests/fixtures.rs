@@ -42,7 +42,8 @@ use ast_merge::{
     StructuredEditProviderExecutionReplayBundleEnvelope, StructuredEditProviderExecutionRequest,
     StructuredEditProviderExecutionRequestEnvelope, StructuredEditProviderExecutorProfile,
     StructuredEditProviderExecutorProfileEnvelope, StructuredEditProviderExecutorRegistry,
-    StructuredEditProviderExecutorRegistryEnvelope, StructuredEditProviderExecutorSelectionPolicy,
+    StructuredEditProviderExecutorRegistryEnvelope, StructuredEditProviderExecutorResolution,
+    StructuredEditProviderExecutorSelectionPolicy,
     StructuredEditProviderExecutorSelectionPolicyEnvelope, StructuredEditRequest,
     StructuredEditResult, StructuredEditSelectionProfile, StructuredEditStructureProfile,
     StructuredEditTransportImportError, TemplateApplyResult, TemplateConvergenceResult,
@@ -5331,6 +5332,28 @@ fn conforms_to_slice_512_structured_edit_provider_executor_selection_policy_enve
             import_structured_edit_provider_executor_selection_policy_envelope(&rejected_envelope),
             Err(expected_error)
         );
+    }
+}
+
+#[test]
+fn conforms_to_slice_513_structured_edit_provider_executor_resolution_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_executor_resolution",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let executor_resolution =
+            serde_json::from_value::<StructuredEditProviderExecutorResolution>(
+                case["executor_resolution"].clone(),
+            )
+            .expect("executor resolution should deserialize");
+        let roundtrip =
+            serde_json::to_value(&executor_resolution).expect("roundtrip should serialize");
+        let decoded = serde_json::from_value::<StructuredEditProviderExecutorResolution>(roundtrip)
+            .expect("roundtrip should deserialize");
+
+        assert_eq!(decoded, executor_resolution);
     }
 }
 
