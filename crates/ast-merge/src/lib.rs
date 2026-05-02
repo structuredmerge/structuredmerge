@@ -446,6 +446,13 @@ pub struct StructuredEditProviderExecutionReceipt {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionReceiptEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub execution_receipt: StructuredEditProviderExecutionReceipt,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditExecutionReportEnvelope {
     pub kind: String,
     pub version: u32,
@@ -3818,6 +3825,40 @@ pub fn import_structured_edit_provider_batch_execution_run_result_envelope(
     }
 
     Ok(envelope.batch_execution_run_result.clone())
+}
+
+pub fn structured_edit_provider_execution_receipt_envelope(
+    execution_receipt: &StructuredEditProviderExecutionReceipt,
+) -> StructuredEditProviderExecutionReceiptEnvelope {
+    StructuredEditProviderExecutionReceiptEnvelope {
+        kind: "structured_edit_provider_execution_receipt".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        execution_receipt: execution_receipt.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_execution_receipt_envelope(
+    envelope: &StructuredEditProviderExecutionReceiptEnvelope,
+) -> Result<StructuredEditProviderExecutionReceipt, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_provider_execution_receipt" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_provider_execution_receipt envelope kind."
+                .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_execution_receipt envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.execution_receipt.clone())
 }
 
 pub fn structured_edit_provider_batch_execution_handoff_envelope(

@@ -48,7 +48,8 @@ use ast_merge::{
     StructuredEditProviderExecutionOutcome, StructuredEditProviderExecutionOutcomeEnvelope,
     StructuredEditProviderExecutionPlan, StructuredEditProviderExecutionPlanEnvelope,
     StructuredEditProviderExecutionProvenance, StructuredEditProviderExecutionProvenanceEnvelope,
-    StructuredEditProviderExecutionReceipt, StructuredEditProviderExecutionReplayBundle,
+    StructuredEditProviderExecutionReceipt, StructuredEditProviderExecutionReceiptEnvelope,
+    StructuredEditProviderExecutionReplayBundle,
     StructuredEditProviderExecutionReplayBundleEnvelope, StructuredEditProviderExecutionRequest,
     StructuredEditProviderExecutionRequestEnvelope, StructuredEditProviderExecutionRunResult,
     StructuredEditProviderExecutionRunResultEnvelope, StructuredEditProviderExecutorProfile,
@@ -93,6 +94,7 @@ use ast_merge::{
     import_structured_edit_provider_execution_outcome_envelope,
     import_structured_edit_provider_execution_plan_envelope,
     import_structured_edit_provider_execution_provenance_envelope,
+    import_structured_edit_provider_execution_receipt_envelope,
     import_structured_edit_provider_execution_replay_bundle_envelope,
     import_structured_edit_provider_execution_request_envelope,
     import_structured_edit_provider_execution_run_result_envelope,
@@ -141,6 +143,7 @@ use ast_merge::{
     structured_edit_provider_execution_outcome_envelope,
     structured_edit_provider_execution_plan_envelope,
     structured_edit_provider_execution_provenance_envelope,
+    structured_edit_provider_execution_receipt_envelope,
     structured_edit_provider_execution_replay_bundle_envelope,
     structured_edit_provider_execution_request_envelope,
     structured_edit_provider_execution_run_result_envelope,
@@ -6056,6 +6059,86 @@ fn conforms_to_slice_549_structured_edit_provider_execution_receipt_fixture() {
             .expect("roundtrip should deserialize");
 
         assert_eq!(decoded, execution_receipt);
+    }
+}
+
+#[test]
+fn conforms_to_slice_550_structured_edit_provider_execution_receipt_transport_envelope_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_receipt_envelope",
+    ));
+    let execution_receipt = serde_json::from_value::<StructuredEditProviderExecutionReceipt>(
+        fixture["structured_edit_provider_execution_receipt"].clone(),
+    )
+    .expect("execution receipt should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderExecutionReceiptEnvelope>(
+        fixture["expected_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+
+    assert_eq!(structured_edit_provider_execution_receipt_envelope(&execution_receipt), expected);
+    assert_eq!(
+        import_structured_edit_provider_execution_receipt_envelope(&expected),
+        Ok(execution_receipt)
+    );
+}
+
+#[test]
+fn conforms_to_slice_551_structured_edit_provider_execution_receipt_transport_rejection_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_receipt_envelope_rejection",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let envelope = serde_json::from_value::<StructuredEditProviderExecutionReceiptEnvelope>(
+            case["envelope"].clone(),
+        )
+        .expect("rejected envelope should deserialize");
+        let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_execution_receipt_envelope(&envelope),
+            Err(expected_error)
+        );
+    }
+}
+
+#[test]
+fn conforms_to_slice_552_structured_edit_provider_execution_receipt_envelope_application_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_execution_receipt_envelope_application",
+    ));
+    let envelope = serde_json::from_value::<StructuredEditProviderExecutionReceiptEnvelope>(
+        fixture["structured_edit_provider_execution_receipt_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+    let expected = serde_json::from_value::<StructuredEditProviderExecutionReceipt>(
+        fixture["expected_execution_receipt"].clone(),
+    )
+    .expect("expected execution receipt should deserialize");
+
+    assert_eq!(import_structured_edit_provider_execution_receipt_envelope(&envelope), Ok(expected));
+
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let rejected_envelope = serde_json::from_value::<
+            StructuredEditProviderExecutionReceiptEnvelope,
+        >(case["envelope"].clone())
+        .expect("rejected envelope should deserialize");
+        let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_provider_execution_receipt_envelope(&rejected_envelope),
+            Err(expected_error)
+        );
     }
 }
 
