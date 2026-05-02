@@ -435,6 +435,17 @@ pub struct StructuredEditProviderBatchExecutionRunResultEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionReceipt {
+    pub run_result: StructuredEditProviderExecutionRunResult,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<StructuredEditProviderExecutionProvenance>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replay_bundle: Option<StructuredEditProviderExecutionReplayBundle>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditExecutionReportEnvelope {
     pub kind: String,
     pub version: u32,
