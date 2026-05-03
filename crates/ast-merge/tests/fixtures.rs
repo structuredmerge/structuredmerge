@@ -77,6 +77,7 @@ use ast_merge::{
     StructuredEditProviderExecutionReceiptReplaySessionEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflow,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecision,
+    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyRequest,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyRequestEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyResult,
@@ -147,6 +148,7 @@ use ast_merge::{
     import_structured_edit_provider_execution_receipt_replay_application_envelope,
     import_structured_edit_provider_execution_receipt_replay_request_envelope,
     import_structured_edit_provider_execution_receipt_replay_session_envelope,
+    import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope,
     import_structured_edit_provider_execution_receipt_replay_workflow_apply_request_envelope,
     import_structured_edit_provider_execution_receipt_replay_workflow_apply_result_envelope,
     import_structured_edit_provider_execution_receipt_replay_workflow_apply_session_envelope,
@@ -215,6 +217,7 @@ use ast_merge::{
     structured_edit_provider_execution_receipt_replay_application_envelope,
     structured_edit_provider_execution_receipt_replay_request_envelope,
     structured_edit_provider_execution_receipt_replay_session_envelope,
+    structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope,
     structured_edit_provider_execution_receipt_replay_workflow_apply_request_envelope,
     structured_edit_provider_execution_receipt_replay_workflow_apply_result_envelope,
     structured_edit_provider_execution_receipt_replay_workflow_apply_session_envelope,
@@ -8533,6 +8536,138 @@ fn conforms_to_slice_629_structured_edit_provider_execution_receipt_replay_workf
         .expect("apply decision thread should spawn")
         .join()
         .expect("apply decision thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_630_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_transport_envelope_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope",
+            ));
+            let apply_decision = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecision,
+            >(
+                fixture["structured_edit_provider_execution_receipt_replay_workflow_apply_decision"]
+                    .clone(),
+            )
+            .expect("apply decision should deserialize");
+            let expected = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionEnvelope,
+            >(fixture["expected_envelope"].clone())
+            .expect("envelope should deserialize");
+
+            assert_eq!(
+                serde_json::to_value(
+                    structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope(
+                        &apply_decision
+                    )
+                )
+                .expect("apply decision envelope should serialize"),
+                serde_json::to_value(expected.clone()).expect("expected envelope should serialize")
+            );
+            assert_eq!(
+                serde_json::to_value(
+                    import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope(
+                        &expected
+                    )
+                    .expect("apply decision envelope should import")
+                )
+                .expect("imported apply decision should serialize"),
+                serde_json::to_value(apply_decision).expect("expected apply decision should serialize")
+            );
+        })
+        .expect("apply decision envelope thread should spawn")
+        .join()
+        .expect("apply decision envelope thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_631_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_transport_rejection_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope_rejection",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+            for case in cases {
+                let envelope = serde_json::from_value::<
+                    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionEnvelope,
+                >(case["envelope"].clone())
+                .expect("rejected envelope should deserialize");
+                let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+                    case["expected_error"].clone(),
+                )
+                .expect("expected error should deserialize");
+
+                assert_eq!(
+                    import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope(
+                        &envelope
+                    ),
+                    Err(expected_error)
+                );
+            }
+        })
+        .expect("apply decision rejection thread should spawn")
+        .join()
+        .expect("apply decision rejection thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_632_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope_application_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(move || {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope_application",
+            ));
+            let envelope = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionEnvelope,
+            >(fixture["structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope"].clone())
+            .expect("envelope should deserialize");
+            let mut actual = serde_json::to_value(
+                import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope(
+                    &envelope,
+                )
+                .expect("apply decision envelope application should import"),
+            )
+            .expect("applied apply decision should serialize");
+            let mut expected =
+                fixture["expected_receipt_replay_workflow_apply_decision"].clone();
+            prune_empty_metadata(&mut actual);
+            prune_empty_metadata(&mut expected);
+            assert!(
+                actual == expected,
+                "apply decision envelope application payload should match fixture"
+            );
+
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+            for case in cases {
+                let rejected_envelope = serde_json::from_value::<
+                    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionEnvelope,
+                >(case["envelope"].clone())
+                .expect("rejected envelope should deserialize");
+                let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+                    case["expected_error"].clone(),
+                )
+                .expect("expected error should deserialize");
+
+                assert_eq!(
+                    import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope(
+                        &rejected_envelope
+                    ),
+                    Err(expected_error)
+                );
+            }
+        })
+        .expect("apply decision application thread should spawn")
+        .join()
+        .expect("apply decision application thread should complete");
 }
 
 #[test]
