@@ -80,6 +80,7 @@ use ast_merge::{
     StructuredEditProviderExecutionReceiptReplayWorkflow,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecision,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionEnvelope,
+    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionOutcome,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyRequest,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyRequestEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyResult,
@@ -8540,6 +8541,38 @@ fn conforms_to_slice_629_structured_edit_provider_execution_receipt_replay_workf
         .expect("apply decision thread should spawn")
         .join()
         .expect("apply decision thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_637_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_outcome_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_decision_outcome",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+            for case in cases {
+                let mut actual = serde_json::to_value(
+                    serde_json::from_value::<
+                        StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionOutcome,
+                    >(
+                        case["receipt_replay_workflow_apply_decision_outcome"].clone()
+                    )
+                    .expect("apply decision outcome should deserialize"),
+                )
+                .expect("apply decision outcome should serialize");
+                let mut expected = case["receipt_replay_workflow_apply_decision_outcome"].clone();
+                prune_empty_metadata(&mut actual);
+                prune_empty_metadata(&mut expected);
+                assert!(actual == expected, "apply decision outcome payload should match fixture");
+            }
+        })
+        .expect("apply decision outcome thread should spawn")
+        .join()
+        .expect("apply decision outcome thread should complete");
 }
 
 #[test]

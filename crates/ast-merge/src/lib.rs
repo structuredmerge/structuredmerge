@@ -648,6 +648,15 @@ pub struct StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecision {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionOutcome {
+    pub receipt_replay_workflow_apply_decision:
+        StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecision,
+    pub outcome: String,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditProviderExecutionReceiptReplayWorkflowApplyResultEnvelope {
     pub kind: String,
     pub version: u32,
