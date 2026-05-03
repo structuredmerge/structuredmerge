@@ -82,6 +82,7 @@ use ast_merge::{
     StructuredEditProviderExecutionReceiptReplayWorkflow,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecision,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConfirmation,
+    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConfirmationEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionOutcome,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionOutcomeEnvelope,
@@ -159,6 +160,7 @@ use ast_merge::{
     import_structured_edit_provider_execution_receipt_replay_application_envelope,
     import_structured_edit_provider_execution_receipt_replay_request_envelope,
     import_structured_edit_provider_execution_receipt_replay_session_envelope,
+    import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_envelope,
     import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope,
     import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_outcome_envelope,
     import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_settlement_envelope,
@@ -232,6 +234,7 @@ use ast_merge::{
     structured_edit_provider_execution_receipt_replay_application_envelope,
     structured_edit_provider_execution_receipt_replay_request_envelope,
     structured_edit_provider_execution_receipt_replay_session_envelope,
+    structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_envelope,
     structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope,
     structured_edit_provider_execution_receipt_replay_workflow_apply_decision_outcome_envelope,
     structured_edit_provider_execution_receipt_replay_workflow_apply_decision_settlement_envelope,
@@ -8657,6 +8660,121 @@ fn conforms_to_slice_653_structured_edit_provider_execution_receipt_replay_workf
         .expect("apply decision confirmation thread should spawn")
         .join()
         .expect("apply decision confirmation thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_654_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_transport_envelope_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_envelope",
+            ));
+            let confirmation = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConfirmation,
+            >(
+                fixture["structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation"].clone(),
+            )
+            .expect("apply decision confirmation should deserialize");
+            let expected = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConfirmationEnvelope,
+            >(fixture["expected_envelope"].clone())
+            .expect("envelope should deserialize");
+
+            assert_eq!(
+                structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_envelope(&confirmation),
+                expected
+            );
+            assert_eq!(
+                import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_envelope(&expected)
+                    .expect("apply decision confirmation envelope should import"),
+                confirmation
+            );
+        })
+        .expect("apply decision confirmation transport envelope thread should spawn")
+        .join()
+        .expect("apply decision confirmation transport envelope thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_655_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_transport_rejection_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_envelope_rejection",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+            for case in cases {
+                let envelope = serde_json::from_value::<
+                    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConfirmationEnvelope,
+                >(case["envelope"].clone())
+                .expect("envelope should deserialize");
+                let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+                    case["expected_error"].clone(),
+                )
+                .expect("expected error should deserialize");
+
+                let actual = import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_envelope(&envelope)
+                    .expect_err("confirmation envelope import should fail");
+                assert_eq!(actual, expected);
+            }
+        })
+        .expect("apply decision confirmation rejection thread should spawn")
+        .join()
+        .expect("apply decision confirmation rejection thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_656_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_envelope_application_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_envelope_application",
+            ));
+            let envelope = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConfirmationEnvelope,
+            >(
+                fixture["structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_envelope"].clone(),
+            )
+            .expect("envelope should deserialize");
+            let expected = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConfirmation,
+            >(
+                fixture["expected_receipt_replay_workflow_apply_decision_confirmation"].clone(),
+            )
+            .expect("expected confirmation should deserialize");
+
+            assert_eq!(
+                import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_envelope(&envelope)
+                    .expect("apply decision confirmation envelope should import"),
+                expected
+            );
+
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+            for case in cases {
+                let rejected = serde_json::from_value::<
+                    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConfirmationEnvelope,
+                >(case["envelope"].clone())
+                .expect("rejected envelope should deserialize");
+                let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+                    case["expected_error"].clone(),
+                )
+                .expect("expected error should deserialize");
+
+                let actual = import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_envelope(&rejected)
+                    .expect_err("confirmation envelope application rejection should fail");
+                assert_eq!(actual, expected);
+            }
+        })
+        .expect("apply decision confirmation application thread should spawn")
+        .join()
+        .expect("apply decision confirmation application thread should complete");
 }
 
 #[test]
