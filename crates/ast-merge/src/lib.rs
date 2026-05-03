@@ -591,6 +591,13 @@ pub struct StructuredEditProviderExecutionReceiptReplayWorkflowResult {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionReceiptReplayWorkflowResultEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub receipt_replay_workflow_result: StructuredEditProviderExecutionReceiptReplayWorkflowResult,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditExecutionReportEnvelope {
     pub kind: String,
     pub version: u32,
@@ -4326,6 +4333,44 @@ pub fn import_structured_edit_provider_batch_execution_receipt_replay_workflow_e
     }
 
     Ok(envelope.batch_receipt_replay_workflow.clone())
+}
+
+pub fn structured_edit_provider_execution_receipt_replay_workflow_result_envelope(
+    receipt_replay_workflow_result: &StructuredEditProviderExecutionReceiptReplayWorkflowResult,
+) -> StructuredEditProviderExecutionReceiptReplayWorkflowResultEnvelope {
+    StructuredEditProviderExecutionReceiptReplayWorkflowResultEnvelope {
+        kind: "structured_edit_provider_execution_receipt_replay_workflow_result".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        receipt_replay_workflow_result: receipt_replay_workflow_result.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_execution_receipt_replay_workflow_result_envelope(
+    envelope: &StructuredEditProviderExecutionReceiptReplayWorkflowResultEnvelope,
+) -> Result<
+    StructuredEditProviderExecutionReceiptReplayWorkflowResult,
+    StructuredEditTransportImportError,
+> {
+    if envelope.kind != "structured_edit_provider_execution_receipt_replay_workflow_result" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message:
+                "expected structured_edit_provider_execution_receipt_replay_workflow_result envelope kind."
+                    .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_execution_receipt_replay_workflow_result envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.receipt_replay_workflow_result.clone())
 }
 
 pub fn structured_edit_provider_batch_execution_handoff_envelope(

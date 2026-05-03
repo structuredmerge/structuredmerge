@@ -68,6 +68,7 @@ use ast_merge::{
     StructuredEditProviderExecutionReceiptReplayWorkflow,
     StructuredEditProviderExecutionReceiptReplayWorkflowEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflowResult,
+    StructuredEditProviderExecutionReceiptReplayWorkflowResultEnvelope,
     StructuredEditProviderExecutionReplayBundle,
     StructuredEditProviderExecutionReplayBundleEnvelope, StructuredEditProviderExecutionRequest,
     StructuredEditProviderExecutionRequestEnvelope, StructuredEditProviderExecutionRunResult,
@@ -123,6 +124,7 @@ use ast_merge::{
     import_structured_edit_provider_execution_receipt_replay_request_envelope,
     import_structured_edit_provider_execution_receipt_replay_session_envelope,
     import_structured_edit_provider_execution_receipt_replay_workflow_envelope,
+    import_structured_edit_provider_execution_receipt_replay_workflow_result_envelope,
     import_structured_edit_provider_execution_replay_bundle_envelope,
     import_structured_edit_provider_execution_request_envelope,
     import_structured_edit_provider_execution_run_result_envelope,
@@ -181,6 +183,7 @@ use ast_merge::{
     structured_edit_provider_execution_receipt_replay_request_envelope,
     structured_edit_provider_execution_receipt_replay_session_envelope,
     structured_edit_provider_execution_receipt_replay_workflow_envelope,
+    structured_edit_provider_execution_receipt_replay_workflow_result_envelope,
     structured_edit_provider_execution_replay_bundle_envelope,
     structured_edit_provider_execution_request_envelope,
     structured_edit_provider_execution_run_result_envelope,
@@ -7324,6 +7327,141 @@ fn conforms_to_slice_589_structured_edit_provider_execution_receipt_replay_workf
         .expect("workflow result validation thread should spawn")
         .join()
         .expect("workflow result validation thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_590_structured_edit_provider_execution_receipt_replay_workflow_result_transport_envelope_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_result_envelope",
+            ));
+            let receipt_replay_workflow_result =
+                serde_json::from_value::<StructuredEditProviderExecutionReceiptReplayWorkflowResult>(
+                    fixture["structured_edit_provider_execution_receipt_replay_workflow_result"]
+                        .clone(),
+                )
+                .expect("receipt replay workflow result should deserialize");
+            let expected = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplayWorkflowResultEnvelope,
+            >(fixture["expected_envelope"].clone())
+            .expect("envelope should deserialize");
+
+            assert_eq!(
+                serde_json::to_value(
+                    structured_edit_provider_execution_receipt_replay_workflow_result_envelope(
+                        &receipt_replay_workflow_result
+                    )
+                )
+                .expect("workflow result envelope should serialize"),
+                serde_json::to_value(expected.clone()).expect("expected envelope should serialize")
+            );
+            assert_eq!(
+                serde_json::to_value(
+                    import_structured_edit_provider_execution_receipt_replay_workflow_result_envelope(
+                        &expected
+                    )
+                    .expect("workflow result envelope should import")
+                )
+                .expect("imported workflow result should serialize"),
+                serde_json::to_value(receipt_replay_workflow_result)
+                    .expect("expected workflow result should serialize")
+            );
+        })
+        .expect("workflow result envelope thread should spawn")
+        .join()
+        .expect("workflow result envelope thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_591_structured_edit_provider_execution_receipt_replay_workflow_result_transport_rejection_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_result_envelope_rejection",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+            for case in cases {
+                let envelope = serde_json::from_value::<
+                    StructuredEditProviderExecutionReceiptReplayWorkflowResultEnvelope,
+                >(case["envelope"].clone())
+                .expect("rejected envelope should deserialize");
+                let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+                    case["expected_error"].clone(),
+                )
+                .expect("expected error should deserialize");
+
+                assert_eq!(
+                    import_structured_edit_provider_execution_receipt_replay_workflow_result_envelope(
+                        &envelope
+                    ),
+                    Err(expected_error)
+                );
+            }
+        })
+        .expect("workflow result rejection thread should spawn")
+        .join()
+        .expect("workflow result rejection thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_592_structured_edit_provider_execution_receipt_replay_workflow_result_envelope_application_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(move || {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_result_envelope_application",
+            ));
+            let envelope = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplayWorkflowResultEnvelope,
+            >(
+                fixture["structured_edit_provider_execution_receipt_replay_workflow_result_envelope"]
+                    .clone(),
+            )
+            .expect("envelope should deserialize");
+            let expected_payload = fixture["expected_receipt_replay_workflow_result"].clone();
+            let mut actual = serde_json::to_value(
+                import_structured_edit_provider_execution_receipt_replay_workflow_result_envelope(
+                    &envelope,
+                )
+                .expect("workflow result envelope application should import"),
+            )
+            .expect("applied workflow result should serialize");
+            let mut expected = expected_payload.clone();
+            prune_empty_metadata(&mut actual);
+            prune_empty_metadata(&mut expected);
+            assert!(
+                actual == expected,
+                "workflow result envelope application payload should match fixture"
+            );
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+            for case in cases {
+                let rejected_envelope = serde_json::from_value::<
+                    StructuredEditProviderExecutionReceiptReplayWorkflowResultEnvelope,
+                >(case["envelope"].clone())
+                .expect("rejected envelope should deserialize");
+                let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+                    case["expected_error"].clone(),
+                )
+                .expect("expected error should deserialize");
+
+                assert_eq!(
+                    import_structured_edit_provider_execution_receipt_replay_workflow_result_envelope(
+                        &rejected_envelope
+                    ),
+                    Err(expected_error)
+                );
+            }
+        })
+        .expect("workflow result application thread should spawn")
+        .join()
+        .expect("workflow result application thread should complete");
 }
 
 #[test]
