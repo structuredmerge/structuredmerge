@@ -10776,6 +10776,26 @@ fn conforms_to_slice_464_structured_edit_provider_execution_application_envelope
 }
 
 #[test]
+fn conforms_to_slice_677_structured_edit_crispr_overmatch_fail_closed_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_crispr_overmatch_fail_closed",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let mut actual = serde_json::to_value(
+            serde_json::from_value::<StructuredEditExecutionReport>(case["report"].clone())
+                .expect("crispr overmatch report should deserialize"),
+        )
+        .expect("crispr overmatch report should serialize");
+        let mut expected = case["report"].clone();
+        prune_empty_metadata(&mut actual);
+        prune_empty_metadata(&mut expected);
+        assert!(actual == expected, "crispr overmatch fail closed payload should match fixture");
+    }
+}
+
+#[test]
 fn conforms_to_slice_439_structured_edit_execution_report_transport_envelope_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_execution_report_envelope",
