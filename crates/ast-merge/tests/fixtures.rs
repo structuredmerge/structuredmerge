@@ -76,6 +76,7 @@ use ast_merge::{
     StructuredEditProviderExecutionReceiptReplayWorkflow,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyRequest,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyRequestEnvelope,
+    StructuredEditProviderExecutionReceiptReplayWorkflowApplyResult,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplySession,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplySessionEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflowEnvelope,
@@ -7610,6 +7611,36 @@ fn conforms_to_slice_613_structured_edit_provider_execution_receipt_replay_workf
         .expect("workflow apply session thread should spawn")
         .join()
         .expect("workflow apply session thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_621_structured_edit_provider_execution_receipt_replay_workflow_apply_result_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_result",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+            for case in cases {
+                let mut actual = serde_json::to_value(
+                    serde_json::from_value::<
+                        StructuredEditProviderExecutionReceiptReplayWorkflowApplyResult,
+                    >(case["receipt_replay_workflow_apply_result"].clone())
+                    .expect("receipt replay workflow apply result should deserialize"),
+                )
+                .expect("receipt replay workflow apply result should serialize");
+                let mut expected = case["receipt_replay_workflow_apply_result"].clone();
+                prune_empty_metadata(&mut actual);
+                prune_empty_metadata(&mut expected);
+                assert!(actual == expected, "workflow apply result payload should match fixture");
+            }
+        })
+        .expect("workflow apply result thread should spawn")
+        .join()
+        .expect("workflow apply result thread should complete");
 }
 
 #[test]
