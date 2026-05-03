@@ -21,9 +21,10 @@ use ast_merge::{
     ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, StructuredEditApplication,
     StructuredEditApplicationEnvelope, StructuredEditBatchReport,
     StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
-    StructuredEditDestinationProfile, StructuredEditExecutionReport,
-    StructuredEditExecutionReportEnvelope, StructuredEditMatchProfile,
-    StructuredEditOperationProfile, StructuredEditProviderBatchExecutionDispatch,
+    StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
+    StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
+    StructuredEditMatchProfile, StructuredEditOperationProfile,
+    StructuredEditProviderBatchExecutionDispatch,
     StructuredEditProviderBatchExecutionDispatchEnvelope,
     StructuredEditProviderBatchExecutionHandoff,
     StructuredEditProviderBatchExecutionHandoffEnvelope,
@@ -10883,6 +10884,25 @@ fn conforms_to_slice_681_structured_edit_crispr_markdown_heading_section_replace
             "crispr markdown heading section replace parity payload should match fixture"
         );
     }
+}
+
+#[test]
+fn conforms_to_slice_682_structured_edit_crispr_example_parity_report_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_crispr_example_parity_report",
+    ));
+
+    let mut actual = serde_json::to_value(
+        serde_json::from_value::<StructuredEditCrisprExampleParityReport>(
+            fixture["report"].clone(),
+        )
+        .expect("crispr example parity report should deserialize"),
+    )
+    .expect("crispr example parity report should serialize");
+    let mut expected = fixture["report"].clone();
+    prune_empty_metadata(&mut actual);
+    prune_empty_metadata(&mut expected);
+    assert!(actual == expected, "crispr example parity report payload should match fixture");
 }
 
 #[test]

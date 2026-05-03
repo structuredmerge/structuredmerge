@@ -331,6 +331,38 @@ pub struct StructuredEditExecutionReport {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditCrisprExampleParityBackendNote {
+    pub backend: String,
+    pub scope: String,
+    pub notes: Vec<String>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditCrisprExampleParityScenario {
+    pub scenario: String,
+    pub family: String,
+    pub reproduced: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference_backend: Option<String>,
+    pub implementation_notes: Vec<String>,
+    #[serde(default)]
+    pub backend_notes: Vec<StructuredEditCrisprExampleParityBackendNote>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditCrisprExampleParityReport {
+    pub scenarios: Vec<StructuredEditCrisprExampleParityScenario>,
+    #[serde(default)]
+    pub remaining_gaps: Vec<String>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditProviderExecutionRequest {
     pub request: StructuredEditRequest,
     pub provider_family: String,
