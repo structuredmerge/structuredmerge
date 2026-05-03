@@ -555,6 +555,34 @@ pub struct StructuredEditProviderBatchExecutionReceiptReplaySessionEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionReceiptReplayWorkflow {
+    pub receipt_replay_session: StructuredEditProviderExecutionReceiptReplaySession,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionReceiptReplayWorkflowEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub receipt_replay_workflow: StructuredEditProviderExecutionReceiptReplayWorkflow,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionReceiptReplayWorkflow {
+    pub workflows: Vec<StructuredEditProviderExecutionReceiptReplayWorkflow>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionReceiptReplayWorkflowEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub batch_receipt_replay_workflow: StructuredEditProviderBatchExecutionReceiptReplayWorkflow,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditExecutionReportEnvelope {
     pub kind: String,
     pub version: u32,
@@ -4216,6 +4244,80 @@ pub fn import_structured_edit_provider_batch_execution_receipt_replay_session_en
     }
 
     Ok(envelope.batch_receipt_replay_session.clone())
+}
+
+pub fn structured_edit_provider_execution_receipt_replay_workflow_envelope(
+    receipt_replay_workflow: &StructuredEditProviderExecutionReceiptReplayWorkflow,
+) -> StructuredEditProviderExecutionReceiptReplayWorkflowEnvelope {
+    StructuredEditProviderExecutionReceiptReplayWorkflowEnvelope {
+        kind: "structured_edit_provider_execution_receipt_replay_workflow".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        receipt_replay_workflow: receipt_replay_workflow.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_execution_receipt_replay_workflow_envelope(
+    envelope: &StructuredEditProviderExecutionReceiptReplayWorkflowEnvelope,
+) -> Result<StructuredEditProviderExecutionReceiptReplayWorkflow, StructuredEditTransportImportError>
+{
+    if envelope.kind != "structured_edit_provider_execution_receipt_replay_workflow" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message:
+                "expected structured_edit_provider_execution_receipt_replay_workflow envelope kind."
+                    .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_execution_receipt_replay_workflow envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.receipt_replay_workflow.clone())
+}
+
+pub fn structured_edit_provider_batch_execution_receipt_replay_workflow_envelope(
+    batch_receipt_replay_workflow: &StructuredEditProviderBatchExecutionReceiptReplayWorkflow,
+) -> StructuredEditProviderBatchExecutionReceiptReplayWorkflowEnvelope {
+    StructuredEditProviderBatchExecutionReceiptReplayWorkflowEnvelope {
+        kind: "structured_edit_provider_batch_execution_receipt_replay_workflow".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        batch_receipt_replay_workflow: batch_receipt_replay_workflow.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_batch_execution_receipt_replay_workflow_envelope(
+    envelope: &StructuredEditProviderBatchExecutionReceiptReplayWorkflowEnvelope,
+) -> Result<
+    StructuredEditProviderBatchExecutionReceiptReplayWorkflow,
+    StructuredEditTransportImportError,
+> {
+    if envelope.kind != "structured_edit_provider_batch_execution_receipt_replay_workflow" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message:
+                "expected structured_edit_provider_batch_execution_receipt_replay_workflow envelope kind."
+                    .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_batch_execution_receipt_replay_workflow envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.batch_receipt_replay_workflow.clone())
 }
 
 pub fn structured_edit_provider_batch_execution_handoff_envelope(
