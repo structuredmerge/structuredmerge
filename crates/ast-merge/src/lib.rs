@@ -496,6 +496,36 @@ pub struct StructuredEditProviderBatchExecutionReceiptReplayRequestEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionReceiptReplayApplication {
+    pub receipt_replay_request: StructuredEditProviderExecutionReceiptReplayRequest,
+    pub run_result: StructuredEditProviderExecutionRunResult,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionReceiptReplayApplicationEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub receipt_replay_application: StructuredEditProviderExecutionReceiptReplayApplication,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionReceiptReplayApplication {
+    pub applications: Vec<StructuredEditProviderExecutionReceiptReplayApplication>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionReceiptReplayApplicationEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub batch_receipt_replay_application:
+        StructuredEditProviderBatchExecutionReceiptReplayApplication,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditExecutionReportEnvelope {
     pub kind: String,
     pub version: u32,
@@ -4009,6 +4039,81 @@ pub fn import_structured_edit_provider_batch_execution_receipt_replay_request_en
     }
 
     Ok(envelope.batch_receipt_replay_request.clone())
+}
+
+pub fn structured_edit_provider_execution_receipt_replay_application_envelope(
+    receipt_replay_application: &StructuredEditProviderExecutionReceiptReplayApplication,
+) -> StructuredEditProviderExecutionReceiptReplayApplicationEnvelope {
+    StructuredEditProviderExecutionReceiptReplayApplicationEnvelope {
+        kind: "structured_edit_provider_execution_receipt_replay_application".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        receipt_replay_application: receipt_replay_application.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_execution_receipt_replay_application_envelope(
+    envelope: &StructuredEditProviderExecutionReceiptReplayApplicationEnvelope,
+) -> Result<
+    StructuredEditProviderExecutionReceiptReplayApplication,
+    StructuredEditTransportImportError,
+> {
+    if envelope.kind != "structured_edit_provider_execution_receipt_replay_application" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message:
+                "expected structured_edit_provider_execution_receipt_replay_application envelope kind."
+                    .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_execution_receipt_replay_application envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.receipt_replay_application.clone())
+}
+
+pub fn structured_edit_provider_batch_execution_receipt_replay_application_envelope(
+    batch_receipt_replay_application: &StructuredEditProviderBatchExecutionReceiptReplayApplication,
+) -> StructuredEditProviderBatchExecutionReceiptReplayApplicationEnvelope {
+    StructuredEditProviderBatchExecutionReceiptReplayApplicationEnvelope {
+        kind: "structured_edit_provider_batch_execution_receipt_replay_application".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        batch_receipt_replay_application: batch_receipt_replay_application.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_batch_execution_receipt_replay_application_envelope(
+    envelope: &StructuredEditProviderBatchExecutionReceiptReplayApplicationEnvelope,
+) -> Result<
+    StructuredEditProviderBatchExecutionReceiptReplayApplication,
+    StructuredEditTransportImportError,
+> {
+    if envelope.kind != "structured_edit_provider_batch_execution_receipt_replay_application" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_provider_batch_execution_receipt_replay_application envelope kind."
+                .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_batch_execution_receipt_replay_application envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.batch_receipt_replay_application.clone())
 }
 
 pub fn structured_edit_provider_batch_execution_handoff_envelope(
