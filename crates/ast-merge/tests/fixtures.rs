@@ -10816,6 +10816,30 @@ fn conforms_to_slice_678_structured_edit_crispr_append_fallback_insert_fixture()
 }
 
 #[test]
+fn conforms_to_slice_679_structured_edit_crispr_ruby_comment_owned_rewrite_delete_parity_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_crispr_ruby_comment_owned_rewrite_delete_parity",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let mut actual = serde_json::to_value(
+            serde_json::from_value::<StructuredEditExecutionReport>(case["report"].clone()).expect(
+                "crispr ruby comment owned rewrite delete parity report should deserialize",
+            ),
+        )
+        .expect("crispr ruby comment owned rewrite delete parity report should serialize");
+        let mut expected = case["report"].clone();
+        prune_empty_metadata(&mut actual);
+        prune_empty_metadata(&mut expected);
+        assert!(
+            actual == expected,
+            "crispr ruby comment owned rewrite delete parity payload should match fixture"
+        );
+    }
+}
+
+#[test]
 fn conforms_to_slice_439_structured_edit_execution_report_transport_envelope_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_execution_report_envelope",
