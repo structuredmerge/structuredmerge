@@ -630,6 +630,14 @@ pub struct StructuredEditProviderExecutionReceiptReplayWorkflowApplySession {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionReceiptReplayWorkflowApplySessionEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub receipt_replay_workflow_apply_session:
+        StructuredEditProviderExecutionReceiptReplayWorkflowApplySession,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditProviderExecutionReceiptReplayWorkflowApplyRequestEnvelope {
     pub kind: String,
     pub version: u32,
@@ -643,6 +651,36 @@ pub struct StructuredEditProviderExecutionReceiptReplayWorkflowReviewRequestEnve
     pub version: u32,
     pub receipt_replay_workflow_review_request:
         StructuredEditProviderExecutionReceiptReplayWorkflowReviewRequest,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyRequest {
+    pub apply_requests: Vec<StructuredEditProviderExecutionReceiptReplayWorkflowApplyRequest>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplySession {
+    pub apply_sessions: Vec<StructuredEditProviderExecutionReceiptReplayWorkflowApplySession>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyRequestEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub batch_receipt_replay_workflow_apply_request:
+        StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyRequest,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplySessionEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub batch_receipt_replay_workflow_apply_session:
+        StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplySession,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -4559,6 +4597,129 @@ pub fn import_structured_edit_provider_execution_receipt_replay_workflow_apply_r
     }
 
     Ok(envelope.receipt_replay_workflow_apply_request.clone())
+}
+
+pub fn structured_edit_provider_execution_receipt_replay_workflow_apply_session_envelope(
+    receipt_replay_workflow_apply_session: &StructuredEditProviderExecutionReceiptReplayWorkflowApplySession,
+) -> StructuredEditProviderExecutionReceiptReplayWorkflowApplySessionEnvelope {
+    StructuredEditProviderExecutionReceiptReplayWorkflowApplySessionEnvelope {
+        kind: "structured_edit_provider_execution_receipt_replay_workflow_apply_session"
+            .to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        receipt_replay_workflow_apply_session: receipt_replay_workflow_apply_session.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_execution_receipt_replay_workflow_apply_session_envelope(
+    envelope: &StructuredEditProviderExecutionReceiptReplayWorkflowApplySessionEnvelope,
+) -> Result<
+    StructuredEditProviderExecutionReceiptReplayWorkflowApplySession,
+    StructuredEditTransportImportError,
+> {
+    if envelope.kind != "structured_edit_provider_execution_receipt_replay_workflow_apply_session" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message:
+                "expected structured_edit_provider_execution_receipt_replay_workflow_apply_session envelope kind."
+                    .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_execution_receipt_replay_workflow_apply_session envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.receipt_replay_workflow_apply_session.clone())
+}
+
+pub fn structured_edit_provider_batch_execution_receipt_replay_workflow_apply_request_envelope(
+    batch_receipt_replay_workflow_apply_request: &StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyRequest,
+) -> StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyRequestEnvelope {
+    StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyRequestEnvelope {
+        kind: "structured_edit_provider_batch_execution_receipt_replay_workflow_apply_request"
+            .to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        batch_receipt_replay_workflow_apply_request: batch_receipt_replay_workflow_apply_request
+            .clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_request_envelope(
+    envelope: &StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyRequestEnvelope,
+) -> Result<
+    StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyRequest,
+    StructuredEditTransportImportError,
+> {
+    if envelope.kind
+        != "structured_edit_provider_batch_execution_receipt_replay_workflow_apply_request"
+    {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message:
+                "expected structured_edit_provider_batch_execution_receipt_replay_workflow_apply_request envelope kind."
+                    .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_batch_execution_receipt_replay_workflow_apply_request envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.batch_receipt_replay_workflow_apply_request.clone())
+}
+
+pub fn structured_edit_provider_batch_execution_receipt_replay_workflow_apply_session_envelope(
+    batch_receipt_replay_workflow_apply_session: &StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplySession,
+) -> StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplySessionEnvelope {
+    StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplySessionEnvelope {
+        kind: "structured_edit_provider_batch_execution_receipt_replay_workflow_apply_session"
+            .to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        batch_receipt_replay_workflow_apply_session: batch_receipt_replay_workflow_apply_session
+            .clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_session_envelope(
+    envelope: &StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplySessionEnvelope,
+) -> Result<
+    StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplySession,
+    StructuredEditTransportImportError,
+> {
+    if envelope.kind
+        != "structured_edit_provider_batch_execution_receipt_replay_workflow_apply_session"
+    {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message:
+                "expected structured_edit_provider_batch_execution_receipt_replay_workflow_apply_session envelope kind."
+                    .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_batch_execution_receipt_replay_workflow_apply_session envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.batch_receipt_replay_workflow_apply_session.clone())
 }
 
 pub fn structured_edit_provider_batch_execution_receipt_replay_workflow_review_request_envelope(
