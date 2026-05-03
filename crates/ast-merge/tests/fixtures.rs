@@ -45,6 +45,8 @@ use ast_merge::{
     StructuredEditProviderBatchExecutionReceiptReplayWorkflow,
     StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyRequest,
     StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyRequestEnvelope,
+    StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyResult,
+    StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyResultEnvelope,
     StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplySession,
     StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplySessionEnvelope,
     StructuredEditProviderBatchExecutionReceiptReplayWorkflowEnvelope,
@@ -124,6 +126,7 @@ use ast_merge::{
     import_structured_edit_provider_batch_execution_receipt_replay_request_envelope,
     import_structured_edit_provider_batch_execution_receipt_replay_session_envelope,
     import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_request_envelope,
+    import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_envelope,
     import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_session_envelope,
     import_structured_edit_provider_batch_execution_receipt_replay_workflow_envelope,
     import_structured_edit_provider_batch_execution_receipt_replay_workflow_result_envelope,
@@ -191,6 +194,7 @@ use ast_merge::{
     structured_edit_provider_batch_execution_receipt_replay_request_envelope,
     structured_edit_provider_batch_execution_receipt_replay_session_envelope,
     structured_edit_provider_batch_execution_receipt_replay_workflow_apply_request_envelope,
+    structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_envelope,
     structured_edit_provider_batch_execution_receipt_replay_workflow_apply_session_envelope,
     structured_edit_provider_batch_execution_receipt_replay_workflow_envelope,
     structured_edit_provider_batch_execution_receipt_replay_workflow_result_envelope,
@@ -8344,6 +8348,160 @@ fn conforms_to_slice_620_structured_edit_provider_batch_execution_receipt_replay
         .expect("batch apply session application thread should spawn")
         .join()
         .expect("batch apply session application thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_625_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+            for case in cases {
+                let mut actual = serde_json::to_value(
+                    serde_json::from_value::<
+                        StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyResult,
+                    >(
+                        case["batch_receipt_replay_workflow_apply_result"].clone()
+                    )
+                    .expect("batch apply result should deserialize"),
+                )
+                .expect("batch apply result should serialize");
+                let mut expected = case["batch_receipt_replay_workflow_apply_result"].clone();
+                prune_empty_metadata(&mut actual);
+                prune_empty_metadata(&mut expected);
+                assert!(actual == expected, "batch apply result payload should match fixture");
+            }
+        })
+        .expect("batch apply result thread should spawn")
+        .join()
+        .expect("batch apply result thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_626_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_transport_envelope_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_envelope",
+            ));
+            let apply_result = serde_json::from_value::<
+                StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyResult,
+            >(fixture["structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result"].clone())
+            .expect("batch apply result should deserialize");
+            let expected = serde_json::from_value::<
+                StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyResultEnvelope,
+            >(fixture["expected_envelope"].clone())
+            .expect("envelope should deserialize");
+
+            assert_eq!(
+                structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_envelope(
+                    &apply_result
+                ),
+                expected
+            );
+            assert_eq!(
+                import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_envelope(
+                    &expected
+                )
+                .expect("batch apply result envelope should import"),
+                apply_result
+            );
+        })
+        .expect("batch apply result envelope thread should spawn")
+        .join()
+        .expect("batch apply result envelope thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_627_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_transport_rejection_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_envelope_rejection",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+            for case in cases {
+                let envelope = serde_json::from_value::<
+                    StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyResultEnvelope,
+                >(case["envelope"].clone())
+                .expect("rejected envelope should deserialize");
+                let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+                    case["expected_error"].clone(),
+                )
+                .expect("expected error should deserialize");
+
+                assert_eq!(
+                    import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_envelope(
+                        &envelope
+                    ),
+                    Err(expected_error)
+                );
+            }
+        })
+        .expect("batch apply result rejection thread should spawn")
+        .join()
+        .expect("batch apply result rejection thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_628_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_envelope_application_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(move || {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_envelope_application",
+            ));
+            let envelope = serde_json::from_value::<
+                StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyResultEnvelope,
+            >(fixture["structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_envelope"].clone())
+            .expect("envelope should deserialize");
+            let mut actual = serde_json::to_value(
+                import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_envelope(
+                    &envelope,
+                )
+                .expect("batch apply result envelope application should import"),
+            )
+            .expect("applied batch apply result should serialize");
+            let mut expected = fixture["expected_batch_receipt_replay_workflow_apply_result"].clone();
+            prune_empty_metadata(&mut actual);
+            prune_empty_metadata(&mut expected);
+            assert!(
+                actual == expected,
+                "batch apply result envelope application payload should match fixture"
+            );
+
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+            for case in cases {
+                let rejected_envelope = serde_json::from_value::<
+                    StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyResultEnvelope,
+                >(case["envelope"].clone())
+                .expect("rejected envelope should deserialize");
+                let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+                    case["expected_error"].clone(),
+                )
+                .expect("expected error should deserialize");
+
+                assert_eq!(
+                    import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_result_envelope(
+                        &rejected_envelope
+                    ),
+                    Err(expected_error)
+                );
+            }
+        })
+        .expect("batch apply result application thread should spawn")
+        .join()
+        .expect("batch apply result application thread should complete");
 }
 
 #[test]
