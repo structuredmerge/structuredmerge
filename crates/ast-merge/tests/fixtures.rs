@@ -81,6 +81,7 @@ use ast_merge::{
     StructuredEditProviderExecutionReceiptReplaySessionEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflow,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecision,
+    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConfirmation,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionOutcome,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionOutcomeEnvelope,
@@ -8620,6 +8621,42 @@ fn conforms_to_slice_645_structured_edit_provider_execution_receipt_replay_workf
         .expect("apply decision settlement thread should spawn")
         .join()
         .expect("apply decision settlement thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_653_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+            for case in cases {
+                let mut actual = serde_json::to_value(
+                    serde_json::from_value::<
+                        StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConfirmation,
+                    >(
+                        case["receipt_replay_workflow_apply_decision_confirmation"].clone()
+                    )
+                    .expect("apply decision confirmation should deserialize"),
+                )
+                .expect("apply decision confirmation should serialize");
+                let mut expected =
+                    case["receipt_replay_workflow_apply_decision_confirmation"].clone();
+                prune_empty_metadata(&mut actual);
+                prune_empty_metadata(&mut expected);
+                assert!(
+                    actual == expected,
+                    "apply decision confirmation payload should match fixture"
+                );
+            }
+        })
+        .expect("apply decision confirmation thread should spawn")
+        .join()
+        .expect("apply decision confirmation thread should complete");
 }
 
 #[test]
