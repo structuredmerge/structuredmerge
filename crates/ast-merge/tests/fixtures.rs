@@ -72,6 +72,7 @@ use ast_merge::{
     StructuredEditProviderExecutionReceiptReplayWorkflow,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyRequest,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyRequestEnvelope,
+    StructuredEditProviderExecutionReceiptReplayWorkflowApplySession,
     StructuredEditProviderExecutionReceiptReplayWorkflowEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflowResult,
     StructuredEditProviderExecutionReceiptReplayWorkflowResultEnvelope,
@@ -7568,6 +7569,36 @@ fn conforms_to_slice_605_structured_edit_provider_execution_receipt_replay_workf
         .expect("workflow apply request thread should spawn")
         .join()
         .expect("workflow apply request thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_613_structured_edit_provider_execution_receipt_replay_workflow_apply_session_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_session",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+            for case in cases {
+                let mut actual = serde_json::to_value(
+                    serde_json::from_value::<
+                        StructuredEditProviderExecutionReceiptReplayWorkflowApplySession,
+                    >(case["receipt_replay_workflow_apply_session"].clone())
+                    .expect("receipt replay workflow apply session should deserialize"),
+                )
+                .expect("receipt replay workflow apply session should serialize");
+                let mut expected = case["receipt_replay_workflow_apply_session"].clone();
+                prune_empty_metadata(&mut actual);
+                prune_empty_metadata(&mut expected);
+                assert!(actual == expected, "workflow apply session payload should match fixture");
+            }
+        })
+        .expect("workflow apply session thread should spawn")
+        .join()
+        .expect("workflow apply session thread should complete");
 }
 
 #[test]
