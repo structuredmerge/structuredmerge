@@ -67,6 +67,7 @@ use ast_merge::{
     StructuredEditProviderExecutionReceiptReplaySessionEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflow,
     StructuredEditProviderExecutionReceiptReplayWorkflowEnvelope,
+    StructuredEditProviderExecutionReceiptReplayWorkflowResult,
     StructuredEditProviderExecutionReplayBundle,
     StructuredEditProviderExecutionReplayBundleEnvelope, StructuredEditProviderExecutionRequest,
     StructuredEditProviderExecutionRequestEnvelope, StructuredEditProviderExecutionRunResult,
@@ -7293,6 +7294,36 @@ fn conforms_to_slice_588_structured_edit_provider_batch_execution_receipt_replay
             Err(expected_error)
         );
     }
+}
+
+#[test]
+fn conforms_to_slice_589_structured_edit_provider_execution_receipt_replay_workflow_result_fixture()
+{
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_result",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+            for case in cases {
+                let mut actual = serde_json::to_value(
+                    serde_json::from_value::<
+                        StructuredEditProviderExecutionReceiptReplayWorkflowResult,
+                    >(case["receipt_replay_workflow_result"].clone())
+                    .expect("receipt replay workflow result should deserialize"),
+                )
+                .expect("receipt replay workflow result should serialize");
+                let mut expected = case["receipt_replay_workflow_result"].clone();
+                prune_empty_metadata(&mut actual);
+                prune_empty_metadata(&mut expected);
+                assert!(actual == expected, "workflow result payload should match fixture");
+            }
+        })
+        .expect("workflow result validation thread should spawn")
+        .join()
+        .expect("workflow result validation thread should complete");
 }
 
 #[test]
