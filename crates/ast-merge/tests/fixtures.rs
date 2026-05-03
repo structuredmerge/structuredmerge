@@ -76,6 +76,7 @@ use ast_merge::{
     StructuredEditProviderExecutionReceiptReplaySession,
     StructuredEditProviderExecutionReceiptReplaySessionEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflow,
+    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecision,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyRequest,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyRequestEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyResult,
@@ -8502,6 +8503,36 @@ fn conforms_to_slice_628_structured_edit_provider_batch_execution_receipt_replay
         .expect("batch apply result application thread should spawn")
         .join()
         .expect("batch apply result application thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_629_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_decision",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+            for case in cases {
+                let mut actual = serde_json::to_value(
+                    serde_json::from_value::<
+                        StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecision,
+                    >(case["receipt_replay_workflow_apply_decision"].clone())
+                    .expect("apply decision should deserialize"),
+                )
+                .expect("apply decision should serialize");
+                let mut expected = case["receipt_replay_workflow_apply_decision"].clone();
+                prune_empty_metadata(&mut actual);
+                prune_empty_metadata(&mut expected);
+                assert!(actual == expected, "apply decision payload should match fixture");
+            }
+        })
+        .expect("apply decision thread should spawn")
+        .join()
+        .expect("apply decision thread should complete");
 }
 
 #[test]
