@@ -675,6 +675,15 @@ pub struct StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConf
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReport {
+    pub receipt_replay_workflow_apply_decision_confirmation:
+        StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConfirmation,
+    pub closure_report: String,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditProviderExecutionReceiptReplayWorkflowApplyResultEnvelope {
     pub kind: String,
     pub version: u32,
@@ -712,6 +721,14 @@ pub struct StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConf
     pub version: u32,
     pub receipt_replay_workflow_apply_decision_confirmation:
         StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConfirmation,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub receipt_replay_workflow_apply_decision_closure_report:
+        StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReport,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -791,6 +808,14 @@ pub struct StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisio
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReport {
+    pub closure_reports:
+        Vec<StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReport>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyRequestEnvelope {
     pub kind: String,
     pub version: u32,
@@ -830,6 +855,15 @@ pub struct StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisio
     pub version: u32,
     pub batch_receipt_replay_workflow_apply_decision_confirmation:
         StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionConfirmation,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope
+{
+    pub kind: String,
+    pub version: u32,
+    pub batch_receipt_replay_workflow_apply_decision_closure_report:
+        StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReport,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -5009,6 +5043,49 @@ pub fn import_structured_edit_provider_execution_receipt_replay_workflow_apply_d
     Ok(envelope.receipt_replay_workflow_apply_decision_confirmation.clone())
 }
 
+pub fn structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_envelope(
+    receipt_replay_workflow_apply_decision_closure_report: &StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReport,
+) -> StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope {
+    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope {
+        kind:
+            "structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report"
+                .to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        receipt_replay_workflow_apply_decision_closure_report:
+            receipt_replay_workflow_apply_decision_closure_report.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_envelope(
+    envelope: &StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope,
+) -> Result<
+    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReport,
+    StructuredEditTransportImportError,
+> {
+    if envelope.kind
+        != "structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report"
+    {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message:
+                "expected structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report envelope kind."
+                    .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.receipt_replay_workflow_apply_decision_closure_report.clone())
+}
+
 pub fn structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_settlement_envelope(
     batch_receipt_replay_workflow_apply_decision_settlement: &StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionSettlement,
 ) -> StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionSettlementEnvelope {
@@ -5091,6 +5168,48 @@ pub fn import_structured_edit_provider_batch_execution_receipt_replay_workflow_a
     }
 
     Ok(envelope.batch_receipt_replay_workflow_apply_decision_confirmation.clone())
+}
+
+pub fn structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_envelope(
+    batch_receipt_replay_workflow_apply_decision_closure_report: &StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReport,
+) -> StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope {
+    StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope {
+        kind: "structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report"
+            .to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        batch_receipt_replay_workflow_apply_decision_closure_report:
+            batch_receipt_replay_workflow_apply_decision_closure_report.clone(),
+    }
+}
+
+pub fn import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_envelope(
+    envelope: &StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope,
+) -> Result<
+    StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReport,
+    StructuredEditTransportImportError,
+> {
+    if envelope.kind
+        != "structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report"
+    {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message:
+                "expected structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report envelope kind."
+                    .to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.batch_receipt_replay_workflow_apply_decision_closure_report.clone())
 }
 
 pub fn structured_edit_provider_batch_execution_receipt_replay_workflow_apply_request_envelope(

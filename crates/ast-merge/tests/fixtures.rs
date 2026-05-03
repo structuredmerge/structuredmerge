@@ -44,6 +44,8 @@ use ast_merge::{
     StructuredEditProviderBatchExecutionReceiptReplaySessionEnvelope,
     StructuredEditProviderBatchExecutionReceiptReplayWorkflow,
     StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecision,
+    StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReport,
+    StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope,
     StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionConfirmation,
     StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionConfirmationEnvelope,
     StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionEnvelope,
@@ -83,6 +85,8 @@ use ast_merge::{
     StructuredEditProviderExecutionReceiptReplaySessionEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflow,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecision,
+    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReport,
+    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConfirmation,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionConfirmationEnvelope,
     StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionEnvelope,
@@ -139,6 +143,7 @@ use ast_merge::{
     import_structured_edit_provider_batch_execution_receipt_replay_application_envelope,
     import_structured_edit_provider_batch_execution_receipt_replay_request_envelope,
     import_structured_edit_provider_batch_execution_receipt_replay_session_envelope,
+    import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_envelope,
     import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_confirmation_envelope,
     import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_envelope,
     import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_outcome_envelope,
@@ -163,6 +168,7 @@ use ast_merge::{
     import_structured_edit_provider_execution_receipt_replay_application_envelope,
     import_structured_edit_provider_execution_receipt_replay_request_envelope,
     import_structured_edit_provider_execution_receipt_replay_session_envelope,
+    import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_envelope,
     import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_envelope,
     import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope,
     import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_outcome_envelope,
@@ -214,6 +220,7 @@ use ast_merge::{
     structured_edit_provider_batch_execution_receipt_replay_application_envelope,
     structured_edit_provider_batch_execution_receipt_replay_request_envelope,
     structured_edit_provider_batch_execution_receipt_replay_session_envelope,
+    structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_envelope,
     structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_confirmation_envelope,
     structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_envelope,
     structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_outcome_envelope,
@@ -238,6 +245,7 @@ use ast_merge::{
     structured_edit_provider_execution_receipt_replay_application_envelope,
     structured_edit_provider_execution_receipt_replay_request_envelope,
     structured_edit_provider_execution_receipt_replay_session_envelope,
+    structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_envelope,
     structured_edit_provider_execution_receipt_replay_workflow_apply_decision_confirmation_envelope,
     structured_edit_provider_execution_receipt_replay_workflow_apply_decision_envelope,
     structured_edit_provider_execution_receipt_replay_workflow_apply_decision_outcome_envelope,
@@ -8930,6 +8938,308 @@ fn conforms_to_slice_660_structured_edit_provider_batch_execution_receipt_replay
         .expect("batch apply decision confirmation application thread should spawn")
         .join()
         .expect("batch apply decision confirmation application thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_661_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+            for case in cases {
+                let mut actual = serde_json::to_value(
+                    serde_json::from_value::<
+                        StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReport,
+                    >(
+                        case["receipt_replay_workflow_apply_decision_closure_report"].clone()
+                    )
+                    .expect("apply decision closure report should deserialize"),
+                )
+                .expect("apply decision closure report should serialize");
+                let mut expected =
+                    case["receipt_replay_workflow_apply_decision_closure_report"].clone();
+                prune_empty_metadata(&mut actual);
+                prune_empty_metadata(&mut expected);
+                assert!(
+                    actual == expected,
+                    "apply decision closure report payload should match fixture"
+                );
+            }
+        })
+        .expect("apply decision closure report thread should spawn")
+        .join()
+        .expect("apply decision closure report thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_662_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_transport_envelope_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_envelope",
+            ));
+            let report = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReport,
+            >(
+                fixture["structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report"].clone(),
+            )
+            .expect("apply decision closure report should deserialize");
+            let expected = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope,
+            >(fixture["expected_envelope"].clone())
+            .expect("envelope should deserialize");
+
+            assert_eq!(
+                structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_envelope(&report),
+                expected
+            );
+            assert_eq!(
+                import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_envelope(&expected)
+                    .expect("apply decision closure report envelope should import"),
+                report
+            );
+        })
+        .expect("apply decision closure report transport envelope thread should spawn")
+        .join()
+        .expect("apply decision closure report transport envelope thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_663_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_transport_rejection_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_envelope_rejection",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+            for case in cases {
+                let envelope = serde_json::from_value::<
+                    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope,
+                >(case["envelope"].clone())
+                .expect("envelope should deserialize");
+                let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+                    case["expected_error"].clone(),
+                )
+                .expect("expected error should deserialize");
+
+                let actual = import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_envelope(&envelope)
+                    .expect_err("closure report envelope import should fail");
+                assert_eq!(actual, expected);
+            }
+        })
+        .expect("apply decision closure report rejection thread should spawn")
+        .join()
+        .expect("apply decision closure report rejection thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_664_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_envelope_application_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_envelope_application",
+            ));
+            let envelope = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope,
+            >(
+                fixture["structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_envelope"].clone(),
+            )
+            .expect("envelope should deserialize");
+            let expected = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReport,
+            >(
+                fixture["expected_receipt_replay_workflow_apply_decision_closure_report"].clone(),
+            )
+            .expect("expected closure report should deserialize");
+
+            assert_eq!(
+                import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_envelope(&envelope)
+                    .expect("apply decision closure report envelope should import"),
+                expected
+            );
+
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+            for case in cases {
+                let rejected = serde_json::from_value::<
+                    StructuredEditProviderExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope,
+                >(case["envelope"].clone())
+                .expect("rejected envelope should deserialize");
+                let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+                    case["expected_error"].clone(),
+                )
+                .expect("expected error should deserialize");
+
+                let actual = import_structured_edit_provider_execution_receipt_replay_workflow_apply_decision_closure_report_envelope(&rejected)
+                    .expect_err("closure report envelope application rejection should fail");
+                assert_eq!(actual, expected);
+            }
+        })
+        .expect("apply decision closure report application thread should spawn")
+        .join()
+        .expect("apply decision closure report application thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_665_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+            for case in cases {
+                let mut actual = serde_json::to_value(
+                    serde_json::from_value::<
+                        StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReport,
+                    >(
+                        case["batch_receipt_replay_workflow_apply_decision_closure_report"].clone()
+                    )
+                    .expect("batch apply decision closure report should deserialize"),
+                )
+                .expect("batch apply decision closure report should serialize");
+                let mut expected =
+                    case["batch_receipt_replay_workflow_apply_decision_closure_report"].clone();
+                prune_empty_metadata(&mut actual);
+                prune_empty_metadata(&mut expected);
+                assert!(
+                    actual == expected,
+                    "batch apply decision closure report payload should match fixture"
+                );
+            }
+        })
+        .expect("batch apply decision closure report thread should spawn")
+        .join()
+        .expect("batch apply decision closure report thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_666_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_transport_envelope_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_envelope",
+            ));
+            let report = serde_json::from_value::<
+                StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReport,
+            >(
+                fixture["batch_receipt_replay_workflow_apply_decision_closure_report"].clone(),
+            )
+            .expect("batch apply decision closure report should deserialize");
+            let expected = serde_json::from_value::<
+                StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope,
+            >(fixture["expected_envelope"].clone())
+            .expect("envelope should deserialize");
+
+            assert_eq!(
+                structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_envelope(&report),
+                expected
+            );
+            assert_eq!(
+                import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_envelope(&expected)
+                    .expect("batch apply decision closure report envelope should import"),
+                report
+            );
+        })
+        .expect("batch apply decision closure report transport envelope thread should spawn")
+        .join()
+        .expect("batch apply decision closure report transport envelope thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_667_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_transport_rejection_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_envelope_rejection",
+            ));
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+            for case in cases {
+                let envelope = serde_json::from_value::<
+                    StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope,
+                >(case["envelope"].clone())
+                .expect("envelope should deserialize");
+                let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+                    case["expected_error"].clone(),
+                )
+                .expect("expected error should deserialize");
+
+                let actual = import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_envelope(&envelope)
+                    .expect_err("batch closure report envelope import should fail");
+                assert_eq!(actual, expected);
+            }
+        })
+        .expect("batch apply decision closure report rejection thread should spawn")
+        .join()
+        .expect("batch apply decision closure report rejection thread should complete");
+}
+
+#[test]
+fn conforms_to_slice_668_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_envelope_application_fixture()
+ {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = read_fixture_from_path(diagnostics_fixture_path(
+                "structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_envelope_application",
+            ));
+            let envelope = serde_json::from_value::<
+                StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope,
+            >(
+                fixture["batch_receipt_replay_workflow_apply_decision_closure_report_envelope"].clone(),
+            )
+            .expect("envelope should deserialize");
+            let expected = serde_json::from_value::<
+                StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReport,
+            >(
+                fixture["expected_batch_receipt_replay_workflow_apply_decision_closure_report"].clone(),
+            )
+            .expect("expected batch closure report should deserialize");
+
+            assert_eq!(
+                import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_envelope(&envelope)
+                    .expect("batch apply decision closure report envelope should import"),
+                expected
+            );
+
+            let cases = fixture["cases"].as_array().expect("cases should be an array");
+            for case in cases {
+                let rejected = serde_json::from_value::<
+                    StructuredEditProviderBatchExecutionReceiptReplayWorkflowApplyDecisionClosureReportEnvelope,
+                >(case["envelope"].clone())
+                .expect("rejected envelope should deserialize");
+                let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+                    case["expected_error"].clone(),
+                )
+                .expect("expected error should deserialize");
+
+                let actual = import_structured_edit_provider_batch_execution_receipt_replay_workflow_apply_decision_closure_report_envelope(&rejected)
+                    .expect_err("batch closure report envelope application rejection should fail");
+                assert_eq!(actual, expected);
+            }
+        })
+        .expect("batch apply decision closure report application thread should spawn")
+        .join()
+        .expect("batch apply decision closure report application thread should complete");
 }
 
 #[test]
