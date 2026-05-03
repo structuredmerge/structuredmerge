@@ -255,6 +255,18 @@ pub struct StructuredEditDestinationProfile {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditCallableDestination {
+    pub strategy_kind: String,
+    pub anchor_text: String,
+    pub anchor_boundary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anchor_boundary_family: Option<String>,
+    pub known_anchor_boundary: bool,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditRequest {
     pub operation_kind: String,
     pub content: String,
@@ -271,6 +283,8 @@ pub struct StructuredEditRequest {
     pub payload_text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub if_missing: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub callable_destination: Option<StructuredEditCallableDestination>,
     #[serde(default)]
     pub metadata: HashMap<String, serde_json::Value>,
 }
