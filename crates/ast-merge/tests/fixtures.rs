@@ -11531,6 +11531,39 @@ fn conforms_to_slice_712_changelog_unreleased_normalization_acceptance_fixture()
 }
 
 #[test]
+fn conforms_to_slice_713_readme_supplied_metadata_synchronization_acceptance_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "readme_supplied_metadata_synchronization_acceptance",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("README supplied metadata synchronization report envelope should deserialize");
+
+        if case["label"] == "sync-readme-heading-and-summary-from-supplied-metadata" {
+            let final_content = &report_envelope.report.final_content;
+            assert!(final_content.starts_with("# Demo Toolkit\n"));
+            assert!(final_content.contains("A deterministic toolkit for structured merges."));
+            assert!(final_content.contains("Destination usage."));
+            assert_eq!(
+                report_envelope.report.step_reports[0].metadata["consumed_context"].as_str(),
+                Some("readme_metadata.title")
+            );
+            assert_eq!(
+                report_envelope.report.step_reports[1].metadata["consumed_context"].as_str(),
+                Some("readme_metadata.summary")
+            );
+        }
+        if case["label"] == "missing-readme-metadata-fails-closed" {
+            assert_eq!(report_envelope.report.step_reports[0].status, "failed");
+        }
+    }
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
