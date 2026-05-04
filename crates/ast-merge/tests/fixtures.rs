@@ -5282,6 +5282,27 @@ fn conforms_to_slice_501_structured_edit_provider_executor_profile_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_693_structured_edit_provider_executor_operation_triad_profile_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_provider_executor_operation_triad_profile",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let executor_profile = serde_json::from_value::<StructuredEditProviderExecutorProfile>(
+            case["executor_profile"].clone(),
+        )
+        .expect("provider executor operation triad profile should deserialize");
+        let roundtrip =
+            serde_json::to_value(&executor_profile).expect("operation triad profile should serialize");
+        let decoded = serde_json::from_value::<StructuredEditProviderExecutorProfile>(roundtrip)
+            .expect("operation triad profile should deserialize after roundtrip");
+
+        assert_eq!(decoded, executor_profile);
+    }
+}
+
+#[test]
 fn conforms_to_slice_502_structured_edit_provider_executor_profile_transport_envelope_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_provider_executor_profile_envelope",
