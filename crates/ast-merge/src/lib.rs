@@ -487,6 +487,84 @@ pub struct StructuredEditProviderExecutionRequest {
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ContentRecipeStep {
+    pub step_id: String,
+    pub step_kind: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_family: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_backend: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub merge_profile: Option<HashMap<String, serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub partial_target: Option<HashMap<String, serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub structured_edit_request: Option<StructuredEditRequest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub policy: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ContentRecipeExecutionRequest {
+    pub recipe_name: String,
+    pub recipe_version: String,
+    pub relative_path: String,
+    pub provider_family: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_backend: Option<String>,
+    pub template_content: String,
+    pub destination_content: String,
+    pub steps: Vec<ContentRecipeStep>,
+    #[serde(default)]
+    pub runtime_context: HashMap<String, serde_json::Value>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ContentRecipeExecutionRequestEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub request: ContentRecipeExecutionRequest,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ContentRecipeStepReport {
+    pub step_id: String,
+    pub step_kind: String,
+    pub status: String,
+    pub changed: bool,
+    pub input_content: String,
+    pub output_content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub application: Option<StructuredEditApplication>,
+    pub diagnostics: Vec<Diagnostic>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ContentRecipeExecutionReport {
+    pub request: ContentRecipeExecutionRequest,
+    pub final_content: String,
+    pub changed: bool,
+    pub step_reports: Vec<ContentRecipeStepReport>,
+    pub diagnostics: Vec<Diagnostic>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ContentRecipeExecutionReportEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub report: ContentRecipeExecutionReport,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditProviderExecutionRequestEnvelope {
     pub kind: String,

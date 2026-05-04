@@ -12,7 +12,8 @@ use ast_merge::{
     ConformanceManifestReviewStateEnvelope, ConformanceManifestReviewedNestedApplication,
     ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuiteDefinition,
     ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSelector,
-    ConformanceSuiteSubject, ConformanceSuiteSummary, DelegatedChildOperation, DiagnosticCategory,
+    ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
+    ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
     DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, NamedConformanceSuitePlan,
     NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
     PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
@@ -11051,6 +11052,36 @@ fn conforms_to_slice_696_structured_edit_kettle_jem_primitive_gap_report_fixture
     prune_empty_metadata(&mut actual);
     prune_empty_metadata(&mut expected);
     assert!(actual == expected, "kettle-jem primitive gap report payload should match fixture");
+}
+
+#[test]
+fn conforms_to_slice_697_content_recipe_execution_envelope_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("content_recipe_execution_envelope"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let request_envelope = serde_json::from_value::<ContentRecipeExecutionRequestEnvelope>(
+            case["request_envelope"].clone(),
+        )
+        .expect("content recipe execution request envelope should deserialize");
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("content recipe execution report envelope should deserialize");
+
+        assert_eq!(request_envelope.kind, "content_recipe_execution_request");
+        assert_eq!(report_envelope.kind, "content_recipe_execution_report");
+        assert_eq!(
+            report_envelope.report.request.steps.len(),
+            report_envelope.report.step_reports.len(),
+            "content recipe report should include one step report per request step"
+        );
+        assert!(
+            report_envelope.report.changed,
+            "content recipe report should mark the fixture as changed"
+        );
+    }
 }
 
 #[test]
