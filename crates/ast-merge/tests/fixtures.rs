@@ -11355,6 +11355,43 @@ fn conforms_to_slice_707_project_facts_runtime_context_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_708_ruby_gemspec_self_dependency_policy_acceptance_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "ruby_gemspec_self_dependency_policy_acceptance",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("Ruby gemspec self-dependency policy report envelope should deserialize");
+
+        if case["label"] == "delete-active-self-dependencies-preserve-comments" {
+            assert!(
+                !report_envelope
+                    .report
+                    .final_content
+                    .contains("spec.add_dependency \"demo\", \"~> 1.0\"")
+            );
+            assert!(
+                report_envelope
+                    .report
+                    .final_content
+                    .contains("# spec.add_dependency \"demo\", \"~> 0\"")
+            );
+            assert_eq!(
+                report_envelope.report.step_reports[0].metadata["operation"].as_str(),
+                Some("delete")
+            );
+        }
+        if case["label"] == "missing-project-identity-fails-closed" {
+            assert_eq!(report_envelope.report.step_reports[0].status, "failed");
+        }
+    }
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
