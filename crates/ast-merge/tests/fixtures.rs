@@ -11211,6 +11211,40 @@ fn conforms_to_slice_701_ruby_gemspec_native_boundary_report_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_702_ruby_gemspec_signature_merge_acceptance_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("ruby_gemspec_signature_merge_acceptance"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("Ruby gemspec signature merge report envelope should deserialize");
+
+        let step = report_envelope
+            .report
+            .request
+            .steps
+            .first()
+            .expect("fixture should include a merge step");
+        assert_eq!(
+            step.merge_profile
+                .as_ref()
+                .and_then(|profile| profile.get("signature_profile"))
+                .and_then(|value| value.as_str()),
+            Some("gemspec_declarations")
+        );
+        assert!(
+            report_envelope
+                .report
+                .final_content
+                .contains("spec.add_development_dependency(\"rubocop\"")
+        );
+    }
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
