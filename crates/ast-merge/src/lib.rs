@@ -239,6 +239,26 @@ pub struct StructuredEditMatchProfile {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditTargetMatch {
+    pub start_boundary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_boundary_family: Option<String>,
+    pub known_start_boundary: bool,
+    pub end_boundary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_boundary_family: Option<String>,
+    pub known_end_boundary: bool,
+    pub payload_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payload_family: Option<String>,
+    pub known_payload_kind: bool,
+    pub comment_anchored: bool,
+    pub trailing_gap_extended: bool,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditOperationProfile {
     pub operation_kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -292,6 +312,8 @@ pub struct StructuredEditRequest {
     pub target_selector_family: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_selection: Option<StructuredEditTargetSelection>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_match: Option<StructuredEditTargetMatch>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub destination_selector: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
