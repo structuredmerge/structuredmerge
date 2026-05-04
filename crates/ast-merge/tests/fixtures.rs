@@ -11564,6 +11564,42 @@ fn conforms_to_slice_713_readme_supplied_metadata_synchronization_acceptance_fix
 }
 
 #[test]
+fn conforms_to_slice_714_supplied_markdown_pruning_acceptance_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "supplied_markdown_pruning_acceptance",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("supplied Markdown pruning report envelope should deserialize");
+
+        if case["label"] == "prune-supplied-table-rows-and-reference-definitions" {
+            let final_content = &report_envelope.report.final_content;
+            assert!(!final_content.contains("Works with JRuby"));
+            assert!(!final_content.contains("[jruby-9.4]:"));
+            assert!(!final_content.contains("[jruby-head]:"));
+            assert!(final_content.contains("Works with MRI Ruby"));
+            assert!(final_content.contains("[ruby-3.2]:"));
+            assert_eq!(
+                report_envelope.report.step_reports[0].metadata["deleted_rows"].as_u64(),
+                Some(1)
+            );
+            assert_eq!(
+                report_envelope.report.step_reports[1].metadata["deleted_reference_definitions"]
+                    .as_u64(),
+                Some(2)
+            );
+        }
+        if case["label"] == "missing-prune-selectors-fails-closed" {
+            assert_eq!(report_envelope.report.step_reports[0].status, "failed");
+        }
+    }
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
