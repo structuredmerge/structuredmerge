@@ -660,7 +660,7 @@ pub fn apply_ruby_delegated_child_outputs(
         replacements.push((span.start_line - 1, span.end_line - 1, output.clone()));
     }
 
-    replacements.sort_by(|left, right| right.0.cmp(&left.0));
+    replacements.sort_by_key(|replacement| std::cmp::Reverse(replacement.0));
     for (start, end, output) in replacements {
         if start >= lines.len() {
             return MergeResult {

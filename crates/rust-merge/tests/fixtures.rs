@@ -52,6 +52,8 @@ fn diagnostic_shape(diagnostics: &[ast_merge::Diagnostic]) -> Value {
                         ast_merge::DiagnosticCategory::AssumedDefault => "assumed_default",
                         ast_merge::DiagnosticCategory::ConfigurationError => "configuration_error",
                         ast_merge::DiagnosticCategory::ReplayRejected => "replay_rejected",
+                        ast_merge::DiagnosticCategory::KindMismatch => "kind_mismatch",
+                        ast_merge::DiagnosticCategory::UnsupportedVersion => "unsupported_version",
                     }
                 })
             })

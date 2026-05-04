@@ -317,6 +317,15 @@ fn read_fixture_from_path(path: PathBuf) -> Value {
     serde_json::from_str(&source).expect("fixture should be valid json")
 }
 
+fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
+    std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(test)
+        .expect("large-stack fixture test should spawn")
+        .join()
+        .expect("large-stack fixture test should pass");
+}
+
 fn prune_empty_metadata(value: &mut Value) {
     match value {
         Value::Object(map) => {
@@ -6991,93 +7000,105 @@ fn conforms_to_slice_573_structured_edit_provider_execution_receipt_replay_sessi
 #[test]
 fn conforms_to_slice_574_structured_edit_provider_execution_receipt_replay_session_transport_envelope_fixture()
  {
-    let fixture = read_fixture_from_path(diagnostics_fixture_path(
-        "structured_edit_provider_execution_receipt_replay_session_envelope",
-    ));
-    let receipt_replay_session =
-        serde_json::from_value::<StructuredEditProviderExecutionReceiptReplaySession>(
-            fixture["structured_edit_provider_execution_receipt_replay_session"].clone(),
-        )
-        .expect("receipt replay session should deserialize");
-    let expected = serde_json::from_value::<
-        StructuredEditProviderExecutionReceiptReplaySessionEnvelope,
-    >(fixture["expected_envelope"].clone())
-    .expect("envelope should deserialize");
+    run_with_large_stack(|| {
+        let fixture = read_fixture_from_path(diagnostics_fixture_path(
+            "structured_edit_provider_execution_receipt_replay_session_envelope",
+        ));
+        let receipt_replay_session =
+            serde_json::from_value::<StructuredEditProviderExecutionReceiptReplaySession>(
+                fixture["structured_edit_provider_execution_receipt_replay_session"].clone(),
+            )
+            .expect("receipt replay session should deserialize");
+        let expected = serde_json::from_value::<
+            StructuredEditProviderExecutionReceiptReplaySessionEnvelope,
+        >(fixture["expected_envelope"].clone())
+        .expect("envelope should deserialize");
 
-    assert_eq!(
-        structured_edit_provider_execution_receipt_replay_session_envelope(&receipt_replay_session),
-        expected
-    );
-    assert_eq!(
-        import_structured_edit_provider_execution_receipt_replay_session_envelope(&expected),
-        Ok(receipt_replay_session)
-    );
+        assert_eq!(
+            structured_edit_provider_execution_receipt_replay_session_envelope(
+                &receipt_replay_session
+            ),
+            expected
+        );
+        assert_eq!(
+            import_structured_edit_provider_execution_receipt_replay_session_envelope(&expected),
+            Ok(receipt_replay_session)
+        );
+    });
 }
 
 #[test]
 fn conforms_to_slice_575_structured_edit_provider_execution_receipt_replay_session_transport_rejection_fixture()
  {
-    let fixture = read_fixture_from_path(diagnostics_fixture_path(
-        "structured_edit_provider_execution_receipt_replay_session_envelope_rejection",
-    ));
-    let cases = fixture["cases"].as_array().expect("cases should be an array");
+    run_with_large_stack(|| {
+        let fixture = read_fixture_from_path(diagnostics_fixture_path(
+            "structured_edit_provider_execution_receipt_replay_session_envelope_rejection",
+        ));
+        let cases = fixture["cases"].as_array().expect("cases should be an array");
 
-    for case in cases {
-        let envelope = serde_json::from_value::<
-            StructuredEditProviderExecutionReceiptReplaySessionEnvelope,
-        >(case["envelope"].clone())
-        .expect("rejected envelope should deserialize");
-        let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
-            case["expected_error"].clone(),
-        )
-        .expect("expected error should deserialize");
+        for case in cases {
+            let envelope = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplaySessionEnvelope,
+            >(case["envelope"].clone())
+            .expect("rejected envelope should deserialize");
+            let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+                case["expected_error"].clone(),
+            )
+            .expect("expected error should deserialize");
 
-        assert_eq!(
-            import_structured_edit_provider_execution_receipt_replay_session_envelope(&envelope),
-            Err(expected_error)
-        );
-    }
+            assert_eq!(
+                import_structured_edit_provider_execution_receipt_replay_session_envelope(
+                    &envelope
+                ),
+                Err(expected_error)
+            );
+        }
+    });
 }
 
 #[test]
 fn conforms_to_slice_576_structured_edit_provider_execution_receipt_replay_session_envelope_application_fixture()
  {
-    let fixture = read_fixture_from_path(diagnostics_fixture_path(
-        "structured_edit_provider_execution_receipt_replay_session_envelope_application",
-    ));
-    let envelope =
-        serde_json::from_value::<StructuredEditProviderExecutionReceiptReplaySessionEnvelope>(
+    run_with_large_stack(|| {
+        let fixture = read_fixture_from_path(diagnostics_fixture_path(
+            "structured_edit_provider_execution_receipt_replay_session_envelope_application",
+        ));
+        let envelope = serde_json::from_value::<
+            StructuredEditProviderExecutionReceiptReplaySessionEnvelope,
+        >(
             fixture["structured_edit_provider_execution_receipt_replay_session_envelope"].clone(),
         )
         .expect("envelope should deserialize");
-    let expected = serde_json::from_value::<StructuredEditProviderExecutionReceiptReplaySession>(
-        fixture["expected_receipt_replay_session"].clone(),
-    )
-    .expect("expected receipt replay session should deserialize");
-
-    assert_eq!(
-        import_structured_edit_provider_execution_receipt_replay_session_envelope(&envelope),
-        Ok(expected)
-    );
-
-    let cases = fixture["cases"].as_array().expect("cases should be an array");
-    for case in cases {
-        let rejected_envelope = serde_json::from_value::<
-            StructuredEditProviderExecutionReceiptReplaySessionEnvelope,
-        >(case["envelope"].clone())
-        .expect("rejected envelope should deserialize");
-        let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
-            case["expected_error"].clone(),
-        )
-        .expect("expected error should deserialize");
+        let expected =
+            serde_json::from_value::<StructuredEditProviderExecutionReceiptReplaySession>(
+                fixture["expected_receipt_replay_session"].clone(),
+            )
+            .expect("expected receipt replay session should deserialize");
 
         assert_eq!(
-            import_structured_edit_provider_execution_receipt_replay_session_envelope(
-                &rejected_envelope
-            ),
-            Err(expected_error)
+            import_structured_edit_provider_execution_receipt_replay_session_envelope(&envelope),
+            Ok(expected)
         );
-    }
+
+        let cases = fixture["cases"].as_array().expect("cases should be an array");
+        for case in cases {
+            let rejected_envelope = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplaySessionEnvelope,
+            >(case["envelope"].clone())
+            .expect("rejected envelope should deserialize");
+            let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+                case["expected_error"].clone(),
+            )
+            .expect("expected error should deserialize");
+
+            assert_eq!(
+                import_structured_edit_provider_execution_receipt_replay_session_envelope(
+                    &rejected_envelope
+                ),
+                Err(expected_error)
+            );
+        }
+    });
 }
 
 #[test]
@@ -13009,6 +13030,7 @@ fn conforms_to_mini_template_tree_directory_runner_report_fixture() {
     fs::remove_dir_all(temp_root).expect("temp dir should be removable");
 }
 
+#[allow(clippy::type_complexity)]
 fn reviewed_nested_execution_callbacks_from_fixture(
     execution: ReviewedNestedExecution,
     expected_output: Option<String>,

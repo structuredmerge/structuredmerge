@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments, clippy::iter_cloned_collect)]
+
 use ast_merge::{
     TemplateDestinationContext, TemplateExecutionPlanEntry, TemplateStrategy,
     TemplateStrategyOverride, TemplateTokenConfig, TemplateTreeRunResult,

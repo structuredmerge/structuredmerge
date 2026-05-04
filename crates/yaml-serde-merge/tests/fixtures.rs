@@ -296,9 +296,7 @@ fn rejects_unsupported_provider_backend_overrides() {
     let expected = serde_json::json!([{
         "severity": "error",
         "category": "unsupported_feature",
-        "message": "Unsupported YAML backend kreuzberg-language-pack.",
-        "path": null,
-        "review": null
+        "message": "Unsupported YAML backend kreuzberg-language-pack."
     }]);
 
     let parse_result =

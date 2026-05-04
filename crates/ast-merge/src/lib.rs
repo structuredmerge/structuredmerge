@@ -2678,6 +2678,7 @@ pub fn plan_template_execution(
         .collect()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn plan_template_tree_execution(
     template_source_paths: &[String],
     template_contents: &HashMap<String, String>,
@@ -2864,6 +2865,7 @@ where
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn evaluate_template_tree_convergence(
     template_source_paths: &[String],
     template_contents: &HashMap<String, String>,
@@ -2914,6 +2916,7 @@ pub fn evaluate_template_tree_convergence(
     TemplateConvergenceResult { converged: pending_paths.is_empty(), pending_paths }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn run_template_tree_execution<F>(
     template_source_paths: &[String],
     template_contents: &HashMap<String, String>,
@@ -3002,6 +3005,7 @@ pub fn write_relative_file_tree(root: &Path, files: &HashMap<String, String>) ->
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn run_template_tree_execution_from_directories<F>(
     template_root: &Path,
     destination_root: &Path,
@@ -3062,6 +3066,7 @@ pub fn plan_template_tree_execution_from_directories(
     ))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn apply_template_tree_execution_to_directory<F>(
     template_root: &Path,
     destination_root: &Path,
@@ -3103,8 +3108,6 @@ where
 }
 
 pub fn report_template_tree_run(result: &TemplateTreeRunResult) -> TemplateTreeRunReport {
-    let created =
-        result.apply_result.created_paths.iter().cloned().collect::<std::collections::HashSet<_>>();
     let updated =
         result.apply_result.updated_paths.iter().cloned().collect::<std::collections::HashSet<_>>();
     let kept =
@@ -3130,8 +3133,6 @@ pub fn report_template_tree_run(result: &TemplateTreeRunResult) -> TemplateTreeR
                 TemplateTreeRunStatus::Kept
             } else if entry.destination_path.as_ref().is_some_and(|path| updated.contains(path)) {
                 TemplateTreeRunStatus::Updated
-            } else if entry.destination_path.as_ref().is_some_and(|path| created.contains(path)) {
-                TemplateTreeRunStatus::Created
             } else {
                 TemplateTreeRunStatus::Created
             };

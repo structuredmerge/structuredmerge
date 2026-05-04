@@ -527,7 +527,7 @@ pub fn apply_markdown_delegated_child_outputs(
         replacements.push((start, end, output.clone()));
     }
 
-    replacements.sort_by(|left, right| right.0.cmp(&left.0));
+    replacements.sort_by_key(|replacement| std::cmp::Reverse(replacement.0));
     for (start, end, output) in replacements {
         let replacement_lines = if output.is_empty() {
             Vec::new()

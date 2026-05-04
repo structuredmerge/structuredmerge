@@ -1,3 +1,5 @@
+#![allow(clippy::single_element_loop)]
+
 use std::{fs, path::PathBuf};
 
 use ast_merge::{
@@ -48,6 +50,8 @@ fn diagnostic_category_name(category: ast_merge::DiagnosticCategory) -> &'static
         ast_merge::DiagnosticCategory::AssumedDefault => "assumed_default",
         ast_merge::DiagnosticCategory::ConfigurationError => "configuration_error",
         ast_merge::DiagnosticCategory::ReplayRejected => "replay_rejected",
+        ast_merge::DiagnosticCategory::KindMismatch => "kind_mismatch",
+        ast_merge::DiagnosticCategory::UnsupportedVersion => "unsupported_version",
     }
 }
 
