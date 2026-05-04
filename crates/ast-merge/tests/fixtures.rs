@@ -11600,6 +11600,37 @@ fn conforms_to_slice_714_supplied_markdown_pruning_acceptance_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_715_supplied_source_selector_deletion_acceptance_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "supplied_source_selector_deletion_acceptance",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("supplied source selector deletion report envelope should deserialize");
+
+        if case["label"] == "delete-supplied-structural-owner-ranges" {
+            let final_content = &report_envelope.report.final_content;
+            assert!(!final_content.contains("kettle/scaffold"));
+            assert!(!final_content.contains("task :scaffold"));
+            assert!(final_content.contains("require \"bundler/gem_tasks\""));
+            assert!(final_content.contains("task :spec"));
+            assert!(!final_content.contains("\n\n\n"));
+            assert_eq!(
+                report_envelope.report.step_reports[0].metadata["deleted_ranges"].as_u64(),
+                Some(2)
+            );
+        }
+        if case["label"] == "missing-delete-selectors-fails-closed" {
+            assert_eq!(report_envelope.report.step_reports[0].status, "failed");
+        }
+    }
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
