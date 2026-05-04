@@ -11346,19 +11346,19 @@ fn conforms_to_slice_706_ruby_gemspec_version_loader_policy_acceptance_fixture()
 }
 
 #[test]
-fn conforms_to_slice_707_project_facts_runtime_context_fixture() {
-    let fixture = read_fixture_from_path(diagnostics_fixture_path("project_facts_runtime_context"));
+fn conforms_to_slice_707_runtime_facts_context_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("runtime_facts_context"));
     let cases = fixture["cases"].as_array().expect("cases should be an array");
 
     for case in cases {
         let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
             case["report_envelope"].clone(),
         )
-        .expect("project facts runtime context report envelope should deserialize");
+        .expect("runtime facts runtime context report envelope should deserialize");
 
         assert_eq!(
-            report_envelope.report.request.runtime_context["project_facts"]["schema"].as_str(),
-            Some("project_facts.v1")
+            report_envelope.report.request.runtime_context["facts"]["schema"].as_str(),
+            Some("runtime_facts.v1")
         );
 
         if case["label"] == "dependency-floor-comments-from-project-facts" {
