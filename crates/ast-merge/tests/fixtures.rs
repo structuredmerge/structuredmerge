@@ -11052,6 +11052,26 @@ fn conforms_to_slice_688_structured_edit_parity_match_semantics_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_692_structured_edit_operation_triad_parity_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("structured_edit_operation_triad_parity"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let application =
+            serde_json::from_value::<StructuredEditApplication>(case["application"].clone())
+                .expect("operation triad application should deserialize");
+        let round_tripped = serde_json::from_value::<StructuredEditApplication>(
+            serde_json::to_value(&application)
+                .expect("operation triad application should serialize"),
+        )
+        .expect("operation triad application should deserialize after roundtrip");
+
+        assert_eq!(round_tripped, application);
+    }
+}
+
+#[test]
 fn conforms_to_slice_439_structured_edit_execution_report_transport_envelope_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_execution_report_envelope",
