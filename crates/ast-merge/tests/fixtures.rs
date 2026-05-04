@@ -10975,6 +10975,25 @@ fn conforms_to_slice_682_structured_edit_crispr_example_parity_report_fixture() 
 }
 
 #[test]
+fn conforms_to_slice_689_structured_edit_crispr_parity_substrate_report_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_crispr_parity_substrate_report",
+    ));
+
+    let mut actual = serde_json::to_value(
+        serde_json::from_value::<StructuredEditCrisprExampleParityReport>(
+            fixture["report"].clone(),
+        )
+        .expect("crispr parity substrate report should deserialize"),
+    )
+    .expect("crispr parity substrate report should serialize");
+    let mut expected = fixture["report"].clone();
+    prune_empty_metadata(&mut actual);
+    prune_empty_metadata(&mut expected);
+    assert!(actual == expected, "crispr parity substrate report payload should match fixture");
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
