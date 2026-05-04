@@ -334,6 +334,13 @@ pub struct StructuredEditApplicationEnvelope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditRequestEnvelope {
+    pub kind: String,
+    pub version: u32,
+    pub request: StructuredEditRequest,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditExecutionReport {
     pub application: StructuredEditApplication,
     pub provider_family: String,
@@ -4096,6 +4103,39 @@ pub fn import_structured_edit_application_envelope(
     }
 
     Ok(envelope.application.clone())
+}
+
+pub fn structured_edit_request_envelope(
+    request: &StructuredEditRequest,
+) -> StructuredEditRequestEnvelope {
+    StructuredEditRequestEnvelope {
+        kind: "structured_edit_request".to_string(),
+        version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        request: request.clone(),
+    }
+}
+
+pub fn import_structured_edit_request_envelope(
+    envelope: &StructuredEditRequestEnvelope,
+) -> Result<StructuredEditRequest, StructuredEditTransportImportError> {
+    if envelope.kind != "structured_edit_request" {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::KindMismatch,
+            message: "expected structured_edit_request envelope kind.".to_string(),
+        });
+    }
+
+    if envelope.version != STRUCTURED_EDIT_TRANSPORT_VERSION {
+        return Err(StructuredEditTransportImportError {
+            category: StructuredEditTransportImportErrorCategory::UnsupportedVersion,
+            message: format!(
+                "unsupported structured_edit_request envelope version {}.",
+                envelope.version
+            ),
+        });
+    }
+
+    Ok(envelope.request.clone())
 }
 
 pub fn structured_edit_provider_execution_request_envelope(

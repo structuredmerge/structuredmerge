@@ -116,10 +116,10 @@ use ast_merge::{
     StructuredEditProviderExecutorResolutionEnvelope,
     StructuredEditProviderExecutorSelectionPolicy,
     StructuredEditProviderExecutorSelectionPolicyEnvelope, StructuredEditRequest,
-    StructuredEditResult, StructuredEditSelectionProfile, StructuredEditStructureProfile,
-    StructuredEditTransportImportError, TemplateApplyResult, TemplateConvergenceResult,
-    TemplateDestinationContext, TemplateExecutionPlanEntry, TemplatePlanEntry,
-    TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
+    StructuredEditRequestEnvelope, StructuredEditResult, StructuredEditSelectionProfile,
+    StructuredEditStructureProfile, StructuredEditTransportImportError, TemplateApplyResult,
+    TemplateConvergenceResult, TemplateDestinationContext, TemplateExecutionPlanEntry,
+    TemplatePlanEntry, TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
     TemplatePreviewResult, TemplateStrategy, TemplateStrategyOverride, TemplateTokenConfig,
     TemplateTreeRunReport, TemplateTreeRunResult, apply_template_execution,
     classify_template_target_path, conformance_family_feature_profile_path,
@@ -188,17 +188,18 @@ use ast_merge::{
     import_structured_edit_provider_executor_registry_envelope,
     import_structured_edit_provider_executor_resolution_envelope,
     import_structured_edit_provider_executor_selection_policy_envelope,
-    normalize_template_source_path, plan_conformance_suite, plan_named_conformance_suite,
-    plan_named_conformance_suite_entry, plan_named_conformance_suites,
-    plan_named_conformance_suites_with_diagnostics, plan_template_entries, plan_template_execution,
-    plan_template_tree_execution, prepare_template_entries, preview_template_execution,
-    projected_child_group_review_request, report_conformance_manifest, report_conformance_suite,
-    report_named_conformance_suite, report_named_conformance_suite_entry,
-    report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
-    report_planned_conformance_suite, report_planned_named_conformance_suites,
-    report_template_directory_apply, report_template_directory_plan,
-    report_template_directory_runner, report_template_tree_run, resolve_conformance_family_context,
-    resolve_delegated_child_outputs, resolve_template_destination_path,
+    import_structured_edit_request_envelope, normalize_template_source_path,
+    plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
+    plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
+    plan_template_entries, plan_template_execution, plan_template_tree_execution,
+    prepare_template_entries, preview_template_execution, projected_child_group_review_request,
+    report_conformance_manifest, report_conformance_suite, report_named_conformance_suite,
+    report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
+    report_named_conformance_suite_manifest, report_planned_conformance_suite,
+    report_planned_named_conformance_suites, report_template_directory_apply,
+    report_template_directory_plan, report_template_directory_runner, report_template_tree_run,
+    resolve_conformance_family_context, resolve_delegated_child_outputs,
+    resolve_template_destination_path,
     review_and_execute_conformance_manifest_with_replay_bundle_envelope,
     review_conformance_family_context, review_conformance_manifest,
     review_conformance_manifest_with_replay_bundle_envelope, review_projected_child_groups,
@@ -264,9 +265,9 @@ use ast_merge::{
     structured_edit_provider_executor_profile_envelope,
     structured_edit_provider_executor_registry_envelope,
     structured_edit_provider_executor_resolution_envelope,
-    structured_edit_provider_executor_selection_policy_envelope, summarize_conformance_results,
-    summarize_named_conformance_suite_reports, summarize_projected_child_review_group_progress,
-    template_token_keys,
+    structured_edit_provider_executor_selection_policy_envelope, structured_edit_request_envelope,
+    summarize_conformance_results, summarize_named_conformance_suite_reports,
+    summarize_projected_child_review_group_progress, template_token_keys,
 };
 use markdown_merge::{MarkdownDialect, merge_markdown};
 use ruby_merge::{RubyDialect, merge_ruby};
@@ -4297,6 +4298,74 @@ fn conforms_to_slice_437_structured_edit_envelope_application_fixture() {
 
         assert_eq!(
             import_structured_edit_application_envelope(&rejected_envelope),
+            Err(expected_error)
+        );
+    }
+}
+
+#[test]
+fn conforms_to_slice_684_structured_edit_request_transport_envelope_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("structured_edit_request_envelope"));
+    let request =
+        serde_json::from_value::<StructuredEditRequest>(fixture["structured_edit_request"].clone())
+            .expect("request should deserialize");
+    let expected = serde_json::from_value::<StructuredEditRequestEnvelope>(
+        fixture["expected_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+
+    assert_eq!(structured_edit_request_envelope(&request), expected);
+    assert_eq!(import_structured_edit_request_envelope(&expected), Ok(request));
+}
+
+#[test]
+fn conforms_to_slice_685_structured_edit_request_transport_rejection_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_request_envelope_rejection",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let envelope =
+            serde_json::from_value::<StructuredEditRequestEnvelope>(case["envelope"].clone())
+                .expect("envelope should deserialize");
+        let expected = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(import_structured_edit_request_envelope(&envelope), Err(expected));
+    }
+}
+
+#[test]
+fn conforms_to_slice_686_structured_edit_request_envelope_application_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_request_envelope_application",
+    ));
+    let envelope = serde_json::from_value::<StructuredEditRequestEnvelope>(
+        fixture["structured_edit_request_envelope"].clone(),
+    )
+    .expect("envelope should deserialize");
+    let expected =
+        serde_json::from_value::<StructuredEditRequest>(fixture["expected_request"].clone())
+            .expect("expected request should deserialize");
+
+    assert_eq!(import_structured_edit_request_envelope(&envelope), Ok(expected));
+
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+    for case in cases {
+        let rejected_envelope =
+            serde_json::from_value::<StructuredEditRequestEnvelope>(case["envelope"].clone())
+                .expect("rejected envelope should deserialize");
+        let expected_error = serde_json::from_value::<StructuredEditTransportImportError>(
+            case["expected_error"].clone(),
+        )
+        .expect("expected error should deserialize");
+
+        assert_eq!(
+            import_structured_edit_request_envelope(&rejected_envelope),
             Err(expected_error)
         );
     }
