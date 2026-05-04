@@ -10887,6 +10887,26 @@ fn conforms_to_slice_677_structured_edit_crispr_overmatch_fail_closed_fixture() 
 }
 
 #[test]
+fn conforms_to_slice_695_structured_edit_crispr_acceptance_scenario_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_crispr_acceptance_scenario",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let mut actual = serde_json::to_value(
+            serde_json::from_value::<StructuredEditExecutionReport>(case["report"].clone())
+                .expect("crispr acceptance scenario report should deserialize"),
+        )
+        .expect("crispr acceptance scenario report should serialize");
+        let mut expected = case["report"].clone();
+        prune_empty_metadata(&mut actual);
+        prune_empty_metadata(&mut expected);
+        assert!(actual == expected, "crispr acceptance scenario payload should match fixture");
+    }
+}
+
+#[test]
 fn conforms_to_slice_678_structured_edit_crispr_append_fallback_insert_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_crispr_append_fallback_insert",
