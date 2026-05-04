@@ -11421,6 +11421,34 @@ fn conforms_to_slice_709_ruby_gemfile_self_dependency_policy_acceptance_fixture(
 }
 
 #[test]
+fn conforms_to_slice_710_ruby_appraisals_self_dependency_policy_acceptance_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "ruby_appraisals_self_dependency_policy_acceptance",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("Ruby Appraisals self-dependency policy report envelope should deserialize");
+
+        if case["label"] == "delete-appraisals-self-dependencies" {
+            assert!(!report_envelope.report.final_content.contains("gem \"demo\""));
+            assert!(report_envelope.report.final_content.contains("appraise(\"rails-6\")"));
+            assert!(report_envelope.report.final_content.contains("gem \"rspec\" # Testing"));
+            assert_eq!(
+                report_envelope.report.step_reports[0].metadata["operation"].as_str(),
+                Some("delete")
+            );
+        }
+        if case["label"] == "missing-project-identity-fails-closed" {
+            assert_eq!(report_envelope.report.step_reports[0].status, "failed");
+        }
+    }
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
