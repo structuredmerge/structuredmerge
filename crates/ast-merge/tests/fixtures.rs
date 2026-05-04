@@ -10994,6 +10994,26 @@ fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() 
 }
 
 #[test]
+fn conforms_to_slice_687_structured_edit_parity_selection_semantics_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_parity_selection_semantics",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let request = serde_json::from_value::<StructuredEditRequest>(case["request"].clone())
+            .expect("parity selection semantics request should deserialize");
+        let round_tripped = serde_json::from_value::<StructuredEditRequest>(
+            serde_json::to_value(&request)
+                .expect("parity selection semantics request should serialize"),
+        )
+        .expect("parity selection semantics request should deserialize after roundtrip");
+
+        assert_eq!(round_tripped, request);
+    }
+}
+
+#[test]
 fn conforms_to_slice_439_structured_edit_execution_report_transport_envelope_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_execution_report_envelope",
