@@ -11325,6 +11325,36 @@ fn conforms_to_slice_706_ruby_gemspec_version_loader_policy_acceptance_fixture()
 }
 
 #[test]
+fn conforms_to_slice_707_project_facts_runtime_context_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("project_facts_runtime_context"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("project facts runtime context report envelope should deserialize");
+
+        assert_eq!(
+            report_envelope.report.request.runtime_context["project_facts"]["schema"].as_str(),
+            Some("project_facts.v1")
+        );
+
+        if case["label"] == "dependency-floor-comments-from-project-facts" {
+            assert!(report_envelope.report.final_content.contains("# Required for Ruby < 3.4."));
+            assert_eq!(
+                report_envelope.report.step_reports[0].metadata["consumed_fact_id"].as_str(),
+                Some("dependency.ruby_floor")
+            );
+        }
+        if case["label"] == "dependency-floor-comments-missing-project-facts-fail-closed" {
+            assert!(!report_envelope.report.changed);
+            assert_eq!(report_envelope.report.step_reports[0].status, "failed");
+        }
+    }
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
