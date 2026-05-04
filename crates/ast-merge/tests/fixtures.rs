@@ -11179,6 +11179,38 @@ fn conforms_to_slice_700_ruby_gemfile_signature_merge_acceptance_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_701_ruby_gemspec_native_boundary_report_fixture() {
+    let report =
+        read_fixture_from_path(diagnostics_fixture_path("ruby_gemspec_native_boundary_report"));
+
+    assert_eq!(report["kind"], "ruby_gemspec_native_boundary_report");
+    assert_eq!(report["native_recipe_surface"]["signature_profile"], "gemspec_declarations");
+
+    let wrapper_names = report["wrapper_required_behaviors"]
+        .as_array()
+        .expect("wrapper_required_behaviors should be an array")
+        .iter()
+        .map(|behavior| {
+            behavior["name"].as_str().expect("wrapper behavior name should be a string")
+        })
+        .collect::<Vec<_>>();
+    assert!(wrapper_names.contains(&"dependency_ruby_floor_comment_alignment"));
+
+    let example_request = serde_json::from_value::<ContentRecipeExecutionRequestEnvelope>(
+        report["example_native_recipe"].clone(),
+    )
+    .expect("example native gemspec recipe should deserialize");
+    assert_eq!(
+        example_request.request.steps[0]
+            .merge_profile
+            .as_ref()
+            .and_then(|profile| profile.get("signature_profile"))
+            .and_then(|value| value.as_str()),
+        Some("gemspec_declarations")
+    );
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
