@@ -11116,6 +11116,36 @@ fn conforms_to_slice_698_single_file_readme_heading_section_acceptance_fixture()
 }
 
 #[test]
+fn conforms_to_slice_699_native_structured_edit_recipe_steps_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("native_structured_edit_recipe_steps"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("native structured edit recipe steps report envelope should deserialize");
+
+        let operation_kinds = report_envelope
+            .report
+            .step_reports
+            .iter()
+            .map(|step| {
+                step.application
+                    .as_ref()
+                    .expect("structured edit step should include application")
+                    .request
+                    .operation_kind
+                    .as_str()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(operation_kinds, vec!["replace", "insert", "delete"]);
+        assert!(report_envelope.report.changed);
+    }
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
