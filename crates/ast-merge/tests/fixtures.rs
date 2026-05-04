@@ -23,8 +23,8 @@ use ast_merge::{
     StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
-    StructuredEditMatchProfile, StructuredEditOperationProfile,
-    StructuredEditProviderBatchExecutionDispatch,
+    StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
+    StructuredEditOperationProfile, StructuredEditProviderBatchExecutionDispatch,
     StructuredEditProviderBatchExecutionDispatchEnvelope,
     StructuredEditProviderBatchExecutionHandoff,
     StructuredEditProviderBatchExecutionHandoffEnvelope,
@@ -5293,8 +5293,8 @@ fn conforms_to_slice_693_structured_edit_provider_executor_operation_triad_profi
             case["executor_profile"].clone(),
         )
         .expect("provider executor operation triad profile should deserialize");
-        let roundtrip =
-            serde_json::to_value(&executor_profile).expect("operation triad profile should serialize");
+        let roundtrip = serde_json::to_value(&executor_profile)
+            .expect("operation triad profile should serialize");
         let decoded = serde_json::from_value::<StructuredEditProviderExecutorProfile>(roundtrip)
             .expect("operation triad profile should deserialize after roundtrip");
 
@@ -11032,6 +11032,25 @@ fn conforms_to_slice_689_structured_edit_crispr_parity_substrate_report_fixture(
     prune_empty_metadata(&mut actual);
     prune_empty_metadata(&mut expected);
     assert!(actual == expected, "crispr parity substrate report payload should match fixture");
+}
+
+#[test]
+fn conforms_to_slice_696_structured_edit_kettle_jem_primitive_gap_report_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "structured_edit_kettle_jem_primitive_gap_report",
+    ));
+
+    let mut actual = serde_json::to_value(
+        serde_json::from_value::<StructuredEditKettleJemPrimitiveGapReport>(
+            fixture["report"].clone(),
+        )
+        .expect("kettle-jem primitive gap report should deserialize"),
+    )
+    .expect("kettle-jem primitive gap report should serialize");
+    let mut expected = fixture["report"].clone();
+    prune_empty_metadata(&mut actual);
+    prune_empty_metadata(&mut expected);
+    assert!(actual == expected, "kettle-jem primitive gap report payload should match fixture");
 }
 
 #[test]

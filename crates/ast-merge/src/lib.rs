@@ -425,6 +425,59 @@ pub struct StructuredEditCrisprExampleParityReport {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditKettleJemSubstrateCapability {
+    pub capability: String,
+    pub status: String,
+    pub evidence: Vec<String>,
+    #[serde(default)]
+    pub notes: Vec<String>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditKettleJemRequiredPrimitive {
+    pub name: String,
+    pub capability_kind: String,
+    pub portability_status: String,
+    pub native_contract: String,
+    pub source_references: Vec<String>,
+    #[serde(default)]
+    pub depends_on: Vec<String>,
+    #[serde(default)]
+    pub notes: Vec<String>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditKettleJemScriptClassification {
+    pub source: String,
+    pub classification: String,
+    pub shared_contract: String,
+    #[serde(default)]
+    pub notes: Vec<String>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredEditKettleJemPrimitiveGapReport {
+    pub reference_project: String,
+    pub scope: String,
+    pub product_target: String,
+    pub current_substrate: Vec<StructuredEditKettleJemSubstrateCapability>,
+    pub required_primitives: Vec<StructuredEditKettleJemRequiredPrimitive>,
+    pub script_classifications: Vec<StructuredEditKettleJemScriptClassification>,
+    #[serde(default)]
+    pub non_goals: Vec<String>,
+    #[serde(default)]
+    pub next_slices: Vec<String>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredEditProviderExecutionRequest {
     pub request: StructuredEditRequest,
     pub provider_family: String,
