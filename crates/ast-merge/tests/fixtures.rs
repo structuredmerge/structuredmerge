@@ -11085,6 +11085,37 @@ fn conforms_to_slice_697_content_recipe_execution_envelope_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_698_single_file_readme_heading_section_acceptance_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "single_file_readme_heading_section_acceptance",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let request_envelope = serde_json::from_value::<ContentRecipeExecutionRequestEnvelope>(
+            case["request_envelope"].clone(),
+        )
+        .expect("README acceptance request envelope should deserialize");
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("README acceptance report envelope should deserialize");
+
+        assert_eq!(request_envelope.request.relative_path, "README.md");
+        assert_eq!(report_envelope.report.request.relative_path, "README.md");
+        assert_eq!(
+            report_envelope.report.request.steps.len(),
+            report_envelope.report.step_reports.len(),
+            "README acceptance should include one step report per request step"
+        );
+        assert!(
+            !report_envelope.report.final_content.is_empty(),
+            "README acceptance should carry final content"
+        );
+    }
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
