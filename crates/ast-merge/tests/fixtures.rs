@@ -11284,6 +11284,25 @@ fn conforms_to_slice_704_ruby_gemspec_dependency_section_policy_acceptance_fixtu
 }
 
 #[test]
+fn conforms_to_slice_705_ruby_gemspec_files_policy_acceptance_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("ruby_gemspec_files_policy_acceptance"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("Ruby gemspec files policy report envelope should deserialize");
+
+        if case["label"] == "gemspec-files-literal-dir-union-and-duplicate-cleanup" {
+            assert_eq!(report_envelope.report.final_content.matches("spec.files =").count(), 1);
+            assert!(report_envelope.report.final_content.contains("sig/**/*.rbs"));
+        }
+    }
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
