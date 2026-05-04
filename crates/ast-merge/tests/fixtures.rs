@@ -11496,6 +11496,41 @@ fn conforms_to_slice_711_ruby_appraisals_min_ruby_prune_policy_acceptance_fixtur
 }
 
 #[test]
+fn conforms_to_slice_712_changelog_unreleased_normalization_acceptance_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "changelog_unreleased_normalization_acceptance",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("CHANGELOG Unreleased normalization report envelope should deserialize");
+
+        if case["label"] == "create-unreleased-section-from-supplied-entries" {
+            let final_content = &report_envelope.report.final_content;
+            let unreleased_index = final_content
+                .find("## Unreleased")
+                .expect("Unreleased heading should be present");
+            let release_index = final_content
+                .find("## 1.2.0")
+                .expect("release heading should be present");
+            assert!(unreleased_index < release_index);
+            assert!(final_content.contains("- Added native Markdown recipe boundary."));
+            assert!(final_content.contains("- Existing release."));
+            assert_eq!(
+                report_envelope.report.step_reports[0].metadata["operation"].as_str(),
+                Some("insert_or_replace_section")
+            );
+        }
+        if case["label"] == "missing-entries-fails-closed" {
+            assert_eq!(report_envelope.report.step_reports[0].status, "failed");
+        }
+    }
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
