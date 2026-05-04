@@ -54,7 +54,9 @@ pub struct Diagnostic {
     pub severity: DiagnosticSeverity,
     pub category: DiagnosticCategory,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub review: Option<Box<ReviewDiagnosticDetail>>,
 }
 
