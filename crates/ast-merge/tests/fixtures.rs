@@ -11146,6 +11146,39 @@ fn conforms_to_slice_699_native_structured_edit_recipe_steps_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_700_ruby_gemfile_signature_merge_acceptance_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("ruby_gemfile_signature_merge_acceptance"));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("Ruby Gemfile signature merge report envelope should deserialize");
+
+        let step = report_envelope
+            .report
+            .request
+            .steps
+            .first()
+            .expect("fixture should include a merge step");
+        assert_eq!(
+            step.merge_profile
+                .as_ref()
+                .and_then(|profile| profile.get("signature_profile"))
+                .and_then(|value| value.as_str()),
+            Some("gemfile_declarations")
+        );
+
+        if case["label"] == "gemfile-cross-nesting-duplicates-fail-closed" {
+            assert!(!report_envelope.report.changed);
+            assert_eq!(report_envelope.report.step_reports[0].status, "failed");
+        }
+    }
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
