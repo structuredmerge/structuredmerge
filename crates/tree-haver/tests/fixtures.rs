@@ -3,9 +3,11 @@ use std::{fs, path::PathBuf};
 use ast_merge::{ConformanceManifest, conformance_fixture_path};
 use serde_json::Value;
 use tree_haver::{
-    AdapterInfo, BackendReference, FeatureProfile, ParserRequest, ProcessRequest,
-    current_backend_id, pest_adapter_info, pest_backend, pest_feature_profile,
-    process_with_language_pack, register_backend, registered_backends, with_backend,
+    AdapterInfo, BackendReference, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis,
+    KaitaiTreeNode, ParserRequest, ProcessRequest, current_backend_id, kaitai_adapter_info,
+    kaitai_feature_profile, kaitai_struct_backend, pest_adapter_info, pest_backend,
+    pest_feature_profile, process_with_language_pack, register_backend, registered_backends,
+    with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -215,6 +217,62 @@ fn conforms_to_slice_25_backend_registry_fixture() {
             "family": "tree-sitter",
         })
     );
+}
+
+#[test]
+fn conforms_to_slice_721_kaitai_tree_haver_substrate_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("kaitai_tree_haver_substrate"));
+
+    let backend = kaitai_struct_backend();
+    assert_eq!(backend.id, fixture["backend"]["id"].as_str().unwrap());
+    assert_eq!(backend.family, fixture["backend"]["family"].as_str().unwrap());
+
+    let info = kaitai_adapter_info();
+    assert_eq!(info.backend, fixture["adapter_info"]["backend"].as_str().unwrap());
+    assert_eq!(info.backend_ref.as_ref().unwrap().family, "kaitai");
+
+    let profile = kaitai_feature_profile();
+    assert_eq!(profile.backend, fixture["feature_profile"]["backend"].as_str().unwrap());
+    assert_eq!(profile.backend_ref.as_ref().unwrap().id, "kaitai-struct");
+
+    let tree_node = &fixture["tree_node"];
+    let child = &tree_node["children"][0];
+    let mut fields = std::collections::HashMap::new();
+    for (key, value) in tree_node["fields"].as_object().unwrap() {
+        fields.insert(key.clone(), value.as_str().unwrap().to_string());
+    }
+    let mut child_fields = std::collections::HashMap::new();
+    for (key, value) in child["fields"].as_object().unwrap() {
+        child_fields.insert(key.clone(), value.as_str().unwrap().to_string());
+    }
+
+    let analysis = KaitaiTreeAnalysis {
+        schema: "png.ksy".to_string(),
+        root: KaitaiTreeNode {
+            kind: tree_node["kind"].as_str().unwrap().to_string(),
+            schema_path: tree_node["schema_path"].as_str().unwrap().to_string(),
+            span: KaitaiByteSpan {
+                start_byte: tree_node["span"]["start_byte"].as_u64().unwrap() as usize,
+                end_byte: tree_node["span"]["end_byte"].as_u64().unwrap() as usize,
+            },
+            fields,
+            children: vec![KaitaiTreeNode {
+                kind: child["kind"].as_str().unwrap().to_string(),
+                schema_path: child["schema_path"].as_str().unwrap().to_string(),
+                span: KaitaiByteSpan {
+                    start_byte: child["span"]["start_byte"].as_u64().unwrap() as usize,
+                    end_byte: child["span"]["end_byte"].as_u64().unwrap() as usize,
+                },
+                fields: child_fields,
+                children: vec![],
+            }],
+        },
+        backend_ref: backend,
+    };
+
+    assert_eq!(tree_haver::AnalysisHandle::kind(&analysis), "kaitai-tree");
+    assert_eq!(analysis.root.schema_path, "/chunks/1");
+    assert_eq!(analysis.root.children[0].fields["value"], "Template");
 }
 
 #[test]

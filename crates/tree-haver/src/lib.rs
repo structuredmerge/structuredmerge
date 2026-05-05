@@ -110,6 +110,28 @@ pub struct LanguagePackProcessAnalysis {
     pub backend_ref: BackendReference,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct KaitaiByteSpan {
+    pub start_byte: usize,
+    pub end_byte: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct KaitaiTreeNode {
+    pub kind: String,
+    pub schema_path: String,
+    pub span: KaitaiByteSpan,
+    pub fields: HashMap<String, String>,
+    pub children: Vec<KaitaiTreeNode>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct KaitaiTreeAnalysis {
+    pub schema: String,
+    pub root: KaitaiTreeNode,
+    pub backend_ref: BackendReference,
+}
+
 impl AnalysisHandle for LanguagePackAnalysis {
     fn kind(&self) -> &'static str {
         "tree-sitter"
@@ -119,6 +141,12 @@ impl AnalysisHandle for LanguagePackAnalysis {
 impl AnalysisHandle for LanguagePackProcessAnalysis {
     fn kind(&self) -> &'static str {
         "tree-sitter-process"
+    }
+}
+
+impl AnalysisHandle for KaitaiTreeAnalysis {
+    fn kind(&self) -> &'static str {
+        "kaitai-tree"
     }
 }
 
@@ -133,14 +161,20 @@ pub fn pest_backend() -> BackendReference {
     BackendReference { id: "pest".to_string(), family: "peg".to_string() }
 }
 
+pub fn kaitai_struct_backend() -> BackendReference {
+    BackendReference { id: "kaitai-struct".to_string(), family: "kaitai".to_string() }
+}
+
 fn backend_registry() -> &'static Mutex<HashMap<String, BackendReference>> {
     static BACKEND_REGISTRY: OnceLock<Mutex<HashMap<String, BackendReference>>> = OnceLock::new();
     BACKEND_REGISTRY.get_or_init(|| {
         let mut backends = HashMap::new();
         let language_pack = kreuzberg_language_pack_backend();
         let pest = pest_backend();
+        let kaitai = kaitai_struct_backend();
         backends.insert(language_pack.id.clone(), language_pack);
         backends.insert(pest.id.clone(), pest);
+        backends.insert(kaitai.id.clone(), kaitai);
         Mutex::new(backends)
     })
 }
@@ -183,6 +217,24 @@ pub fn pest_feature_profile() -> FeatureProfile {
     FeatureProfile {
         backend: "pest".to_string(),
         backend_ref: Some(pest_backend()),
+        supports_dialects: false,
+        supported_policies: vec![],
+    }
+}
+
+pub fn kaitai_adapter_info() -> AdapterInfo {
+    AdapterInfo {
+        backend: "kaitai-struct".to_string(),
+        backend_ref: Some(kaitai_struct_backend()),
+        supports_dialects: false,
+        supported_policies: vec![],
+    }
+}
+
+pub fn kaitai_feature_profile() -> FeatureProfile {
+    FeatureProfile {
+        backend: "kaitai-struct".to_string(),
+        backend_ref: Some(kaitai_struct_backend()),
         supports_dialects: false,
         supported_policies: vec![],
     }
