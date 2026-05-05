@@ -11670,6 +11670,46 @@ fn conforms_to_slice_716_supplied_yaml_snippet_synchronization_acceptance_fixtur
 }
 
 #[test]
+fn conforms_to_slice_717_supplied_managed_text_block_replacement_acceptance_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "supplied_managed_text_block_replacement_acceptance",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("supplied managed text block replacement report envelope should deserialize");
+
+        if case["label"] == "replace-existing-managed-text-block" {
+            let final_content = &report_envelope.report.final_content;
+            assert!(final_content.contains("gem \"debug\", \"~> 1.9\""));
+            assert!(final_content.contains("gem \"irb\", \"~> 1.15\""));
+            assert!(!final_content.contains("old-debug"));
+            assert!(final_content.contains("gem \"rake\""));
+            assert!(final_content.contains("gem \"rspec\""));
+            assert_eq!(
+                report_envelope.report.step_reports[0].metadata["replaced_blocks"].as_u64(),
+                Some(1)
+            );
+        }
+        if case["label"] == "append-missing-managed-text-block" {
+            let final_content = &report_envelope.report.final_content;
+            assert!(final_content.contains("# <<kettle-jem:generated>>"));
+            assert!(final_content.contains("# (no shunted dependencies)"));
+            assert_eq!(
+                report_envelope.report.step_reports[0].metadata["appended_blocks"].as_u64(),
+                Some(1)
+            );
+        }
+        if case["label"] == "missing-managed-block-updates-fails-closed" {
+            assert_eq!(report_envelope.report.step_reports[0].status, "failed");
+        }
+    }
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
