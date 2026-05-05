@@ -11710,6 +11710,41 @@ fn conforms_to_slice_717_supplied_managed_text_block_replacement_acceptance_fixt
 }
 
 #[test]
+fn conforms_to_slice_718_supplied_yaml_placeholder_scalar_backfill_acceptance_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "supplied_yaml_placeholder_scalar_backfill_acceptance",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("supplied YAML placeholder scalar backfill report envelope should deserialize");
+
+        if case["label"] == "backfill-placeholder-and-blank-scalars" {
+            let final_content = &report_envelope.report.final_content;
+            assert!(final_content.contains("name: \"demo-toolkit\""));
+            assert!(final_content.contains("namespace: 'Demo::Toolkit'"));
+            assert!(final_content.contains("homepage: \"https://example.invalid/existing\""));
+            assert!(final_content.contains("# ENV: KJ_GEM_NAME"));
+            assert!(final_content.contains("# keep concrete value"));
+            assert_eq!(
+                report_envelope.report.step_reports[0].metadata["updated_scalars"].as_u64(),
+                Some(2)
+            );
+            assert_eq!(
+                report_envelope.report.step_reports[0].metadata["preserved_scalars"].as_u64(),
+                Some(1)
+            );
+        }
+        if case["label"] == "missing-yaml-scalar-backfills-fails-closed" {
+            assert_eq!(report_envelope.report.step_reports[0].status, "failed");
+        }
+    }
+}
+
+#[test]
 fn conforms_to_slice_683_structured_edit_callable_destination_request_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "structured_edit_callable_destination_request",
