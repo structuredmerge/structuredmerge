@@ -119,6 +119,72 @@ pub struct SourceSpan {
     pub end_point: SourcePoint,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum BinaryScalarValue {
+    String(String),
+    Integer(i64),
+    Float(f64),
+    Boolean(bool),
+    Enum { symbol: String, raw_value: i64 },
+    Bytes { encoding: String, value: String },
+    Timestamp(String),
+    Opaque { format: String, description: String },
+    Null,
+}
+
+impl BinaryScalarValue {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            BinaryScalarValue::String(_) => "string",
+            BinaryScalarValue::Integer(_) => "integer",
+            BinaryScalarValue::Float(_) => "float",
+            BinaryScalarValue::Boolean(_) => "boolean",
+            BinaryScalarValue::Enum { .. } => "enum",
+            BinaryScalarValue::Bytes { .. } => "bytes",
+            BinaryScalarValue::Timestamp(_) => "timestamp",
+            BinaryScalarValue::Opaque { .. } => "opaque",
+            BinaryScalarValue::Null => "null",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BinaryRenderPolicy {
+    pub schema_path: String,
+    pub byte_range: Option<ByteRange>,
+    pub operation: String,
+    pub disposition: String,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BinaryDiagnostic {
+    pub severity: String,
+    pub category: String,
+    pub message: String,
+    pub schema_path: String,
+    pub byte_range: Option<ByteRange>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BinaryNestedDispatch {
+    pub schema_path: String,
+    pub family: String,
+    pub status: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BinaryMergeReport {
+    pub format: String,
+    pub schema: String,
+    pub matched_schema_paths: Vec<String>,
+    pub preserved_ranges: Vec<ByteRange>,
+    pub rewritten_nodes: Vec<String>,
+    pub checksum_updates: Vec<String>,
+    pub nested_dispatches: Vec<BinaryNestedDispatch>,
+    pub diagnostics: Vec<BinaryDiagnostic>,
+}
+
 pub fn slice_byte_range(source: &str, byte_range: &ByteRange) -> Result<String, String> {
     if !byte_range.is_valid() || byte_range.end_byte > source.len() {
         return Err(format!(

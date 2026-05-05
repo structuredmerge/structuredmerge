@@ -3,11 +3,13 @@ use std::{fs, path::PathBuf};
 use ast_merge::{ConformanceManifest, conformance_fixture_path};
 use serde_json::Value;
 use tree_haver::{
-    AdapterInfo, BackendReference, ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis,
-    KaitaiTreeNode, ParserRequest, ProcessRequest, SourcePoint, byte_offset_for_point,
-    current_backend_id, kaitai_adapter_info, kaitai_feature_profile, kaitai_struct_backend,
-    pest_adapter_info, pest_backend, pest_feature_profile, process_with_language_pack,
-    register_backend, registered_backends, slice_byte_range, with_backend,
+    AdapterInfo, BackendReference, BinaryDiagnostic, BinaryMergeReport, BinaryNestedDispatch,
+    BinaryRenderPolicy, BinaryScalarValue, ByteRange, FeatureProfile, KaitaiByteSpan,
+    KaitaiTreeAnalysis, KaitaiTreeNode, ParserRequest, ProcessRequest, SourcePoint,
+    byte_offset_for_point, current_backend_id, kaitai_adapter_info, kaitai_feature_profile,
+    kaitai_struct_backend, pest_adapter_info, pest_backend, pest_feature_profile,
+    process_with_language_pack, register_backend, registered_backends, slice_byte_range,
+    with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -326,6 +328,117 @@ fn conforms_to_slice_722_portable_byte_location_contract_fixture() {
         byte_offset_for_point(source, &point).unwrap(),
         fixture["expected"]["line_column_offset"].as_u64().unwrap() as usize
     );
+}
+
+#[test]
+fn conforms_to_slice_723_binary_core_contract_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("binary_core_contract"));
+
+    let scalar_values = vec![
+        BinaryScalarValue::String(
+            fixture["scalar_values"][0]["value"].as_str().unwrap().to_string(),
+        ),
+        BinaryScalarValue::Integer(fixture["scalar_values"][1]["value"].as_i64().unwrap()),
+        BinaryScalarValue::Float(fixture["scalar_values"][2]["value"].as_f64().unwrap()),
+        BinaryScalarValue::Boolean(fixture["scalar_values"][3]["value"].as_bool().unwrap()),
+        BinaryScalarValue::Enum {
+            symbol: fixture["scalar_values"][4]["symbol"].as_str().unwrap().to_string(),
+            raw_value: fixture["scalar_values"][4]["raw_value"].as_i64().unwrap(),
+        },
+        BinaryScalarValue::Bytes {
+            encoding: fixture["scalar_values"][5]["encoding"].as_str().unwrap().to_string(),
+            value: fixture["scalar_values"][5]["value"].as_str().unwrap().to_string(),
+        },
+        BinaryScalarValue::Timestamp(
+            fixture["scalar_values"][6]["value"].as_str().unwrap().to_string(),
+        ),
+        BinaryScalarValue::Opaque {
+            format: fixture["scalar_values"][7]["format"].as_str().unwrap().to_string(),
+            description: fixture["scalar_values"][7]["description"].as_str().unwrap().to_string(),
+        },
+        BinaryScalarValue::Null,
+    ];
+    assert_eq!(scalar_values.len(), 9);
+    assert_eq!(scalar_values[0].kind(), "string");
+    assert_eq!(scalar_values[8].kind(), "null");
+
+    let policies = fixture["render_policies"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| BinaryRenderPolicy {
+            schema_path: item["schema_path"].as_str().unwrap().to_string(),
+            byte_range: Some(ByteRange {
+                start_byte: item["byte_range"]["start_byte"].as_u64().unwrap() as usize,
+                end_byte: item["byte_range"]["end_byte"].as_u64().unwrap() as usize,
+            }),
+            operation: item["operation"].as_str().unwrap().to_string(),
+            disposition: item["disposition"].as_str().unwrap().to_string(),
+            reason: item["reason"].as_str().unwrap().to_string(),
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(policies[0].operation, "preserve");
+    assert_eq!(policies[1].disposition, "requires_renderer");
+    assert_eq!(policies[2].disposition, "unsafe");
+
+    let report = BinaryMergeReport {
+        format: fixture["merge_report"]["format"].as_str().unwrap().to_string(),
+        schema: fixture["merge_report"]["schema"].as_str().unwrap().to_string(),
+        matched_schema_paths: vec!["/chunks/0".to_string(), "/chunks/1".to_string()],
+        preserved_ranges: vec![ByteRange {
+            start_byte: fixture["merge_report"]["preserved_ranges"][0]["start_byte"]
+                .as_u64()
+                .unwrap() as usize,
+            end_byte: fixture["merge_report"]["preserved_ranges"][0]["end_byte"].as_u64().unwrap()
+                as usize,
+        }],
+        rewritten_nodes: vec!["/chunks/1".to_string()],
+        checksum_updates: vec!["/chunks/1/crc".to_string()],
+        nested_dispatches: vec![BinaryNestedDispatch {
+            schema_path: fixture["merge_report"]["nested_dispatches"][0]["schema_path"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            family: fixture["merge_report"]["nested_dispatches"][0]["family"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            status: fixture["merge_report"]["nested_dispatches"][0]["status"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+        }],
+        diagnostics: vec![BinaryDiagnostic {
+            severity: fixture["merge_report"]["diagnostics"][0]["severity"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            category: fixture["merge_report"]["diagnostics"][0]["category"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            message: fixture["merge_report"]["diagnostics"][0]["message"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            schema_path: fixture["merge_report"]["diagnostics"][0]["schema_path"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            byte_range: Some(ByteRange {
+                start_byte: fixture["merge_report"]["diagnostics"][0]["byte_range"]["start_byte"]
+                    .as_u64()
+                    .unwrap() as usize,
+                end_byte: fixture["merge_report"]["diagnostics"][0]["byte_range"]["end_byte"]
+                    .as_u64()
+                    .unwrap() as usize,
+            }),
+        }],
+    };
+    assert_eq!(report.format, "png");
+    assert_eq!(report.preserved_ranges[0].len(), 25);
+    assert_eq!(report.nested_dispatches[0].family, "text");
+    assert_eq!(report.diagnostics[0].category, "unsupported_checksum_rewrite");
 }
 
 #[test]
