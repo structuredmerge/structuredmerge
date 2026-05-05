@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs, io,
     path::{Path, PathBuf},
 };
@@ -172,6 +172,173 @@ pub struct FamilyFeatureProfile {
     pub family: String,
     pub supported_dialects: Vec<String>,
     pub supported_policies: Vec<PolicyReference>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CompactRulesetDirective {
+    pub name: String,
+    pub arguments: Vec<String>,
+    pub line: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CompactRuleset {
+    pub directives: Vec<CompactRulesetDirective>,
+    pub comments: Vec<String>,
+}
+
+pub fn parse_compact_ruleset(source: &str) -> ParseResult<CompactRuleset> {
+    let mut ruleset = CompactRuleset { directives: vec![], comments: vec![] };
+    let mut diagnostics = vec![];
+    let mut seen_directives: HashMap<String, usize> = HashMap::new();
+    let mut seen_repeatable_keys: HashSet<(String, String)> = HashSet::new();
+
+    for (index, raw_line) in source.lines().enumerate() {
+        let line_number = index + 1;
+        let line = raw_line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if line.starts_with('#') {
+            ruleset.comments.push(line.to_string());
+            continue;
+        }
+
+        let parts = line.split_whitespace().collect::<Vec<_>>();
+        let name = parts[0];
+        let arguments = parts[1..].iter().map(|arg| (*arg).to_string()).collect::<Vec<_>>();
+        let path = Some(line_number.to_string());
+        if !compact_ruleset_identifier(name) {
+            diagnostics.push(compact_ruleset_diagnostic(
+                format!("invalid directive token {name:?}"),
+                path.clone(),
+            ));
+            continue;
+        }
+        if !compact_ruleset_known_directive(name) {
+            diagnostics.push(compact_ruleset_diagnostic(
+                format!("unknown directive {name:?}"),
+                path.clone(),
+            ));
+            continue;
+        }
+        if arguments.is_empty() {
+            diagnostics.push(compact_ruleset_diagnostic(
+                format!("directive {name:?} requires at least one argument"),
+                path.clone(),
+            ));
+            continue;
+        }
+        for argument in &arguments {
+            if argument != "true"
+                && argument != "false"
+                && !compact_ruleset_identifier(argument)
+                && !compact_ruleset_token(argument)
+            {
+                diagnostics.push(compact_ruleset_diagnostic(
+                    format!("invalid argument token {argument:?}"),
+                    path.clone(),
+                ));
+            }
+        }
+
+        if compact_ruleset_singleton_directive(name) {
+            if let Some(first_line) = seen_directives.get(name) {
+                diagnostics.push(compact_ruleset_diagnostic(
+                    format!(
+                        "repeated singleton directive {name:?} first seen on line {first_line}"
+                    ),
+                    path.clone(),
+                ));
+            }
+        }
+        if compact_ruleset_repeatable_keyed_directive(name) {
+            let key = (name.to_string(), arguments[0].clone());
+            if seen_repeatable_keys.contains(&key) {
+                diagnostics.push(compact_ruleset_diagnostic(
+                    format!("repeated {name:?} key {:?}", arguments[0]),
+                    path.clone(),
+                ));
+            }
+            seen_repeatable_keys.insert(key);
+        }
+        if name == "read" && !READ_VALUES.contains(&arguments[0].as_str()) {
+            diagnostics.push(compact_ruleset_diagnostic(
+                format!("unknown read value {:?}", arguments[0]),
+                path.clone(),
+            ));
+        }
+        if name == "attach" && !ATTACH_VALUES.contains(&arguments[0].as_str()) {
+            diagnostics.push(compact_ruleset_diagnostic(
+                format!("unknown attach value {:?}", arguments[0]),
+                path,
+            ));
+        }
+
+        seen_directives.insert(name.to_string(), line_number);
+        ruleset.directives.push(CompactRulesetDirective {
+            name: name.to_string(),
+            arguments,
+            line: line_number,
+        });
+    }
+
+    for required in REQUIRED_DIRECTIVES {
+        if !seen_directives.contains_key(*required) {
+            diagnostics.push(compact_ruleset_diagnostic(
+                format!("missing required directive {required:?}"),
+                None,
+            ));
+        }
+    }
+
+    let ok = diagnostics.is_empty();
+    ParseResult { ok, diagnostics, analysis: ok.then_some(ruleset), policies: vec![] }
+}
+
+const REQUIRED_DIRECTIVES: &[&str] = &["format", "owners", "match", "read", "attach"];
+const READ_VALUES: &[&str] =
+    &["source_augmented_portable_write", "native_read_portable_write", "native_mutation"];
+const ATTACH_VALUES: &[&str] = &[
+    "layout_only",
+    "tracker_layout_merge",
+    "augmenter_preferred_tracker_layout",
+    "normalize_tracked_layout_merge",
+];
+
+fn compact_ruleset_singleton_directive(name: &str) -> bool {
+    matches!(name, "format" | "owners" | "match" | "read" | "attach" | "comment_style" | "render")
+}
+
+fn compact_ruleset_repeatable_keyed_directive(name: &str) -> bool {
+    matches!(name, "capability" | "logical_owner" | "repair" | "surface" | "delegate")
+}
+
+fn compact_ruleset_known_directive(name: &str) -> bool {
+    compact_ruleset_singleton_directive(name) || compact_ruleset_repeatable_keyed_directive(name)
+}
+
+fn compact_ruleset_identifier(value: &str) -> bool {
+    let mut chars = value.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_alphabetic() => {}
+        _ => return false,
+    }
+    chars.all(|char| char.is_ascii_alphanumeric() || matches!(char, '_' | '-' | '.'))
+}
+
+fn compact_ruleset_token(value: &str) -> bool {
+    value.bytes().all(|byte| byte == b'!' || (b'$'..=b'~').contains(&byte))
+}
+
+fn compact_ruleset_diagnostic(message: String, path: Option<String>) -> Diagnostic {
+    Diagnostic {
+        severity: DiagnosticSeverity::Error,
+        category: DiagnosticCategory::ConfigurationError,
+        message,
+        path,
+        review: None,
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
