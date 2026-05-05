@@ -3,11 +3,11 @@ use std::{fs, path::PathBuf};
 use ast_merge::{ConformanceManifest, conformance_fixture_path};
 use serde_json::Value;
 use tree_haver::{
-    AdapterInfo, BackendReference, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis,
-    KaitaiTreeNode, ParserRequest, ProcessRequest, current_backend_id, kaitai_adapter_info,
-    kaitai_feature_profile, kaitai_struct_backend, pest_adapter_info, pest_backend,
-    pest_feature_profile, process_with_language_pack, register_backend, registered_backends,
-    with_backend,
+    AdapterInfo, BackendReference, ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis,
+    KaitaiTreeNode, ParserRequest, ProcessRequest, SourcePoint, byte_offset_for_point,
+    current_backend_id, kaitai_adapter_info, kaitai_feature_profile, kaitai_struct_backend,
+    pest_adapter_info, pest_backend, pest_feature_profile, process_with_language_pack,
+    register_backend, registered_backends, slice_byte_range, with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -273,6 +273,59 @@ fn conforms_to_slice_721_kaitai_tree_haver_substrate_fixture() {
     assert_eq!(tree_haver::AnalysisHandle::kind(&analysis), "kaitai-tree");
     assert_eq!(analysis.root.schema_path, "/chunks/1");
     assert_eq!(analysis.root.children[0].fields["value"], "Template");
+}
+
+#[test]
+fn conforms_to_slice_722_portable_byte_location_contract_fixture() {
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("portable_byte_location_contract"));
+
+    let byte_range = ByteRange {
+        start_byte: fixture["byte_range"]["start_byte"].as_u64().unwrap() as usize,
+        end_byte: fixture["byte_range"]["end_byte"].as_u64().unwrap() as usize,
+    };
+    let point = SourcePoint {
+        row: fixture["source_point"]["row"].as_u64().unwrap() as usize,
+        column: fixture["source_point"]["column"].as_u64().unwrap() as usize,
+    };
+    let overlapping_range = ByteRange {
+        start_byte: fixture["comparison_ranges"]["overlapping"]["start_byte"].as_u64().unwrap()
+            as usize,
+        end_byte: fixture["comparison_ranges"]["overlapping"]["end_byte"].as_u64().unwrap()
+            as usize,
+    };
+    let disjoint_range = ByteRange {
+        start_byte: fixture["comparison_ranges"]["disjoint"]["start_byte"].as_u64().unwrap()
+            as usize,
+        end_byte: fixture["comparison_ranges"]["disjoint"]["end_byte"].as_u64().unwrap() as usize,
+    };
+    let source = fixture["source"].as_str().unwrap();
+
+    assert_eq!(byte_range.len(), fixture["expected"]["length"].as_u64().unwrap() as usize);
+    assert_eq!(
+        slice_byte_range(source, &byte_range).unwrap(),
+        fixture["expected"]["slice"].as_str().unwrap()
+    );
+    assert_eq!(
+        byte_range.contains_byte(byte_range.start_byte),
+        fixture["expected"]["contains_start"].as_bool().unwrap()
+    );
+    assert_eq!(
+        byte_range.contains_byte(byte_range.end_byte),
+        fixture["expected"]["contains_end"].as_bool().unwrap()
+    );
+    assert_eq!(
+        byte_range.overlaps(&overlapping_range),
+        fixture["expected"]["overlaps"].as_bool().unwrap()
+    );
+    assert_eq!(
+        byte_range.overlaps(&disjoint_range),
+        fixture["expected"]["disjoint"].as_bool().unwrap()
+    );
+    assert_eq!(
+        byte_offset_for_point(source, &point).unwrap(),
+        fixture["expected"]["line_column_offset"].as_u64().unwrap() as usize
+    );
 }
 
 #[test]

@@ -73,6 +73,90 @@ pub struct ProcessSpan {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ByteRange {
+    pub start_byte: usize,
+    pub end_byte: usize,
+}
+
+impl ByteRange {
+    pub fn is_valid(&self) -> bool {
+        self.end_byte >= self.start_byte
+    }
+
+    pub fn len(&self) -> usize {
+        self.end_byte.saturating_sub(self.start_byte)
+    }
+
+    pub fn contains_byte(&self, offset: usize) -> bool {
+        self.is_valid() && offset >= self.start_byte && offset < self.end_byte
+    }
+
+    pub fn contains_range(&self, other: &ByteRange) -> bool {
+        self.is_valid()
+            && other.is_valid()
+            && other.start_byte >= self.start_byte
+            && other.end_byte <= self.end_byte
+    }
+
+    pub fn overlaps(&self, other: &ByteRange) -> bool {
+        self.is_valid()
+            && other.is_valid()
+            && self.start_byte < other.end_byte
+            && other.start_byte < self.end_byte
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SourcePoint {
+    pub row: usize,
+    pub column: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SourceSpan {
+    pub range: ByteRange,
+    pub start_point: SourcePoint,
+    pub end_point: SourcePoint,
+}
+
+pub fn slice_byte_range(source: &str, byte_range: &ByteRange) -> Result<String, String> {
+    if !byte_range.is_valid() || byte_range.end_byte > source.len() {
+        return Err(format!(
+            "invalid byte range [{}, {}) for source length {}",
+            byte_range.start_byte,
+            byte_range.end_byte,
+            source.len()
+        ));
+    }
+
+    std::str::from_utf8(&source.as_bytes()[byte_range.start_byte..byte_range.end_byte])
+        .map(str::to_string)
+        .map_err(|error| error.to_string())
+}
+
+pub fn byte_offset_for_point(source: &str, point: &SourcePoint) -> Result<usize, String> {
+    let mut row = 0;
+    let mut column = 0;
+
+    for (offset, value) in source.as_bytes().iter().enumerate() {
+        if row == point.row && column == point.column {
+            return Ok(offset);
+        }
+        if *value == b'\n' {
+            row += 1;
+            column = 0;
+        } else {
+            column += 1;
+        }
+    }
+    if row == point.row && column == point.column {
+        return Ok(source.len());
+    }
+
+    Err(format!("source point ({}, {}) is outside source", point.row, point.column))
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProcessStructureItem {
     pub kind: String,
     pub name: Option<String>,
