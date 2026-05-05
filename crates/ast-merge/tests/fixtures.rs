@@ -11510,12 +11510,10 @@ fn conforms_to_slice_712_changelog_unreleased_normalization_acceptance_fixture()
 
         if case["label"] == "create-unreleased-section-from-supplied-entries" {
             let final_content = &report_envelope.report.final_content;
-            let unreleased_index = final_content
-                .find("## Unreleased")
-                .expect("Unreleased heading should be present");
-            let release_index = final_content
-                .find("## 1.2.0")
-                .expect("release heading should be present");
+            let unreleased_index =
+                final_content.find("## Unreleased").expect("Unreleased heading should be present");
+            let release_index =
+                final_content.find("## 1.2.0").expect("release heading should be present");
             assert!(unreleased_index < release_index);
             assert!(final_content.contains("- Added native Markdown recipe boundary."));
             assert!(final_content.contains("- Existing release."));
@@ -11565,9 +11563,8 @@ fn conforms_to_slice_713_readme_supplied_metadata_synchronization_acceptance_fix
 
 #[test]
 fn conforms_to_slice_714_supplied_markdown_pruning_acceptance_fixture() {
-    let fixture = read_fixture_from_path(diagnostics_fixture_path(
-        "supplied_markdown_pruning_acceptance",
-    ));
+    let fixture =
+        read_fixture_from_path(diagnostics_fixture_path("supplied_markdown_pruning_acceptance"));
     let cases = fixture["cases"].as_array().expect("cases should be an array");
 
     for case in cases {
@@ -11625,6 +11622,48 @@ fn conforms_to_slice_715_supplied_source_selector_deletion_acceptance_fixture() 
             );
         }
         if case["label"] == "missing-delete-selectors-fails-closed" {
+            assert_eq!(report_envelope.report.step_reports[0].status, "failed");
+        }
+    }
+}
+
+#[test]
+fn conforms_to_slice_716_supplied_yaml_snippet_synchronization_acceptance_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path(
+        "supplied_yaml_snippet_synchronization_acceptance",
+    ));
+    let cases = fixture["cases"].as_array().expect("cases should be an array");
+
+    for case in cases {
+        let report_envelope = serde_json::from_value::<ContentRecipeExecutionReportEnvelope>(
+            case["report_envelope"].clone(),
+        )
+        .expect("supplied YAML snippet synchronization report envelope should deserialize");
+
+        if case["label"] == "apply-supplied-sections-and-scalar-pins" {
+            let final_content = &report_envelope.report.final_content;
+            assert!(final_content.contains("concurrency:"));
+            assert!(final_content.contains("permissions:"));
+            assert!(
+                final_content.contains("actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd")
+            );
+            assert!(
+                final_content.contains("ruby/setup-ruby@e65c17d16e57e481586a6a5a0282698790062f92")
+            );
+            assert!(!final_content.contains("actions/checkout@v3"));
+            assert!(!final_content.contains("ruby/setup-ruby@v1"));
+            assert!(final_content.contains("gemfiles/current.gemfile"));
+            assert!(final_content.contains("ruby-version: ${{ matrix.ruby }}"));
+            assert_eq!(
+                report_envelope.report.step_reports[0].metadata["updated_sections"].as_u64(),
+                Some(2)
+            );
+            assert_eq!(
+                report_envelope.report.step_reports[1].metadata["updated_scalars"].as_u64(),
+                Some(2)
+            );
+        }
+        if case["label"] == "missing-yaml-updates-fails-closed" {
             assert_eq!(report_envelope.report.step_reports[0].status, "failed");
         }
     }
