@@ -6,7 +6,7 @@ use ast_merge::{
 use toml::Value;
 use tree_haver::{BackendReference, kreuzberg_language_pack_backend, parse_with_language_pack};
 
-pub const PACKAGE_NAME: &str = "toml-merge";
+pub const PACKAGE_NAME: &str = "structuredmerge-toml-merge";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TomlDialect {
