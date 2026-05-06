@@ -5,10 +5,12 @@ repository = "https://github.com/structuredmerge/structuredmerge-rust"
 homepage = "https://structuredmerge.org"
 authors = ["Peter H. Boling"]
 edition = "2024"
+description = "Ruby syntax merge helpers for Structured Merge"
+license = "AGPL-3.0-only"
 
 [dependencies]
-ast-merge = { path = "../ast-merge" }
-tree-haver = { path = "../tree-haver" }
+ast-merge = { version = "0.1.0", path = "../ast-merge" }
+tree-haver = { version = "0.1.0", path = "../tree-haver" }
 regex-lite = "0.1"
 serde_json = "1"
 

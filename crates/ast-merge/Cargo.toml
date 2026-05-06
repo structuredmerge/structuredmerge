@@ -14,9 +14,9 @@ serde_json = "1.0"
 tree-haver = { version = "0.1.0", path = "../tree-haver" }
 
 [dev-dependencies]
-markdown-merge = { path = "../markdown-merge" }
-toml-merge = { path = "../toml-merge" }
-ruby-merge = { path = "../ruby-merge" }
+markdown-merge = { version = "0.0.0", path = "../markdown-merge" }
+toml-merge = { version = "0.0.0", path = "../toml-merge" }
+ruby-merge = { version = "0.0.0", path = "../ruby-merge" }
 
 [lib]
 path = "src/lib.rs"

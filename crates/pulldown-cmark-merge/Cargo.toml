@@ -5,13 +5,15 @@ repository = "https://github.com/structuredmerge/structuredmerge-rust"
 homepage = "https://structuredmerge.org"
 authors = ["Peter H. Boling"]
 edition = "2024"
+description = "Pulldown-cmark Markdown merge helpers for Structured Merge"
+license = "AGPL-3.0-only"
 
 [dependencies]
-ast-merge = { path = "../ast-merge" }
-markdown-merge = { path = "../markdown-merge" }
+ast-merge = { version = "0.1.0", path = "../ast-merge" }
+markdown-merge = { version = "0.0.0", path = "../markdown-merge" }
 pulldown-cmark = "0.13"
 serde_json = "1"
-tree-haver = { path = "../tree-haver" }
+tree-haver = { version = "0.1.0", path = "../tree-haver" }
 
 [dev-dependencies]
 serde_json = "1"

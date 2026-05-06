@@ -5,12 +5,14 @@ repository = "https://github.com/structuredmerge/structuredmerge-rust"
 homepage = "https://structuredmerge.org"
 authors = ["Peter H. Boling"]
 edition = "2024"
+description = "yaml-serde merge helpers for Structured Merge"
+license = "AGPL-3.0-only"
 
 [dependencies]
-ast-merge = { path = "../ast-merge" }
+ast-merge = { version = "0.1.0", path = "../ast-merge" }
 serde_json = "1"
-tree-haver = { path = "../tree-haver" }
-yaml-merge = { path = "../yaml-merge" }
+tree-haver = { version = "0.1.0", path = "../tree-haver" }
+yaml-merge = { version = "0.0.0", path = "../yaml-merge" }
 yaml_serde = "0.10.4"
 
 [dev-dependencies]
