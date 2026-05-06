@@ -119,6 +119,30 @@ pub struct SourceSpan {
     pub end_point: SourcePoint,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ByteEditSpan {
+    pub start_byte: usize,
+    pub old_end_byte: usize,
+    pub new_end_byte: usize,
+    pub start_point: SourcePoint,
+    pub old_end_point: SourcePoint,
+    pub new_end_point: SourcePoint,
+}
+
+impl ByteEditSpan {
+    pub fn old_range(&self) -> ByteRange {
+        ByteRange { start_byte: self.start_byte, end_byte: self.old_end_byte }
+    }
+
+    pub fn new_range(&self) -> ByteRange {
+        ByteRange { start_byte: self.start_byte, end_byte: self.new_end_byte }
+    }
+
+    pub fn byte_delta(&self) -> isize {
+        self.new_end_byte as isize - self.old_end_byte as isize
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum BinaryScalarValue {
     String(String),
@@ -174,6 +198,22 @@ pub struct BinaryNestedDispatch {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BinaryPayloadRegion {
+    pub kind: String,
+    pub schema_path: String,
+    pub byte_range: ByteRange,
+    pub expected_hex: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BinaryRawPayload {
+    pub encoding: String,
+    pub value: String,
+    pub byte_length: usize,
+    pub regions: Vec<BinaryPayloadRegion>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BinaryMergeReport {
     pub format: String,
     pub schema: String,
@@ -183,6 +223,54 @@ pub struct BinaryMergeReport {
     pub checksum_updates: Vec<String>,
     pub nested_dispatches: Vec<BinaryNestedDispatch>,
     pub diagnostics: Vec<BinaryDiagnostic>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ZipArchiveInfo {
+    pub format: String,
+    pub schema: String,
+    pub entry_count: usize,
+    pub central_directory_range: ByteRange,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ZipArchiveEntry {
+    pub path: String,
+    pub normalized_path: String,
+    pub directory: bool,
+    pub compression: String,
+    pub compressed_size: usize,
+    pub uncompressed_size: usize,
+    pub crc32: String,
+    pub local_header_range: ByteRange,
+    pub data_range: ByteRange,
+    pub central_directory_range: ByteRange,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ZipMemberDecision {
+    pub normalized_path: String,
+    pub operation: String,
+    pub disposition: String,
+    pub nested_family: Option<String>,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ZipUnsafeEntry {
+    pub path: String,
+    pub normalized_path: String,
+    pub category: String,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ZipFamilyReport {
+    pub archive: ZipArchiveInfo,
+    pub entries: Vec<ZipArchiveEntry>,
+    pub member_decisions: Vec<ZipMemberDecision>,
+    pub unsafe_entries: Vec<ZipUnsafeEntry>,
+    pub merge_report: BinaryMergeReport,
 }
 
 pub fn slice_byte_range(source: &str, byte_range: &ByteRange) -> Result<String, String> {
@@ -278,8 +366,10 @@ pub struct KaitaiTreeNode {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct KaitaiTreeAnalysis {
     pub schema: String,
+    pub source_byte_length: usize,
     pub root: KaitaiTreeNode,
     pub backend_ref: BackendReference,
+    pub diagnostics: Vec<BinaryDiagnostic>,
 }
 
 impl AnalysisHandle for LanguagePackAnalysis {

@@ -4,12 +4,12 @@ use ast_merge::{ConformanceManifest, conformance_fixture_path};
 use serde_json::Value;
 use tree_haver::{
     AdapterInfo, BackendReference, BinaryDiagnostic, BinaryMergeReport, BinaryNestedDispatch,
-    BinaryRenderPolicy, BinaryScalarValue, ByteRange, FeatureProfile, KaitaiByteSpan,
-    KaitaiTreeAnalysis, KaitaiTreeNode, ParserRequest, ProcessRequest, SourcePoint,
-    byte_offset_for_point, current_backend_id, kaitai_adapter_info, kaitai_feature_profile,
-    kaitai_struct_backend, pest_adapter_info, pest_backend, pest_feature_profile,
-    process_with_language_pack, register_backend, registered_backends, slice_byte_range,
-    with_backend,
+    BinaryPayloadRegion, BinaryRawPayload, BinaryRenderPolicy, BinaryScalarValue, ByteEditSpan,
+    ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis, KaitaiTreeNode, ParserRequest,
+    ProcessRequest, SourcePoint, ZipUnsafeEntry, byte_offset_for_point, current_backend_id,
+    kaitai_adapter_info, kaitai_feature_profile, kaitai_struct_backend, pest_adapter_info,
+    pest_backend, pest_feature_profile, process_with_language_pack, register_backend,
+    registered_backends, slice_byte_range, with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -249,7 +249,8 @@ fn conforms_to_slice_721_kaitai_tree_haver_substrate_fixture() {
     }
 
     let analysis = KaitaiTreeAnalysis {
-        schema: "png.ksy".to_string(),
+        schema: fixture["analysis"]["schema"].as_str().unwrap().to_string(),
+        source_byte_length: fixture["analysis"]["source_byte_length"].as_u64().unwrap() as usize,
         root: KaitaiTreeNode {
             kind: tree_node["kind"].as_str().unwrap().to_string(),
             schema_path: tree_node["schema_path"].as_str().unwrap().to_string(),
@@ -270,9 +271,40 @@ fn conforms_to_slice_721_kaitai_tree_haver_substrate_fixture() {
             }],
         },
         backend_ref: backend,
+        diagnostics: vec![BinaryDiagnostic {
+            severity: fixture["analysis"]["diagnostics"][0]["severity"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            category: fixture["analysis"]["diagnostics"][0]["category"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            message: fixture["analysis"]["diagnostics"][0]["message"].as_str().unwrap().to_string(),
+            schema_path: fixture["analysis"]["diagnostics"][0]["schema_path"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            byte_range: Some(ByteRange {
+                start_byte: fixture["analysis"]["diagnostics"][0]["byte_range"]["start_byte"]
+                    .as_u64()
+                    .unwrap() as usize,
+                end_byte: fixture["analysis"]["diagnostics"][0]["byte_range"]["end_byte"]
+                    .as_u64()
+                    .unwrap() as usize,
+            }),
+        }],
     };
 
     assert_eq!(tree_haver::AnalysisHandle::kind(&analysis), "kaitai-tree");
+    assert_eq!(
+        analysis.source_byte_length,
+        fixture["analysis"]["source_byte_length"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        analysis.diagnostics[0].schema_path,
+        fixture["analysis"]["diagnostics"][0]["schema_path"].as_str().unwrap()
+    );
     assert_eq!(analysis.root.schema_path, "/chunks/1");
     assert_eq!(analysis.root.children[0].fields["value"], "Template");
 }
@@ -289,6 +321,14 @@ fn conforms_to_slice_722_portable_byte_location_contract_fixture() {
     let point = SourcePoint {
         row: fixture["source_point"]["row"].as_u64().unwrap() as usize,
         column: fixture["source_point"]["column"].as_u64().unwrap() as usize,
+    };
+    let edit_span = ByteEditSpan {
+        start_byte: fixture["edit_span"]["start_byte"].as_u64().unwrap() as usize,
+        old_end_byte: fixture["edit_span"]["old_end_byte"].as_u64().unwrap() as usize,
+        new_end_byte: fixture["edit_span"]["new_end_byte"].as_u64().unwrap() as usize,
+        start_point: source_point_from_fixture(&fixture["edit_span"]["start_point"]),
+        old_end_point: source_point_from_fixture(&fixture["edit_span"]["old_end_point"]),
+        new_end_point: source_point_from_fixture(&fixture["edit_span"]["new_end_point"]),
     };
     let overlapping_range = ByteRange {
         start_byte: fixture["comparison_ranges"]["overlapping"]["start_byte"].as_u64().unwrap()
@@ -328,11 +368,62 @@ fn conforms_to_slice_722_portable_byte_location_contract_fixture() {
         byte_offset_for_point(source, &point).unwrap(),
         fixture["expected"]["line_column_offset"].as_u64().unwrap() as usize
     );
+    assert_eq!(
+        edit_span.old_range().len(),
+        fixture["expected"]["old_edit_length"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        edit_span.new_range().len(),
+        fixture["expected"]["new_edit_length"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        edit_span.byte_delta(),
+        fixture["expected"]["edit_delta"].as_i64().unwrap() as isize
+    );
+    assert_eq!(
+        slice_byte_range(source, &edit_span.old_range()).unwrap(),
+        fixture["expected"]["old_edit_slice"].as_str().unwrap()
+    );
+}
+
+fn source_point_from_fixture(value: &Value) -> SourcePoint {
+    SourcePoint {
+        row: value["row"].as_u64().unwrap() as usize,
+        column: value["column"].as_u64().unwrap() as usize,
+    }
 }
 
 #[test]
 fn conforms_to_slice_723_binary_core_contract_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path("binary_core_contract"));
+
+    let raw_payload = BinaryRawPayload {
+        encoding: fixture["raw_payload"]["encoding"].as_str().unwrap().to_string(),
+        value: fixture["raw_payload"]["value"].as_str().unwrap().to_string(),
+        byte_length: fixture["raw_payload"]["byte_length"].as_u64().unwrap() as usize,
+        regions: fixture["raw_payload"]["regions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|region| BinaryPayloadRegion {
+                kind: region["kind"].as_str().unwrap().to_string(),
+                schema_path: region["schema_path"].as_str().unwrap().to_string(),
+                byte_range: ByteRange {
+                    start_byte: region["byte_range"]["start_byte"].as_u64().unwrap() as usize,
+                    end_byte: region["byte_range"]["end_byte"].as_u64().unwrap() as usize,
+                },
+                expected_hex: region["expected_hex"].as_str().unwrap().to_string(),
+            })
+            .collect(),
+    };
+    let checksum_region = &raw_payload.regions[3];
+    let checksum_start = checksum_region.byte_range.start_byte * 2;
+    let checksum_end = checksum_region.byte_range.end_byte * 2;
+    assert_eq!(raw_payload.encoding, "hex");
+    assert_eq!(raw_payload.value.len() / 2, raw_payload.byte_length);
+    assert_eq!(raw_payload.regions[0].kind, "header");
+    assert_eq!(raw_payload.regions[0].byte_range.len(), 8);
+    assert_eq!(&raw_payload.value[checksum_start..checksum_end], checksum_region.expected_hex);
 
     let scalar_values = vec![
         BinaryScalarValue::String(
@@ -439,6 +530,26 @@ fn conforms_to_slice_723_binary_core_contract_fixture() {
     assert_eq!(report.preserved_ranges[0].len(), 25);
     assert_eq!(report.nested_dispatches[0].family, "text");
     assert_eq!(report.diagnostics[0].category, "unsupported_checksum_rewrite");
+}
+
+#[test]
+fn conforms_to_slice_729_zip_unsafe_entries_fixture() {
+    let fixture = read_fixture_from_path(diagnostics_fixture_path("zip_family_contract"));
+    let unsafe_entries = fixture["unsafe_entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| ZipUnsafeEntry {
+            path: entry["path"].as_str().unwrap().to_string(),
+            normalized_path: entry["normalized_path"].as_str().unwrap().to_string(),
+            category: entry["category"].as_str().unwrap().to_string(),
+            reason: entry["reason"].as_str().unwrap().to_string(),
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(unsafe_entries[0].category, "path_traversal");
+    assert_eq!(unsafe_entries[1].normalized_path, "config/settings.yml");
+    assert_eq!(unsafe_entries[2].category, "encrypted_member");
 }
 
 #[test]
