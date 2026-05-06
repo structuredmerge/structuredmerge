@@ -1,6 +1,7 @@
 [package]
 name = "structuredmerge-zip-merge"
 version = "0.1.0"
+authors = ["Peter H. Boling"]
 edition = "2024"
 description = "ZIP inventory, planning, nested dispatch, and raw-preservation helpers for Structured Merge"
 homepage = "https://structuredmerge.org"

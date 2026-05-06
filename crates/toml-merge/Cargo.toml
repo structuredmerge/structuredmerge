@@ -1,6 +1,9 @@
 [package]
 name = "toml-merge"
 version = "0.0.0"
+repository = "https://github.com/structuredmerge/structuredmerge-rust"
+homepage = "https://structuredmerge.org"
+authors = ["Peter H. Boling"]
 edition = "2024"
 
 [dependencies]

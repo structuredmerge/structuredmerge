@@ -1,6 +1,7 @@
 [package]
 name = "tree-haver"
 version = "0.1.0"
+authors = ["Peter H. Boling"]
 edition = "2024"
 description = "Tree substrate and binary location contracts for Structured Merge"
 homepage = "https://structuredmerge.org"

@@ -1,6 +1,7 @@
 [package]
 name = "ast-merge"
 version = "0.1.0"
+authors = ["Peter H. Boling"]
 edition = "2024"
 description = "Core Structured Merge AST, ruleset, planning, and review contracts"
 homepage = "https://structuredmerge.org"
