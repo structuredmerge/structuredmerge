@@ -1,7 +1,7 @@
 use ast_merge::{FamilyFeatureProfile, MergeResult, PolicyReference};
 use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest};
 
-pub const PACKAGE_NAME: &str = "text-merge";
+pub const PACKAGE_NAME: &str = "plain-merge";
 pub const DEFAULT_TEXT_REFINEMENT_THRESHOLD: f64 = 0.7;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -448,7 +448,7 @@ mod tests {
     }
 
     #[test]
-    fn resolves_text_merge() {
+    fn resolves_plain_merge() {
         let result = merge_text(
             "Alpha\n\nBeta\n\nAlpha\n\nTemplate only",
             "Beta\n\nAlpha revised\n\nAlpha\n\nDestination only",

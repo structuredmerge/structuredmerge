@@ -23,7 +23,7 @@ Initial focus:
 
 1. tree-sitter adapter crate
 2. core merge contracts
-3. text merge MVP
+3. plain text merge MVP
 4. JSON and JSONC merge MVP
 5. shared-fixture conformance runner
 
@@ -40,7 +40,7 @@ Initial crate candidates:
 
 - `tree-haver`
 - `ast-merge`
-- `text-merge`
+- `plain-merge`
 - `json-merge`
 
 Possible later crates:
@@ -97,7 +97,7 @@ Requirements:
 - match/refiner traits
 - freeze region representation
 
-### 3. `text-merge`
+### 3. `plain-merge`
 
 - normalized text segmentation
 - block matching
@@ -140,5 +140,5 @@ Requirements:
 1. define Rust core traits and diagnostic enums
 2. implement `tree-haver`
 3. implement fixture runner
-4. implement `text-merge`
+4. implement `plain-merge`
 5. implement `json-merge`

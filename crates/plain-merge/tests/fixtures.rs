@@ -4,7 +4,7 @@ use ast_merge::{
     ConformanceManifest, conformance_family_feature_profile_path, conformance_fixture_path,
 };
 use serde_json::Value;
-use text_merge::{
+use plain_merge::{
     TextMatchPhase, analyze_text, is_similar, match_text_blocks, merge_text, similarity_score,
     text_feature_profile,
 };
