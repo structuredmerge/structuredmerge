@@ -1,6 +1,8 @@
 use ast_merge::{
     TemplateDestinationContext, TemplateExecutionPlanEntry, TemplateStrategy,
-    TemplateStrategyOverride, default_template_token_config, read_relative_file_tree,
+    TemplateStrategyOverride, TemplateTreeRunReport, TemplateTreeRunResult,
+    apply_template_tree_execution_to_directory, default_template_token_config,
+    read_relative_file_tree, report_template_tree_run, run_template_tree_execution,
     write_relative_file_tree,
 };
 use ast_template::{
@@ -46,6 +48,156 @@ use ruby_merge::{RubyDialect, merge_ruby};
 use serde_json::Value;
 use std::{collections::HashMap, fs, path::PathBuf};
 use toml_merge::{TomlDialect, merge_toml};
+
+#[test]
+fn conforms_to_mini_template_tree_family_merge_callback_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-345-mini-template-tree-family-merge-callback/mini-template-tree-family-merge-callback.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture should have parent");
+    let template_contents = read_relative_file_tree(&fixture_root.join("template"))
+        .expect("template tree should be readable");
+    let destination_contents = read_relative_file_tree(&fixture_root.join("destination"))
+        .expect("destination tree should be readable");
+    let mut template_source_paths = template_contents.keys().cloned().collect::<Vec<_>>();
+    template_source_paths.sort();
+
+    let actual = run_template_tree_execution(
+        &template_source_paths,
+        &template_contents,
+        &destination_contents,
+        &serde_json::from_value::<TemplateDestinationContext>(fixture["context"].clone())
+            .expect("context should deserialize"),
+        serde_json::from_value::<TemplateStrategy>(fixture["default_strategy"].clone())
+            .expect("strategy should deserialize"),
+        &serde_json::from_value::<Vec<TemplateStrategyOverride>>(fixture["overrides"].clone())
+            .expect("overrides should deserialize"),
+        &serde_json::from_value::<HashMap<String, String>>(fixture["replacements"].clone())
+            .expect("replacements should deserialize"),
+        multi_family_merge_callback,
+        &default_template_token_config(),
+    );
+    let expected = serde_json::from_value::<TemplateTreeRunResult>(fixture["expected"].clone())
+        .expect("expected should deserialize");
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn conforms_to_mini_template_tree_multi_family_merge_callback_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-346-mini-template-tree-multi-family-merge-callback/mini-template-tree-multi-family-merge-callback.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture should have parent");
+    let template_contents = read_relative_file_tree(&fixture_root.join("template"))
+        .expect("template tree should be readable");
+    let destination_contents = read_relative_file_tree(&fixture_root.join("destination"))
+        .expect("destination tree should be readable");
+    let mut template_source_paths = template_contents.keys().cloned().collect::<Vec<_>>();
+    template_source_paths.sort();
+
+    let actual = run_template_tree_execution(
+        &template_source_paths,
+        &template_contents,
+        &destination_contents,
+        &serde_json::from_value::<TemplateDestinationContext>(fixture["context"].clone())
+            .expect("context should deserialize"),
+        serde_json::from_value::<TemplateStrategy>(fixture["default_strategy"].clone())
+            .expect("strategy should deserialize"),
+        &serde_json::from_value::<Vec<TemplateStrategyOverride>>(fixture["overrides"].clone())
+            .expect("overrides should deserialize"),
+        &serde_json::from_value::<HashMap<String, String>>(fixture["replacements"].clone())
+            .expect("replacements should deserialize"),
+        multi_family_merge_callback,
+        &default_template_token_config(),
+    );
+    let expected = serde_json::from_value::<TemplateTreeRunResult>(fixture["expected"].clone())
+        .expect("expected should deserialize");
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn conforms_to_mini_template_tree_directory_apply_convergence_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-349-mini-template-tree-directory-apply-convergence/mini-template-tree-directory-apply-convergence.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let fixture_root = fixture_path.parent().expect("fixture should have parent");
+    let temp_root = repo_root().join("rust/crates/ast-template/tmp/directory-apply-convergence");
+    let destination_root = temp_root.join("destination");
+    let _ = fs::remove_dir_all(&temp_root);
+    write_relative_file_tree(
+        &destination_root,
+        &read_relative_file_tree(&fixture_root.join("destination"))
+            .expect("destination tree should be readable"),
+    )
+    .expect("destination tree should be writable");
+
+    let context = serde_json::from_value::<TemplateDestinationContext>(fixture["context"].clone())
+        .expect("context should deserialize");
+    let default_strategy =
+        serde_json::from_value::<TemplateStrategy>(fixture["default_strategy"].clone())
+            .expect("strategy should deserialize");
+    let overrides =
+        serde_json::from_value::<Vec<TemplateStrategyOverride>>(fixture["overrides"].clone())
+            .expect("overrides should deserialize");
+    let replacements =
+        serde_json::from_value::<HashMap<String, String>>(fixture["replacements"].clone())
+            .expect("replacements should deserialize");
+
+    let first_run = apply_template_tree_execution_to_directory(
+        &fixture_root.join("template"),
+        &destination_root,
+        &context,
+        default_strategy.clone(),
+        &overrides,
+        &replacements,
+        multi_family_merge_callback,
+        &default_template_token_config(),
+    )
+    .expect("first directory apply should succeed");
+    let first_actual = report_template_tree_run(&first_run);
+    let first_expected =
+        serde_json::from_value::<TemplateTreeRunReport>(fixture["expected_first_report"].clone())
+            .expect("expected_first_report should deserialize");
+    assert_eq!(first_actual, first_expected);
+
+    let actual_files =
+        read_relative_file_tree(&destination_root).expect("applied destination should be readable");
+    let expected_files = serde_json::from_value::<HashMap<String, String>>(
+        fixture["expected_destination_files"].clone(),
+    )
+    .expect("expected_destination_files should deserialize");
+    assert_eq!(actual_files, expected_files);
+
+    let second_run = apply_template_tree_execution_to_directory(
+        &fixture_root.join("template"),
+        &destination_root,
+        &context,
+        default_strategy,
+        &overrides,
+        &replacements,
+        multi_family_merge_callback,
+        &default_template_token_config(),
+    )
+    .expect("second directory apply should succeed");
+    let second_actual = report_template_tree_run(&second_run);
+    let second_expected =
+        serde_json::from_value::<TemplateTreeRunReport>(fixture["expected_second_report"].clone())
+            .expect("expected_second_report should deserialize");
+    assert_eq!(second_actual, second_expected);
+
+    fs::remove_dir_all(temp_root).expect("temp dir should be removable");
+}
 
 #[test]
 fn conforms_to_template_directory_session_report_fixture() {
