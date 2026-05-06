@@ -1,60 +1,76 @@
 # StructuredMerge Rust
 
-Rust implementation of the StructuredMerge contract.
+StructuredMerge Rust provides Cargo crates for native tools that need portable
+structured-merge contracts, fixture-backed behavior, and embeddable merge
+components.
 
-This repository is one of four peer launch implementations: [Go](https://github.com/structuredmerge/structuredmerge-go), [TypeScript](https://github.com/structuredmerge/structuredmerge-typescript), [Rust](https://github.com/structuredmerge/structuredmerge-rust), and [Ruby](https://github.com/structuredmerge/structuredmerge-ruby). The language repos are not separate products. They consume the same public spec and shared fixture corpus so tools can choose the runtime surface that fits their environment.
+The workspace includes the core AST/review contracts, parser substrate support,
+format-specific merge crates, binary/ZIP planning helpers, provider adapters,
+and a Rust packaging recipe crate.
 
 Project links:
 
 - Website: <https://structuredmerge.org>
-- Implementations overview: <https://structuredmerge.org/implementations.html>
-- Conformance model: <https://structuredmerge.org/conformance.html>
+- Implementations: <https://structuredmerge.org/implementations.html>
 - Specification: <https://github.com/structuredmerge/structuredmerge-spec>
 - Shared fixtures: <https://github.com/structuredmerge/structuredmerge-fixtures>
 
-## Workspace
+## Install
 
-This is a Cargo workspace for StructuredMerge packages.
+Add the crates your tool needs:
 
-Package directories:
+```toml
+[dependencies]
+ast-merge = "0.1"
+tree-haver = "0.1"
+```
 
-- [`ast-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/ast-merge)
-- [`ast-template`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/ast-template)
-- [`binary-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/binary-merge)
-- [`go-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/go-merge)
-- [`json-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/json-merge)
-- [`kettle-rusty`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/kettle-rusty)
-- [`markdown-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/markdown-merge)
-- [`pest-toml-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/pest-toml-merge)
-- [`pulldown-cmark-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/pulldown-cmark-merge)
-- [`ruby-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/ruby-merge)
-- [`rust-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/rust-merge)
+Binary and ZIP use StructuredMerge-prefixed package names on crates.io:
+
+```toml
+structuredmerge-binary-merge = "0.1"
+structuredmerge-zip-merge = "0.1"
+```
+
+## Crates
+
+Core:
+
+- [`tree-haver`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/tree-haver) - parser substrate, byte ranges, backend adapters, and binary tree contracts.
+- [`ast-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/ast-merge) - AST merge contracts, diagnostics, planning, review, replay, and nested-merge vocabulary.
+- [`ast-template`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/ast-template) - template/session transport contracts.
+
+Format libraries:
+
 - [`plain-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/plain-merge)
-- [`toml-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/toml-merge)
-- [`tree-haver`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/tree-haver)
-- [`typescript-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/typescript-merge)
+- [`json-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/json-merge)
 - [`yaml-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/yaml-merge)
-- [`yaml-serde-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/yaml-serde-merge)
+- [`toml-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/toml-merge)
+- [`markdown-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/markdown-merge)
+- [`ruby-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/ruby-merge)
+- [`go-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/go-merge)
+- [`rust-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/rust-merge)
+- [`typescript-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/typescript-merge)
+- [`binary-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/binary-merge)
 - [`zip-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/zip-merge)
 
-## Conformance
+Provider and recipe crates:
 
-Integration tests should consume the shared fixture corpus from the sibling `../structuredmerge-fixtures` checkout. A ruleset, fixture, diagnostic shape, or review outcome should mean the same thing whether exercised through Go, TypeScript, Rust, or Ruby.
+- [`yaml-serde-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/yaml-serde-merge)
+- [`pest-toml-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/pest-toml-merge)
+- [`pulldown-cmark-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/pulldown-cmark-merge)
+- [`kettle-rusty`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/kettle-rusty)
 
-Use the spec repository's conformance matrix for the current launch-readiness snapshot:
+## Portability
 
-- <https://github.com/structuredmerge/structuredmerge-spec/blob/main/conformance-matrix.md>
-- <https://github.com/structuredmerge/structuredmerge-spec/blob/main/IMPLEMENTATION_STATUS.md>
+The Rust crates are developed against the shared StructuredMerge fixtures. Those
+fixtures define the cross-language behavior expected from the Go, TypeScript,
+Rust, and Ruby implementations. Conformance checks live in crate tests and in
+the shared spec/fixture tooling rather than in a static launch-status document.
 
 ## Development
-
-Standard repo tasks are exposed through `mise` and native Rust tooling.
 
 Common checks:
 
 - `mise run check`
 - `cargo test`
-
-## Status
-
-Early implementation work. Public compatibility claims should be tied to shared fixtures and documented conformance status rather than runtime-specific assumptions.
