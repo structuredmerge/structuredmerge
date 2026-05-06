@@ -1,6 +1,6 @@
 [package]
 name = "structuredmerge-zip-merge"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Peter H. Boling"]
 edition = "2024"
 description = "ZIP inventory, planning, nested dispatch, and raw-preservation helpers for Structured Merge"
@@ -9,7 +9,7 @@ repository = "https://github.com/structuredmerge/structuredmerge-rust"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
-tree-haver = { version = "0.1.0", path = "../tree-haver" }
+tree-haver = { version = "0.2.0", path = "../tree-haver" }
 
 [dev-dependencies]
 serde_json = "1.0"

@@ -1,6 +1,6 @@
 [package]
 name = "yaml-serde-merge"
-version = "0.0.0"
+version = "0.2.0"
 repository = "https://github.com/structuredmerge/structuredmerge-rust"
 homepage = "https://structuredmerge.org"
 authors = ["Peter H. Boling"]
@@ -9,10 +9,10 @@ description = "yaml-serde merge helpers for Structured Merge"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
-ast-merge = { version = "0.1.0", path = "../ast-merge" }
+ast-merge = { version = "0.2.0", path = "../ast-merge" }
 serde_json = "1"
-tree-haver = { version = "0.1.0", path = "../tree-haver" }
-yaml-merge = { version = "0.0.0", path = "../yaml-merge" }
+tree-haver = { version = "0.2.0", path = "../tree-haver" }
+yaml-merge = { version = "0.2.0", path = "../yaml-merge" }
 yaml_serde = "0.10.4"
 
 [dev-dependencies]

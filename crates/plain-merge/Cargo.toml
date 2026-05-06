@@ -1,6 +1,6 @@
 [package]
 name = "plain-merge"
-version = "0.0.0"
+version = "0.2.0"
 repository = "https://github.com/structuredmerge/structuredmerge-rust"
 homepage = "https://structuredmerge.org"
 authors = ["Peter H. Boling"]
@@ -9,8 +9,8 @@ description = "Plain text merge helpers for Structured Merge"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
-ast-merge = { version = "0.1.0", path = "../ast-merge" }
-tree-haver = { version = "0.1.0", path = "../tree-haver" }
+ast-merge = { version = "0.2.0", path = "../ast-merge" }
+tree-haver = { version = "0.2.0", path = "../tree-haver" }
 
 [dev-dependencies]
 serde_json = "1.0"

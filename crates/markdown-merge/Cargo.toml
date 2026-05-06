@@ -1,6 +1,6 @@
 [package]
 name = "markdown-merge"
-version = "0.0.0"
+version = "0.2.0"
 repository = "https://github.com/structuredmerge/structuredmerge-rust"
 homepage = "https://structuredmerge.org"
 authors = ["Peter H. Boling"]
@@ -9,9 +9,9 @@ description = "Markdown merge helpers for Structured Merge"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
-ast-merge = { version = "0.1.0", path = "../ast-merge" }
+ast-merge = { version = "0.2.0", path = "../ast-merge" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tree-haver = { version = "0.1.0", path = "../tree-haver" }
+tree-haver = { version = "0.2.0", path = "../tree-haver" }
 
 [dev-dependencies]

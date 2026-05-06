@@ -1,6 +1,6 @@
 [package]
 name = "json-merge"
-version = "0.0.0"
+version = "0.2.0"
 repository = "https://github.com/structuredmerge/structuredmerge-rust"
 homepage = "https://structuredmerge.org"
 authors = ["Peter H. Boling"]
@@ -9,9 +9,9 @@ description = "JSON merge helpers for Structured Merge"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
-ast-merge = { version = "0.1.0", path = "../ast-merge" }
+ast-merge = { version = "0.2.0", path = "../ast-merge" }
 serde_json = { version = "1.0", features = ["preserve_order"] }
-tree-haver = { version = "0.1.0", path = "../tree-haver" }
+tree-haver = { version = "0.2.0", path = "../tree-haver" }
 
 [lib]
 path = "src/lib.rs"

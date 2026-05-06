@@ -1,6 +1,6 @@
 [package]
 name = "pest-toml-merge"
-version = "0.0.0"
+version = "0.2.0"
 repository = "https://github.com/structuredmerge/structuredmerge-rust"
 homepage = "https://structuredmerge.org"
 authors = ["Peter H. Boling"]
@@ -9,12 +9,12 @@ description = "Pest TOML merge helpers for Structured Merge"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
-ast-merge = { version = "0.1.0", path = "../ast-merge" }
+ast-merge = { version = "0.2.0", path = "../ast-merge" }
 pest = "2.8"
 pest_grammars = "2.8.6"
 serde_json = "1"
-toml-merge = { version = "0.0.0", path = "../toml-merge" }
-tree-haver = { version = "0.1.0", path = "../tree-haver" }
+toml-merge = { version = "0.2.0", path = "../toml-merge" }
+tree-haver = { version = "0.2.0", path = "../tree-haver" }
 
 [dev-dependencies]
 serde_json = "1"
