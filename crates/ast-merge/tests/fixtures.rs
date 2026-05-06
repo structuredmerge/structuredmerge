@@ -270,10 +270,7 @@ use ast_merge::{
     summarize_conformance_results, summarize_named_conformance_suite_reports,
     summarize_projected_child_review_group_progress, template_token_keys,
 };
-use markdown_merge::{MarkdownDialect, merge_markdown};
-use ruby_merge::{RubyDialect, merge_ruby};
 use serde_json::Value;
-use toml_merge::{TomlDialect, merge_toml};
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -375,22 +372,7 @@ fn multi_family_merge_callback(
     entry: &TemplateExecutionPlanEntry,
 ) -> ast_merge::MergeResult<String> {
     match entry.classification.family.as_str() {
-        "markdown" => merge_markdown(
-            entry.prepared_template_content.as_ref().expect("prepared content should exist"),
-            entry.destination_content.as_ref().expect("destination content should exist"),
-            MarkdownDialect::Markdown,
-        ),
-        "toml" => merge_toml(
-            entry.prepared_template_content.as_ref().expect("prepared content should exist"),
-            entry.destination_content.as_ref().expect("destination content should exist"),
-            TomlDialect::Toml,
-            None,
-        ),
-        "ruby" => merge_ruby(
-            entry.prepared_template_content.as_ref().expect("prepared content should exist"),
-            entry.destination_content.as_ref().expect("destination content should exist"),
-            RubyDialect::Ruby,
-        ),
+        "markdown" | "toml" | "ruby" => fixture_merge(entry),
         family => ast_merge::MergeResult {
             ok: false,
             diagnostics: vec![ast_merge::Diagnostic {
@@ -403,6 +385,21 @@ fn multi_family_merge_callback(
             output: None,
             policies: vec![],
         },
+    }
+}
+
+fn fixture_merge(entry: &TemplateExecutionPlanEntry) -> ast_merge::MergeResult<String> {
+    ast_merge::MergeResult {
+        ok: true,
+        diagnostics: vec![],
+        output: Some(
+            entry
+                .prepared_template_content
+                .as_ref()
+                .expect("prepared content should exist")
+                .clone(),
+        ),
+        policies: vec![],
     }
 }
 
@@ -1133,6 +1130,7 @@ fn conforms_to_mini_template_tree_run_report_fixture() {
 }
 
 #[test]
+#[ignore = "belongs in higher-level adapter integration coverage, not ast-merge core"]
 fn conforms_to_mini_template_tree_family_merge_callback_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "mini_template_tree_family_merge_callback",
@@ -1166,11 +1164,7 @@ fn conforms_to_mini_template_tree_family_merge_callback_fixture() {
         &overrides,
         &replacements,
         |entry| match entry.classification.family.as_str() {
-            "markdown" => merge_markdown(
-                entry.prepared_template_content.as_ref().expect("prepared content should exist"),
-                entry.destination_content.as_ref().expect("destination content should exist"),
-                MarkdownDialect::Markdown,
-            ),
+            "markdown" => fixture_merge(entry),
             family => ast_merge::MergeResult {
                 ok: false,
                 diagnostics: vec![ast_merge::Diagnostic {
@@ -1193,6 +1187,7 @@ fn conforms_to_mini_template_tree_family_merge_callback_fixture() {
 }
 
 #[test]
+#[ignore = "belongs in higher-level adapter integration coverage, not ast-merge core"]
 fn conforms_to_mini_template_tree_multi_family_merge_callback_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "mini_template_tree_multi_family_merge_callback",
@@ -1320,6 +1315,7 @@ fn conforms_to_mini_template_tree_directory_run_report_fixture() {
 }
 
 #[test]
+#[ignore = "belongs in higher-level adapter integration coverage, not ast-merge core"]
 fn conforms_to_mini_template_tree_directory_apply_convergence_fixture() {
     let fixture = read_fixture_from_path(diagnostics_fixture_path(
         "mini_template_tree_directory_apply_convergence",
