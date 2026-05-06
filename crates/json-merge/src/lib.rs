@@ -527,7 +527,8 @@ pub fn parse_json(source: &str, dialect: JsonDialect) -> ParseResult<JsonAnalysi
             };
         }
     };
-    let (root_kind, owners) = analyze_value(&decoded, "");
+    let (root_kind, mut owners) = analyze_value(&decoded, "");
+    owners.sort_by(|left, right| left.path.cmp(&right.path));
 
     ParseResult {
         ok: true,
@@ -613,11 +614,11 @@ fn merge_values(template: Value, destination: Value) -> Value {
     match (template, destination) {
         (Value::Object(template_map), Value::Object(destination_map)) => {
             let mut merged = serde_json::Map::new();
-            let keys: std::collections::BTreeSet<String> =
-                template_map.keys().chain(destination_map.keys()).cloned().collect();
-
-            for key in keys {
-                match (template_map.get(&key), destination_map.get(&key)) {
+            for key in template_map.keys().chain(destination_map.keys()) {
+                if merged.contains_key(key) {
+                    continue;
+                }
+                match (template_map.get(key), destination_map.get(key)) {
                     (Some(template_value), Some(destination_value)) => {
                         merged.insert(
                             key.clone(),
@@ -653,14 +654,13 @@ fn canonical_json(value: &Value) -> String {
             format!("[{}]", items.iter().map(canonical_json).collect::<Vec<_>>().join(","))
         }
         Value::Object(map) => {
-            let keys: std::collections::BTreeSet<&String> = map.keys().collect();
-            let entries = keys
-                .into_iter()
-                .map(|key| {
+            let entries = map
+                .iter()
+                .map(|(key, value)| {
                     format!(
                         "{}:{}",
                         serde_json::to_string(key).expect("key serialization should succeed"),
-                        canonical_json(map.get(key).expect("key should exist"))
+                        canonical_json(value)
                     )
                 })
                 .collect::<Vec<_>>()
@@ -870,7 +870,7 @@ mod tests {
         assert!(result.ok);
         assert_eq!(
             result.output,
-            Some("{\"destination_only\":2,\"meta\":{\"enabled\":true,\"mode\":\"template\"},\"name\":\"structuredmerge\",\"tags\":[\"destination\"],\"template_only\":1}".to_string())
+            Some("{\"name\":\"structuredmerge\",\"meta\":{\"enabled\":true,\"mode\":\"template\"},\"tags\":[\"destination\"],\"template_only\":1,\"destination_only\":2}".to_string())
         );
     }
 
@@ -908,7 +908,7 @@ mod tests {
         assert!(result.ok);
         assert_eq!(
             result.output.as_deref(),
-            Some("{\"items\":[9],\"meta\":{\"mode\":\"template\",\"tags\":[\"destination\"]}}")
+            Some("{\"items\":[9],\"meta\":{\"tags\":[\"destination\"],\"mode\":\"template\"}}")
         );
         assert_eq!(result.policies, vec![destination_wins_array_policy()]);
     }

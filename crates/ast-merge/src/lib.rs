@@ -188,6 +188,18 @@ pub struct PolicyReference {
     pub name: String,
 }
 
+impl From<tree_haver::PolicyReference> for PolicyReference {
+    fn from(policy: tree_haver::PolicyReference) -> Self {
+        Self {
+            surface: match policy.surface {
+                tree_haver::PolicySurface::Fallback => PolicySurface::Fallback,
+                tree_haver::PolicySurface::Array => PolicySurface::Array,
+            },
+            name: policy.name,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FamilyFeatureProfile {
     pub family: String,

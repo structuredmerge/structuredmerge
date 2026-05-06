@@ -112,9 +112,21 @@ pub fn plan_zip_merge(
                 &unsafe_entry.reason,
             ));
         } else if current_entry.is_none() && incoming_entry.is_some() {
-            decision(&mut report, &path, "add", "requires_renderer", "member exists only in incoming archive");
+            decision(
+                &mut report,
+                &path,
+                "add",
+                "requires_renderer",
+                "member exists only in incoming archive",
+            );
         } else if current_entry.is_some() && incoming_entry.is_none() {
-            decision(&mut report, &path, "delete", "requires_renderer", "member was removed from incoming archive");
+            decision(
+                &mut report,
+                &path,
+                "delete",
+                "requires_renderer",
+                "member was removed from incoming archive",
+            );
         } else if ancestor_entry.is_some()
             && same_entry(current_entry.unwrap(), ancestor_entry.unwrap())
             && same_entry(incoming_entry.unwrap(), ancestor_entry.unwrap())
@@ -135,7 +147,8 @@ pub fn plan_zip_merge(
                 operation: "delegate".to_string(),
                 disposition: "requires_renderer".to_string(),
                 nested_family: Some(family.to_string()),
-                reason: "structured member can be merged by a nested family before ZIP rendering".to_string(),
+                reason: "structured member can be merged by a nested family before ZIP rendering"
+                    .to_string(),
             });
             report.merge_report.nested_dispatches.push(BinaryNestedDispatch {
                 schema_path: format!("{}/data", schema_path(&path)),
@@ -145,13 +158,21 @@ pub fn plan_zip_merge(
             report.merge_report.rewritten_nodes.push(schema_path(&path));
             report.merge_report.checksum_updates.push(format!("{}/crc32", schema_path(&path)));
         } else {
-            decision(&mut report, &path, "rewrite", "requires_renderer", "member bytes or metadata changed");
+            decision(
+                &mut report,
+                &path,
+                "rewrite",
+                "requires_renderer",
+                "member bytes or metadata changed",
+            );
             report.merge_report.checksum_updates.push(format!("{}/crc32", schema_path(&path)));
         }
         report.merge_report.matched_schema_paths.push(schema_path(&path));
     }
 
-    if !report.merge_report.rewritten_nodes.is_empty() || !report.merge_report.checksum_updates.is_empty() {
+    if !report.merge_report.rewritten_nodes.is_empty()
+        || !report.merge_report.checksum_updates.is_empty()
+    {
         report.merge_report.rewritten_nodes.push("/central_directory".to_string());
         report.merge_report.checksum_updates.push("/central_directory/size".to_string());
         report.merge_report.checksum_updates.push("/central_directory/offset".to_string());
@@ -164,8 +185,10 @@ pub fn render_with_raw_preservation(
     plan: &ZipFamilyReport,
     member_bytes: &HashMap<String, Vec<u8>>,
 ) -> Result<(Vec<u8>, ZipFamilyReport, BinaryMergeReport), RenderError> {
-    let source_inventory = parse_zip_inventory(source).map_err(|error| render_error("invalid_zip", "/archive", &error))?;
-    let central = scan_central_directory(source).map_err(|error| render_error("invalid_zip", "/archive", &error))?;
+    let source_inventory = parse_zip_inventory(source)
+        .map_err(|error| render_error("invalid_zip", "/archive", &error))?;
+    let central = scan_central_directory(source)
+        .map_err(|error| render_error("invalid_zip", "/archive", &error))?;
     let source_entries = entries_by_path(&source_inventory.entries);
     let raw_ranges = raw_local_record_ranges(&source_entries);
     let entries = entries_by_path(&plan.entries);
@@ -174,24 +197,40 @@ pub fn render_with_raw_preservation(
 
     for member in &plan.member_decisions {
         match member.operation.as_str() {
-            "reject" => return Err(render_error("rejected_member", &schema_path(&member.normalized_path), &member.reason)),
+            "reject" => {
+                return Err(render_error(
+                    "rejected_member",
+                    &schema_path(&member.normalized_path),
+                    &member.reason,
+                ));
+            }
             "delete" => {}
             "preserve" => {
-                let entry = source_entries.get(&member.normalized_path).expect("source entry should exist");
+                let entry =
+                    source_entries.get(&member.normalized_path).expect("source entry should exist");
                 validate_raw_preserve_entry(&central, entry)?;
-                let range = raw_ranges.get(&member.normalized_path).expect("raw range should exist");
+                let range =
+                    raw_ranges.get(&member.normalized_path).expect("raw range should exist");
                 let offset = output.len();
                 output.extend_from_slice(&source[range.start_byte..range.end_byte]);
                 central_records.push(record_from_entry(entry, offset));
             }
             "add" | "rewrite" | "delegate" => {
-                let entry = entries.get(&member.normalized_path).expect("planned entry should exist");
-                let content = member_bytes.get(&member.normalized_path).expect("member bytes should exist");
+                let entry =
+                    entries.get(&member.normalized_path).expect("planned entry should exist");
+                let content =
+                    member_bytes.get(&member.normalized_path).expect("member bytes should exist");
                 let (local, record) = rendered_local_record(entry, content, output.len());
                 output.extend_from_slice(&local);
                 central_records.push(record);
             }
-            operation => return Err(render_error("unsupported_operation", &schema_path(&member.normalized_path), operation)),
+            operation => {
+                return Err(render_error(
+                    "unsupported_operation",
+                    &schema_path(&member.normalized_path),
+                    operation,
+                ));
+            }
         }
     }
 
@@ -201,12 +240,18 @@ pub fn render_with_raw_preservation(
     }
     let central_size = output.len() - central_start;
     write_eocd(&mut output, central_records.len(), central_size, central_start);
-    let inventory = parse_zip_inventory(&output).map_err(|error| render_error("invalid_rendered_zip", "/archive", &error))?;
+    let inventory = parse_zip_inventory(&output)
+        .map_err(|error| render_error("invalid_rendered_zip", "/archive", &error))?;
     let mut merge_report = plan.merge_report.clone();
     merge_report.preserved_ranges = plan
         .member_decisions
         .iter()
-        .filter_map(|member| raw_ranges.get(&member.normalized_path).cloned().filter(|_| member.operation == "preserve"))
+        .filter_map(|member| {
+            raw_ranges
+                .get(&member.normalized_path)
+                .cloned()
+                .filter(|_| member.operation == "preserve")
+        })
         .collect();
     Ok((output, inventory, merge_report))
 }
@@ -294,19 +339,23 @@ fn scan_central_directory(source: &[u8]) -> Result<CentralScan, String> {
         let name_len = read_u16(source, cursor + 28) as usize;
         let extra_len = read_u16(source, cursor + 30) as usize;
         let comment_len = read_u16(source, cursor + 32) as usize;
-        let name = String::from_utf8_lossy(&source[cursor + 46..cursor + 46 + name_len]).to_string();
+        let name =
+            String::from_utf8_lossy(&source[cursor + 46..cursor + 46 + name_len]).to_string();
         let end = cursor + 46 + name_len + extra_len + comment_len;
-        records.insert(name, CentralInfo {
-            range: ByteRange { start_byte: cursor, end_byte: end },
-            flags: read_u16(source, cursor + 8),
-            method: read_u16(source, cursor + 10),
-            crc32: read_u32(source, cursor + 16),
-            compressed_size: read_u32(source, cursor + 20) as usize,
-            uncompressed_size: read_u32(source, cursor + 24) as usize,
-            extra_length: extra_len,
-            comment_length: comment_len,
-            local_offset: read_u32(source, cursor + 42) as usize,
-        });
+        records.insert(
+            name,
+            CentralInfo {
+                range: ByteRange { start_byte: cursor, end_byte: end },
+                flags: read_u16(source, cursor + 8),
+                method: read_u16(source, cursor + 10),
+                crc32: read_u32(source, cursor + 16),
+                compressed_size: read_u32(source, cursor + 20) as usize,
+                uncompressed_size: read_u32(source, cursor + 24) as usize,
+                extra_length: extra_len,
+                comment_length: comment_len,
+                local_offset: read_u32(source, cursor + 42) as usize,
+            },
+        );
         cursor = end;
     }
     Ok(CentralScan {
@@ -316,7 +365,10 @@ fn scan_central_directory(source: &[u8]) -> Result<CentralScan, String> {
     })
 }
 
-fn scan_local_headers(source: &[u8], records: &HashMap<String, CentralInfo>) -> Result<HashMap<String, LocalInfo>, String> {
+fn scan_local_headers(
+    source: &[u8],
+    records: &HashMap<String, CentralInfo>,
+) -> Result<HashMap<String, LocalInfo>, String> {
     let mut result = HashMap::new();
     for (name, record) in records {
         if read_u32(source, record.local_offset) != LOCAL {
@@ -324,32 +376,61 @@ fn scan_local_headers(source: &[u8], records: &HashMap<String, CentralInfo>) -> 
         }
         let name_len = read_u16(source, record.local_offset + 26) as usize;
         let extra_len = read_u16(source, record.local_offset + 28) as usize;
-        result.insert(name.clone(), LocalInfo { data_start: record.local_offset + 30 + name_len + extra_len });
+        result.insert(
+            name.clone(),
+            LocalInfo { data_start: record.local_offset + 30 + name_len + extra_len },
+        );
     }
     Ok(result)
 }
 
-fn validate_raw_preserve_entry(central: &CentralScan, entry: &ZipArchiveEntry) -> Result<(), RenderError> {
+fn validate_raw_preserve_entry(
+    central: &CentralScan,
+    entry: &ZipArchiveEntry,
+) -> Result<(), RenderError> {
     if central.archive_comment {
-        return Err(render_error("archive_comment", "/archive/comment", "raw-preserving ZIP renderer does not yet preserve archive comments"));
+        return Err(render_error(
+            "archive_comment",
+            "/archive/comment",
+            "raw-preserving ZIP renderer does not yet preserve archive comments",
+        ));
     }
     let record = central.records.get(&entry.path).expect("central record should exist");
     if record.flags & 0x1 != 0 {
-        return Err(render_error("encrypted_member", &schema_path(&entry.normalized_path), "raw-preserving ZIP renderer rejects encrypted member"));
+        return Err(render_error(
+            "encrypted_member",
+            &schema_path(&entry.normalized_path),
+            "raw-preserving ZIP renderer rejects encrypted member",
+        ));
     }
     if record.method != 0 && record.method != 8 {
-        return Err(render_error("unsupported_compression", &schema_path(&entry.normalized_path), "raw-preserving ZIP renderer rejects unsupported compression"));
+        return Err(render_error(
+            "unsupported_compression",
+            &schema_path(&entry.normalized_path),
+            "raw-preserving ZIP renderer rejects unsupported compression",
+        ));
     }
     if record.extra_length != 0 {
-        return Err(render_error("central_directory_extra_field", &schema_path(&entry.normalized_path), "raw-preserving ZIP renderer does not yet preserve central-directory extra fields"));
+        return Err(render_error(
+            "central_directory_extra_field",
+            &schema_path(&entry.normalized_path),
+            "raw-preserving ZIP renderer does not yet preserve central-directory extra fields",
+        ));
     }
     if record.comment_length != 0 {
-        return Err(render_error("member_comment", &schema_path(&entry.normalized_path), "raw-preserving ZIP renderer does not yet preserve member comments"));
+        return Err(render_error(
+            "member_comment",
+            &schema_path(&entry.normalized_path),
+            "raw-preserving ZIP renderer does not yet preserve member comments",
+        ));
     }
     Ok(())
 }
 
-fn unsafe_entries(entries: &[ZipArchiveEntry], records: &HashMap<String, CentralInfo>) -> Vec<ZipUnsafeEntry> {
+fn unsafe_entries(
+    entries: &[ZipArchiveEntry],
+    records: &HashMap<String, CentralInfo>,
+) -> Vec<ZipUnsafeEntry> {
     let mut seen = HashMap::new();
     let mut result = vec![];
     for entry in entries {
@@ -357,19 +438,35 @@ fn unsafe_entries(entries: &[ZipArchiveEntry], records: &HashMap<String, Central
             result.push(unsafe_entry(entry, "path_traversal", "entry escapes the archive root"));
         }
         if seen.insert(entry.normalized_path.clone(), entry.path.clone()).is_some() {
-            result.push(unsafe_entry(entry, "duplicate_normalized_path", "normalized path collides with an existing entry"));
+            result.push(unsafe_entry(
+                entry,
+                "duplicate_normalized_path",
+                "normalized path collides with an existing entry",
+            ));
         }
         if records.get(&entry.path).map(|record| record.flags & 0x1 != 0).unwrap_or(false) {
-            result.push(unsafe_entry(entry, "encrypted_member", "encrypted member cannot be rendered by the default provider"));
+            result.push(unsafe_entry(
+                entry,
+                "encrypted_member",
+                "encrypted member cannot be rendered by the default provider",
+            ));
         }
         if signing_sensitive(&entry.normalized_path) {
-            result.push(unsafe_entry(entry, "signing_sensitive_member", "signature-bearing member mutation is not enabled"));
+            result.push(unsafe_entry(
+                entry,
+                "signing_sensitive_member",
+                "signature-bearing member mutation is not enabled",
+            ));
         }
     }
     result
 }
 
-fn rendered_local_record(entry: &ZipArchiveEntry, content: &[u8], offset: usize) -> (Vec<u8>, CentralRecord) {
+fn rendered_local_record(
+    entry: &ZipArchiveEntry,
+    content: &[u8],
+    offset: usize,
+) -> (Vec<u8>, CentralRecord) {
     let crc = crc32(content);
     let mut output = vec![];
     write_u32(&mut output, LOCAL);
@@ -384,15 +481,18 @@ fn rendered_local_record(entry: &ZipArchiveEntry, content: &[u8], offset: usize)
     write_u16(&mut output, 0);
     output.extend_from_slice(entry.path.as_bytes());
     output.extend_from_slice(content);
-    (output, CentralRecord {
-        name: entry.path.clone(),
-        method: 0,
-        crc32: crc,
-        compressed_size: content.len(),
-        uncompressed_size: content.len(),
-        offset,
-        flags: 0,
-    })
+    (
+        output,
+        CentralRecord {
+            name: entry.path.clone(),
+            method: 0,
+            crc32: crc,
+            compressed_size: content.len(),
+            uncompressed_size: content.len(),
+            offset,
+            flags: 0,
+        },
+    )
 }
 
 fn write_central_record(output: &mut Vec<u8>, record: &CentralRecord) {
@@ -438,15 +538,23 @@ fn record_from_entry(entry: &ZipArchiveEntry, offset: usize) -> CentralRecord {
     }
 }
 
-fn raw_local_record_ranges(entries: &HashMap<String, ZipArchiveEntry>) -> HashMap<String, ByteRange> {
+fn raw_local_record_ranges(
+    entries: &HashMap<String, ZipArchiveEntry>,
+) -> HashMap<String, ByteRange> {
     let mut ordered = entries.values().collect::<Vec<_>>();
     ordered.sort_by_key(|entry| entry.local_header_range.start_byte);
     ordered
         .iter()
         .enumerate()
         .map(|(index, entry)| {
-            let end_byte = ordered.get(index + 1).map(|next| next.local_header_range.start_byte).unwrap_or(entry.central_directory_range.start_byte);
-            (entry.normalized_path.clone(), ByteRange { start_byte: entry.local_header_range.start_byte, end_byte })
+            let end_byte = ordered
+                .get(index + 1)
+                .map(|next| next.local_header_range.start_byte)
+                .unwrap_or(entry.central_directory_range.start_byte);
+            (
+                entry.normalized_path.clone(),
+                ByteRange { start_byte: entry.local_header_range.start_byte, end_byte },
+            )
         })
         .collect()
 }
@@ -464,7 +572,13 @@ fn empty_report() -> BinaryMergeReport {
     }
 }
 
-fn decision(report: &mut ZipFamilyReport, path: &str, operation: &str, disposition: &str, reason: &str) {
+fn decision(
+    report: &mut ZipFamilyReport,
+    path: &str,
+    operation: &str,
+    disposition: &str,
+    reason: &str,
+) {
     report.member_decisions.push(ZipMemberDecision {
         normalized_path: path.to_string(),
         operation: operation.to_string(),
@@ -493,7 +607,9 @@ fn normalize_zip_path(path: &str) -> String {
     for part in normalized.split('/') {
         match part {
             "." | "" => {}
-            ".." => { stack.pop(); }
+            ".." => {
+                stack.pop();
+            }
             other => stack.push(other),
         }
     }
@@ -517,7 +633,8 @@ fn escapes_root(path: &str) -> bool {
 
 fn signing_sensitive(path: &str) -> bool {
     let upper = path.to_uppercase();
-    upper.starts_with("META-INF/") && [".RSA", ".DSA", ".EC", ".SF"].iter().any(|suffix| upper.ends_with(suffix))
+    upper.starts_with("META-INF/")
+        && [".RSA", ".DSA", ".EC", ".SF"].iter().any(|suffix| upper.ends_with(suffix))
 }
 
 fn nested_family(path: &str) -> Option<&'static str> {

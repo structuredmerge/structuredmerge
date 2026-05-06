@@ -3,11 +3,11 @@ use std::{fs, path::PathBuf};
 use ast_merge::{
     ConformanceManifest, conformance_family_feature_profile_path, conformance_fixture_path,
 };
-use serde_json::Value;
 use plain_merge::{
     TextMatchPhase, analyze_text, is_similar, match_text_blocks, merge_text, similarity_score,
     text_feature_profile,
 };
+use serde_json::Value;
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

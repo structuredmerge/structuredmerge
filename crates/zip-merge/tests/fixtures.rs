@@ -1,7 +1,9 @@
 use std::{collections::HashMap, fs, path::PathBuf};
 
 use serde_json::Value;
-use zip_merge::{new_stored_zip, parse_zip_inventory, plan_zip_merge, render_with_raw_preservation};
+use zip_merge::{
+    new_stored_zip, parse_zip_inventory, plan_zip_merge, render_with_raw_preservation,
+};
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -16,8 +18,10 @@ fn fixture_path(parts: &[&str]) -> PathBuf {
 }
 
 fn read_fixture(parts: &[&str]) -> Value {
-    serde_json::from_str(&fs::read_to_string(fixture_path(parts)).expect("fixture should be readable"))
-        .expect("fixture should be valid json")
+    serde_json::from_str(
+        &fs::read_to_string(fixture_path(parts)).expect("fixture should be readable"),
+    )
+    .expect("fixture should be valid json")
 }
 
 #[test]
@@ -37,7 +41,8 @@ fn parses_plans_and_raw_preserves_stored_zip_members() {
     member_bytes.insert("docs/readme.md".to_string(), b"# New\n".to_vec());
 
     let (_output, inventory, report) =
-        render_with_raw_preservation(&current_source, &plan, &member_bytes).expect("ZIP should render");
+        render_with_raw_preservation(&current_source, &plan, &member_bytes)
+            .expect("ZIP should render");
 
     assert_eq!(inventory.archive.entry_count, 2);
     assert_eq!(plan.merge_report.nested_dispatches[0].family, "markdown");

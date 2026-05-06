@@ -496,7 +496,12 @@ fn selects_backend_limited_tree_sitter_cases_through_the_slice_33_capability_con
     let feature_profile = ConformanceFeatureProfileView {
         backend: adapter_info.backend.clone(),
         supports_dialects: adapter_info.supports_dialects,
-        supported_policies: adapter_info.supported_policies.clone(),
+        supported_policies: adapter_info
+            .supported_policies
+            .clone()
+            .into_iter()
+            .map(Into::into)
+            .collect(),
     };
 
     let selected = select_conformance_case(

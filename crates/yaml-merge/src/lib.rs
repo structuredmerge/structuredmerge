@@ -158,7 +158,12 @@ pub fn yaml_plan_context_with_backend(backend: YamlBackend) -> ConformanceFamily
         family_profile: FamilyFeatureProfile {
             family: backend_profile.family.to_string(),
             supported_dialects: vec!["yaml".to_string()],
-            supported_policies: backend_profile.supported_policies.clone(),
+            supported_policies: backend_profile
+                .supported_policies
+                .clone()
+                .into_iter()
+                .map(Into::into)
+                .collect(),
         },
         feature_profile: Some(ConformanceFeatureProfileView {
             backend: backend_profile.backend,
@@ -248,14 +253,9 @@ fn render_yaml_node(key: &str, value: &Value, indent: usize) -> Vec<String> {
 }
 
 fn render_yaml_mapping(mapping: &Map<String, Value>, indent: usize) -> Vec<String> {
-    let mut keys = mapping.keys().cloned().collect::<Vec<_>>();
-    keys.sort();
-
     let mut lines = Vec::new();
-    for key in keys {
-        if let Some(value) = mapping.get(&key) {
-            lines.extend(render_yaml_node(&key, value, indent));
-        }
+    for (key, value) in mapping {
+        lines.extend(render_yaml_node(key, value, indent));
     }
 
     lines
@@ -460,29 +460,28 @@ fn merge_yaml_mappings(
     destination: &Map<String, Value>,
 ) -> Map<String, Value> {
     let mut merged = Map::new();
-    let mut keys = template.keys().chain(destination.keys()).cloned().collect::<Vec<_>>();
-    keys.sort();
-    keys.dedup();
-
-    for key in keys {
-        let template_value = template.get(&key);
-        let destination_value = destination.get(&key);
+    for key in template.keys().chain(destination.keys()) {
+        if merged.contains_key(key) {
+            continue;
+        }
+        let template_value = template.get(key);
+        let destination_value = destination.get(key);
 
         match (template_value, destination_value) {
             (None, Some(destination)) => {
-                merged.insert(key, destination.clone());
+                merged.insert(key.clone(), destination.clone());
             }
             (Some(template), None) => {
-                merged.insert(key, template.clone());
+                merged.insert(key.clone(), template.clone());
             }
             (Some(Value::Object(template_mapping)), Some(Value::Object(destination_mapping))) => {
                 merged.insert(
-                    key,
+                    key.clone(),
                     Value::Object(merge_yaml_mappings(template_mapping, destination_mapping)),
                 );
             }
             (_, Some(destination)) => {
-                merged.insert(key, destination.clone());
+                merged.insert(key.clone(), destination.clone());
             }
             _ => {}
         }
