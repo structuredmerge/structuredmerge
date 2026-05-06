@@ -164,7 +164,7 @@ pub fn parse_go(source: &str, _dialect: GoDialect) -> ParseResult<GoAnalysis> {
     if !parsed.ok {
         return ParseResult {
             ok: false,
-            diagnostics: parsed.diagnostics,
+            diagnostics: parsed.diagnostics.into_iter().map(Into::into).collect(),
             analysis: None,
             policies: vec![],
         };
@@ -174,7 +174,7 @@ pub fn parse_go(source: &str, _dialect: GoDialect) -> ParseResult<GoAnalysis> {
     if !processed.ok {
         return ParseResult {
             ok: false,
-            diagnostics: processed.diagnostics,
+            diagnostics: processed.diagnostics.into_iter().map(Into::into).collect(),
             analysis: None,
             policies: vec![],
         };

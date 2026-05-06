@@ -1,11 +1,16 @@
 [package]
 name = "ast-merge"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2024"
+description = "Core Structured Merge AST, ruleset, planning, and review contracts"
+homepage = "https://structuredmerge.org"
+repository = "https://github.com/structuredmerge/structuredmerge-rust"
+license = "AGPL-3.0-only"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+tree-haver = { version = "0.1.0", path = "../tree-haver" }
 
 [dev-dependencies]
 markdown-merge = { path = "../markdown-merge" }

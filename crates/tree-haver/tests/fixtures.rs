@@ -1,15 +1,15 @@
 use std::{fs, path::PathBuf};
 
-use ast_merge::{ConformanceManifest, conformance_fixture_path};
 use serde_json::Value;
 use tree_haver::{
     AdapterInfo, BackendReference, BinaryDiagnostic, BinaryMergeReport, BinaryNestedDispatch,
     BinaryPayloadRegion, BinaryRawPayload, BinaryRenderPolicy, BinaryScalarValue, ByteEditSpan,
     ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis, KaitaiTreeNode, ParserRequest,
-    ProcessRequest, SourcePoint, ZipUnsafeEntry, byte_offset_for_point, current_backend_id,
-    kaitai_adapter_info, kaitai_feature_profile, kaitai_struct_backend, pest_adapter_info,
-    pest_backend, pest_feature_profile, process_with_language_pack, register_backend,
-    registered_backends, slice_byte_range, with_backend,
+    PolicyReference, PolicySurface, ProcessRequest, SourcePoint, ZipUnsafeEntry,
+    byte_offset_for_point, current_backend_id, kaitai_adapter_info, kaitai_feature_profile,
+    kaitai_struct_backend, pest_adapter_info, pest_backend, pest_feature_profile,
+    process_with_language_pack, register_backend, registered_backends, slice_byte_range,
+    with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -26,7 +26,7 @@ fn fixture_path(parts: &[&str]) -> PathBuf {
     path
 }
 
-fn read_manifest() -> ConformanceManifest {
+fn read_manifest() -> Value {
     let path = fixture_path(&["conformance", "slice-24-manifest", "family-feature-profiles.json"]);
     let source = fs::read_to_string(path).expect("manifest should be readable");
     serde_json::from_str(&source).expect("manifest should be valid json")
@@ -43,10 +43,21 @@ fn path_buf_from_segments(segments: &[String]) -> PathBuf {
 
 fn diagnostics_fixture_path(role: &str) -> PathBuf {
     let manifest = read_manifest();
-    let path = conformance_fixture_path(&manifest, "diagnostics", role)
+    let entries = manifest["families"]["diagnostics"]
+        .as_array()
+        .expect("diagnostics family should be present");
+    let entry = entries
+        .iter()
+        .find(|entry| entry["role"].as_str() == Some(role))
         .expect("diagnostics fixture entry should be present");
+    let segments = entry["path"]
+        .as_array()
+        .expect("fixture path should be an array")
+        .iter()
+        .map(|segment| segment.as_str().expect("path segment should be a string").to_string())
+        .collect::<Vec<_>>();
 
-    path_buf_from_segments(path)
+    path_buf_from_segments(&segments)
 }
 
 fn read_fixture_from_path(path: PathBuf) -> Value {
@@ -113,12 +124,12 @@ fn conforms_to_slice_19_adapter_policy_support_fixture() {
             .as_bool()
             .expect("supports_dialects should be boolean"),
         supported_policies: vec![
-            ast_merge::PolicyReference {
-                surface: ast_merge::PolicySurface::Array,
+            PolicyReference {
+                surface: PolicySurface::Array,
                 name: "destination_wins_array".to_string(),
             },
-            ast_merge::PolicyReference {
-                surface: ast_merge::PolicySurface::Fallback,
+            PolicyReference {
+                surface: PolicySurface::Fallback,
                 name: "trailing_comma_destination_fallback".to_string(),
             },
         ],
@@ -131,8 +142,8 @@ fn conforms_to_slice_19_adapter_policy_support_fixture() {
             "supported_policies": adapter_info.supported_policies.iter().map(|policy| {
                 serde_json::json!({
                     "surface": match policy.surface {
-                        ast_merge::PolicySurface::Fallback => "fallback",
-                        ast_merge::PolicySurface::Array => "array",
+                        PolicySurface::Fallback => "fallback",
+                        PolicySurface::Array => "array",
                     },
                     "name": policy.name
                 })
@@ -156,12 +167,12 @@ fn conforms_to_slice_20_adapter_feature_profile_fixture() {
             .as_bool()
             .expect("supports_dialects should be boolean"),
         supported_policies: vec![
-            ast_merge::PolicyReference {
-                surface: ast_merge::PolicySurface::Array,
+            PolicyReference {
+                surface: PolicySurface::Array,
                 name: "destination_wins_array".to_string(),
             },
-            ast_merge::PolicyReference {
-                surface: ast_merge::PolicySurface::Fallback,
+            PolicyReference {
+                surface: PolicySurface::Fallback,
                 name: "trailing_comma_destination_fallback".to_string(),
             },
         ],
@@ -174,8 +185,8 @@ fn conforms_to_slice_20_adapter_feature_profile_fixture() {
             "supported_policies": profile.supported_policies.iter().map(|policy| {
                 serde_json::json!({
                     "surface": match policy.surface {
-                        ast_merge::PolicySurface::Fallback => "fallback",
-                        ast_merge::PolicySurface::Array => "array",
+                        PolicySurface::Fallback => "fallback",
+                        PolicySurface::Array => "array",
                     },
                     "name": policy.name
                 })

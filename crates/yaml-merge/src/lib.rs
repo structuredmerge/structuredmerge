@@ -356,7 +356,7 @@ pub fn parse_yaml_with_backend(
     if !backend_result.ok {
         return ParseResult {
             ok: false,
-            diagnostics: backend_result.diagnostics,
+            diagnostics: backend_result.diagnostics.into_iter().map(Into::into).collect(),
             analysis: None,
             policies: vec![],
         };

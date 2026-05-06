@@ -1,14 +1,19 @@
 [package]
-name = "binary-merge"
-version = "0.0.0"
+name = "structuredmerge-binary-merge"
+version = "0.1.0"
 edition = "2024"
+description = "Binary preservation planning and diagnostics for Structured Merge"
+homepage = "https://structuredmerge.org"
+repository = "https://github.com/structuredmerge/structuredmerge-rust"
+license = "AGPL-3.0-only"
 
 [dependencies]
-ast-merge = { path = "../ast-merge" }
-tree-haver = { path = "../tree-haver" }
+ast-merge = { version = "0.1.0", path = "../ast-merge" }
+tree-haver = { version = "0.1.0", path = "../tree-haver" }
 
 [dev-dependencies]
 serde_json = "1.0"
 
 [lib]
+name = "binary_merge"
 path = "src/lib.rs"

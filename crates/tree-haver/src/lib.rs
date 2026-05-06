@@ -4,7 +4,6 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use ast_merge::{Diagnostic, ParseResult, PolicyReference};
 use tree_sitter_language_pack::{
     PackConfig, ProcessConfig, init, parse_string, process, tree_has_error_nodes,
 };
@@ -26,6 +25,47 @@ pub struct ParserRequest {
 pub struct BackendReference {
     pub id: String,
     pub family: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DiagnosticSeverity {
+    Info,
+    Warning,
+    Error,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DiagnosticCategory {
+    ParseError,
+    UnsupportedFeature,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Diagnostic {
+    pub severity: DiagnosticSeverity,
+    pub category: DiagnosticCategory,
+    pub message: String,
+    pub path: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PolicySurface {
+    Fallback,
+    Array,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PolicyReference {
+    pub surface: PolicySurface,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ParseResult<TAnalysis> {
+    pub ok: bool,
+    pub diagnostics: Vec<Diagnostic>,
+    pub analysis: Option<TAnalysis>,
+    pub policies: Vec<PolicyReference>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -536,11 +576,10 @@ pub fn parse_with_language_pack(request: &ParserRequest) -> ParseResult<Language
         return ParseResult {
             ok: false,
             diagnostics: vec![Diagnostic {
-                severity: ast_merge::DiagnosticSeverity::Error,
-                category: ast_merge::DiagnosticCategory::UnsupportedFeature,
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::UnsupportedFeature,
                 message: error,
                 path: None,
-                review: None,
             }],
             analysis: None,
             policies: vec![],
@@ -554,14 +593,13 @@ pub fn parse_with_language_pack(request: &ParserRequest) -> ParseResult<Language
                 ParseResult {
                     ok: false,
                     diagnostics: vec![Diagnostic {
-                        severity: ast_merge::DiagnosticSeverity::Error,
-                        category: ast_merge::DiagnosticCategory::ParseError,
+                        severity: DiagnosticSeverity::Error,
+                        category: DiagnosticCategory::ParseError,
                         message: format!(
                             "tree-sitter-language-pack reported syntax errors for {}.",
                             request.language
                         ),
                         path: None,
-                        review: None,
                     }],
                     analysis: None,
                     policies: vec![],
@@ -584,11 +622,10 @@ pub fn parse_with_language_pack(request: &ParserRequest) -> ParseResult<Language
         Err(error) => ParseResult {
             ok: false,
             diagnostics: vec![Diagnostic {
-                severity: ast_merge::DiagnosticSeverity::Error,
-                category: ast_merge::DiagnosticCategory::UnsupportedFeature,
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::UnsupportedFeature,
                 message: error.to_string(),
                 path: None,
-                review: None,
             }],
             analysis: None,
             policies: vec![],
@@ -663,11 +700,10 @@ pub fn process_with_language_pack(
         return ParseResult {
             ok: false,
             diagnostics: vec![Diagnostic {
-                severity: ast_merge::DiagnosticSeverity::Error,
-                category: ast_merge::DiagnosticCategory::UnsupportedFeature,
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::UnsupportedFeature,
                 message: error,
                 path: None,
-                review: None,
             }],
             analysis: None,
             policies: vec![],
@@ -733,11 +769,10 @@ pub fn process_with_language_pack(
         Err(error) => ParseResult {
             ok: false,
             diagnostics: vec![Diagnostic {
-                severity: ast_merge::DiagnosticSeverity::Error,
-                category: ast_merge::DiagnosticCategory::UnsupportedFeature,
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::UnsupportedFeature,
                 message: error.to_string(),
                 path: None,
-                review: None,
             }],
             analysis: None,
             policies: vec![],

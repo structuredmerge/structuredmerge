@@ -60,6 +60,27 @@ pub struct Diagnostic {
     pub review: Option<Box<ReviewDiagnosticDetail>>,
 }
 
+impl From<tree_haver::Diagnostic> for Diagnostic {
+    fn from(diagnostic: tree_haver::Diagnostic) -> Self {
+        Self {
+            severity: match diagnostic.severity {
+                tree_haver::DiagnosticSeverity::Info => DiagnosticSeverity::Info,
+                tree_haver::DiagnosticSeverity::Warning => DiagnosticSeverity::Warning,
+                tree_haver::DiagnosticSeverity::Error => DiagnosticSeverity::Error,
+            },
+            category: match diagnostic.category {
+                tree_haver::DiagnosticCategory::ParseError => DiagnosticCategory::ParseError,
+                tree_haver::DiagnosticCategory::UnsupportedFeature => {
+                    DiagnosticCategory::UnsupportedFeature
+                }
+            },
+            message: diagnostic.message,
+            path: diagnostic.path,
+            review: None,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SurfaceOwnerKind {

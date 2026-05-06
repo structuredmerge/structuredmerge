@@ -1,10 +1,13 @@
 [package]
 name = "tree-haver"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2024"
+description = "Tree substrate and binary location contracts for Structured Merge"
+homepage = "https://structuredmerge.org"
+repository = "https://github.com/structuredmerge/structuredmerge-rust"
+license = "AGPL-3.0-only"
 
 [dependencies]
-ast-merge = { path = "../ast-merge" }
 tree-sitter-language-pack = "1.6.2"
 
 [dev-dependencies]

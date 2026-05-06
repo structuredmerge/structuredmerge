@@ -162,7 +162,7 @@ pub fn parse_json_with_language_pack(
     if !backend_result.ok {
         return ParseResult {
             ok: false,
-            diagnostics: backend_result.diagnostics,
+            diagnostics: backend_result.diagnostics.into_iter().map(Into::into).collect(),
             analysis: None,
             policies: vec![],
         };

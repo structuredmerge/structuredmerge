@@ -182,7 +182,7 @@ pub fn parse_rust_with_backend(
     if !parsed.ok {
         return ParseResult {
             ok: false,
-            diagnostics: parsed.diagnostics,
+            diagnostics: parsed.diagnostics.into_iter().map(Into::into).collect(),
             analysis: None,
             policies: vec![],
         };
@@ -192,7 +192,7 @@ pub fn parse_rust_with_backend(
     if !processed.ok {
         return ParseResult {
             ok: false,
-            diagnostics: processed.diagnostics,
+            diagnostics: processed.diagnostics.into_iter().map(Into::into).collect(),
             analysis: None,
             policies: vec![],
         };

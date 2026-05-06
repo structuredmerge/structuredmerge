@@ -421,7 +421,7 @@ pub fn parse_ruby(source: &str, _dialect: RubyDialect) -> ParseResult<RubyAnalys
     if !parsed.ok {
         return ParseResult {
             ok: false,
-            diagnostics: parsed.diagnostics,
+            diagnostics: parsed.diagnostics.into_iter().map(Into::into).collect(),
             analysis: None,
             policies: vec![],
         };

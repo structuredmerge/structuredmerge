@@ -414,7 +414,7 @@ pub fn parse_toml(
     if !syntax.ok {
         return ParseResult {
             ok: false,
-            diagnostics: syntax.diagnostics,
+            diagnostics: syntax.diagnostics.into_iter().map(Into::into).collect(),
             analysis: None,
             policies: vec![],
         };
