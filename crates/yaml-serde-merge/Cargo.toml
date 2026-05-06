@@ -6,7 +6,7 @@ homepage = "https://structuredmerge.org"
 authors = ["Peter H. Boling"]
 edition = "2024"
 description = "yaml-serde merge helpers for Structured Merge"
-license = "AGPL-3.0-only"
+license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
 ast-merge = { version = "0.1.0", path = "../ast-merge" }

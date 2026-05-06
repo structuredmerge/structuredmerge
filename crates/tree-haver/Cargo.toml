@@ -6,7 +6,7 @@ edition = "2024"
 description = "Tree substrate and binary location contracts for Structured Merge"
 homepage = "https://structuredmerge.org"
 repository = "https://github.com/structuredmerge/structuredmerge-rust"
-license = "AGPL-3.0-only"
+license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
 tree-sitter-language-pack = "1.6.2"

@@ -6,7 +6,7 @@ edition = "2024"
 description = "Binary preservation planning and diagnostics for Structured Merge"
 homepage = "https://structuredmerge.org"
 repository = "https://github.com/structuredmerge/structuredmerge-rust"
-license = "AGPL-3.0-only"
+license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
 ast-merge = { version = "0.1.0", path = "../ast-merge" }

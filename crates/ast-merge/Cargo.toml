@@ -6,7 +6,7 @@ edition = "2024"
 description = "Core Structured Merge AST, ruleset, planning, and review contracts"
 homepage = "https://structuredmerge.org"
 repository = "https://github.com/structuredmerge/structuredmerge-rust"
-license = "AGPL-3.0-only"
+license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
