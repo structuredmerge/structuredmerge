@@ -1,11 +1,12 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    path::PathBuf,
     sync::{Mutex, OnceLock},
 };
 
 use tree_sitter_language_pack::{
-    PackConfig, ProcessConfig, init, parse_string, process, tree_has_error_nodes,
+    PackConfig, ProcessConfig, configure, parse_string, process, tree_has_error_nodes,
 };
 
 pub const PACKAGE_NAME: &str = "tree-haver";
@@ -560,15 +561,24 @@ fn ensure_language_pack_language(language: &str) -> Result<(), String> {
         return Ok(());
     }
 
-    init(&PackConfig {
-        cache_dir: None,
-        languages: Some(vec![language.to_string()]),
+    configure(&PackConfig {
+        cache_dir: language_pack_cache_dir(),
+        languages: None,
         groups: None,
     })
     .map_err(|error| error.to_string())?;
 
     initialized_languages.insert(language.to_string());
     Ok(())
+}
+
+fn language_pack_cache_dir() -> Option<PathBuf> {
+    std::env::var("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR")
+        .ok()
+        .or_else(|| std::env::var("TREE_SITTER_LANGUAGE_PACK_CACHE_DIR").ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
 }
 
 pub fn parse_with_language_pack(request: &ParserRequest) -> ParseResult<LanguagePackAnalysis> {
