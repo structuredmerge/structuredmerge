@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     path::PathBuf,
     sync::{Mutex, OnceLock},
 };
@@ -248,6 +248,15 @@ pub struct NormalizedTreeNode {
     pub anonymous: bool,
     pub has_source_text: bool,
     pub source_fragment: String,
+    pub backend_kind: Option<String>,
+    #[serde(default)]
+    pub semantic_roles: Vec<String>,
+    #[serde(default)]
+    pub backend_roles: Vec<String>,
+    #[serde(default)]
+    pub unsupported_features: Vec<String>,
+    #[serde(default)]
+    pub metadata: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

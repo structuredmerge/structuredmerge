@@ -425,6 +425,26 @@ fn conforms_to_slice_782_normalized_tree_node_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_786_progressive_node_metadata_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-786-progressive-node-metadata",
+        "progressive-node-metadata.json",
+    ]));
+    let enhanced: NormalizedTreeNode = serde_json::from_value(fixture["enhanced_node"].clone())
+        .expect("enhanced node should deserialize");
+    let limited: NormalizedTreeNode = serde_json::from_value(fixture["limited_node"].clone())
+        .expect("limited node should deserialize");
+
+    assert_eq!(enhanced.backend_kind.as_deref(), Some("FuncDecl"));
+    assert_eq!(enhanced.semantic_roles[0], "declaration");
+    assert_eq!(enhanced.metadata["go_dst"]["node_path"], "decls[0]");
+    assert!(!limited.has_source_text);
+    assert_eq!(limited.unsupported_features[1], "source_fragment");
+    assert_eq!(limited.metadata["psych"]["location_support"], "line_column_only");
+}
+
+#[test]
 fn conforms_to_slice_783_backend_capability_report_fixture() {
     let fixture = read_fixture_from_path(fixture_path(&[
         "diagnostics",
