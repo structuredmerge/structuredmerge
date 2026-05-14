@@ -236,6 +236,32 @@ pub struct PairwiseMatching {
     pub unmatched_to: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ClassMappingNodeClass {
+    pub class_id: String,
+    pub signature: String,
+    pub node_ids: HashMap<String, String>,
+    pub matching_ids: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ClassMappingDiagnostic {
+    pub severity: String,
+    pub category: String,
+    pub class_id: String,
+    pub message: String,
+    pub matching_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ClassMappingReport {
+    pub mapping_id: String,
+    pub source_matching_ids: Vec<String>,
+    pub node_classes: Vec<ClassMappingNodeClass>,
+    pub diagnostics: Vec<ClassMappingDiagnostic>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {

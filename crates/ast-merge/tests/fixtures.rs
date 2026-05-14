@@ -5,7 +5,7 @@ use std::{
 };
 
 use ast_merge::{
-    ConformanceCaseExecution, ConformanceCaseRef, ConformanceCaseRequirements,
+    ClassMappingReport, ConformanceCaseExecution, ConformanceCaseRef, ConformanceCaseRequirements,
     ConformanceCaseResult, ConformanceCaseRun, ConformanceFamilyPlanContext,
     ConformanceFeatureProfileView, ConformanceManifest, ConformanceManifestPlanningOptions,
     ConformanceManifestReport, ConformanceManifestReviewOptions, ConformanceManifestReviewState,
@@ -361,6 +361,28 @@ fn conforms_to_slice_791_pairwise_matchings_fixture() {
     assert_eq!(matchings[0].unmatched_to[0], "left-import-os");
     assert_eq!(matchings[1].unmatched_from[0], "base-decl-greet");
     assert_eq!(matchings[2].matches[1].diagnostics[0], "sibling position changed");
+}
+
+#[test]
+fn conforms_to_slice_792_class_mapping_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-792-class-mapping",
+        "class-mapping.json",
+    ]));
+    let report: ClassMappingReport = serde_json::from_value(fixture["class_mapping"].clone())
+        .expect("class mapping report should deserialize");
+    let expected = &fixture["expected"];
+    let categories: Vec<&str> =
+        report.diagnostics.iter().map(|diagnostic| diagnostic.category.as_str()).collect();
+    let class_ids: Vec<&str> =
+        report.diagnostics.iter().map(|diagnostic| diagnostic.class_id.as_str()).collect();
+
+    assert_eq!(report.node_classes.len(), expected["class_count"].as_u64().unwrap() as usize);
+    assert_eq!(serde_json::json!(categories), expected["diagnostic_categories"]);
+    assert_eq!(serde_json::json!(class_ids), expected["conflicted_class_ids"]);
+    assert!(!report.node_classes[2].node_ids.contains_key("right"));
+    assert_eq!(report.diagnostics[1].category, "delete_edit_disagreement");
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
