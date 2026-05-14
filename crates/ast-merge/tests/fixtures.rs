@@ -15,7 +15,7 @@ use ast_merge::{
     ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSelector,
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
-    DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, MergeIR,
+    DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, InconsistencyReport, MergeIR,
     NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
     NamedConformanceSuiteResults, PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
     ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
@@ -444,6 +444,31 @@ fn conforms_to_slice_794_raw_merge_change_set_union_fixture() {
         raw_merge.diagnostics[0],
         "raw merge intentionally preserves both sides before inconsistency detection"
     );
+}
+
+#[test]
+fn conforms_to_slice_795_inconsistency_detection_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-795-inconsistency-detection",
+        "inconsistency-detection.json",
+    ]));
+    let report: InconsistencyReport =
+        serde_json::from_value(fixture["inconsistency_report"].clone())
+            .expect("inconsistency report should deserialize");
+    let expected = &fixture["expected"];
+    let categories: Vec<&str> =
+        report.inconsistencies.iter().map(|item| item.category.as_str()).collect();
+    let blocking_count =
+        report.inconsistencies.iter().filter(|item| item.severity == "error").count();
+
+    assert_eq!(
+        report.inconsistencies.len(),
+        expected["inconsistency_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(serde_json::json!(categories), expected["categories"]);
+    assert_eq!(blocking_count, expected["blocking_count"].as_u64().unwrap() as usize);
+    assert_eq!(report.inconsistencies[1].change_ids[1], "right-delete-greet");
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

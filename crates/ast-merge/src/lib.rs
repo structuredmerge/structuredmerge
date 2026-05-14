@@ -320,6 +320,24 @@ pub struct RawMerge {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MergeInconsistency {
+    pub inconsistency_id: String,
+    pub category: String,
+    pub severity: String,
+    pub class_ids: Vec<String>,
+    pub change_ids: Vec<String>,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct InconsistencyReport {
+    pub report_id: String,
+    pub raw_merge_id: String,
+    pub inconsistencies: Vec<MergeInconsistency>,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {
