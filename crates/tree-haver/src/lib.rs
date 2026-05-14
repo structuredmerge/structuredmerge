@@ -23,7 +23,7 @@ pub struct ParserRequest {
     pub dialect: Option<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BackendReference {
     pub id: String,
     pub family: String,
@@ -84,6 +84,35 @@ pub struct FeatureProfile {
     pub backend_ref: Option<BackendReference>,
     pub supports_dialects: bool,
     pub supported_policies: Vec<PolicyReference>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ParserIdentity {
+    pub name: String,
+    pub version: String,
+    pub implementation: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LanguageVersion {
+    pub version: String,
+    pub dialect: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BackendCapability {
+    pub backend_ref: BackendReference,
+    pub language: String,
+    pub parser_identity: ParserIdentity,
+    pub language_version: LanguageVersion,
+    pub parse_error_behavior: String,
+    pub source_span_support: String,
+    pub source_fragment_support: String,
+    pub render_strategies: Vec<String>,
+    pub semantic_role_support: String,
+    pub normalized_tree_support: bool,
+    pub native_node_access: bool,
+    pub diagnostics: Vec<String>,
 }
 
 pub trait ParserAdapter<TAnalysis: AnalysisHandle> {

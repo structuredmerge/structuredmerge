@@ -2,14 +2,14 @@ use std::{fs, path::PathBuf};
 
 use serde_json::Value;
 use tree_haver::{
-    AdapterInfo, BackendReference, BinaryDiagnostic, BinaryMergeReport, BinaryNestedDispatch,
-    BinaryPayloadRegion, BinaryRawPayload, BinaryRenderPolicy, BinaryScalarValue, ByteEditSpan,
-    ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis, KaitaiTreeNode, NodeRole,
-    NormalizedTreeNode, ParserRequest, PolicyReference, PolicySurface, ProcessRequest, SourcePoint,
-    ZipUnsafeEntry, byte_offset_for_point, current_backend_id, kaitai_adapter_info,
-    kaitai_feature_profile, kaitai_struct_backend, node_roles, pest_adapter_info, pest_backend,
-    pest_feature_profile, process_with_language_pack, register_backend, registered_backends,
-    slice_byte_range, with_backend,
+    AdapterInfo, BackendCapability, BackendReference, BinaryDiagnostic, BinaryMergeReport,
+    BinaryNestedDispatch, BinaryPayloadRegion, BinaryRawPayload, BinaryRenderPolicy,
+    BinaryScalarValue, ByteEditSpan, ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis,
+    KaitaiTreeNode, NodeRole, NormalizedTreeNode, ParserRequest, PolicyReference, PolicySurface,
+    ProcessRequest, SourcePoint, ZipUnsafeEntry, byte_offset_for_point, current_backend_id,
+    kaitai_adapter_info, kaitai_feature_profile, kaitai_struct_backend, node_roles,
+    pest_adapter_info, pest_backend, pest_feature_profile, process_with_language_pack,
+    register_backend, registered_backends, slice_byte_range, with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -421,6 +421,26 @@ fn conforms_to_slice_782_normalized_tree_node_fixture() {
     assert_eq!(child.parent_id.as_deref(), Some(node.id.as_str()));
     assert_eq!(child.field_name.as_deref(), Some("declaration"));
     assert!(child.has_source_text);
+}
+
+#[test]
+fn conforms_to_slice_783_backend_capability_report_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-783-backend-capability-report",
+        "backend-capability-report.json",
+    ]));
+    let capability: BackendCapability = serde_json::from_value(fixture["capability"].clone())
+        .expect("capability should deserialize");
+
+    assert_eq!(capability.backend_ref.id, "go-dst");
+    assert_eq!(capability.backend_ref.family, "native");
+    assert_eq!(capability.language, "go");
+    assert_eq!(capability.parser_identity.name, "github.com/dave/dst");
+    assert_eq!(capability.parse_error_behavior, "diagnostic_and_partial_tree");
+    assert_eq!(capability.render_strategies[0], "source_fragment_reuse");
+    assert!(capability.normalized_tree_support);
+    assert!(capability.native_node_access);
 }
 
 fn source_point_from_fixture(value: &Value) -> SourcePoint {
