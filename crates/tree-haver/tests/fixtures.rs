@@ -6,10 +6,11 @@ use tree_haver::{
     BinaryNestedDispatch, BinaryPayloadRegion, BinaryRawPayload, BinaryRenderPolicy,
     BinaryScalarValue, ByteEditSpan, ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis,
     KaitaiTreeNode, NodeRole, NormalizedTreeNode, ParserRequest, PolicyReference, PolicySurface,
-    ProcessRequest, SourcePoint, ZipUnsafeEntry, byte_offset_for_point, current_backend_id,
-    kaitai_adapter_info, kaitai_feature_profile, kaitai_struct_backend, node_roles,
-    pest_adapter_info, pest_backend, pest_feature_profile, process_with_language_pack,
-    register_backend, registered_backends, slice_byte_range, with_backend,
+    ProcessRequest, SourcePoint, SourceSpan, ZipUnsafeEntry, byte_offset_for_point,
+    current_backend_id, extract_source_fragment, kaitai_adapter_info, kaitai_feature_profile,
+    kaitai_struct_backend, node_roles, pest_adapter_info, pest_backend, pest_feature_profile,
+    process_with_language_pack, register_backend, registered_backends, slice_byte_range,
+    with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -441,6 +442,31 @@ fn conforms_to_slice_783_backend_capability_report_fixture() {
     assert_eq!(capability.render_strategies[0], "source_fragment_reuse");
     assert!(capability.normalized_tree_support);
     assert!(capability.native_node_access);
+}
+
+#[test]
+fn conforms_to_slice_784_source_fragment_extraction_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-784-source-fragment-extraction",
+        "source-fragment-extraction.json",
+    ]));
+    let span: SourceSpan =
+        serde_json::from_value(fixture["span"].clone()).expect("span should deserialize");
+    let fragment = extract_source_fragment(
+        fixture["source"].as_str().unwrap(),
+        &span,
+        fixture["strategy"].as_str().unwrap(),
+    );
+
+    assert_eq!(fragment.text, fixture["fragment"]["text"].as_str().unwrap());
+    assert_eq!(fragment.available, fixture["fragment"]["available"].as_bool().unwrap());
+    assert_eq!(fragment.strategy, fixture["fragment"]["strategy"].as_str().unwrap());
+    assert_eq!(fragment.byte_length, fixture["fragment"]["byte_length"].as_u64().unwrap() as usize);
+    assert_eq!(
+        fragment.diagnostics.len(),
+        fixture["fragment"]["diagnostics"].as_array().unwrap().len()
+    );
 }
 
 fn source_point_from_fixture(value: &Value) -> SourcePoint {

@@ -233,6 +233,16 @@ pub struct NormalizedTreeNode {
     pub source_fragment: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SourceFragment {
+    pub text: String,
+    pub span: SourceSpan,
+    pub available: bool,
+    pub strategy: String,
+    pub byte_length: usize,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ByteEditSpan {
     pub start_byte: usize,
@@ -400,6 +410,27 @@ pub fn slice_byte_range(source: &str, byte_range: &ByteRange) -> Result<String, 
     std::str::from_utf8(&source.as_bytes()[byte_range.start_byte..byte_range.end_byte])
         .map(str::to_string)
         .map_err(|error| error.to_string())
+}
+
+pub fn extract_source_fragment(source: &str, span: &SourceSpan, strategy: &str) -> SourceFragment {
+    match slice_byte_range(source, &span.range) {
+        Ok(text) => SourceFragment {
+            byte_length: text.len(),
+            text,
+            span: span.clone(),
+            available: true,
+            strategy: strategy.to_string(),
+            diagnostics: vec![],
+        },
+        Err(error) => SourceFragment {
+            text: String::new(),
+            span: span.clone(),
+            available: false,
+            strategy: strategy.to_string(),
+            byte_length: 0,
+            diagnostics: vec![error],
+        },
+    }
 }
 
 pub fn byte_offset_for_point(source: &str, point: &SourcePoint) -> Result<usize, String> {
