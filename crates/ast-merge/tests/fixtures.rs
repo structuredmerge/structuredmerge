@@ -16,7 +16,7 @@ use ast_merge::{
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
     DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, MergeIR,
     NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
-    NamedConformanceSuiteResults, PolicySurface, ProjectedChildReviewCase,
+    NamedConformanceSuiteResults, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
     ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
     ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
     ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
@@ -339,6 +339,28 @@ fn conforms_to_slice_790_generic_merge_ir_fixture() {
     assert_eq!(serde_json::json!(change_kinds), expected["change_kinds"]);
     assert_eq!(merge_ir.node_classes[0].node_ids["left"], "left-import-fmt");
     assert_eq!(merge_ir.changes[1].class_id.as_deref(), Some("class-import-strings"));
+}
+
+#[test]
+fn conforms_to_slice_791_pairwise_matchings_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-791-pairwise-matchings",
+        "pairwise-matchings.json",
+    ]));
+    let matchings: Vec<PairwiseMatching> =
+        serde_json::from_value(fixture["pairwise_matchings"].clone())
+            .expect("pairwise matchings should deserialize");
+    let expected = &fixture["expected"];
+    let matching_ids: Vec<&str> =
+        matchings.iter().map(|matching| matching.matching_id.as_str()).collect();
+    let total_match_count: usize = matchings.iter().map(|matching| matching.matches.len()).sum();
+
+    assert_eq!(serde_json::json!(matching_ids), expected["matching_ids"]);
+    assert_eq!(total_match_count, expected["total_match_count"].as_u64().unwrap() as usize);
+    assert_eq!(matchings[0].unmatched_to[0], "left-import-os");
+    assert_eq!(matchings[1].unmatched_from[0], "base-decl-greet");
+    assert_eq!(matchings[2].matches[1].diagnostics[0], "sibling position changed");
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

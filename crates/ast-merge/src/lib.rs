@@ -216,6 +216,26 @@ pub struct MergeIR {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct PairwiseNodeMatch {
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub class_id: String,
+    pub strategy: String,
+    pub confidence: f64,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct PairwiseMatching {
+    pub matching_id: String,
+    pub from_revision: String,
+    pub to_revision: String,
+    pub matches: Vec<PairwiseNodeMatch>,
+    pub unmatched_from: Vec<String>,
+    pub unmatched_to: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {
