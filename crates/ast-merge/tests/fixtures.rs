@@ -19,7 +19,7 @@ use ast_merge::{
     NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
     NamedConformanceSuiteResults, PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
     ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
-    ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
+    RawMerge, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
     ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
     StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
     StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
@@ -410,6 +410,40 @@ fn conforms_to_slice_793_pcs_change_set_generation_fixture() {
     assert_eq!(diagnostic_count, expected["diagnostic_count"].as_u64().unwrap() as usize);
     assert_eq!(pcs.constraints[2].predecessor_class_id.as_deref(), Some("class-import-strings"));
     assert_eq!(change_sets[1].changes[1].kind, "delete");
+}
+
+#[test]
+fn conforms_to_slice_794_raw_merge_change_set_union_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-794-raw-merge-change-set-union",
+        "raw-merge-change-set-union.json",
+    ]));
+    let raw_merge: RawMerge =
+        serde_json::from_value(fixture["raw_merge"].clone()).expect("raw merge should deserialize");
+    let expected = &fixture["expected"];
+    let mut sides: Vec<&str> = Vec::new();
+    let mut class_decl_greet_count = 0;
+    for change in &raw_merge.changes {
+        if !sides.contains(&change.side.as_str()) {
+            sides.push(change.side.as_str());
+        }
+        if change.class_id == "class-decl-greet" {
+            class_decl_greet_count += 1;
+        }
+    }
+
+    assert_eq!(raw_merge.changes.len(), expected["raw_change_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        raw_merge.input_change_set_ids.len(),
+        expected["input_change_set_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(serde_json::json!(sides), expected["sides"]);
+    assert_eq!(class_decl_greet_count, 2);
+    assert_eq!(
+        raw_merge.diagnostics[0],
+        "raw merge intentionally preserves both sides before inconsistency detection"
+    );
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

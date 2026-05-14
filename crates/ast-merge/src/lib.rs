@@ -299,6 +299,27 @@ pub struct ChangeSet {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RawMergeChange {
+    pub change_id: String,
+    pub source_change_set_id: String,
+    pub side: String,
+    pub kind: String,
+    pub class_id: String,
+    pub parent_class_id: String,
+    pub predecessor_class_id: Option<String>,
+    pub successor_class_id: Option<String>,
+    pub content_hash: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RawMerge {
+    pub raw_merge_id: String,
+    pub input_change_set_ids: Vec<String>,
+    pub changes: Vec<RawMergeChange>,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {
