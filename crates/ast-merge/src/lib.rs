@@ -338,6 +338,35 @@ pub struct InconsistencyReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MergeIRComparisonCase {
+    pub case_id: String,
+    pub family: String,
+    pub scenario: String,
+    pub owner_path_outcome: String,
+    pub merge_ir_outcome: String,
+    pub merge_ir_advantage: String,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MergeIRComparisonSummary {
+    pub owner_path_wins: usize,
+    pub merge_ir_wins: usize,
+    pub neutral: usize,
+    pub defer: usize,
+    pub recommendation: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MergeIRComparisonReport {
+    pub comparison_id: String,
+    pub baseline: String,
+    pub prototype: String,
+    pub cases: Vec<MergeIRComparisonCase>,
+    pub summary: MergeIRComparisonSummary,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {

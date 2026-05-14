@@ -16,12 +16,13 @@ use ast_merge::{
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
     DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, InconsistencyReport, MergeIR,
-    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
-    NamedConformanceSuiteResults, PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
-    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
-    RawMerge, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
-    ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
-    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
+    MergeIRComparisonReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
+    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults, PCS, PairwiseMatching,
+    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge, ReviewHostHints,
+    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
+    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, StructuredEditApplication,
+    StructuredEditApplicationEnvelope, StructuredEditBatchReport,
     StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
@@ -469,6 +470,25 @@ fn conforms_to_slice_795_inconsistency_detection_fixture() {
     assert_eq!(serde_json::json!(categories), expected["categories"]);
     assert_eq!(blocking_count, expected["blocking_count"].as_u64().unwrap() as usize);
     assert_eq!(report.inconsistencies[1].change_ids[1], "right-delete-greet");
+}
+
+#[test]
+fn conforms_to_slice_796_merge_ir_comparison_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-796-merge-ir-comparison",
+        "merge-ir-comparison.json",
+    ]));
+    let report: MergeIRComparisonReport = serde_json::from_value(fixture["comparison"].clone())
+        .expect("merge IR comparison report should deserialize");
+    let expected = &fixture["expected"];
+    let families: Vec<&str> = report.cases.iter().map(|case| case.family.as_str()).collect();
+
+    assert_eq!(report.cases.len(), expected["case_count"].as_u64().unwrap() as usize);
+    assert_eq!(serde_json::json!(families), expected["families"]);
+    assert_eq!(report.summary.merge_ir_wins, expected["merge_ir_wins"].as_u64().unwrap() as usize);
+    assert_eq!(report.summary.recommendation, expected["recommendation"].as_str().unwrap());
+    assert_eq!(report.cases[4].merge_ir_advantage, "defer");
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
