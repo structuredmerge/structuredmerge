@@ -220,6 +220,74 @@ pub struct CompactRuleset {
     pub comments: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CompactRulesetBackendDeclaration {
+    pub backend: String,
+    pub support: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CompactRulesetNodeRole {
+    pub selector: String,
+    pub role: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CompactRulesetAtomicNode {
+    pub selector: String,
+    pub atomic: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CompactRulesetChildGroup {
+    pub parent_selector: String,
+    pub name: String,
+    pub policy: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CompactRulesetNamedValue {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CompactRulesetSurfaceDeclaration {
+    pub name: String,
+    pub selector: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CompactRulesetDelegateDeclaration {
+    pub surface: String,
+    pub policy: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CompactRulesetProfile {
+    pub format: String,
+    pub owners: String,
+    #[serde(rename = "match")]
+    pub match_: String,
+    pub read: String,
+    pub attach: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub comment_style: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub render: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub render_strategy: String,
+    pub backends: Vec<CompactRulesetBackendDeclaration>,
+    pub node_roles: Vec<CompactRulesetNodeRole>,
+    pub atomic_nodes: Vec<CompactRulesetAtomicNode>,
+    pub child_groups: Vec<CompactRulesetChildGroup>,
+    pub capabilities: Vec<CompactRulesetNamedValue>,
+    pub logical_owners: Vec<CompactRulesetNamedValue>,
+    pub repairs: Vec<CompactRulesetNamedValue>,
+    pub surfaces: Vec<CompactRulesetSurfaceDeclaration>,
+    pub delegates: Vec<CompactRulesetDelegateDeclaration>,
+}
+
 pub fn parse_compact_ruleset(source: &str) -> ParseResult<CompactRuleset> {
     let mut ruleset = CompactRuleset { directives: vec![], comments: vec![] };
     let mut diagnostics = vec![];
@@ -327,6 +395,86 @@ pub fn parse_compact_ruleset(source: &str) -> ParseResult<CompactRuleset> {
 
     let ok = diagnostics.is_empty();
     ParseResult { ok, diagnostics, analysis: ok.then_some(ruleset), policies: vec![] }
+}
+
+pub fn compact_ruleset_feature_profile(ruleset: &CompactRuleset) -> CompactRulesetProfile {
+    let mut profile = CompactRulesetProfile::default();
+
+    for directive in &ruleset.directives {
+        if directive.arguments.is_empty() {
+            continue;
+        }
+
+        let args = &directive.arguments;
+        match directive.name.as_str() {
+            "format" => profile.format = args[0].clone(),
+            "owners" => profile.owners = args[0].clone(),
+            "match" => profile.match_ = args[0].clone(),
+            "read" => profile.read = args[0].clone(),
+            "attach" => profile.attach = args[0].clone(),
+            "comment_style" => profile.comment_style = args[0].clone(),
+            "render" => profile.render = args[0].clone(),
+            "render_strategy" => profile.render_strategy = args[0].clone(),
+            "backend" if args.len() > 1 => {
+                profile.backends.push(CompactRulesetBackendDeclaration {
+                    backend: args[0].clone(),
+                    support: args[1].clone(),
+                });
+            }
+            "node_role" if args.len() > 1 => {
+                profile.node_roles.push(CompactRulesetNodeRole {
+                    selector: args[0].clone(),
+                    role: args[1].clone(),
+                });
+            }
+            "atomic" if args.len() > 1 => {
+                profile.atomic_nodes.push(CompactRulesetAtomicNode {
+                    selector: args[0].clone(),
+                    atomic: args[1] == "true",
+                });
+            }
+            "child_group" if args.len() > 2 => {
+                profile.child_groups.push(CompactRulesetChildGroup {
+                    parent_selector: args[0].clone(),
+                    name: args[1].clone(),
+                    policy: args[2].clone(),
+                });
+            }
+            "capability" if args.len() > 1 => {
+                profile.capabilities.push(CompactRulesetNamedValue {
+                    name: args[0].clone(),
+                    value: args[1].clone(),
+                });
+            }
+            "logical_owner" if args.len() > 1 => {
+                profile.logical_owners.push(CompactRulesetNamedValue {
+                    name: args[0].clone(),
+                    value: args[1].clone(),
+                });
+            }
+            "repair" if args.len() > 1 => {
+                profile.repairs.push(CompactRulesetNamedValue {
+                    name: args[0].clone(),
+                    value: args[1].clone(),
+                });
+            }
+            "surface" if args.len() > 1 => {
+                profile.surfaces.push(CompactRulesetSurfaceDeclaration {
+                    name: args[0].clone(),
+                    selector: args[1].clone(),
+                });
+            }
+            "delegate" if args.len() > 1 => {
+                profile.delegates.push(CompactRulesetDelegateDeclaration {
+                    surface: args[0].clone(),
+                    policy: args[1].clone(),
+                });
+            }
+            _ => {}
+        }
+    }
+
+    profile
 }
 
 const REQUIRED_DIRECTIVES: &[&str] = &["format", "owners", "match", "read", "attach"];

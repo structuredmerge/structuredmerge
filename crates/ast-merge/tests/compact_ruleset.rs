@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use ast_merge::parse_compact_ruleset;
+use ast_merge::{CompactRulesetProfile, compact_ruleset_feature_profile, parse_compact_ruleset};
 
 #[test]
 fn parses_compact_ruleset_fixtures() {
@@ -45,6 +45,35 @@ fn rejects_compact_ruleset_edges() {
         assert!(!result.ok, "expected {name} to fail");
         assert!(!result.diagnostics.is_empty(), "expected {name} to produce diagnostics");
     }
+}
+
+#[test]
+fn derives_compact_ruleset_feature_profile_fixture() {
+    let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
+        "../../../fixtures/diagnostics/slice-781-compact-ruleset-profile/module-profile.json",
+    );
+    let fixture: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(fixture_path).expect("profile fixture should be readable"),
+    )
+    .expect("profile fixture should parse");
+
+    let ruleset_path_parts =
+        fixture["ruleset_path"].as_array().expect("ruleset path should be an array");
+    let mut ruleset_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures");
+    for part in ruleset_path_parts {
+        ruleset_path.push(part.as_str().expect("ruleset path part should be a string"));
+    }
+
+    let source = fs::read_to_string(ruleset_path).expect("ruleset fixture should be readable");
+    let result = parse_compact_ruleset(&source);
+    assert!(result.ok, "expected profile ruleset to parse: {:?}", result.diagnostics);
+
+    let expected: CompactRulesetProfile =
+        serde_json::from_value(fixture["profile"].clone()).expect("profile should deserialize");
+    let actual = compact_ruleset_feature_profile(
+        result.analysis.as_ref().expect("profile ruleset should produce analysis"),
+    );
+    assert_eq!(actual, expected);
 }
 
 fn visit_smrules(root: &Path, visit: &mut impl FnMut(&Path)) {
