@@ -115,6 +115,23 @@ pub struct BackendCapability {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ParseErrorNode {
+    pub kind: String,
+    pub span: SourceSpan,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ParseErrorTolerance {
+    pub backend_ref: BackendReference,
+    pub language: String,
+    pub behavior: String,
+    pub tolerates_errors: bool,
+    pub error_nodes: Vec<ParseErrorNode>,
+    pub diagnostics: Vec<String>,
+}
+
 pub trait ParserAdapter<TAnalysis: AnalysisHandle> {
     fn info(&self) -> AdapterInfo;
     fn parse(&self, request: &ParserRequest) -> ParseResult<TAnalysis>;

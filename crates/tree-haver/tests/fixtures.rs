@@ -5,12 +5,12 @@ use tree_haver::{
     AdapterInfo, BackendCapability, BackendReference, BinaryDiagnostic, BinaryMergeReport,
     BinaryNestedDispatch, BinaryPayloadRegion, BinaryRawPayload, BinaryRenderPolicy,
     BinaryScalarValue, ByteEditSpan, ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis,
-    KaitaiTreeNode, NodeRole, NormalizedTreeNode, ParserRequest, PolicyReference, PolicySurface,
-    ProcessRequest, SourcePoint, SourceSpan, ZipUnsafeEntry, byte_offset_for_point,
-    current_backend_id, extract_source_fragment, kaitai_adapter_info, kaitai_feature_profile,
-    kaitai_struct_backend, node_roles, pest_adapter_info, pest_backend, pest_feature_profile,
-    process_with_language_pack, register_backend, registered_backends, slice_byte_range,
-    with_backend,
+    KaitaiTreeNode, NodeRole, NormalizedTreeNode, ParseErrorTolerance, ParserRequest,
+    PolicyReference, PolicySurface, ProcessRequest, SourcePoint, SourceSpan, ZipUnsafeEntry,
+    byte_offset_for_point, current_backend_id, extract_source_fragment, kaitai_adapter_info,
+    kaitai_feature_profile, kaitai_struct_backend, node_roles, pest_adapter_info, pest_backend,
+    pest_feature_profile, process_with_language_pack, register_backend, registered_backends,
+    slice_byte_range, with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -467,6 +467,24 @@ fn conforms_to_slice_784_source_fragment_extraction_fixture() {
         fragment.diagnostics.len(),
         fixture["fragment"]["diagnostics"].as_array().unwrap().len()
     );
+}
+
+#[test]
+fn conforms_to_slice_785_parse_error_tolerance_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-785-parse-error-tolerance",
+        "parse-error-tolerance.json",
+    ]));
+    let tolerance: ParseErrorTolerance =
+        serde_json::from_value(fixture["parse_error_tolerance"].clone())
+            .expect("tolerance should deserialize");
+
+    assert_eq!(tolerance.backend_ref.id, "tree-sitter-go");
+    assert_eq!(tolerance.behavior, "diagnostic_and_partial_tree");
+    assert!(tolerance.tolerates_errors);
+    assert_eq!(tolerance.error_nodes[0].span.range.start_byte, 27);
+    assert_eq!(tolerance.diagnostics[0], "partial tree contains parser error nodes");
 }
 
 fn source_point_from_fixture(value: &Value) -> SourcePoint {
