@@ -5,6 +5,7 @@ use ast_merge::{
     TemplateStrategyOverride, TemplateTokenConfig, TemplateTreeRunResult,
     apply_template_tree_execution_to_directory, default_template_token_config,
     plan_template_tree_execution_from_directories, report_template_directory_runner,
+    resolve_template_tokens,
 };
 use markdown_merge::{MarkdownDialect, merge_markdown};
 use ruby_merge::{RubyDialect, merge_ruby};
@@ -32,6 +33,113 @@ pub struct TemplateDirectorySessionReport {
 
 pub type FamilyMergeAdapter = fn(&TemplateExecutionPlanEntry) -> ast_merge::MergeResult<String>;
 pub type FamilyMergeAdapterRegistry = HashMap<String, FamilyMergeAdapter>;
+
+pub const README_FAMILY_LANGUAGE_ORDER: [&str; 4] = ["go", "ruby", "rust", "typescript"];
+
+fn readme_family_label(language: &str) -> &str {
+    match language {
+        "go" => "Go",
+        "ruby" => "Ruby",
+        "rust" => "Rust",
+        "typescript" => "TypeScript",
+        _ => language,
+    }
+}
+
+fn value_string(value: Option<&Value>) -> String {
+    value.and_then(Value::as_str).unwrap_or_default().to_string()
+}
+
+fn value_object(value: Option<&Value>) -> &Map<String, Value> {
+    static EMPTY: std::sync::LazyLock<Map<String, Value>> = std::sync::LazyLock::new(Map::new);
+    value.and_then(Value::as_object).unwrap_or(&EMPTY)
+}
+
+pub fn readme_family_language_aliases(
+    self_language: &str,
+    language_order: &[String],
+) -> HashMap<String, String> {
+    let order = if language_order.is_empty() {
+        README_FAMILY_LANGUAGE_ORDER.iter().map(|language| language.to_string()).collect::<Vec<_>>()
+    } else {
+        language_order.to_vec()
+    };
+    let mut aliases = HashMap::from([
+        ("SELF_LANG".to_string(), readme_family_label(self_language).to_string()),
+        ("SELF_LANG_ID".to_string(), self_language.to_string()),
+    ]);
+    let mut alias_index = 1;
+    for language in order {
+        if language == self_language {
+            continue;
+        }
+        let prefix = format!("IMP_LANG{alias_index}");
+        aliases.insert(prefix.clone(), readme_family_label(&language).to_string());
+        aliases.insert(format!("{prefix}_ID"), language);
+        alias_index += 1;
+    }
+    aliases
+}
+
+pub fn readme_family_token_values(family: &Map<String, Value>) -> HashMap<String, String> {
+    let self_entry = value_object(family.get("self"));
+    let self_id = value_string(self_entry.get("id"));
+    let implementations = family
+        .get("implementations")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .map(|entry| (value_string(entry.get("id")), entry))
+        .collect::<HashMap<_, _>>();
+
+    let language_order = README_FAMILY_LANGUAGE_ORDER
+        .iter()
+        .map(|language| language.to_string())
+        .collect::<Vec<_>>();
+    let mut tokens = readme_family_language_aliases(&self_id, &language_order);
+    tokens
+        .insert("FAMILY_SECTION_HEADING".to_string(), value_string(family.get("section_heading")));
+    tokens.insert("FAMILY_DESCRIPTION".to_string(), value_string(family.get("description")));
+    tokens.insert("SELF_PACKAGE_ROOT".to_string(), value_string(self_entry.get("package_root")));
+    tokens.insert(
+        "SELF_PACKAGE_MANAGER".to_string(),
+        value_string(self_entry.get("package_manager")),
+    );
+
+    let mut alias_index = 1;
+    for language in README_FAMILY_LANGUAGE_ORDER {
+        if language == self_id {
+            continue;
+        }
+        let implementation =
+            implementations.get(language).copied().unwrap_or_else(|| value_object(None));
+        let prefix = format!("IMP_LANG{alias_index}");
+        tokens.insert(
+            format!("{prefix}_PACKAGE_ROOT"),
+            value_string(implementation.get("package_root")),
+        );
+        tokens.insert(
+            format!("{prefix}_PACKAGE_MANAGER"),
+            value_string(implementation.get("package_manager")),
+        );
+        alias_index += 1;
+    }
+
+    tokens
+}
+
+pub fn render_readme_family_section(
+    template_partial: &str,
+    family: &Map<String, Value>,
+    config: &TemplateTokenConfig,
+) -> String {
+    let replacements = readme_family_token_values(family)
+        .into_iter()
+        .map(|(key, value)| (format!("SM|{key}"), value))
+        .collect::<HashMap<_, _>>();
+    resolve_template_tokens(template_partial, &replacements, config)
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TemplateDirectoryRegistrySessionReport {

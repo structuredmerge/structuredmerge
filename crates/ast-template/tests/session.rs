@@ -22,8 +22,9 @@ use ast_template::{
     plan_template_directory_session_diagnostics_from_directories,
     plan_template_directory_session_envelope_from_directories,
     plan_template_directory_session_from_directories,
-    plan_template_directory_session_outcome_from_directories,
-    reapply_template_directory_session_to_directory, report_adapter_capabilities_from_directories,
+    plan_template_directory_session_outcome_from_directories, readme_family_language_aliases,
+    readme_family_token_values, reapply_template_directory_session_to_directory,
+    render_readme_family_section, report_adapter_capabilities_from_directories,
     report_default_adapter_capabilities_from_directories,
     report_template_directory_session_entrypoint, report_template_directory_session_inspection,
     report_template_directory_session_options_configuration,
@@ -48,6 +49,66 @@ use ruby_merge::{RubyDialect, merge_ruby};
 use serde_json::Value;
 use std::{collections::HashMap, fs, path::PathBuf};
 use toml_merge::{TomlDialect, merge_toml};
+
+#[test]
+fn conforms_to_readme_family_section_template_contract_fixture() {
+    let fixture_path = repo_root().join(
+        "fixtures/diagnostics/slice-738-readme-family-section-template-contract/readme-family-section-template-contract.json",
+    );
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(&fixture_path).expect("fixture should be readable"))
+            .expect("fixture should deserialize");
+    let language_order =
+        serde_json::from_value::<Vec<String>>(fixture["canonical_language_order"].clone())
+            .expect("language order should deserialize");
+
+    for test_case in fixture["alias_derivation_cases"].as_array().expect("cases should be an array")
+    {
+        let aliases = readme_family_language_aliases(
+            test_case["self"].as_str().expect("self should be a string"),
+            &language_order,
+        );
+        let expected_aliases = serde_json::from_value::<HashMap<String, String>>(
+            test_case["expected_aliases"].clone(),
+        )
+        .expect("expected aliases should deserialize");
+        for (key, expected) in expected_aliases {
+            assert_eq!(aliases.get(&key), Some(&expected), "unexpected alias {key}");
+        }
+        let expected_alternative_ids =
+            serde_json::from_value::<Vec<String>>(test_case["expected_alternative_ids"].clone())
+                .expect("expected alternatives should deserialize");
+        let actual_alternative_ids = vec![
+            aliases["IMP_LANG1_ID"].clone(),
+            aliases["IMP_LANG2_ID"].clone(),
+            aliases["IMP_LANG3_ID"].clone(),
+        ];
+        assert_eq!(actual_alternative_ids, expected_alternative_ids);
+    }
+
+    let metadata_case =
+        fixture["metadata_case"].as_object().expect("metadata case should be an object");
+    let family = metadata_case["family"].as_object().expect("family should be an object");
+    let token_values = readme_family_token_values(family);
+    let expected_token_values = serde_json::from_value::<HashMap<String, String>>(
+        metadata_case["expected_token_values"].clone(),
+    )
+    .expect("expected token values should deserialize");
+    for (key, expected) in expected_token_values {
+        assert_eq!(token_values.get(&key), Some(&expected), "unexpected token {key}");
+    }
+    let actual_rendered = render_readme_family_section(
+        fixture["template_partial"].as_str().expect("template partial should be a string"),
+        family,
+        &default_template_token_config(),
+    );
+    assert_eq!(
+        actual_rendered,
+        fixture["expected_rendered_partial"]
+            .as_str()
+            .expect("expected rendered partial should be a string")
+    );
+}
 
 #[test]
 fn conforms_to_mini_template_tree_family_merge_callback_fixture() {
