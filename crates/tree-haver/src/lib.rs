@@ -170,6 +170,22 @@ pub struct TreeHaverProfile {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct OrderedSiblingEdge {
+    pub parent_id: String,
+    pub node_id: String,
+    pub previous_sibling_id: Option<String>,
+    pub next_sibling_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct OrderedTreePrimitives {
+    pub root_id: String,
+    pub child_order: BTreeMap<String, Vec<String>>,
+    pub sibling_edges: Vec<OrderedSiblingEdge>,
+    pub diagnostics: Vec<String>,
+}
+
 pub trait ParserAdapter<TAnalysis: AnalysisHandle> {
     fn info(&self) -> AdapterInfo;
     fn parse(&self, request: &ParserRequest) -> ParseResult<TAnalysis>;

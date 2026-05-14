@@ -6,12 +6,12 @@ use tree_haver::{
     BinaryNestedDispatch, BinaryPayloadRegion, BinaryRawPayload, BinaryRenderPolicy,
     BinaryScalarValue, ByteEditSpan, ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis,
     KaitaiTreeNode, NativeParserProvider, NodeRole, NormalizedParseResult, NormalizedTreeNode,
-    ParseErrorTolerance, ParserRequest, PolicyReference, PolicySurface, ProcessRequest,
-    SourcePoint, SourceSpan, TreeHaverProfile, ZipUnsafeEntry, byte_offset_for_point,
-    current_backend_id, extract_source_fragment, kaitai_adapter_info, kaitai_feature_profile,
-    kaitai_struct_backend, node_roles, pest_adapter_info, pest_backend, pest_feature_profile,
-    process_with_language_pack, register_backend, registered_backends, slice_byte_range,
-    with_backend,
+    OrderedTreePrimitives, ParseErrorTolerance, ParserRequest, PolicyReference, PolicySurface,
+    ProcessRequest, SourcePoint, SourceSpan, TreeHaverProfile, ZipUnsafeEntry,
+    byte_offset_for_point, current_backend_id, extract_source_fragment, kaitai_adapter_info,
+    kaitai_feature_profile, kaitai_struct_backend, node_roles, pest_adapter_info, pest_backend,
+    pest_feature_profile, process_with_language_pack, register_backend, registered_backends,
+    slice_byte_range, with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -483,6 +483,35 @@ fn conforms_to_slice_788_tree_haver_profile_fixture() {
     assert_eq!(profile.unsupported_defaults["field_name"], "null");
     assert_eq!(profile.capability.parser_identity.name, "github.com/dave/dst");
     assert_eq!(profile.fixture_slices[0], "slice-782-normalized-tree-node");
+}
+
+#[test]
+fn conforms_to_slice_789_ordered_tree_primitives_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-789-ordered-tree-primitives",
+        "ordered-tree-primitives.json",
+    ]));
+    let ordered: OrderedTreePrimitives = serde_json::from_value(fixture["ordered_tree"].clone())
+        .expect("ordered tree primitives should deserialize");
+
+    let forbidden_terms = fixture["forbidden_merge_terms"].as_array().unwrap();
+    for diagnostic in &ordered.diagnostics {
+        let diagnostic = diagnostic.to_lowercase();
+        for term in forbidden_terms {
+            let term = term.as_str().unwrap().to_lowercase();
+            assert!(
+                !diagnostic.contains(&term),
+                "ordered-tree diagnostic should not contain merge term {term}"
+            );
+        }
+    }
+
+    assert_eq!(ordered.root_id, fixture["root_id"]);
+    assert_eq!(ordered.child_order["file"][0], "imports");
+    assert_eq!(ordered.child_order["imports"][1], "import-strings");
+    assert_eq!(ordered.sibling_edges[2].previous_sibling_id, None);
+    assert_eq!(ordered.sibling_edges[2].next_sibling_id.as_deref(), Some("import-strings"));
 }
 
 #[test]
