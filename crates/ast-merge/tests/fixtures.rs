@@ -5,10 +5,11 @@ use std::{
 };
 
 use ast_merge::{
-    ClassMappingReport, ConformanceCaseExecution, ConformanceCaseRef, ConformanceCaseRequirements,
-    ConformanceCaseResult, ConformanceCaseRun, ConformanceFamilyPlanContext,
-    ConformanceFeatureProfileView, ConformanceManifest, ConformanceManifestPlanningOptions,
-    ConformanceManifestReport, ConformanceManifestReviewOptions, ConformanceManifestReviewState,
+    ChangeSet, ClassMappingReport, ConformanceCaseExecution, ConformanceCaseRef,
+    ConformanceCaseRequirements, ConformanceCaseResult, ConformanceCaseRun,
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, ConformanceManifest,
+    ConformanceManifestPlanningOptions, ConformanceManifestReport,
+    ConformanceManifestReviewOptions, ConformanceManifestReviewState,
     ConformanceManifestReviewStateEnvelope, ConformanceManifestReviewedNestedApplication,
     ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuiteDefinition,
     ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSelector,
@@ -16,7 +17,7 @@ use ast_merge::{
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
     DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, MergeIR,
     NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
-    NamedConformanceSuiteResults, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
+    NamedConformanceSuiteResults, PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
     ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
     ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
     ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
@@ -383,6 +384,32 @@ fn conforms_to_slice_792_class_mapping_fixture() {
     assert_eq!(serde_json::json!(class_ids), expected["conflicted_class_ids"]);
     assert!(!report.node_classes[2].node_ids.contains_key("right"));
     assert_eq!(report.diagnostics[1].category, "delete_edit_disagreement");
+}
+
+#[test]
+fn conforms_to_slice_793_pcs_change_set_generation_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-793-pcs-change-set-generation",
+        "pcs-change-set-generation.json",
+    ]));
+    let pcs: PCS = serde_json::from_value(fixture["pcs"].clone()).expect("PCS should deserialize");
+    let change_sets: Vec<ChangeSet> = serde_json::from_value(fixture["change_sets"].clone())
+        .expect("change sets should deserialize");
+    let expected = &fixture["expected"];
+    let change_kinds: Vec<&str> = change_sets
+        .iter()
+        .flat_map(|change_set| change_set.changes.iter().map(|change| change.kind.as_str()))
+        .collect();
+    let diagnostic_count: usize =
+        change_sets.iter().map(|change_set| change_set.diagnostics.len()).sum();
+
+    assert_eq!(pcs.constraints.len(), expected["pcs_constraint_count"].as_u64().unwrap() as usize);
+    assert_eq!(change_sets.len(), expected["change_set_count"].as_u64().unwrap() as usize);
+    assert_eq!(serde_json::json!(change_kinds), expected["change_kinds"]);
+    assert_eq!(diagnostic_count, expected["diagnostic_count"].as_u64().unwrap() as usize);
+    assert_eq!(pcs.constraints[2].predecessor_class_id.as_deref(), Some("class-import-strings"));
+    assert_eq!(change_sets[1].changes[1].kind, "delete");
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

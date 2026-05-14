@@ -262,6 +262,43 @@ pub struct ClassMappingReport {
     pub diagnostics: Vec<ClassMappingDiagnostic>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PCSConstraint {
+    pub constraint_id: String,
+    pub revision: String,
+    pub parent_class_id: String,
+    pub predecessor_class_id: Option<String>,
+    pub successor_class_id: Option<String>,
+    pub relation: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PCS {
+    pub pcs_id: String,
+    pub tree_id: String,
+    pub base_revision: String,
+    pub constraints: Vec<PCSConstraint>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ChangeSetChange {
+    pub change_id: String,
+    pub kind: String,
+    pub class_id: String,
+    pub parent_class_id: String,
+    pub predecessor_class_id: Option<String>,
+    pub successor_class_id: Option<String>,
+    pub content_hash: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ChangeSet {
+    pub change_set_id: String,
+    pub side: String,
+    pub changes: Vec<ChangeSetChange>,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {
