@@ -132,6 +132,29 @@ pub struct ParseErrorTolerance {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NativeParserProvider {
+    pub id: String,
+    pub family: String,
+    pub language: String,
+    pub operations: Vec<String>,
+    pub retains_native_tree: bool,
+    pub native_tree_visibility: String,
+    pub metadata_policy: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NormalizedParseResult {
+    pub ok: bool,
+    pub backend_capability: BackendCapability,
+    pub root_id: String,
+    pub nodes: Vec<NormalizedTreeNode>,
+    pub parse_error_tolerance: ParseErrorTolerance,
+    pub source_fragments_available: bool,
+    pub diagnostics: Vec<String>,
+    pub metadata: BTreeMap<String, BTreeMap<String, String>>,
+}
+
 pub trait ParserAdapter<TAnalysis: AnalysisHandle> {
     fn info(&self) -> AdapterInfo;
     fn parse(&self, request: &ParserRequest) -> ParseResult<TAnalysis>;

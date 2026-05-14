@@ -5,12 +5,12 @@ use tree_haver::{
     AdapterInfo, BackendCapability, BackendReference, BinaryDiagnostic, BinaryMergeReport,
     BinaryNestedDispatch, BinaryPayloadRegion, BinaryRawPayload, BinaryRenderPolicy,
     BinaryScalarValue, ByteEditSpan, ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis,
-    KaitaiTreeNode, NodeRole, NormalizedTreeNode, ParseErrorTolerance, ParserRequest,
-    PolicyReference, PolicySurface, ProcessRequest, SourcePoint, SourceSpan, ZipUnsafeEntry,
-    byte_offset_for_point, current_backend_id, extract_source_fragment, kaitai_adapter_info,
-    kaitai_feature_profile, kaitai_struct_backend, node_roles, pest_adapter_info, pest_backend,
-    pest_feature_profile, process_with_language_pack, register_backend, registered_backends,
-    slice_byte_range, with_backend,
+    KaitaiTreeNode, NativeParserProvider, NodeRole, NormalizedParseResult, NormalizedTreeNode,
+    ParseErrorTolerance, ParserRequest, PolicyReference, PolicySurface, ProcessRequest,
+    SourcePoint, SourceSpan, ZipUnsafeEntry, byte_offset_for_point, current_backend_id,
+    extract_source_fragment, kaitai_adapter_info, kaitai_feature_profile, kaitai_struct_backend,
+    node_roles, pest_adapter_info, pest_backend, pest_feature_profile, process_with_language_pack,
+    register_backend, registered_backends, slice_byte_range, with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -442,6 +442,27 @@ fn conforms_to_slice_786_progressive_node_metadata_fixture() {
     assert!(!limited.has_source_text);
     assert_eq!(limited.unsupported_features[1], "source_fragment");
     assert_eq!(limited.metadata["psych"]["location_support"], "line_column_only");
+}
+
+#[test]
+fn conforms_to_slice_787_native_parser_adapter_contract_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-787-native-parser-adapter-contract",
+        "native-parser-adapter-contract.json",
+    ]));
+    let provider: NativeParserProvider =
+        serde_json::from_value(fixture["provider"].clone()).expect("provider should deserialize");
+    let result: NormalizedParseResult = serde_json::from_value(fixture["parse_result"].clone())
+        .expect("parse result should deserialize");
+
+    assert_eq!(provider.id, "go-dst");
+    assert!(provider.retains_native_tree);
+    assert_eq!(provider.native_tree_visibility, "provider_internal");
+    assert_eq!(result.root_id, result.nodes[0].id);
+    assert_eq!(result.nodes[1].semantic_roles[1], "function");
+    assert_eq!(result.metadata["go_dst"]["native_tree_visibility"], "provider_internal");
+    assert!(result.source_fragments_available);
 }
 
 #[test]
