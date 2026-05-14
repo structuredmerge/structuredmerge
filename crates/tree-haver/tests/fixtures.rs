@@ -4,12 +4,12 @@ use serde_json::Value;
 use tree_haver::{
     AdapterInfo, BackendReference, BinaryDiagnostic, BinaryMergeReport, BinaryNestedDispatch,
     BinaryPayloadRegion, BinaryRawPayload, BinaryRenderPolicy, BinaryScalarValue, ByteEditSpan,
-    ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis, KaitaiTreeNode, ParserRequest,
-    PolicyReference, PolicySurface, ProcessRequest, SourcePoint, ZipUnsafeEntry,
-    byte_offset_for_point, current_backend_id, kaitai_adapter_info, kaitai_feature_profile,
-    kaitai_struct_backend, pest_adapter_info, pest_backend, pest_feature_profile,
-    process_with_language_pack, register_backend, registered_backends, slice_byte_range,
-    with_backend,
+    ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis, KaitaiTreeNode, NodeRole,
+    NormalizedTreeNode, ParserRequest, PolicyReference, PolicySurface, ProcessRequest, SourcePoint,
+    ZipUnsafeEntry, byte_offset_for_point, current_backend_id, kaitai_adapter_info,
+    kaitai_feature_profile, kaitai_struct_backend, node_roles, pest_adapter_info, pest_backend,
+    pest_feature_profile, process_with_language_pack, register_backend, registered_backends,
+    slice_byte_range, with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -395,6 +395,32 @@ fn conforms_to_slice_722_portable_byte_location_contract_fixture() {
         slice_byte_range(source, &edit_span.old_range()).unwrap(),
         fixture["expected"]["old_edit_slice"].as_str().unwrap()
     );
+}
+
+#[test]
+fn conforms_to_slice_782_normalized_tree_node_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-782-normalized-tree-node",
+        "normalized-tree-node.json",
+    ]));
+    let roles = node_roles();
+    let role_fixture = fixture["node_roles"].as_array().unwrap();
+    assert_eq!(roles.len(), role_fixture.len());
+    for (role, expected) in roles.iter().zip(role_fixture) {
+        assert_eq!(serde_json::to_value(role).unwrap(), *expected);
+    }
+
+    let node: NormalizedTreeNode =
+        serde_json::from_value(fixture["node"].clone()).expect("node should deserialize");
+    let child: NormalizedTreeNode =
+        serde_json::from_value(fixture["child"].clone()).expect("child should deserialize");
+
+    assert_eq!(node.role, NodeRole::Structural);
+    assert_eq!(node.child_ids[1], child.id);
+    assert_eq!(child.parent_id.as_deref(), Some(node.id.as_str()));
+    assert_eq!(child.field_name.as_deref(), Some("declaration"));
+    assert!(child.has_source_text);
 }
 
 fn source_point_from_fixture(value: &Value) -> SourcePoint {

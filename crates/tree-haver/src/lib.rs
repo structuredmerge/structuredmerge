@@ -5,6 +5,7 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
+use serde::{Deserialize, Serialize};
 use tree_sitter_language_pack::{
     PackConfig, ProcessConfig, configure, parse_string, process, tree_has_error_nodes,
 };
@@ -113,7 +114,7 @@ pub struct ProcessSpan {
     pub end_col: usize,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ByteRange {
     pub start_byte: usize,
     pub end_byte: usize,
@@ -147,17 +148,60 @@ impl ByteRange {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SourcePoint {
     pub row: usize,
     pub column: usize,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SourceSpan {
     pub range: ByteRange,
     pub start_point: SourcePoint,
     pub end_point: SourcePoint,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeRole {
+    Structural,
+    Token,
+    Trivia,
+    Comment,
+    Delimiter,
+    Separator,
+    Virtual,
+    Error,
+    Opaque,
+}
+
+pub fn node_roles() -> Vec<NodeRole> {
+    vec![
+        NodeRole::Structural,
+        NodeRole::Token,
+        NodeRole::Trivia,
+        NodeRole::Comment,
+        NodeRole::Delimiter,
+        NodeRole::Separator,
+        NodeRole::Virtual,
+        NodeRole::Error,
+        NodeRole::Opaque,
+    ]
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NormalizedTreeNode {
+    pub id: String,
+    pub kind: String,
+    pub role: NodeRole,
+    pub parent_id: Option<String>,
+    pub child_ids: Vec<String>,
+    pub span: SourceSpan,
+    pub field_name: Option<String>,
+    pub named: bool,
+    pub anonymous: bool,
+    pub has_source_text: bool,
+    pub source_fragment: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -561,12 +605,8 @@ fn ensure_language_pack_language(language: &str) -> Result<(), String> {
         return Ok(());
     }
 
-    configure(&PackConfig {
-        cache_dir: language_pack_cache_dir(),
-        languages: None,
-        groups: None,
-    })
-    .map_err(|error| error.to_string())?;
+    configure(&PackConfig { cache_dir: language_pack_cache_dir(), languages: None, groups: None })
+        .map_err(|error| error.to_string())?;
 
     initialized_languages.insert(language.to_string());
     Ok(())
