@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{
     collections::HashMap,
+    fs, io,
     path::{Path, PathBuf},
 };
 use toml_merge::{TomlDialect, merge_toml};
@@ -147,6 +148,30 @@ pub struct ReadmeFamilySectionApplication {
     pub changed: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadmeFamilyPackage {
+    pub id: String,
+    pub readme_path: String,
+    pub package: Map<String, Value>,
+    pub family: Map<String, Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadmeFamilyPackageReportEntry {
+    pub id: String,
+    pub readme_path: String,
+    pub changed: bool,
+    pub created: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadmeFamilyPackageReport {
+    pub package_count: usize,
+    pub changed_count: usize,
+    pub created_count: usize,
+    pub entries: Vec<ReadmeFamilyPackageReportEntry>,
+}
+
 pub fn apply_readme_family_section(
     template_partial: &str,
     package_metadata: &Map<String, Value>,
@@ -173,6 +198,55 @@ pub fn apply_readme_family_section(
         &rendered_section,
     );
     ReadmeFamilySectionApplication { changed: content != base_content, content }
+}
+
+pub fn apply_readme_family_sections_to_package_directories(
+    root: &Path,
+    template_partial: &str,
+    packages: &[ReadmeFamilyPackage],
+    config: &TemplateTokenConfig,
+) -> io::Result<ReadmeFamilyPackageReport> {
+    let mut report = ReadmeFamilyPackageReport {
+        package_count: packages.len(),
+        changed_count: 0,
+        created_count: 0,
+        entries: Vec::with_capacity(packages.len()),
+    };
+    for package_entry in packages {
+        let readme_path = package_entry
+            .readme_path
+            .split('/')
+            .fold(root.to_path_buf(), |path, segment| path.join(segment));
+        let (destination_content, created) = match fs::read_to_string(&readme_path) {
+            Ok(content) => (Some(content), false),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => (None, true),
+            Err(error) => return Err(error),
+        };
+        let application = apply_readme_family_section(
+            template_partial,
+            &package_entry.package,
+            &package_entry.family,
+            destination_content.as_deref(),
+            config,
+        );
+        if application.changed {
+            if let Some(parent) = readme_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(&readme_path, &application.content)?;
+            report.changed_count += 1;
+            if created {
+                report.created_count += 1;
+            }
+        }
+        report.entries.push(ReadmeFamilyPackageReportEntry {
+            id: package_entry.id.clone(),
+            readme_path: package_entry.readme_path.clone(),
+            changed: application.changed,
+            created: created && application.changed,
+        });
+    }
+    Ok(report)
 }
 
 fn replace_or_insert_markdown_heading_section(

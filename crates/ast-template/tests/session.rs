@@ -7,7 +7,8 @@ use ast_merge::{
 };
 use ast_template::{
     DirectorySessionOptions, DirectorySessionProfile, FamilyMergeAdapter,
-    FamilyMergeAdapterRegistry, apply_readme_family_section,
+    FamilyMergeAdapterRegistry, ReadmeFamilyPackage, apply_readme_family_section,
+    apply_readme_family_sections_to_package_directories,
     apply_template_directory_session_diagnostics_with_default_registry_to_directory,
     apply_template_directory_session_envelope_with_default_registry_to_directory,
     apply_template_directory_session_outcome_with_default_registry_to_directory,
@@ -135,6 +136,67 @@ fn conforms_to_readme_family_section_template_contract_fixture() {
             test_case["label"].as_str().unwrap_or_default()
         );
     }
+
+    let package_directory_case = fixture["package_directory_case"]
+        .as_object()
+        .expect("package directory case should be an object");
+    let temp_root = repo_root().join("rust/crates/ast-template/tmp/readme-family-packages");
+    let _ = fs::remove_dir_all(&temp_root);
+    let packages = package_directory_case["packages"]
+        .as_array()
+        .expect("packages should be an array")
+        .iter()
+        .map(|package_case| {
+            let readme_path =
+                package_case["readme_path"].as_str().expect("readme path should be a string");
+            if let Some(initial_content) = package_case["initial_content"].as_str() {
+                let full_path = readme_path
+                    .split('/')
+                    .fold(temp_root.clone(), |path, segment| path.join(segment));
+                fs::create_dir_all(full_path.parent().expect("README should have parent"))
+                    .expect("README parent should be created");
+                fs::write(&full_path, initial_content).expect("initial README should be written");
+            }
+            ReadmeFamilyPackage {
+                id: package_case["id"].as_str().expect("id should be a string").to_string(),
+                readme_path: readme_path.to_string(),
+                package: package_case["package"]
+                    .as_object()
+                    .expect("package should be an object")
+                    .clone(),
+                family: package_case["family"]
+                    .as_object()
+                    .expect("family should be an object")
+                    .clone(),
+            }
+        })
+        .collect::<Vec<_>>();
+    let report = apply_readme_family_sections_to_package_directories(
+        &temp_root,
+        fixture["template_partial"].as_str().expect("template partial should be a string"),
+        &packages,
+        &default_template_token_config(),
+    )
+    .expect("package directory sync should succeed");
+    assert_eq!(
+        serde_json::to_value(report).expect("report should serialize"),
+        package_directory_case["expected_report"]
+    );
+    for package_case in
+        package_directory_case["packages"].as_array().expect("packages should be an array")
+    {
+        let readme_path = package_case["readme_path"]
+            .as_str()
+            .expect("readme path should be a string")
+            .split('/')
+            .fold(temp_root.clone(), |path, segment| path.join(segment));
+        let actual = fs::read_to_string(readme_path).expect("synced README should be readable");
+        assert_eq!(
+            actual,
+            package_case["expected_content"].as_str().expect("expected content should be a string")
+        );
+    }
+    let _ = fs::remove_dir_all(&temp_root);
 }
 
 #[test]
