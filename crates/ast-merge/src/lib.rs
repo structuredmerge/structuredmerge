@@ -175,6 +175,47 @@ pub struct MergeResult<TOutput> {
     pub policies: Vec<PolicyReference>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MergeIRNodeClass {
+    pub class_id: String,
+    pub signature: String,
+    pub node_ids: HashMap<String, String>,
+    pub roles: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MergeIROrderedNode {
+    pub node_id: String,
+    pub parent_id: String,
+    pub child_ids: Vec<String>,
+    pub previous_sibling_id: Option<String>,
+    pub next_sibling_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MergeIRChange {
+    pub change_id: String,
+    pub side: String,
+    pub kind: String,
+    pub node_id: String,
+    pub class_id: Option<String>,
+    pub parent_id: String,
+    pub previous_sibling_id: Option<String>,
+    pub next_sibling_id: Option<String>,
+    pub content_hash: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MergeIR {
+    pub version: String,
+    pub tree_id: String,
+    pub source: String,
+    pub node_classes: Vec<MergeIRNodeClass>,
+    pub ordered_nodes: Vec<MergeIROrderedNode>,
+    pub changes: Vec<MergeIRChange>,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {

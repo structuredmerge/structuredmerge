@@ -14,13 +14,13 @@ use ast_merge::{
     ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSelector,
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
-    DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, NamedConformanceSuitePlan,
-    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
-    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
-    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, ReviewHostHints,
-    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
-    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, StructuredEditApplication,
-    StructuredEditApplicationEnvelope, StructuredEditBatchReport,
+    DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, MergeIR,
+    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
+    NamedConformanceSuiteResults, PolicySurface, ProjectedChildReviewCase,
+    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
+    ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
+    ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
+    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
     StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
@@ -312,6 +312,33 @@ fn diagnostics_fixture_path(role: &str) -> PathBuf {
 fn read_fixture_from_path(path: PathBuf) -> Value {
     let source = fs::read_to_string(path).expect("fixture should be readable");
     serde_json::from_str(&source).expect("fixture should be valid json")
+}
+
+#[test]
+fn conforms_to_slice_790_generic_merge_ir_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-790-generic-merge-ir",
+        "generic-merge-ir.json",
+    ]));
+    let merge_ir: MergeIR =
+        serde_json::from_value(fixture["merge_ir"].clone()).expect("merge IR should deserialize");
+    let expected = &fixture["expected"];
+    let change_kinds: Vec<&str> =
+        merge_ir.changes.iter().map(|change| change.kind.as_str()).collect();
+
+    assert_eq!(merge_ir.version, expected["version"].as_str().unwrap());
+    assert_eq!(
+        merge_ir.node_classes.len(),
+        expected["node_class_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        merge_ir.ordered_nodes.len(),
+        expected["ordered_node_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(serde_json::json!(change_kinds), expected["change_kinds"]);
+    assert_eq!(merge_ir.node_classes[0].node_ids["left"], "left-import-fmt");
+    assert_eq!(merge_ir.changes[1].class_id.as_deref(), Some("class-import-strings"));
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
