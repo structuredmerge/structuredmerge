@@ -224,7 +224,7 @@ pub fn parse_compact_ruleset(source: &str) -> ParseResult<CompactRuleset> {
     let mut ruleset = CompactRuleset { directives: vec![], comments: vec![] };
     let mut diagnostics = vec![];
     let mut seen_directives: HashMap<String, usize> = HashMap::new();
-    let mut seen_repeatable_keys: HashSet<(String, String)> = HashSet::new();
+    let mut seen_repeatable_keys: HashSet<String> = HashSet::new();
 
     for (index, raw_line) in source.lines().enumerate() {
         let line_number = index + 1;
@@ -286,7 +286,7 @@ pub fn parse_compact_ruleset(source: &str) -> ParseResult<CompactRuleset> {
             }
         }
         if compact_ruleset_repeatable_keyed_directive(name) {
-            let key = (name.to_string(), arguments[0].clone());
+            let key = compact_ruleset_repeatable_key(name, &arguments);
             if seen_repeatable_keys.contains(&key) {
                 diagnostics.push(compact_ruleset_diagnostic(
                     format!("repeated {name:?} key {:?}", arguments[0]),
@@ -340,15 +340,43 @@ const ATTACH_VALUES: &[&str] = &[
 ];
 
 fn compact_ruleset_singleton_directive(name: &str) -> bool {
-    matches!(name, "format" | "owners" | "match" | "read" | "attach" | "comment_style" | "render")
+    matches!(
+        name,
+        "format"
+            | "owners"
+            | "match"
+            | "read"
+            | "attach"
+            | "comment_style"
+            | "render"
+            | "render_strategy"
+    )
 }
 
 fn compact_ruleset_repeatable_keyed_directive(name: &str) -> bool {
-    matches!(name, "capability" | "logical_owner" | "repair" | "surface" | "delegate")
+    matches!(
+        name,
+        "backend"
+            | "node_role"
+            | "atomic"
+            | "child_group"
+            | "capability"
+            | "logical_owner"
+            | "repair"
+            | "surface"
+            | "delegate"
+    )
 }
 
 fn compact_ruleset_known_directive(name: &str) -> bool {
     compact_ruleset_singleton_directive(name) || compact_ruleset_repeatable_keyed_directive(name)
+}
+
+fn compact_ruleset_repeatable_key(name: &str, arguments: &[String]) -> String {
+    if name == "child_group" && arguments.len() > 1 {
+        return format!("{}\0{}\0{}", name, arguments[0], arguments[1]);
+    }
+    format!("{}\0{}", name, arguments[0])
 }
 
 fn compact_ruleset_identifier(value: &str) -> bool {
