@@ -172,6 +172,22 @@ pub struct ReadmeFamilyPackageReport {
     pub entries: Vec<ReadmeFamilyPackageReportEntry>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadmeFamilySectionCommand {
+    pub profile_name: String,
+    pub mode: DirectorySessionMode,
+    pub root: PathBuf,
+    pub template_partial: String,
+    pub packages: Vec<ReadmeFamilyPackage>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadmeFamilySectionCommandReport {
+    pub profile_name: String,
+    pub mode: DirectorySessionMode,
+    pub runner: ReadmeFamilyPackageReport,
+}
+
 pub fn apply_readme_family_section(
     template_partial: &str,
     package_metadata: &Map<String, Value>,
@@ -206,6 +222,57 @@ pub fn apply_readme_family_sections_to_package_directories(
     packages: &[ReadmeFamilyPackage],
     config: &TemplateTokenConfig,
 ) -> io::Result<ReadmeFamilyPackageReport> {
+    run_readme_family_sections_for_package_directories(
+        root,
+        template_partial,
+        packages,
+        true,
+        config,
+    )
+}
+
+pub fn plan_readme_family_sections_for_package_directories(
+    root: &Path,
+    template_partial: &str,
+    packages: &[ReadmeFamilyPackage],
+    config: &TemplateTokenConfig,
+) -> io::Result<ReadmeFamilyPackageReport> {
+    run_readme_family_sections_for_package_directories(
+        root,
+        template_partial,
+        packages,
+        false,
+        config,
+    )
+}
+
+pub fn run_readme_family_section_command(
+    command: &ReadmeFamilySectionCommand,
+    config: &TemplateTokenConfig,
+) -> io::Result<ReadmeFamilySectionCommandReport> {
+    let write_changes =
+        matches!(command.mode, DirectorySessionMode::Apply | DirectorySessionMode::Reapply);
+    let runner = run_readme_family_sections_for_package_directories(
+        &command.root,
+        &command.template_partial,
+        &command.packages,
+        write_changes,
+        config,
+    )?;
+    Ok(ReadmeFamilySectionCommandReport {
+        profile_name: command.profile_name.clone(),
+        mode: command.mode,
+        runner,
+    })
+}
+
+fn run_readme_family_sections_for_package_directories(
+    root: &Path,
+    template_partial: &str,
+    packages: &[ReadmeFamilyPackage],
+    write_changes: bool,
+    config: &TemplateTokenConfig,
+) -> io::Result<ReadmeFamilyPackageReport> {
     let mut report = ReadmeFamilyPackageReport {
         package_count: packages.len(),
         changed_count: 0,
@@ -230,10 +297,12 @@ pub fn apply_readme_family_sections_to_package_directories(
             config,
         );
         if application.changed {
-            if let Some(parent) = readme_path.parent() {
-                fs::create_dir_all(parent)?;
+            if write_changes {
+                if let Some(parent) = readme_path.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::write(&readme_path, &application.content)?;
             }
-            fs::write(&readme_path, &application.content)?;
             report.changed_count += 1;
             if created {
                 report.created_count += 1;

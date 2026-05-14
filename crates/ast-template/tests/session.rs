@@ -7,8 +7,8 @@ use ast_merge::{
 };
 use ast_template::{
     DirectorySessionOptions, DirectorySessionProfile, FamilyMergeAdapter,
-    FamilyMergeAdapterRegistry, ReadmeFamilyPackage, apply_readme_family_section,
-    apply_readme_family_sections_to_package_directories,
+    FamilyMergeAdapterRegistry, ReadmeFamilyPackage, ReadmeFamilySectionCommand,
+    apply_readme_family_section, apply_readme_family_sections_to_package_directories,
     apply_template_directory_session_diagnostics_with_default_registry_to_directory,
     apply_template_directory_session_envelope_with_default_registry_to_directory,
     apply_template_directory_session_outcome_with_default_registry_to_directory,
@@ -34,10 +34,11 @@ use ast_template::{
     report_template_directory_session_profile_request,
     report_template_directory_session_resolution, report_template_directory_session_runner_input,
     report_template_directory_session_runner_payload, report_template_directory_session_status,
-    run_template_directory_session, run_template_directory_session_command,
-    run_template_directory_session_command_payload, run_template_directory_session_dispatch,
-    run_template_directory_session_entrypoint, run_template_directory_session_request,
-    run_template_directory_session_runner_payload, run_template_directory_session_runner_request,
+    run_readme_family_section_command, run_template_directory_session,
+    run_template_directory_session_command, run_template_directory_session_command_payload,
+    run_template_directory_session_dispatch, run_template_directory_session_entrypoint,
+    run_template_directory_session_request, run_template_directory_session_runner_payload,
+    run_template_directory_session_runner_request,
     run_template_directory_session_with_default_registry_to_directory,
     run_template_directory_session_with_options, run_template_directory_session_with_profile,
     session_command_envelope, session_command_payload_envelope, session_diagnostics_envelope,
@@ -182,6 +183,23 @@ fn conforms_to_readme_family_section_template_contract_fixture() {
         serde_json::to_value(report).expect("report should serialize"),
         package_directory_case["expected_report"]
     );
+    let command_report = run_readme_family_section_command(
+        &ReadmeFamilySectionCommand {
+            profile_name: "update-readme-family-section".to_string(),
+            mode: ast_template::DirectorySessionMode::Plan,
+            root: temp_root.clone(),
+            template_partial: fixture["template_partial"]
+                .as_str()
+                .expect("template partial should be a string")
+                .to_string(),
+            packages: packages.clone(),
+        },
+        &default_template_token_config(),
+    )
+    .expect("README family section command should plan");
+    assert_eq!(command_report.profile_name, "update-readme-family-section");
+    assert_eq!(command_report.mode, ast_template::DirectorySessionMode::Plan);
+    assert_eq!(command_report.runner.changed_count, 0);
     for package_case in
         package_directory_case["packages"].as_array().expect("packages should be an array")
     {
