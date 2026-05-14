@@ -155,6 +155,21 @@ pub struct NormalizedParseResult {
     pub metadata: BTreeMap<String, BTreeMap<String, String>>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TreeHaverProfile {
+    pub profile_id: String,
+    pub language: String,
+    pub backend_ref: BackendReference,
+    pub provider_id: String,
+    pub node_roles: Vec<NodeRole>,
+    pub normalized_node_fields: Vec<String>,
+    pub optional_node_features: Vec<String>,
+    pub unsupported_defaults: BTreeMap<String, String>,
+    pub capability: BackendCapability,
+    pub fixture_slices: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
 pub trait ParserAdapter<TAnalysis: AnalysisHandle> {
     fn info(&self) -> AdapterInfo;
     fn parse(&self, request: &ParserRequest) -> ParseResult<TAnalysis>;

@@ -7,10 +7,11 @@ use tree_haver::{
     BinaryScalarValue, ByteEditSpan, ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis,
     KaitaiTreeNode, NativeParserProvider, NodeRole, NormalizedParseResult, NormalizedTreeNode,
     ParseErrorTolerance, ParserRequest, PolicyReference, PolicySurface, ProcessRequest,
-    SourcePoint, SourceSpan, ZipUnsafeEntry, byte_offset_for_point, current_backend_id,
-    extract_source_fragment, kaitai_adapter_info, kaitai_feature_profile, kaitai_struct_backend,
-    node_roles, pest_adapter_info, pest_backend, pest_feature_profile, process_with_language_pack,
-    register_backend, registered_backends, slice_byte_range, with_backend,
+    SourcePoint, SourceSpan, TreeHaverProfile, ZipUnsafeEntry, byte_offset_for_point,
+    current_backend_id, extract_source_fragment, kaitai_adapter_info, kaitai_feature_profile,
+    kaitai_struct_backend, node_roles, pest_adapter_info, pest_backend, pest_feature_profile,
+    process_with_language_pack, register_backend, registered_backends, slice_byte_range,
+    with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -463,6 +464,25 @@ fn conforms_to_slice_787_native_parser_adapter_contract_fixture() {
     assert_eq!(result.nodes[1].semantic_roles[1], "function");
     assert_eq!(result.metadata["go_dst"]["native_tree_visibility"], "provider_internal");
     assert!(result.source_fragments_available);
+}
+
+#[test]
+fn conforms_to_slice_788_tree_haver_profile_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-788-tree-haver-profile",
+        "tree-haver-profile.json",
+    ]));
+    let profile: TreeHaverProfile =
+        serde_json::from_value(fixture["profile"].clone()).expect("profile should deserialize");
+
+    assert_eq!(profile.profile_id, "go-dst-normalized-tree-v1");
+    assert_eq!(profile.backend_ref.id, "go-dst");
+    assert_eq!(profile.node_roles[0], NodeRole::Structural);
+    assert_eq!(profile.normalized_node_fields.last().map(String::as_str), Some("metadata"));
+    assert_eq!(profile.unsupported_defaults["field_name"], "null");
+    assert_eq!(profile.capability.parser_identity.name, "github.com/dave/dst");
+    assert_eq!(profile.fixture_slices[0], "slice-782-normalized-tree-node");
 }
 
 #[test]
