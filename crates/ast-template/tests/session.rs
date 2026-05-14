@@ -7,7 +7,7 @@ use ast_merge::{
 };
 use ast_template::{
     DirectorySessionOptions, DirectorySessionProfile, FamilyMergeAdapter,
-    FamilyMergeAdapterRegistry,
+    FamilyMergeAdapterRegistry, apply_readme_family_section,
     apply_template_directory_session_diagnostics_with_default_registry_to_directory,
     apply_template_directory_session_envelope_with_default_registry_to_directory,
     apply_template_directory_session_outcome_with_default_registry_to_directory,
@@ -108,6 +108,33 @@ fn conforms_to_readme_family_section_template_contract_fixture() {
             .as_str()
             .expect("expected rendered partial should be a string")
     );
+
+    let package_metadata =
+        metadata_case["package"].as_object().expect("package should be an object");
+    for test_case in fixture["readme_application_cases"]
+        .as_array()
+        .expect("application cases should be an array")
+    {
+        let actual = apply_readme_family_section(
+            fixture["template_partial"].as_str().expect("template partial should be a string"),
+            package_metadata,
+            family,
+            test_case["destination_content"].as_str(),
+            &default_template_token_config(),
+        );
+        assert_eq!(
+            actual.content,
+            test_case["expected_content"].as_str().expect("expected content should be a string"),
+            "unexpected content for {}",
+            test_case["label"].as_str().unwrap_or_default()
+        );
+        assert_eq!(
+            actual.changed,
+            test_case["changed"].as_bool().expect("changed should be a bool"),
+            "unexpected changed flag for {}",
+            test_case["label"].as_str().unwrap_or_default()
+        );
+    }
 }
 
 #[test]

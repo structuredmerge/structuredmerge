@@ -141,6 +141,114 @@ pub fn render_readme_family_section(
     resolve_template_tokens(template_partial, &replacements, config)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadmeFamilySectionApplication {
+    pub content: String,
+    pub changed: bool,
+}
+
+pub fn apply_readme_family_section(
+    template_partial: &str,
+    package_metadata: &Map<String, Value>,
+    family: &Map<String, Value>,
+    destination_content: Option<&str>,
+    config: &TemplateTokenConfig,
+) -> ReadmeFamilySectionApplication {
+    let rendered_section =
+        render_readme_family_section(template_partial, family, config).trim_end().to_string();
+    let base_content = destination_content.map_or_else(
+        || {
+            format!(
+                "# {}\n\n{}\n",
+                value_string(package_metadata.get("name")),
+                value_string(package_metadata.get("summary"))
+            )
+        },
+        ToString::to_string,
+    );
+    let content = replace_or_insert_markdown_heading_section(
+        &base_content,
+        &value_string(family.get("section_heading")),
+        2,
+        &rendered_section,
+    );
+    ReadmeFamilySectionApplication { changed: content != base_content, content }
+}
+
+fn replace_or_insert_markdown_heading_section(
+    content: &str,
+    heading_text: &str,
+    heading_level: usize,
+    replacement: &str,
+) -> String {
+    let normalized = content.trim_end();
+    if normalized.is_empty() {
+        return format!("{replacement}\n");
+    }
+
+    let lines = normalized.split('\n').collect::<Vec<_>>();
+    let heading = format!("{} {heading_text}", "#".repeat(heading_level));
+    if let Some(heading_index) = lines.iter().position(|line| line.trim() == heading) {
+        let mut section_end = lines.len();
+        for (index, line) in lines.iter().enumerate().skip(heading_index + 1) {
+            let level = markdown_heading_level(line);
+            if level > 0 && level <= heading_level {
+                section_end = index;
+                break;
+            }
+        }
+        let mut output_lines = lines[..heading_index].to_vec();
+        output_lines.extend(replacement.split('\n'));
+        if section_end < lines.len() && !lines[section_end].is_empty() {
+            output_lines.push("");
+        }
+        output_lines.extend(&lines[section_end..]);
+        return format!("{}\n", output_lines.join("\n"));
+    }
+
+    let insert_at = readme_family_section_insert_index(&lines);
+    let mut output_lines = lines[..insert_at].to_vec();
+    if !output_lines.is_empty() && output_lines.last() != Some(&"") {
+        output_lines.push("");
+    }
+    output_lines.extend(replacement.split('\n'));
+    if insert_at < lines.len() && !lines[insert_at].is_empty() {
+        output_lines.push("");
+    }
+    output_lines.extend(&lines[insert_at..]);
+    format!("{}\n", output_lines.join("\n"))
+}
+
+fn markdown_heading_level(line: &str) -> usize {
+    let trimmed = line.trim();
+    let level = trimmed.chars().take_while(|character| *character == '#').count();
+    if level == 0 || level > 6 || trimmed.as_bytes().get(level).copied() != Some(b' ') {
+        0
+    } else {
+        level
+    }
+}
+
+fn readme_family_section_insert_index(lines: &[&str]) -> usize {
+    let mut index = 0;
+    if lines.first().map_or(0, |line| markdown_heading_level(line)) == 1 {
+        index = 1;
+        while index < lines.len() && lines[index].is_empty() {
+            index += 1;
+        }
+    }
+    while index < lines.len() {
+        if lines[index].is_empty() {
+            while index < lines.len() && lines[index].is_empty() {
+                index += 1;
+            }
+            return index;
+        }
+        index += 1;
+    }
+    lines.len()
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TemplateDirectoryRegistrySessionReport {
     pub mode: DirectorySessionMode,
