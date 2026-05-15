@@ -578,6 +578,48 @@ pub struct TieBreakMatchingReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MatchingDebugOwnerSet {
+    pub owner_id: String,
+    pub scope_path: String,
+    pub node_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct MatchingDebugCandidate {
+    pub candidate_id: String,
+    pub signature: String,
+    pub from_path: String,
+    pub to_path: String,
+    pub confidence: f64,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MatchingDebugSelectedMatch {
+    pub candidate_id: String,
+    pub selected_by: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MatchingDebugRejectedMatch {
+    pub candidate_id: String,
+    pub rejected_by: String,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct MatchingDebugArtifacts {
+    pub artifact_id: String,
+    pub matching_id: String,
+    pub enabled: bool,
+    pub owner_sets: Vec<MatchingDebugOwnerSet>,
+    pub candidates: Vec<MatchingDebugCandidate>,
+    pub selected_matches: Vec<MatchingDebugSelectedMatch>,
+    pub rejected_matches: Vec<MatchingDebugRejectedMatch>,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {

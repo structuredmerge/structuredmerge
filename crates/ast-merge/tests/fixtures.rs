@@ -15,16 +15,17 @@ use ast_merge::{
     ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSelector,
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
-    DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, InconsistencyReport, MergeIR,
-    MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
-    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
-    PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
-    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
-    RenameAwareMatchingReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
-    ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
-    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
-    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
-    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, InconsistencyReport,
+    MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport, MoveDetectionMatchingReport,
+    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
+    NamedConformanceSuiteResults, PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
+    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
+    RawMerge, RenameAwareMatchingReport, ReviewHostHints, ReviewReplayBundle,
+    ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest, ReviewedNestedExecution,
+    ReviewedNestedExecutionEnvelope, SignatureMatchingParent, SignatureMatchingReport,
+    SourceTextNormalizedMatchingReport, StructuralMatchingReport, StructuredEditApplication,
+    StructuredEditApplicationEnvelope, StructuredEditBatchReport,
+    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -702,6 +703,35 @@ fn conforms_to_slice_803_duplicate_signature_tie_break_fixture() {
     assert_eq!(
         report.matches[0].rejected_candidates[0].rejected_by,
         expected["first_rejected_by"].as_str().unwrap()
+    );
+}
+
+#[test]
+fn conforms_to_slice_804_matching_debug_artifacts_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-804-matching-debug-artifacts",
+        "matching-debug-artifacts.json",
+    ]));
+    let artifacts: MatchingDebugArtifacts =
+        serde_json::from_value(fixture["debug_artifacts"].clone())
+            .expect("matching debug artifacts should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(artifacts.enabled, expected["enabled"].as_bool().unwrap());
+    assert_eq!(artifacts.owner_sets.len(), expected["owner_set_count"].as_u64().unwrap() as usize);
+    assert_eq!(artifacts.candidates.len(), expected["candidate_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        artifacts.selected_matches.len(),
+        expected["selected_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        artifacts.rejected_matches.len(),
+        expected["rejected_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        artifacts.rejected_matches[0].reason,
+        expected["first_rejection_reason"].as_str().unwrap()
     );
 }
 
