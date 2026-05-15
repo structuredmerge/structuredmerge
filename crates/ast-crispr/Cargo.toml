@@ -1,0 +1,19 @@
+[package]
+name = "ast-crispr"
+version = "0.2.0"
+repository = "https://github.com/structuredmerge/structuredmerge-rust"
+homepage = "https://structuredmerge.org"
+authors = ["Peter H. Boling"]
+edition = "2024"
+description = "Structural edit tooling over Structured Merge AST contracts"
+license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
+
+[dependencies]
+ast-merge = { version = "0.2.0", path = "../ast-merge" }
+serde_json = "1.0"
+
+[dev-dependencies]
+
+[lib]
+path = "src/lib.rs"
+
