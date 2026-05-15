@@ -4,12 +4,13 @@ use serde_json::Value;
 use tree_haver::{
     AdapterInfo, BackendAvailabilityReport, BackendCapability, BackendReference, BinaryDiagnostic,
     BinaryMergeReport, BinaryNestedDispatch, BinaryPayloadRegion, BinaryRawPayload,
-    BinaryRenderPolicy, BinaryScalarValue, ByteEditSpan, ByteRange, EditProjectionSupport,
-    FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis, KaitaiTreeNode, NativeParserProvider,
-    NativeProviderMetadata, NodeRole, NormalizedParseResult, NormalizedTreeNode,
-    OrderedTreePrimitives, ParseErrorTolerance, ParserRequest, PolicyReference, PolicySurface,
-    ProcessRequest, ProviderDiagnosticsReport, SourcePoint, SourceSpan, TreeHaverProfile,
-    ZipUnsafeEntry, build_backend_availability_report, build_provider_diagnostics_report,
+    BinaryRenderPolicy, BinaryScalarValue, ByteEditSpan, ByteRange, EditProjectionExecutionResult,
+    EditProjectionSupport, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis, KaitaiTreeNode,
+    NativeParserProvider, NativeProviderMetadata, NodeRole, NormalizedParseResult,
+    NormalizedTreeNode, OrderedTreePrimitives, ParseErrorTolerance, ParserRequest, PolicyReference,
+    PolicySurface, ProcessRequest, ProviderDiagnosticsReport, SourcePoint, SourceSpan,
+    TreeHaverProfile, ZipUnsafeEntry, build_backend_availability_report,
+    build_edit_projection_execution_result, build_provider_diagnostics_report,
     byte_offset_for_point, current_backend_id, extract_source_fragment, kaitai_adapter_info,
     kaitai_feature_profile, kaitai_struct_backend, library_path_errors, node_roles,
     pest_adapter_info, pest_backend, pest_feature_profile, process_with_language_pack,
@@ -948,6 +949,33 @@ fn conforms_to_slice_927_tree_haver_provider_diagnostics_fixture() {
         );
         assert_eq!(serde_json::json!(result), fixture[name], "{name}");
     }
+}
+
+#[test]
+fn conforms_to_slice_928_edit_projection_execution_contract_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-928-go-dst-edit-projection-execution",
+        "edit-projection-execution.json",
+    ]));
+
+    let expected: EditProjectionExecutionResult =
+        serde_json::from_value(fixture["expected_result"].clone()).expect("execution result");
+    let result = build_edit_projection_execution_result(
+        expected.source.clone(),
+        expected.applied_operations.clone(),
+        expected.diagnostics.clone(),
+    );
+    assert_eq!(serde_json::json!(result), fixture["expected_result"]);
+
+    let unsupported: EditProjectionExecutionResult =
+        serde_json::from_value(fixture["unsupported_result"].clone()).expect("unsupported result");
+    let rejected = build_edit_projection_execution_result(
+        unsupported.source.clone(),
+        Vec::new(),
+        unsupported.diagnostics.clone(),
+    );
+    assert_eq!(serde_json::json!(rejected), fixture["unsupported_result"]);
 }
 
 #[test]

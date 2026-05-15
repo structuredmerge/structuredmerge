@@ -254,6 +254,40 @@ pub struct ProviderDiagnosticsReport {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct EditProjectionOperationRequest {
+    pub operation: String,
+    pub target_node_id: String,
+    pub target_node_path: String,
+    pub replacement_source: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct EditProjectionExecutionRequest {
+    pub provider_id: String,
+    pub backend_ref: BackendReference,
+    pub language: String,
+    pub source: String,
+    pub operations: Vec<EditProjectionOperationRequest>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AppliedEditProjectionOperation {
+    pub operation: String,
+    pub target_node_id: String,
+    pub correlation_key: String,
+    pub correlation_value: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct EditProjectionExecutionResult {
+    pub ok: bool,
+    pub status: String,
+    pub source: String,
+    pub applied_operations: Vec<AppliedEditProjectionOperation>,
+    pub diagnostics: Vec<ProviderDiagnostic>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OrderedSiblingEdge {
     pub parent_id: String,
     pub node_id: String,
@@ -862,6 +896,30 @@ pub fn build_provider_diagnostics_report(
         }
     }
     ProviderDiagnosticsReport { provider_id, backend_ref, language, status, diagnostics }
+}
+
+pub fn build_edit_projection_execution_result(
+    source: String,
+    applied_operations: Vec<AppliedEditProjectionOperation>,
+    diagnostics: Vec<ProviderDiagnostic>,
+) -> EditProjectionExecutionResult {
+    if diagnostics.iter().any(|diagnostic| diagnostic.blocking) {
+        return EditProjectionExecutionResult {
+            ok: false,
+            status: "rejected".to_string(),
+            source,
+            applied_operations: Vec::new(),
+            diagnostics,
+        };
+    }
+
+    EditProjectionExecutionResult {
+        ok: true,
+        status: "applied".to_string(),
+        source,
+        applied_operations,
+        diagnostics,
+    }
 }
 
 fn windows_absolute_path(path: &str) -> bool {
