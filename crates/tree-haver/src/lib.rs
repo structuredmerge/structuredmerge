@@ -144,6 +144,26 @@ pub struct NativeParserProvider {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NativeProviderMetadata {
+    pub provider_id: String,
+    pub family: String,
+    pub host_language: String,
+    pub target_language: String,
+    pub parser_name: String,
+    pub parser_version: String,
+    pub language_version: String,
+    pub dialect: String,
+    pub parse_error_behavior: String,
+    pub source_span_support: String,
+    pub render_support: String,
+    pub semantic_role_support: String,
+    pub retains_native_tree: bool,
+    pub native_tree_visibility: String,
+    pub metadata_policy: String,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct NormalizedParseResult {
     pub ok: bool,
     pub backend_capability: BackendCapability,

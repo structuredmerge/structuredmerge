@@ -22,12 +22,12 @@ use ast_merge::{
     GenericConflictHandlerExecution, InconsistencyReport, LanguageProfileHandlerRegistry,
     LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
     MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
-    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults, PCS, PairwiseMatching,
-    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
-    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
-    RenameAwareMatchingReport, RenderPlanReport, RenderSafetyReport, RenderVerificationReport,
-    ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
-    ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
+    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
+    NativeProviderMetadataReport, PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
+    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
+    RawMerge, RenameAwareMatchingReport, RenderPlanReport, RenderSafetyReport,
+    RenderVerificationReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
+    ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
     SecondaryFormattingMetricsReport, SignatureMatchingParent, SignatureMatchingReport,
     SourceTextNormalizedMatchingReport, StructuralMatchingReport, StructuredEditApplication,
     StructuredEditApplicationEnvelope, StructuredEditBatchReport,
@@ -1173,6 +1173,31 @@ fn conforms_to_slice_821_unsafe_render_fallback_or_failure_fixture() {
     assert_eq!(report.outcome, expected["outcome"].as_str().unwrap());
     assert_eq!(report.fallback_strategy, expected["fallback_strategy"].as_str().unwrap());
     assert_eq!(report.diagnostics.len(), expected["diagnostic_count"].as_u64().unwrap() as usize);
+}
+
+#[test]
+fn conforms_to_slice_822_native_provider_metadata_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-822-native-provider-metadata",
+        "native-provider-metadata.json",
+    ]));
+    let report: NativeProviderMetadataReport =
+        serde_json::from_value(fixture["provider_metadata"].clone())
+            .expect("native provider metadata should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.provider_id, expected["provider_id"].as_str().unwrap());
+    assert_eq!(report.family, expected["family"].as_str().unwrap());
+    assert_eq!(report.host_language, expected["host_language"].as_str().unwrap());
+    assert_eq!(report.target_language, expected["target_language"].as_str().unwrap());
+    assert_eq!(report.parser_name, expected["parser_name"].as_str().unwrap());
+    assert_eq!(report.parse_error_behavior, expected["parse_error_behavior"].as_str().unwrap());
+    assert_eq!(report.source_span_support, expected["source_span_support"].as_str().unwrap());
+    assert_eq!(report.render_support, expected["render_support"].as_str().unwrap());
+    assert_eq!(report.semantic_role_support, expected["semantic_role_support"].as_str().unwrap());
+    assert_eq!(report.retains_native_tree, expected["retains_native_tree"].as_bool().unwrap());
+    assert_eq!(report.metadata_policy, expected["metadata_policy"].as_str().unwrap());
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

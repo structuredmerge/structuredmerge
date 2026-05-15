@@ -5,9 +5,9 @@ use tree_haver::{
     AdapterInfo, BackendCapability, BackendReference, BinaryDiagnostic, BinaryMergeReport,
     BinaryNestedDispatch, BinaryPayloadRegion, BinaryRawPayload, BinaryRenderPolicy,
     BinaryScalarValue, ByteEditSpan, ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis,
-    KaitaiTreeNode, NativeParserProvider, NodeRole, NormalizedParseResult, NormalizedTreeNode,
-    OrderedTreePrimitives, ParseErrorTolerance, ParserRequest, PolicyReference, PolicySurface,
-    ProcessRequest, SourcePoint, SourceSpan, TreeHaverProfile, ZipUnsafeEntry,
+    KaitaiTreeNode, NativeParserProvider, NativeProviderMetadata, NodeRole, NormalizedParseResult,
+    NormalizedTreeNode, OrderedTreePrimitives, ParseErrorTolerance, ParserRequest, PolicyReference,
+    PolicySurface, ProcessRequest, SourcePoint, SourceSpan, TreeHaverProfile, ZipUnsafeEntry,
     byte_offset_for_point, current_backend_id, extract_source_fragment, kaitai_adapter_info,
     kaitai_feature_profile, kaitai_struct_backend, node_roles, pest_adapter_info, pest_backend,
     pest_feature_profile, process_with_language_pack, register_backend, registered_backends,
@@ -464,6 +464,31 @@ fn conforms_to_slice_787_native_parser_adapter_contract_fixture() {
     assert_eq!(result.nodes[1].semantic_roles[1], "function");
     assert_eq!(result.metadata["go_dst"]["native_tree_visibility"], "provider_internal");
     assert!(result.source_fragments_available);
+}
+
+#[test]
+fn conforms_to_slice_822_native_provider_metadata_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-822-native-provider-metadata",
+        "native-provider-metadata.json",
+    ]));
+    let metadata: NativeProviderMetadata =
+        serde_json::from_value(fixture["provider_metadata"].clone())
+            .expect("native provider metadata should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(metadata.provider_id, expected["provider_id"].as_str().unwrap());
+    assert_eq!(metadata.family, expected["family"].as_str().unwrap());
+    assert_eq!(metadata.host_language, expected["host_language"].as_str().unwrap());
+    assert_eq!(metadata.target_language, expected["target_language"].as_str().unwrap());
+    assert_eq!(metadata.parser_name, expected["parser_name"].as_str().unwrap());
+    assert_eq!(metadata.parse_error_behavior, expected["parse_error_behavior"].as_str().unwrap());
+    assert_eq!(metadata.source_span_support, expected["source_span_support"].as_str().unwrap());
+    assert_eq!(metadata.render_support, expected["render_support"].as_str().unwrap());
+    assert_eq!(metadata.semantic_role_support, expected["semantic_role_support"].as_str().unwrap());
+    assert_eq!(metadata.retains_native_tree, expected["retains_native_tree"].as_bool().unwrap());
+    assert_eq!(metadata.metadata_policy, expected["metadata_policy"].as_str().unwrap());
 }
 
 #[test]
