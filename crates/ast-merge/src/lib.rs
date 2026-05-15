@@ -424,6 +424,33 @@ pub struct SignatureMatchingReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct SourceTextNormalizedMatch {
+    pub normalized_text: String,
+    pub from_path: String,
+    pub to_path: String,
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub from_source_text: String,
+    pub to_source_text: String,
+    pub confidence: f64,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct SourceTextNormalizedMatchingReport {
+    pub matching_id: String,
+    pub strategy: String,
+    pub from_revision: String,
+    pub to_revision: String,
+    pub normalization: Vec<String>,
+    pub leaf_kinds: Vec<String>,
+    pub matches: Vec<SourceTextNormalizedMatch>,
+    pub unmatched_from: Vec<String>,
+    pub unmatched_to: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {
