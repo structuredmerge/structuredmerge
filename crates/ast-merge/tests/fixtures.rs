@@ -17,18 +17,18 @@ use ast_merge::{
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
     DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FallbackUsageReport,
-    FamilyFeatureProfile, GenericConflictHandlerExecution, InconsistencyReport,
-    LanguageProfileHandlerRegistry, LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR,
-    MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
-    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
-    PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
-    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
-    RenameAwareMatchingReport, RenderPlanReport, RenderVerificationReport, ReviewHostHints,
-    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
-    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SignatureMatchingParent,
-    SignatureMatchingReport, SourceTextNormalizedMatchingReport, StructuralMatchingReport,
-    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
-    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    FamilyFeatureProfile, FormattingPreservationConformanceReport, GenericConflictHandlerExecution,
+    InconsistencyReport, LanguageProfileHandlerRegistry, LocalLineFallbackReport,
+    MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport, MoveDetectionMatchingReport,
+    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
+    NamedConformanceSuiteResults, PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
+    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
+    RawMerge, RenameAwareMatchingReport, RenderPlanReport, RenderVerificationReport,
+    ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
+    ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
+    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
+    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
+    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -1002,6 +1002,34 @@ fn conforms_to_slice_814_reparse_after_render_verification_fixture() {
     assert_eq!(report.hard_gate, expected["hard_gate"].as_bool().unwrap());
     assert_eq!(report.parse_errors.len(), expected["parse_error_count"].as_u64().unwrap() as usize);
     assert_eq!(report.render_strategy, expected["render_strategy"].as_str().unwrap());
+}
+
+#[test]
+fn conforms_to_slice_815_formatting_preservation_metrics_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-815-formatting-preservation-metrics",
+        "formatting-preservation-metrics.json",
+    ]));
+    let report: FormattingPreservationConformanceReport =
+        serde_json::from_value(fixture["conformance_report"].clone())
+            .expect("formatting preservation report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.suite, expected["suite"].as_str().unwrap());
+    assert_eq!(report.language, expected["language"].as_str().unwrap());
+    assert_eq!(
+        report.formatting_metrics.expected_output_line_diff_size,
+        expected["line_diff_size"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        report.formatting_metrics.expected_output_character_diff_size,
+        expected["character_diff_size"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        report.formatting_metrics.formatting_preservation_score,
+        expected["score"].as_f64().unwrap()
+    );
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

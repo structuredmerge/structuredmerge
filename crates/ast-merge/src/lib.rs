@@ -858,6 +858,24 @@ pub struct RenderVerificationReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct FormattingPreservationMetrics {
+    pub expected_output_line_diff_size: usize,
+    pub expected_output_character_diff_size: usize,
+    pub formatting_preservation_score: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct FormattingPreservationConformanceReport {
+    pub report_id: String,
+    pub version: String,
+    pub suite: String,
+    pub case_id: String,
+    pub language: String,
+    pub formatting_metrics: FormattingPreservationMetrics,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";
