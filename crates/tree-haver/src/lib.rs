@@ -219,6 +219,22 @@ pub struct LibraryPathValidation {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BackendAvailabilityCheck {
+    pub name: String,
+    pub status: String,
+    pub required: bool,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BackendAvailabilityReport {
+    pub backend_ref: BackendReference,
+    pub status: String,
+    pub checks: Vec<BackendAvailabilityCheck>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OrderedSiblingEdge {
     pub parent_id: String,
     pub node_id: String,
@@ -781,6 +797,33 @@ pub fn safe_symbol_name(symbol: &str) -> bool {
 
 pub fn safe_backend_name(name: &str) -> bool {
     name == "auto" || backend_reference(name).is_some()
+}
+
+pub fn build_backend_availability_report(
+    backend_ref: BackendReference,
+    checks: Vec<BackendAvailabilityCheck>,
+) -> BackendAvailabilityReport {
+    if checks.is_empty() {
+        return BackendAvailabilityReport {
+            backend_ref,
+            status: "unknown".to_string(),
+            checks,
+            diagnostics: vec!["backend availability unknown: no checks supplied".to_string()],
+        };
+    }
+
+    let mut diagnostics = Vec::new();
+    let mut status = "available".to_string();
+    for check in &checks {
+        if check.required && check.status != "available" {
+            status = "unavailable".to_string();
+            diagnostics.push(format!(
+                "backend unavailable: required check {} is {}",
+                check.name, check.status
+            ));
+        }
+    }
+    BackendAvailabilityReport { backend_ref, status, checks, diagnostics }
 }
 
 fn windows_absolute_path(path: &str) -> bool {

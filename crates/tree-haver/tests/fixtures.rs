@@ -2,18 +2,19 @@ use std::{fs, path::PathBuf};
 
 use serde_json::Value;
 use tree_haver::{
-    AdapterInfo, BackendCapability, BackendReference, BinaryDiagnostic, BinaryMergeReport,
-    BinaryNestedDispatch, BinaryPayloadRegion, BinaryRawPayload, BinaryRenderPolicy,
-    BinaryScalarValue, ByteEditSpan, ByteRange, EditProjectionSupport, FeatureProfile,
-    KaitaiByteSpan, KaitaiTreeAnalysis, KaitaiTreeNode, NativeParserProvider,
+    AdapterInfo, BackendAvailabilityReport, BackendCapability, BackendReference, BinaryDiagnostic,
+    BinaryMergeReport, BinaryNestedDispatch, BinaryPayloadRegion, BinaryRawPayload,
+    BinaryRenderPolicy, BinaryScalarValue, ByteEditSpan, ByteRange, EditProjectionSupport,
+    FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis, KaitaiTreeNode, NativeParserProvider,
     NativeProviderMetadata, NodeRole, NormalizedParseResult, NormalizedTreeNode,
     OrderedTreePrimitives, ParseErrorTolerance, ParserRequest, PolicyReference, PolicySurface,
     ProcessRequest, SourcePoint, SourceSpan, TreeHaverProfile, ZipUnsafeEntry,
-    byte_offset_for_point, current_backend_id, extract_source_fragment, kaitai_adapter_info,
-    kaitai_feature_profile, kaitai_struct_backend, library_path_errors, node_roles,
-    pest_adapter_info, pest_backend, pest_feature_profile, process_with_language_pack,
-    register_backend, registered_backends, safe_backend_name, safe_language_name, safe_symbol_name,
-    sanitize_language_name, slice_byte_range, validate_library_path, with_backend,
+    build_backend_availability_report, byte_offset_for_point, current_backend_id,
+    extract_source_fragment, kaitai_adapter_info, kaitai_feature_profile, kaitai_struct_backend,
+    library_path_errors, node_roles, pest_adapter_info, pest_backend, pest_feature_profile,
+    process_with_language_pack, register_backend, registered_backends, safe_backend_name,
+    safe_language_name, safe_symbol_name, sanitize_language_name, slice_byte_range,
+    validate_library_path, with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -906,6 +907,25 @@ fn conforms_to_slice_925_tree_haver_path_validation_fixture() {
     for test_case in fixture["backend_name_cases"].as_array().expect("backend name cases") {
         let value = test_case["value"].as_str().expect("value");
         assert_eq!(safe_backend_name(value), test_case["expected_valid"], "{}", test_case["name"]);
+    }
+}
+
+#[test]
+fn conforms_to_slice_926_tree_haver_backend_availability_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-926-tree-haver-backend-availability",
+        "backend-availability.json",
+    ]));
+
+    for name in ["available_report", "unavailable_report", "unknown_report"] {
+        let expected: BackendAvailabilityReport =
+            serde_json::from_value(fixture[name].clone()).expect("backend availability report");
+        let result = build_backend_availability_report(
+            expected.backend_ref.clone(),
+            expected.checks.clone(),
+        );
+        assert_eq!(serde_json::json!(result), fixture[name], "{name}");
     }
 }
 
