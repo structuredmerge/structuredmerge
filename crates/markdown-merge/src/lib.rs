@@ -296,6 +296,7 @@ pub fn markdown_plan_context_with_backend(
             supports_dialects: false,
             supported_policies: vec![],
         }),
+        merge_engine: None,
     }
 }
 

@@ -170,6 +170,7 @@ pub fn yaml_plan_context_with_backend(backend: YamlBackend) -> ConformanceFamily
             supports_dialects: backend != YamlBackend::KreuzbergLanguagePack,
             supported_policies: backend_profile.supported_policies,
         }),
+        merge_engine: None,
     }
 }
 

@@ -413,6 +413,7 @@ pub fn ruby_plan_context() -> ConformanceFamilyPlanContext {
             supports_dialects: backend_profile.supports_dialects,
             supported_policies: backend_profile.supported_policies,
         }),
+        merge_engine: None,
     }
 }
 

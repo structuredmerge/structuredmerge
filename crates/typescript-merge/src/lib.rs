@@ -150,6 +150,7 @@ pub fn typescript_plan_context(backend: TypeScriptBackend) -> ConformanceFamilyP
             supports_dialects: feature_profile.supports_dialects,
             supported_policies: feature_profile.supported_policies,
         }),
+        merge_engine: None,
     }
 }
 

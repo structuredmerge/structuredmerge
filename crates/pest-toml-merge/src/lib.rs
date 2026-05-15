@@ -96,6 +96,7 @@ pub fn toml_plan_context() -> ConformanceFamilyPlanContext {
                 name: "destination_wins_array".to_string(),
             }],
         }),
+        merge_engine: None,
     }
 }
 

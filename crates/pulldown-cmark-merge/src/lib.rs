@@ -81,6 +81,7 @@ pub fn markdown_plan_context() -> ConformanceFamilyPlanContext {
             supports_dialects: true,
             supported_policies: vec![],
         }),
+        merge_engine: None,
     }
 }
 

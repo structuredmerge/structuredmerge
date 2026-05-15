@@ -158,6 +158,7 @@ pub fn rust_plan_context(backend: RustBackend) -> ConformanceFamilyPlanContext {
             supports_dialects: feature_profile.supports_dialects,
             supported_policies: feature_profile.supported_policies,
         }),
+        merge_engine: None,
     }
 }
 

@@ -157,6 +157,7 @@ pub fn toml_plan_context(backend: Option<TomlBackend>) -> ConformanceFamilyPlanC
             supports_dialects: false,
             supported_policies: backend_profile.supported_policies,
         }),
+        merge_engine: None,
     }
 }
 

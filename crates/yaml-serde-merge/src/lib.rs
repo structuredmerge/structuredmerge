@@ -77,6 +77,7 @@ pub fn yaml_plan_context() -> ConformanceFamilyPlanContext {
             supports_dialects: true,
             supported_policies: yaml_feature_profile().supported_policies,
         }),
+        merge_engine: None,
     }
 }
 

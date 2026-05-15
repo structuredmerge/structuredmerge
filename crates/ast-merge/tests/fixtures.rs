@@ -10,7 +10,7 @@ use ast_merge::{
     ConflictMarkerRenderingReport, ConformanceCaseExecution, ConformanceCaseRef,
     ConformanceCaseRequirements, ConformanceCaseResult, ConformanceCaseRun,
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, ConformanceManifest,
-    ConformanceManifestPlanningOptions, ConformanceManifestReport,
+    ConformanceManifestEntry, ConformanceManifestPlanningOptions, ConformanceManifestReport,
     ConformanceManifestReviewOptions, ConformanceManifestReviewState,
     ConformanceManifestReviewStateEnvelope, ConformanceManifestReviewedNestedApplication,
     ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuiteDefinition,
@@ -285,6 +285,7 @@ use ast_merge::{
     summarize_conformance_results, summarize_named_conformance_suite_reports,
     summarize_projected_child_review_group_progress, template_token_keys,
 };
+use ast_merge::{MERGE_ENGINE_ENVIRONMENT_VARIABLE, MergeEngine, normalize_merge_engine};
 use serde_json::Value;
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -354,6 +355,76 @@ fn conforms_to_slice_790_generic_merge_ir_fixture() {
     assert_eq!(serde_json::json!(change_kinds), expected["change_kinds"]);
     assert_eq!(merge_ir.node_classes[0].node_ids["left"], "left-import-fmt");
     assert_eq!(merge_ir.changes[1].class_id.as_deref(), Some("class-import-strings"));
+}
+
+#[test]
+fn conforms_to_slice_906_merge_engine_suite_setting_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-906-merge-engine-suite-setting",
+        "merge-engine-suite-setting.json",
+    ]));
+    let settings = &fixture["settings"];
+    let expected = &fixture["expected"];
+    let supported_engines =
+        settings["supported_engines"].as_array().expect("supported_engines should be an array");
+
+    assert_eq!(
+        normalize_merge_engine(None),
+        serde_json::from_value(expected["default_engine"].clone()).unwrap()
+    );
+    assert_eq!(
+        normalize_merge_engine(Some(MergeEngine::MergeIrExperimental)),
+        serde_json::from_value(expected["experimental_engine"].clone()).unwrap()
+    );
+    assert_eq!(
+        supported_engines.len(),
+        expected["supported_engine_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        MERGE_ENGINE_ENVIRONMENT_VARIABLE,
+        expected["environment_variable"].as_str().unwrap()
+    );
+    assert_eq!(settings["experimental_policy"], expected["experimental_policy"]);
+    assert_eq!(settings["runs_same_suite"], expected["runs_same_suite"]);
+
+    let manifest = ConformanceManifest {
+        family_feature_profiles: Vec::new(),
+        suite_descriptors: vec![ConformanceSuiteDefinition {
+            kind: "family".to_string(),
+            subject: ConformanceSuiteSubject { grammar: "go".to_string(), variant: None },
+            roles: vec!["case".to_string()],
+        }],
+        families: HashMap::from([(
+            "go".to_string(),
+            vec![ConformanceManifestEntry {
+                role: "case".to_string(),
+                path: vec!["go".to_string(), "case.json".to_string()],
+                requirements: None,
+            }],
+        )]),
+    };
+    let family_profile = FamilyFeatureProfile {
+        family: "go".to_string(),
+        supported_dialects: Vec::new(),
+        supported_policies: Vec::new(),
+    };
+    let plan = plan_named_conformance_suites_with_diagnostics(
+        &manifest,
+        &ConformanceManifestPlanningOptions {
+            contexts: HashMap::new(),
+            family_profiles: HashMap::from([("go".to_string(), family_profile)]),
+            require_explicit_contexts: false,
+            merge_engine: Some(MergeEngine::MergeIrExperimental),
+        },
+    );
+
+    assert_eq!(plan.entries.len(), 1);
+    assert_eq!(plan.entries[0].plan.merge_engine, Some(MergeEngine::MergeIrExperimental));
+    assert_eq!(
+        plan.entries[0].plan.entries[0].run.merge_engine,
+        Some(MergeEngine::MergeIrExperimental)
+    );
 }
 
 #[test]
@@ -3127,6 +3198,7 @@ fn conforms_to_slice_49_conformance_family_plan_context_fixture() {
                     name: "destination_wins_array".to_string(),
                 }],
             }),
+            merge_engine: None,
         },
     );
 }
@@ -3699,6 +3771,7 @@ fn conforms_to_slice_57_default_family_context_fixture() {
         contexts: std::collections::HashMap::new(),
         family_profiles: std::collections::HashMap::from([(family.to_string(), family_profile)]),
         require_explicit_contexts: false,
+        merge_engine: None,
     };
     let (context, diagnostics) = resolve_conformance_family_context(family, &options);
     assert_eq!(context, Some(expected_context));
@@ -4991,6 +5064,7 @@ fn conforms_to_slice_69_review_replay_bundle_fixture() {
         contexts: std::collections::HashMap::new(),
         family_profiles: std::collections::HashMap::new(),
         require_explicit_contexts: false,
+        merge_engine: None,
         review_decisions: Vec::new(),
         review_replay_context: None,
         review_replay_bundle: Some(bundle.clone()),
@@ -5015,6 +5089,7 @@ fn conforms_to_slice_305_review_replay_bundle_reviewed_nested_executions_fixture
         contexts: std::collections::HashMap::new(),
         family_profiles: std::collections::HashMap::new(),
         require_explicit_contexts: false,
+        merge_engine: None,
         review_decisions: Vec::new(),
         review_replay_context: None,
         review_replay_bundle: Some(bundle.clone()),

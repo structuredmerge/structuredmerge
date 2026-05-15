@@ -152,6 +152,7 @@ pub fn go_plan_context(backend: GoBackend) -> ConformanceFamilyPlanContext {
             supports_dialects: feature_profile.supports_dialects,
             supported_policies: feature_profile.supported_policies,
         }),
+        merge_engine: None,
     }
 }
 

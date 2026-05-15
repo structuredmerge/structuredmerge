@@ -1,12 +1,31 @@
 use std::{
     collections::{HashMap, HashSet},
-    fs, io,
+    env, fs, io,
     path::{Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
 
 pub const PACKAGE_NAME: &str = "ast-merge";
+pub const MERGE_ENGINE_ENVIRONMENT_VARIABLE: &str = "SMORG_MERGE_ENGINE";
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MergeEngine {
+    OwnerPath,
+    MergeIrExperimental,
+}
+
+pub fn normalize_merge_engine(engine: Option<MergeEngine>) -> MergeEngine {
+    engine.unwrap_or(MergeEngine::OwnerPath)
+}
+
+pub fn merge_engine_from_environment() -> MergeEngine {
+    match env::var(MERGE_ENGINE_ENVIRONMENT_VARIABLE).ok().as_deref() {
+        Some("merge_ir_experimental") => MergeEngine::MergeIrExperimental,
+        _ => MergeEngine::OwnerPath,
+    }
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -3286,6 +3305,8 @@ pub struct ConformanceCaseRun {
     pub requirements: ConformanceCaseRequirements,
     pub family_profile: FamilyFeatureProfile,
     pub feature_profile: Option<ConformanceFeatureProfileView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub merge_engine: Option<MergeEngine>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -3346,6 +3367,8 @@ pub struct NamedConformanceSuiteReport {
 pub struct ConformanceFamilyPlanContext {
     pub family_profile: FamilyFeatureProfile,
     pub feature_profile: Option<ConformanceFeatureProfileView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub merge_engine: Option<MergeEngine>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -3374,6 +3397,8 @@ pub struct ConformanceManifestPlanningOptions {
     pub family_profiles: HashMap<String, FamilyFeatureProfile>,
     #[serde(default)]
     pub require_explicit_contexts: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub merge_engine: Option<MergeEngine>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -3592,6 +3617,8 @@ pub struct ConformanceManifestReviewOptions {
     pub family_profiles: HashMap<String, FamilyFeatureProfile>,
     #[serde(default)]
     pub require_explicit_contexts: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub merge_engine: Option<MergeEngine>,
     #[serde(default)]
     pub review_decisions: Vec<ReviewDecision>,
     pub review_replay_context: Option<ReviewReplayContext>,
@@ -3643,6 +3670,8 @@ pub struct ConformanceSuitePlanEntry {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ConformanceSuitePlan {
     pub family: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub merge_engine: Option<MergeEngine>,
     pub entries: Vec<ConformanceSuitePlanEntry>,
     pub missing_roles: Vec<String>,
 }
@@ -4855,7 +4884,21 @@ fn conformance_suite_descriptor_string(definition: &ConformanceSuiteDefinition) 
 pub fn default_conformance_family_context(
     family_profile: &FamilyFeatureProfile,
 ) -> ConformanceFamilyPlanContext {
-    ConformanceFamilyPlanContext { family_profile: family_profile.clone(), feature_profile: None }
+    ConformanceFamilyPlanContext {
+        family_profile: family_profile.clone(),
+        feature_profile: None,
+        merge_engine: None,
+    }
+}
+
+fn apply_planning_merge_engine(
+    mut context: ConformanceFamilyPlanContext,
+    options: &ConformanceManifestPlanningOptions,
+) -> ConformanceFamilyPlanContext {
+    if context.merge_engine.is_none() && options.merge_engine.is_some() {
+        context.merge_engine = Some(normalize_merge_engine(options.merge_engine));
+    }
+    context
 }
 
 pub fn review_request_id_for_family_context(family: &str) -> String {
@@ -7881,7 +7924,7 @@ pub fn resolve_conformance_family_context(
     options: &ConformanceManifestPlanningOptions,
 ) -> (Option<ConformanceFamilyPlanContext>, Vec<Diagnostic>) {
     if let Some(context) = options.contexts.get(family) {
-        return (Some(context.clone()), Vec::new());
+        return (Some(apply_planning_merge_engine(context.clone(), options)), Vec::new());
     }
 
     if options.require_explicit_contexts {
@@ -7899,7 +7942,10 @@ pub fn resolve_conformance_family_context(
 
     if let Some(family_profile) = options.family_profiles.get(family) {
         return (
-            Some(default_conformance_family_context(family_profile)),
+            Some(apply_planning_merge_engine(
+                default_conformance_family_context(family_profile),
+                options,
+            )),
             vec![Diagnostic {
                 severity: DiagnosticSeverity::Warning,
                 category: DiagnosticCategory::AssumedDefault,
@@ -8024,6 +8070,7 @@ pub fn review_conformance_family_context(
             contexts: options.contexts.clone(),
             family_profiles: options.family_profiles.clone(),
             require_explicit_contexts: false,
+            merge_engine: options.merge_engine,
         };
         let (context, diagnostics) = resolve_conformance_family_context(family, &planning_options);
         return (context, diagnostics, Vec::new(), Vec::new());
@@ -8608,6 +8655,24 @@ pub fn plan_conformance_suite(
     family_profile: &FamilyFeatureProfile,
     feature_profile: Option<&ConformanceFeatureProfileView>,
 ) -> ConformanceSuitePlan {
+    plan_conformance_suite_with_merge_engine(
+        manifest,
+        family,
+        roles,
+        family_profile,
+        feature_profile,
+        None,
+    )
+}
+
+pub fn plan_conformance_suite_with_merge_engine(
+    manifest: &ConformanceManifest,
+    family: &str,
+    roles: &[String],
+    family_profile: &FamilyFeatureProfile,
+    feature_profile: Option<&ConformanceFeatureProfileView>,
+    merge_engine: Option<MergeEngine>,
+) -> ConformanceSuitePlan {
     let mut entries = Vec::new();
     let mut missing_roles = Vec::new();
 
@@ -8637,11 +8702,12 @@ pub fn plan_conformance_suite(
                 }),
                 family_profile: family_profile.clone(),
                 feature_profile: feature_profile.cloned(),
+                merge_engine,
             },
         });
     }
 
-    ConformanceSuitePlan { family: family.to_string(), entries, missing_roles }
+    ConformanceSuitePlan { family: family.to_string(), merge_engine, entries, missing_roles }
 }
 
 pub fn plan_named_conformance_suite(
@@ -8651,12 +8717,13 @@ pub fn plan_named_conformance_suite(
     feature_profile: Option<&ConformanceFeatureProfileView>,
 ) -> Option<ConformanceSuitePlan> {
     let definition = conformance_suite_definition(manifest, selector)?;
-    Some(plan_conformance_suite(
+    Some(plan_conformance_suite_with_merge_engine(
         manifest,
         &definition.subject.grammar,
         &definition.roles,
         family_profile,
         feature_profile,
+        None,
     ))
 }
 
@@ -8665,13 +8732,15 @@ pub fn plan_named_conformance_suite_entry(
     selector: &ConformanceSuiteSelector,
     context: &ConformanceFamilyPlanContext,
 ) -> Option<NamedConformanceSuitePlan> {
-    let plan = plan_named_conformance_suite(
+    let definition = conformance_suite_definition(manifest, selector)?;
+    let plan = plan_conformance_suite_with_merge_engine(
         manifest,
-        selector,
+        &definition.subject.grammar,
+        &definition.roles,
         &context.family_profile,
         context.feature_profile.as_ref(),
-    )?;
-    let definition = conformance_suite_definition(manifest, selector)?;
+        context.merge_engine,
+    );
     Some(NamedConformanceSuitePlan { suite: definition.clone(), plan })
 }
 
