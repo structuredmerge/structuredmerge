@@ -19,12 +19,13 @@ use ast_merge::{
     DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FallbackUsageReport,
     FamilyFeatureProfile, FormattingEdgeFixtureSuite, FormattingHardGateReport,
     FormattingPreservationConformanceReport, FormattingRecommendationGate,
-    GenericConflictHandlerExecution, GoDSTProviderStackReport, HostLanguageNativeProviderContracts,
-    InconsistencyReport, LanguageProfileHandlerRegistry, LocalLineFallbackReport,
-    MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport, MoveDetectionMatchingReport,
-    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
-    NamedConformanceSuiteResults, NativeProviderMetadataReport, NativeProviderProvingGroundReport,
-    PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    GenericConflictHandlerExecution, GoDSTProviderStackReport, GoProviderComparisonReport,
+    HostLanguageNativeProviderContracts, InconsistencyReport, LanguageProfileHandlerRegistry,
+    LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
+    MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
+    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
+    NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS, PairwiseMatching,
+    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
     RenameAwareMatchingReport, RenderPlanReport, RenderSafetyReport, RenderVerificationReport,
     ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
@@ -1261,6 +1262,26 @@ fn conforms_to_slice_825_go_dst_provider_stack_fixture() {
     assert_eq!(report.backend_family, expected["backend_family"].as_str().unwrap());
     assert_eq!(report.language, expected["language"].as_str().unwrap());
     assert_eq!(report.compares_with.len(), expected["comparison_count"].as_u64().unwrap() as usize);
+}
+
+#[test]
+fn conforms_to_slice_826_go_provider_comparison_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-826-go-provider-comparison",
+        "go-provider-comparison.json",
+    ]));
+    let report: GoProviderComparisonReport = serde_json::from_value(fixture["comparison"].clone())
+        .expect("Go provider comparison report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.language, expected["language"].as_str().unwrap());
+    assert_eq!(report.providers.len(), expected["provider_count"].as_u64().unwrap() as usize);
+    assert_eq!(report.dimensions.len(), expected["dimension_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        report.dimensions.iter().any(|dimension| dimension == "backend_deficiencies"),
+        expected["includes_backend_deficiencies"].as_bool().unwrap()
+    );
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
