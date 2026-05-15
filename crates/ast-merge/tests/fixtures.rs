@@ -5,8 +5,8 @@ use std::{
 };
 
 use ast_merge::{
-    AmbiguityMatchingReport, BackendGapConformanceReport, BackendParitySuite, ChangeSet,
-    ClassMappingReport, ConflictCategoryReport, ConflictHandlerRegistryReport,
+    ActiveProfileView, AmbiguityMatchingReport, BackendGapConformanceReport, BackendParitySuite,
+    ChangeSet, ClassMappingReport, ConflictCategoryReport, ConflictHandlerRegistryReport,
     ConflictMarkerRenderingReport, ConformanceCaseExecution, ConformanceCaseRef,
     ConformanceCaseRequirements, ConformanceCaseResult, ConformanceCaseRun,
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, ConformanceManifest,
@@ -27,15 +27,15 @@ use ast_merge::{
     MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
     NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
     NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS, PairwiseMatching,
-    PerformanceGuardrails, PolicySurface, ProfileConformanceReport, ProjectedChildReviewCase,
-    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, ProviderRichnessProjection,
-    REVIEW_TRANSPORT_VERSION, RawMerge, RenameAwareMatchingReport, RenderPlanReport,
-    RenderSafetyReport, RenderVerificationReport, ReviewHostHints, ReviewReplayBundle,
-    ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest, ReviewedNestedExecution,
-    ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport, SignatureMatchingParent,
-    SignatureMatchingReport, SourceTextNormalizedMatchingReport, StructuralMatchingReport,
-    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
-    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    PerformanceGuardrails, PolicySurface, ProfileConformanceReport, ProfileDebugOutput,
+    ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
+    ProviderRichnessProjection, REVIEW_TRANSPORT_VERSION, RawMerge, RenameAwareMatchingReport,
+    RenderPlanReport, RenderSafetyReport, RenderVerificationReport, ReviewHostHints,
+    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
+    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport,
+    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
+    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
+    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -1939,6 +1939,40 @@ fn conforms_to_slice_909_profile_validation_fixture() {
         sorted_strings(partial.warnings.iter().map(|diagnostic| diagnostic.message.clone())),
         sorted_value_strings(&expected["partial_backend_warnings"])
     );
+}
+
+#[test]
+fn conforms_to_slice_910_active_profile_reporting_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-910-active-profile-reporting",
+        "active-profile-reporting.json",
+    ]));
+    let expected = &fixture["expected"];
+
+    let active_profile: ActiveProfileView =
+        serde_json::from_value(fixture["active_profile"].clone()).unwrap();
+    assert_eq!(active_profile.profile_id, expected["profile_id"].as_str().unwrap());
+    assert_eq!(active_profile.family, expected["family"].as_str().unwrap());
+    assert_eq!(active_profile.backend, expected["backend"].as_str().unwrap());
+    assert_eq!(active_profile.parser, expected["parser"].as_str().unwrap());
+    assert_eq!(
+        active_profile.rule_counts.signatures,
+        expected["signature_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(active_profile.validation.ok, expected["validation_ok"].as_bool().unwrap());
+
+    let report: ProfileConformanceReport =
+        serde_json::from_value(fixture["conformance_report"].clone()).unwrap();
+    assert_eq!(
+        report.active_profile.as_ref().unwrap().profile_id,
+        expected["profile_id"].as_str().unwrap()
+    );
+
+    let debug_output: ProfileDebugOutput =
+        serde_json::from_value(fixture["debug_output"].clone()).unwrap();
+    assert_eq!(debug_output.mode, expected["debug_mode"].as_str().unwrap());
+    assert_eq!(debug_output.active_profile.profile_id, expected["profile_id"].as_str().unwrap());
 }
 
 fn sorted_value_strings(value: &Value) -> Vec<String> {

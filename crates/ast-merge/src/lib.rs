@@ -1375,14 +1375,55 @@ pub struct ProfileSkippedRule {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ActiveProfileRuleCounts {
+    pub node_roles: usize,
+    pub atomic_nodes: usize,
+    pub signatures: usize,
+    pub commutative_parents: usize,
+    pub child_groups: usize,
+    pub comment_attachment: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ActiveProfileValidationSummary {
+    pub ok: bool,
+    pub error_count: usize,
+    pub warning_count: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ActiveProfileView {
+    pub profile_id: String,
+    pub family: String,
+    pub backend: String,
+    pub backend_family: String,
+    pub parser: String,
+    pub parser_version: String,
+    pub language_version: String,
+    pub dialect: String,
+    pub supported_dialects: Vec<String>,
+    pub rule_counts: ActiveProfileRuleCounts,
+    pub validation: ActiveProfileValidationSummary,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ProfileConformanceReport {
     pub report_id: String,
     pub version: String,
     pub profile: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_profile: Option<ActiveProfileView>,
     pub enabled_rules: Vec<String>,
     pub skipped_rules: Vec<ProfileSkippedRule>,
     pub fallback_count: usize,
     pub unresolved_conflict_count: usize,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProfileDebugOutput {
+    pub mode: String,
+    pub active_profile: ActiveProfileView,
     pub diagnostics: Vec<String>,
 }
 
