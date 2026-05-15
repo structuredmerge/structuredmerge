@@ -266,6 +266,14 @@ pub fn move_operation() -> OperationProfile {
     OperationProfile::new("move", "optional", "optional", "captured_text_or_explicit", true, true)
 }
 
+pub fn batch_operation_report(profiles: &[OperationProfile]) -> Value {
+    json!({
+        "operation_count": profiles.len(),
+        "operation_kinds": profiles.iter().map(|profile| profile.operation_kind.as_str()).collect::<Vec<_>>(),
+        "operation_profiles": profiles.iter().map(OperationProfile::report).collect::<Vec<_>>()
+    })
+}
+
 fn defaulted(value: &str, fallback: &str) -> String {
     if value.is_empty() { fallback } else { value }.to_string()
 }
@@ -535,11 +543,10 @@ pub fn boundary_report() -> Value {
             "selection profile helpers",
             "destination profile helpers",
             "operation profile helpers",
-            "replace/delete/insert/move helpers"
-        ],
-        "future_exports": [
+            "replace/delete/insert/move helpers",
             "batch operation helpers"
         ],
+        "future_exports": [],
         "metadata": {
             "source": "legacy_crispr_reference",
             "decision": "Keep ast-merge as the base contract layer and revive ast-crispr as a separate thin package in every implementation."
@@ -726,6 +733,36 @@ mod tests {
                 helper => panic!("unknown helper {helper}"),
             };
             assert_eq!(profile.report(), test_case["expected_operation_profile"]);
+        }
+    }
+
+    #[test]
+    fn batch_operation_helpers_match_fixture() {
+        let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("fixtures")
+            .join("diagnostics")
+            .join("slice-923-ast-crispr-batch-operation-helpers")
+            .join("ast-crispr-batch-operation-helpers.json");
+        let source = fs::read_to_string(fixture_path).expect("read fixture");
+        let fixture: Value = serde_json::from_str(&source).expect("parse fixture");
+
+        for test_case in fixture["cases"].as_array().expect("cases") {
+            let profiles = test_case["helpers"]
+                .as_array()
+                .expect("helpers")
+                .iter()
+                .map(|helper| match helper.as_str().expect("helper") {
+                    "replace" => replace_operation(),
+                    "delete" => delete_operation(),
+                    "insert" => insert_operation(),
+                    "move" => move_operation(),
+                    helper => panic!("unknown helper {helper}"),
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(batch_operation_report(&profiles), test_case["expected"]);
         }
     }
 }
