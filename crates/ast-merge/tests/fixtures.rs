@@ -26,10 +26,10 @@ use ast_merge::{
     NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
     NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS, PairwiseMatching,
     PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
-    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
-    RenameAwareMatchingReport, RenderPlanReport, RenderSafetyReport, RenderVerificationReport,
-    ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
-    ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
+    ProjectedChildReviewGroupProgress, ProviderRichnessProjection, REVIEW_TRANSPORT_VERSION,
+    RawMerge, RenameAwareMatchingReport, RenderPlanReport, RenderSafetyReport,
+    RenderVerificationReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
+    ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
     SecondaryFormattingMetricsReport, SignatureMatchingParent, SignatureMatchingReport,
     SourceTextNormalizedMatchingReport, StructuralMatchingReport, StructuredEditApplication,
     StructuredEditApplicationEnvelope, StructuredEditBatchReport,
@@ -1315,6 +1315,30 @@ fn conforms_to_slice_827_backend_parity_fixtures_fixture() {
         source_span_case_count,
         expected["source_span_case_count"].as_u64().unwrap() as usize
     );
+}
+
+#[test]
+fn conforms_to_slice_828_provider_richness_projection_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-828-provider-richness-projection",
+        "provider-richness-projection.json",
+    ]));
+    let projection: ProviderRichnessProjection =
+        serde_json::from_value(fixture["projection"].clone())
+            .expect("provider richness projection should deserialize");
+    let expected = &fixture["expected"];
+    let metadata_namespace = expected["private_metadata_namespace"].as_str().unwrap();
+
+    assert_eq!(projection.provider_id, expected["provider_id"].as_str().unwrap());
+    assert_eq!(projection.generic_roles.len(), expected["role_count"].as_u64().unwrap() as usize);
+    assert_eq!(projection.generic_signature.kind, expected["signature_kind"].as_str().unwrap());
+    assert_eq!(projection.generic_signature.name, expected["signature_name"].as_str().unwrap());
+    assert_eq!(
+        projection.requires_private_fields,
+        expected["requires_private_fields"].as_bool().unwrap()
+    );
+    assert!(projection.private_metadata.contains_key(metadata_namespace));
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

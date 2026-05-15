@@ -1040,6 +1040,27 @@ pub struct BackendParitySuite {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProviderRichnessSignature {
+    pub kind: String,
+    pub name: String,
+    pub parameters: Vec<String>,
+    pub result: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProviderRichnessProjection {
+    pub projection_id: String,
+    pub version: String,
+    pub provider_id: String,
+    pub node_path: String,
+    pub generic_roles: Vec<String>,
+    pub generic_signature: ProviderRichnessSignature,
+    pub private_metadata: HashMap<String, HashMap<String, String>>,
+    pub requires_private_fields: bool,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";
