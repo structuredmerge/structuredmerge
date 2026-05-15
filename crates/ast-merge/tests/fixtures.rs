@@ -5,12 +5,12 @@ use std::{
 };
 
 use ast_merge::{
-    AmbiguityMatchingReport, ChangeSet, ClassMappingReport, ConflictCategoryReport,
-    ConflictHandlerRegistryReport, ConflictMarkerRenderingReport, ConformanceCaseExecution,
-    ConformanceCaseRef, ConformanceCaseRequirements, ConformanceCaseResult, ConformanceCaseRun,
-    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, ConformanceManifest,
-    ConformanceManifestPlanningOptions, ConformanceManifestReport,
-    ConformanceManifestReviewOptions, ConformanceManifestReviewState,
+    AmbiguityMatchingReport, BackendParitySuite, ChangeSet, ClassMappingReport,
+    ConflictCategoryReport, ConflictHandlerRegistryReport, ConflictMarkerRenderingReport,
+    ConformanceCaseExecution, ConformanceCaseRef, ConformanceCaseRequirements,
+    ConformanceCaseResult, ConformanceCaseRun, ConformanceFamilyPlanContext,
+    ConformanceFeatureProfileView, ConformanceManifest, ConformanceManifestPlanningOptions,
+    ConformanceManifestReport, ConformanceManifestReviewOptions, ConformanceManifestReviewState,
     ConformanceManifestReviewStateEnvelope, ConformanceManifestReviewedNestedApplication,
     ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuiteDefinition,
     ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSelector,
@@ -1281,6 +1281,39 @@ fn conforms_to_slice_826_go_provider_comparison_fixture() {
     assert_eq!(
         report.dimensions.iter().any(|dimension| dimension == "backend_deficiencies"),
         expected["includes_backend_deficiencies"].as_bool().unwrap()
+    );
+}
+
+#[test]
+fn conforms_to_slice_827_backend_parity_fixtures_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-827-backend-parity-fixtures",
+        "backend-parity-fixtures.json",
+    ]));
+    let suite: BackendParitySuite = serde_json::from_value(fixture["parity_suite"].clone())
+        .expect("backend parity suite should deserialize");
+    let expected = &fixture["expected"];
+    let native_providers: Vec<&str> =
+        suite.cases.iter().map(|parity_case| parity_case.native_provider.as_str()).collect();
+    let source_span_case_count = suite
+        .cases
+        .iter()
+        .filter(|parity_case| {
+            parity_case.dimensions.iter().any(|dimension| dimension == "source_spans")
+        })
+        .count();
+
+    assert_eq!(suite.language, expected["language"].as_str().unwrap());
+    assert_eq!(suite.cases.len(), expected["case_count"].as_u64().unwrap() as usize);
+    assert_eq!(serde_json::json!(native_providers), expected["native_providers"]);
+    assert_eq!(
+        suite.cases[0].tree_sitter_provider,
+        expected["tree_sitter_provider"].as_str().unwrap()
+    );
+    assert_eq!(
+        source_span_case_count,
+        expected["source_span_case_count"].as_u64().unwrap() as usize
     );
 }
 

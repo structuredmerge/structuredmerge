@@ -1023,6 +1023,23 @@ pub struct GoProviderComparisonReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BackendParityCase {
+    pub case_id: String,
+    pub native_provider: String,
+    pub tree_sitter_provider: String,
+    pub dimensions: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BackendParitySuite {
+    pub suite_id: String,
+    pub version: String,
+    pub language: String,
+    pub cases: Vec<BackendParityCase>,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";
