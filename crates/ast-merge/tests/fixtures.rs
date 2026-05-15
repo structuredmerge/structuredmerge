@@ -21,8 +21,9 @@ use ast_merge::{
     PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
-    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, StructuralMatchingReport,
-    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
+    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SignatureMatchingParent,
+    SignatureMatchingReport, StructuralMatchingReport, StructuredEditApplication,
+    StructuredEditApplicationEnvelope, StructuredEditBatchReport,
     StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
@@ -514,6 +515,37 @@ fn conforms_to_slice_797_structural_matching_baseline_fixture() {
     );
     assert!(!expected["move_detection"].as_bool().unwrap());
     assert_eq!(report.matches[1].from_path, "/declarations/Greet");
+}
+
+#[test]
+fn conforms_to_slice_798_signature_matching_commutative_parent_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-798-signature-matching-commutative-parent",
+        "signature-matching-commutative-parent.json",
+    ]));
+    let parent: SignatureMatchingParent =
+        serde_json::from_value(fixture["parent"].clone()).expect("parent should deserialize");
+    let report: SignatureMatchingReport = serde_json::from_value(fixture["matching"].clone())
+        .expect("signature matching report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(parent.child_order, expected["parent_policy"].as_str().unwrap());
+    assert_eq!(report.strategy, expected["strategy"].as_str().unwrap());
+    assert_eq!(report.parent_policy, expected["parent_policy"].as_str().unwrap());
+    assert_eq!(serde_json::json!(report.signature_components), expected["signature_components"]);
+    assert_eq!(report.matches.len(), expected["match_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        report.unmatched_from.len(),
+        expected["unmatched_from_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        report.unmatched_to.len(),
+        expected["unmatched_to_count"].as_u64().unwrap() as usize
+    );
+    assert!(!expected["order_sensitive"].as_bool().unwrap());
+    assert_eq!(report.matches[0].signature, expected["first_match_signature"].as_str().unwrap());
+    assert_eq!(report.matches[0].to_path, expected["first_match_to_path"].as_str().unwrap());
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

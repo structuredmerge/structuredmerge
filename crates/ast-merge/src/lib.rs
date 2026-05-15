@@ -388,6 +388,42 @@ pub struct StructuralMatchingReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SignatureMatchingParent {
+    pub kind: String,
+    pub role: String,
+    pub from_path: String,
+    pub to_path: String,
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub child_order: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct SignatureNodeMatch {
+    pub signature: String,
+    pub from_path: String,
+    pub to_path: String,
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub confidence: f64,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct SignatureMatchingReport {
+    pub matching_id: String,
+    pub strategy: String,
+    pub parent_policy: String,
+    pub signature_components: Vec<String>,
+    pub from_revision: String,
+    pub to_revision: String,
+    pub matches: Vec<SignatureNodeMatch>,
+    pub unmatched_from: Vec<String>,
+    pub unmatched_to: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {
