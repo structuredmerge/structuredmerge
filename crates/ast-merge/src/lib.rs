@@ -1526,6 +1526,102 @@ pub struct ProfilePromotionPolicy {
     pub diagnostics: Vec<String>,
 }
 
+pub fn initial_profile_promotion_policy() -> ProfilePromotionPolicy {
+    let source_subprofile = |profile_id: &str, family: &str| ProfilePromotionPolicyEntry {
+        profile_id: profile_id.to_string(),
+        family: family.to_string(),
+        scope: ProfilePromotionScope::SourceSubprofile,
+        eligible_statuses: vec![
+            ProfilePromotionStatus::Available,
+            ProfilePromotionStatus::Recommended,
+        ],
+        recommendation_gate: ProfileRecommendationGate {
+            required_fixture_count: 16,
+            formatting_threshold: 0.95,
+            fallback_threshold: 2,
+            unresolved_conflict_threshold: 0,
+            requires_backend_parity: true,
+            requires_cross_implementation_parity: false,
+        },
+        default_gate: ProfileDefaultGate {
+            requires_recommended_status: true,
+            requires_explicit_package_rollout: true,
+            minimum_recommended_days: 30,
+            requires_narrow_scope: true,
+        },
+        required_suites: vec![
+            "slice-827-backend-parity-fixtures".to_string(),
+            "slice-815-formatting-preservation-metrics".to_string(),
+        ],
+        diagnostics: vec!["source-language profile is narrow and not language-wide".to_string()],
+    };
+    let mut ruby_profile =
+        source_subprofile(PROMOTION_PROFILE_RUBY_GEMSPEC_DEPENDENCY_DECLARATIONS, "ruby");
+    ruby_profile.recommendation_gate.required_fixture_count = 10;
+    ruby_profile.recommendation_gate.fallback_threshold = 1;
+    ruby_profile.recommendation_gate.requires_backend_parity = false;
+    ruby_profile.required_suites = vec![
+        "slice-702-ruby-gemspec-signature-merge-acceptance".to_string(),
+        "slice-703-ruby-gemspec-field-policy-acceptance".to_string(),
+        "slice-704-ruby-gemspec-dependency-section-policy-acceptance".to_string(),
+    ];
+    ruby_profile.diagnostics =
+        vec!["Ruby source subprofile is limited to dependency declarations".to_string()];
+    ProfilePromotionPolicy {
+        policy_id: "initial-profile-promotion-policy".to_string(),
+        version: "1".to_string(),
+        global_hard_gates: vec![
+            "parse_or_fail_closed".to_string(),
+            "render_or_fail_closed".to_string(),
+            "coherent_conflict_markers".to_string(),
+            "performance_guardrails".to_string(),
+        ],
+        profiles: vec![
+            ProfilePromotionPolicyEntry {
+                profile_id: PROMOTION_PROFILE_JSON_KEYED_OBJECT.to_string(),
+                family: "json".to_string(),
+                scope: ProfilePromotionScope::DataFormat,
+                eligible_statuses: vec![
+                    ProfilePromotionStatus::Available,
+                    ProfilePromotionStatus::Recommended,
+                    ProfilePromotionStatus::Default,
+                ],
+                recommendation_gate: ProfileRecommendationGate {
+                    required_fixture_count: 12,
+                    formatting_threshold: 0.95,
+                    fallback_threshold: 1,
+                    unresolved_conflict_threshold: 0,
+                    requires_backend_parity: true,
+                    requires_cross_implementation_parity: true,
+                },
+                default_gate: ProfileDefaultGate {
+                    requires_recommended_status: true,
+                    requires_explicit_package_rollout: true,
+                    minimum_recommended_days: 30,
+                    requires_narrow_scope: true,
+                },
+                required_suites: vec![
+                    "slice-901-false-textual-conflicts".to_string(),
+                    "slice-902-git-driver-smoke-fixtures".to_string(),
+                    "slice-815-formatting-preservation-metrics".to_string(),
+                ],
+                diagnostics: vec![
+                    "data-format profile may become default after recommendation soak time"
+                        .to_string(),
+                ],
+            },
+            source_subprofile(PROMOTION_PROFILE_GO_IMPORT_DECLARATIONS, "go"),
+            source_subprofile(PROMOTION_PROFILE_RUST_USE_DECLARATIONS, "rust"),
+            source_subprofile(PROMOTION_PROFILE_TYPESCRIPT_IMPORT_DECLARATIONS, "typescript"),
+            ruby_profile,
+        ],
+        diagnostics: vec![
+            "default status is allowed only after recommendation status and explicit package rollout"
+                .to_string(),
+        ],
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ProfilePromotionEvaluation {
     pub profile_id: String,

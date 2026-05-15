@@ -208,18 +208,18 @@ use ast_merge::{
     import_structured_edit_provider_executor_registry_envelope,
     import_structured_edit_provider_executor_resolution_envelope,
     import_structured_edit_provider_executor_selection_policy_envelope,
-    import_structured_edit_request_envelope, normalize_template_source_path,
-    plan_conformance_suite, plan_named_conformance_suite, plan_named_conformance_suite_entry,
-    plan_named_conformance_suites, plan_named_conformance_suites_with_diagnostics,
-    plan_template_entries, plan_template_execution, plan_template_tree_execution,
-    prepare_template_entries, preview_template_execution, projected_child_group_review_request,
-    report_conformance_manifest, report_conformance_suite, report_named_conformance_suite,
-    report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
-    report_named_conformance_suite_manifest, report_planned_conformance_suite,
-    report_planned_named_conformance_suites, report_template_directory_apply,
-    report_template_directory_plan, report_template_directory_runner, report_template_tree_run,
-    resolve_conformance_family_context, resolve_delegated_child_outputs,
-    resolve_template_destination_path,
+    import_structured_edit_request_envelope, initial_profile_promotion_policy,
+    normalize_template_source_path, plan_conformance_suite, plan_named_conformance_suite,
+    plan_named_conformance_suite_entry, plan_named_conformance_suites,
+    plan_named_conformance_suites_with_diagnostics, plan_template_entries, plan_template_execution,
+    plan_template_tree_execution, prepare_template_entries, preview_template_execution,
+    projected_child_group_review_request, report_conformance_manifest, report_conformance_suite,
+    report_named_conformance_suite, report_named_conformance_suite_entry,
+    report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
+    report_planned_conformance_suite, report_planned_named_conformance_suites,
+    report_template_directory_apply, report_template_directory_plan,
+    report_template_directory_runner, report_template_tree_run, resolve_conformance_family_context,
+    resolve_delegated_child_outputs, resolve_template_destination_path,
     review_and_execute_conformance_manifest_with_replay_bundle_envelope,
     review_conformance_family_context, review_conformance_manifest,
     review_conformance_manifest_with_replay_bundle_envelope, review_projected_child_groups,
@@ -2073,6 +2073,7 @@ fn conforms_to_slice_912_profile_promotion_policy_fixture() {
         json_policy.recommendation_gate.formatting_threshold,
         expected["formatting_threshold"].as_f64().unwrap()
     );
+    assert_eq!(initial_profile_promotion_policy(), policy);
 }
 
 #[test]
