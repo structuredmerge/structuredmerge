@@ -820,6 +820,30 @@ pub struct FallbackUsageReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RenderByteSpan {
+    pub start_byte: usize,
+    pub end_byte: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RenderStrategyMetadata {
+    pub strategy: String,
+    pub path: String,
+    pub span: Option<RenderByteSpan>,
+    pub preserves_source_fragment: bool,
+    pub requires_reparse: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RenderPlanReport {
+    pub plan_id: String,
+    pub version: String,
+    pub language: String,
+    pub strategies: Vec<RenderStrategyMetadata>,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";

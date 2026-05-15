@@ -23,11 +23,12 @@ use ast_merge::{
     NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
     PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
-    RenameAwareMatchingReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
-    ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
-    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
-    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
-    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    RenameAwareMatchingReport, RenderPlanReport, ReviewHostHints, ReviewReplayBundle,
+    ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest, ReviewedNestedExecution,
+    ReviewedNestedExecutionEnvelope, SignatureMatchingParent, SignatureMatchingReport,
+    SourceTextNormalizedMatchingReport, StructuralMatchingReport, StructuredEditApplication,
+    StructuredEditApplicationEnvelope, StructuredEditBatchReport,
+    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -953,6 +954,32 @@ fn conforms_to_slice_812_fallback_usage_machine_output_fixture() {
     assert_eq!(
         report.machine_output.fallbacks[0].scope,
         expected["first_fallback_scope"].as_str().unwrap()
+    );
+}
+
+#[test]
+fn conforms_to_slice_813_render_strategy_metadata_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-813-render-strategy-metadata",
+        "render-strategy-metadata.json",
+    ]));
+    let report: RenderPlanReport = serde_json::from_value(fixture["render_plan"].clone())
+        .expect("render plan report should deserialize");
+    let expected = &fixture["expected"];
+    let strategies: Vec<&str> =
+        report.strategies.iter().map(|strategy| strategy.strategy.as_str()).collect();
+
+    assert_eq!(report.language, expected["language"].as_str().unwrap());
+    assert_eq!(report.strategies.len(), expected["strategy_count"].as_u64().unwrap() as usize);
+    assert_eq!(serde_json::json!(strategies), expected["strategies"]);
+    assert_eq!(
+        report.strategies[0].preserves_source_fragment,
+        expected["source_reuse_preserves_fragment"].as_bool().unwrap()
+    );
+    assert_eq!(
+        report.strategies.last().unwrap().requires_reparse,
+        expected["full_file_requires_reparse"].as_bool().unwrap()
     );
 }
 
