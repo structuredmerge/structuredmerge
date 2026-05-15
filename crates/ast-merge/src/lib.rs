@@ -488,6 +488,43 @@ pub struct MoveDetectionMatchingReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RenameAwareCapability {
+    pub name: String,
+    pub status: String,
+    pub enabled: bool,
+    pub requires_explicit_profile: bool,
+    pub requires_diagnostics: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct RenameAwareCandidate {
+    pub from_path: String,
+    pub to_path: String,
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub from_signature: String,
+    pub to_signature: String,
+    pub stable_body_hash: String,
+    pub rename_distance: f64,
+    pub selected: bool,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct RenameAwareMatchingReport {
+    pub matching_id: String,
+    pub strategy: String,
+    pub from_revision: String,
+    pub to_revision: String,
+    pub capability: RenameAwareCapability,
+    pub candidates: Vec<RenameAwareCandidate>,
+    pub matches: Vec<SignatureNodeMatch>,
+    pub unmatched_from: Vec<String>,
+    pub unmatched_to: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {

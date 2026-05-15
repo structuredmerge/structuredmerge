@@ -19,12 +19,12 @@ use ast_merge::{
     MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
     NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
     PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
-    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge, ReviewHostHints,
-    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
-    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SignatureMatchingParent,
-    SignatureMatchingReport, SourceTextNormalizedMatchingReport, StructuralMatchingReport,
-    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
-    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
+    RenameAwareMatchingReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
+    ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
+    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
+    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
+    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -609,6 +609,41 @@ fn conforms_to_slice_800_move_detection_opt_in_fixture() {
     assert_eq!(
         report.matches[0].to_index,
         expected["first_moved_to_index"].as_u64().unwrap() as usize
+    );
+}
+
+#[test]
+fn conforms_to_slice_801_rename_aware_matching_gated_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-801-rename-aware-matching-gated",
+        "rename-aware-matching-gated.json",
+    ]));
+    let report: RenameAwareMatchingReport = serde_json::from_value(fixture["matching"].clone())
+        .expect("rename-aware matching report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.strategy, expected["strategy"].as_str().unwrap());
+    assert_eq!(report.capability.name, expected["capability"].as_str().unwrap());
+    assert_eq!(report.capability.status, expected["status"].as_str().unwrap());
+    assert_eq!(report.capability.enabled, expected["enabled"].as_bool().unwrap());
+    assert_eq!(
+        report.capability.requires_explicit_profile,
+        expected["requires_explicit_profile"].as_bool().unwrap()
+    );
+    assert_eq!(
+        report.capability.requires_diagnostics,
+        expected["requires_diagnostics"].as_bool().unwrap()
+    );
+    assert_eq!(report.candidates.len(), expected["candidate_count"].as_u64().unwrap() as usize);
+    assert_eq!(report.matches.len(), expected["match_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        report.candidates[0].selected,
+        expected["first_candidate_selected"].as_bool().unwrap()
+    );
+    assert_eq!(
+        report.candidates[0].stable_body_hash,
+        expected["first_candidate_body_hash"].as_str().unwrap()
     );
 }
 
