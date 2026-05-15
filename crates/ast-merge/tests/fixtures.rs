@@ -125,7 +125,7 @@ use ast_merge::{
     TemplateConvergenceResult, TemplateDestinationContext, TemplateExecutionPlanEntry,
     TemplatePlanEntry, TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
     TemplatePreviewResult, TemplateStrategy, TemplateStrategyOverride, TemplateTokenConfig,
-    TemplateTreeRunReport, TemplateTreeRunResult, apply_template_execution,
+    TemplateTreeRunReport, TemplateTreeRunResult, TieBreakMatchingReport, apply_template_execution,
     classify_template_target_path, conformance_family_feature_profile_path,
     conformance_fixture_path, conformance_manifest_replay_context,
     conformance_manifest_review_request_ids, conformance_manifest_review_state_envelope,
@@ -672,6 +672,36 @@ fn conforms_to_slice_802_ambiguity_diagnostics_fixture() {
     assert_eq!(
         report.ambiguities[0].selected,
         expected["first_ambiguity_selected"].as_bool().unwrap()
+    );
+}
+
+#[test]
+fn conforms_to_slice_803_duplicate_signature_tie_break_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-803-duplicate-signature-tie-break",
+        "duplicate-signature-tie-break.json",
+    ]));
+    let report: TieBreakMatchingReport = serde_json::from_value(fixture["matching"].clone())
+        .expect("tie-break matching report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.strategy, expected["strategy"].as_str().unwrap());
+    assert_eq!(report.scope_path, expected["scope_path"].as_str().unwrap());
+    assert_eq!(serde_json::json!(report.tie_break_rules), expected["tie_break_rules"]);
+    assert_eq!(report.matches.len(), expected["match_count"].as_u64().unwrap() as usize);
+    assert_eq!(report.matches[0].signature, expected["first_match_signature"].as_str().unwrap());
+    assert_eq!(
+        report.matches[0].selected_by,
+        expected["first_match_selected_by"].as_str().unwrap()
+    );
+    assert_eq!(
+        report.matches[0].rejected_candidates.len(),
+        expected["rejected_candidate_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        report.matches[0].rejected_candidates[0].rejected_by,
+        expected["first_rejected_by"].as_str().unwrap()
     );
 }
 

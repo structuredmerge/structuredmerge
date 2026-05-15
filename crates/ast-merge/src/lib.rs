@@ -547,6 +547,37 @@ pub struct AmbiguityMatchingReport {
     pub diagnostics: Vec<Diagnostic>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct RejectedTieBreakCandidate {
+    pub from_path: String,
+    pub from_node_id: String,
+    pub confidence: f64,
+    pub rejected_by: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct TieBreakMatch {
+    pub signature: String,
+    pub from_path: String,
+    pub to_path: String,
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub confidence: f64,
+    pub selected_by: String,
+    pub rejected_candidates: Vec<RejectedTieBreakCandidate>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct TieBreakMatchingReport {
+    pub matching_id: String,
+    pub strategy: String,
+    pub scope_path: String,
+    pub tie_break_rules: Vec<String>,
+    pub matches: Vec<TieBreakMatch>,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {
