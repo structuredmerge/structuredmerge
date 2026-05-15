@@ -1061,6 +1061,34 @@ pub struct ProviderRichnessProjection {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BackendGapConformanceGap {
+    pub capability: String,
+    pub status: String,
+    pub impact: String,
+    pub diagnostic_code: String,
+    pub normalized_fallback: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BackendGapConformanceSummary {
+    pub gap_count: usize,
+    pub fallback_count: usize,
+    pub silently_normalized: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BackendGapConformanceReport {
+    pub report_id: String,
+    pub version: String,
+    pub language: String,
+    pub provider_id: String,
+    pub compared_provider_id: String,
+    pub gaps: Vec<BackendGapConformanceGap>,
+    pub summary: BackendGapConformanceSummary,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";

@@ -5,12 +5,13 @@ use std::{
 };
 
 use ast_merge::{
-    AmbiguityMatchingReport, BackendParitySuite, ChangeSet, ClassMappingReport,
-    ConflictCategoryReport, ConflictHandlerRegistryReport, ConflictMarkerRenderingReport,
-    ConformanceCaseExecution, ConformanceCaseRef, ConformanceCaseRequirements,
-    ConformanceCaseResult, ConformanceCaseRun, ConformanceFamilyPlanContext,
-    ConformanceFeatureProfileView, ConformanceManifest, ConformanceManifestPlanningOptions,
-    ConformanceManifestReport, ConformanceManifestReviewOptions, ConformanceManifestReviewState,
+    AmbiguityMatchingReport, BackendGapConformanceReport, BackendParitySuite, ChangeSet,
+    ClassMappingReport, ConflictCategoryReport, ConflictHandlerRegistryReport,
+    ConflictMarkerRenderingReport, ConformanceCaseExecution, ConformanceCaseRef,
+    ConformanceCaseRequirements, ConformanceCaseResult, ConformanceCaseRun,
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, ConformanceManifest,
+    ConformanceManifestPlanningOptions, ConformanceManifestReport,
+    ConformanceManifestReviewOptions, ConformanceManifestReviewState,
     ConformanceManifestReviewStateEnvelope, ConformanceManifestReviewedNestedApplication,
     ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuiteDefinition,
     ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSelector,
@@ -1339,6 +1340,32 @@ fn conforms_to_slice_828_provider_richness_projection_fixture() {
         expected["requires_private_fields"].as_bool().unwrap()
     );
     assert!(projection.private_metadata.contains_key(metadata_namespace));
+}
+
+#[test]
+fn conforms_to_slice_829_backend_gap_conformance_report_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-829-backend-gap-conformance-report",
+        "backend-gap-conformance-report.json",
+    ]));
+    let report: BackendGapConformanceReport = serde_json::from_value(fixture["report"].clone())
+        .expect("backend gap conformance report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.language, expected["language"].as_str().unwrap());
+    assert_eq!(report.provider_id, expected["provider_id"].as_str().unwrap());
+    assert_eq!(report.compared_provider_id, expected["compared_provider_id"].as_str().unwrap());
+    assert_eq!(report.gaps.len(), expected["gap_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        report.summary.fallback_count,
+        expected["fallback_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        report.summary.silently_normalized,
+        expected["silently_normalized"].as_bool().unwrap()
+    );
+    assert_eq!(report.gaps[0].diagnostic_code, expected["first_diagnostic_code"].as_str().unwrap());
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
