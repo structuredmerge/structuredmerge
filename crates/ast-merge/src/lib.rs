@@ -692,6 +692,24 @@ pub struct ConflictMarkerRenderingReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConflictHandlerRegistration {
+    pub handler_id: String,
+    pub conflict_category: String,
+    pub fallback_scope: String,
+    pub node_roles: Vec<String>,
+    pub capability: String,
+    pub enabled: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConflictHandlerRegistryReport {
+    pub registry_id: String,
+    pub version: String,
+    pub handlers: Vec<ConflictHandlerRegistration>,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {

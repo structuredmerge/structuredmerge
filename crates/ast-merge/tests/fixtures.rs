@@ -6,8 +6,8 @@ use std::{
 
 use ast_merge::{
     AmbiguityMatchingReport, ChangeSet, ClassMappingReport, ConflictCategoryReport,
-    ConflictMarkerRenderingReport, ConformanceCaseExecution, ConformanceCaseRef,
-    ConformanceCaseRequirements, ConformanceCaseResult, ConformanceCaseRun,
+    ConflictHandlerRegistryReport, ConflictMarkerRenderingReport, ConformanceCaseExecution,
+    ConformanceCaseRef, ConformanceCaseRequirements, ConformanceCaseResult, ConformanceCaseRun,
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, ConformanceManifest,
     ConformanceManifestPlanningOptions, ConformanceManifestReport,
     ConformanceManifestReviewOptions, ConformanceManifestReviewState,
@@ -826,6 +826,30 @@ fn conforms_to_slice_808_conflict_marker_rendering_fixture() {
     assert!(report.output.starts_with(expected["starts_with"].as_str().unwrap()));
     assert!(report.output.contains(expected["contains_base_marker"].as_str().unwrap()));
     assert!(report.output.ends_with(expected["ends_with"].as_str().unwrap()));
+}
+
+#[test]
+fn conforms_to_slice_809_typed_conflict_handler_extension_points_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-809-typed-conflict-handler-extension-points",
+        "typed-conflict-handler-extension-points.json",
+    ]));
+    let report: ConflictHandlerRegistryReport = serde_json::from_value(fixture["handlers"].clone())
+        .expect("conflict handler registry report should deserialize");
+    let expected = &fixture["expected"];
+    let enabled_count = report.handlers.iter().filter(|handler| handler.enabled).count();
+
+    assert_eq!(report.handlers.len(), expected["handler_count"].as_u64().unwrap() as usize);
+    assert_eq!(enabled_count, expected["enabled_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        report.handlers[0].conflict_category,
+        expected["first_handler_category"].as_str().unwrap()
+    );
+    assert_eq!(
+        report.handlers[1].fallback_scope,
+        expected["second_handler_scope"].as_str().unwrap()
+    );
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
