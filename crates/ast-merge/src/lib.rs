@@ -1149,6 +1149,26 @@ pub struct DiffDriverSmokeSuite {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PerformanceTimeoutDiagnostic {
+    pub severity: String,
+    pub category: String,
+    pub code: String,
+    pub fallback: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PerformanceGuardrails {
+    pub guardrail_id: String,
+    pub version: String,
+    pub max_bytes: usize,
+    pub max_nodes: usize,
+    pub max_match_candidates: usize,
+    pub timeout_ms: u64,
+    pub timeout_diagnostic: PerformanceTimeoutDiagnostic,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";

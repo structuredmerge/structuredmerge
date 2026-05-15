@@ -26,14 +26,14 @@ use ast_merge::{
     MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport, MoveDetectionMatchingReport,
     NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
     NamedConformanceSuiteResults, NativeProviderMetadataReport, NativeProviderProvingGroundReport,
-    PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
-    ProjectedChildReviewGroupProgress, ProviderRichnessProjection, REVIEW_TRANSPORT_VERSION,
-    RawMerge, RenameAwareMatchingReport, RenderPlanReport, RenderSafetyReport,
-    RenderVerificationReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
-    ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
-    SecondaryFormattingMetricsReport, SignatureMatchingParent, SignatureMatchingReport,
-    SourceTextNormalizedMatchingReport, StructuralMatchingReport, StructuredEditApplication,
-    StructuredEditApplicationEnvelope, StructuredEditBatchReport,
+    PCS, PairwiseMatching, PerformanceGuardrails, PolicySurface, ProjectedChildReviewCase,
+    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, ProviderRichnessProjection,
+    REVIEW_TRANSPORT_VERSION, RawMerge, RenameAwareMatchingReport, RenderPlanReport,
+    RenderSafetyReport, RenderVerificationReport, ReviewHostHints, ReviewReplayBundle,
+    ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest, ReviewedNestedExecution,
+    ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport, SignatureMatchingParent,
+    SignatureMatchingReport, SourceTextNormalizedMatchingReport, StructuralMatchingReport,
+    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
     StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
@@ -1448,6 +1448,28 @@ fn conforms_to_slice_903_diff_driver_smoke_fixtures_fixture() {
     assert_eq!(suite.cases.len(), expected["case_count"].as_u64().unwrap() as usize);
     assert_eq!(serde_json::json!(argument_counts), expected["argument_counts"]);
     assert_eq!(structured_diff_count, expected["structured_diff_count"].as_u64().unwrap() as usize);
+}
+
+#[test]
+fn conforms_to_slice_904_performance_guardrails_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-904-performance-guardrails",
+        "performance-guardrails.json",
+    ]));
+    let guardrails: PerformanceGuardrails = serde_json::from_value(fixture["guardrails"].clone())
+        .expect("performance guardrails should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(guardrails.max_bytes, expected["max_bytes"].as_u64().unwrap() as usize);
+    assert_eq!(guardrails.max_nodes, expected["max_nodes"].as_u64().unwrap() as usize);
+    assert_eq!(
+        guardrails.max_match_candidates,
+        expected["max_match_candidates"].as_u64().unwrap() as usize
+    );
+    assert_eq!(guardrails.timeout_ms, expected["timeout_ms"].as_u64().unwrap());
+    assert_eq!(guardrails.timeout_diagnostic.code, expected["timeout_code"].as_str().unwrap());
+    assert_eq!(guardrails.timeout_diagnostic.fallback, expected["fallback"].as_str().unwrap());
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
