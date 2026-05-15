@@ -763,6 +763,23 @@ pub struct GenericConflictHandlerExecution {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LanguageProfileHandlerRegistration {
+    pub role: String,
+    pub handler_id: String,
+    pub conflict_categories: Vec<String>,
+    pub enabled: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LanguageProfileHandlerRegistry {
+    pub profile_id: String,
+    pub language: String,
+    pub version: String,
+    pub registrations: Vec<LanguageProfileHandlerRegistration>,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";

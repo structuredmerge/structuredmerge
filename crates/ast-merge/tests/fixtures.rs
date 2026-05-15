@@ -17,17 +17,17 @@ use ast_merge::{
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
     DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FamilyFeatureProfile,
-    GenericConflictHandlerExecution, InconsistencyReport, LocalLineFallbackReport,
-    MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport, MoveDetectionMatchingReport,
-    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
-    NamedConformanceSuiteResults, PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
-    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
-    RawMerge, RenameAwareMatchingReport, ReviewHostHints, ReviewReplayBundle,
-    ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest, ReviewedNestedExecution,
-    ReviewedNestedExecutionEnvelope, SignatureMatchingParent, SignatureMatchingReport,
-    SourceTextNormalizedMatchingReport, StructuralMatchingReport, StructuredEditApplication,
-    StructuredEditApplicationEnvelope, StructuredEditBatchReport,
-    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    GenericConflictHandlerExecution, InconsistencyReport, LanguageProfileHandlerRegistry,
+    LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
+    MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
+    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults, PCS, PairwiseMatching,
+    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
+    RenameAwareMatchingReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
+    ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
+    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
+    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
+    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -889,6 +889,41 @@ fn conforms_to_slice_810_generic_conflict_handler_execution_fixture() {
         results[1].merged_members.len(),
         expected["second_merged_member_count"].as_u64().unwrap() as usize
     );
+}
+
+#[test]
+fn conforms_to_slice_811_language_profile_handler_registration_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-811-language-profile-handler-registration",
+        "language-profile-handler-registration.json",
+    ]));
+    let registry: LanguageProfileHandlerRegistry =
+        serde_json::from_value(fixture["profile_handlers"].clone())
+            .expect("language profile handler registry should deserialize");
+    let expected = &fixture["expected"];
+    let enabled_count =
+        registry.registrations.iter().filter(|registration| registration.enabled).count();
+    let roles = registry
+        .registrations
+        .iter()
+        .map(|registration| registration.role.as_str())
+        .collect::<Vec<_>>();
+    let duplicate_member_handler = registry
+        .registrations
+        .iter()
+        .find(|registration| registration.role == "duplicate_members")
+        .map(|registration| registration.handler_id.as_str())
+        .unwrap();
+
+    assert_eq!(registry.language, expected["language"].as_str().unwrap());
+    assert_eq!(
+        registry.registrations.len(),
+        expected["registration_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(enabled_count, expected["enabled_count"].as_u64().unwrap() as usize);
+    assert_eq!(serde_json::json!(roles), expected["roles"]);
+    assert_eq!(duplicate_member_handler, expected["duplicate_member_handler"].as_str().unwrap());
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
