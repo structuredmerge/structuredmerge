@@ -930,6 +930,21 @@ pub struct TokenSpanPreservationMetricsReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FormattingEdgeFixtureCase {
+    pub case_id: String,
+    pub category: String,
+    pub requires_conflict_markers: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FormattingEdgeFixtureSuite {
+    pub suite_id: String,
+    pub version: String,
+    pub cases: Vec<FormattingEdgeFixtureCase>,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";

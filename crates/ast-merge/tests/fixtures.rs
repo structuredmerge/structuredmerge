@@ -17,12 +17,13 @@ use ast_merge::{
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
     DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FallbackUsageReport,
-    FamilyFeatureProfile, FormattingHardGateReport, FormattingPreservationConformanceReport,
-    FormattingRecommendationGate, GenericConflictHandlerExecution, InconsistencyReport,
-    LanguageProfileHandlerRegistry, LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR,
-    MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
-    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
-    PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    FamilyFeatureProfile, FormattingEdgeFixtureSuite, FormattingHardGateReport,
+    FormattingPreservationConformanceReport, FormattingRecommendationGate,
+    GenericConflictHandlerExecution, InconsistencyReport, LanguageProfileHandlerRegistry,
+    LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
+    MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
+    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults, PCS, PairwiseMatching,
+    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
     RenameAwareMatchingReport, RenderPlanReport, RenderVerificationReport, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
@@ -1123,6 +1124,30 @@ fn conforms_to_slice_819_token_span_preservation_metrics_fixture() {
     assert_eq!(report.token_preservation, expected["token_preservation"].as_f64().unwrap());
     assert_eq!(report.span_preservation, expected["span_preservation"].as_f64().unwrap());
     assert_eq!(report.weighted, expected["weighted"].as_bool().unwrap());
+}
+
+#[test]
+fn conforms_to_slice_820_formatting_edge_fixtures_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-820-formatting-edge-fixtures",
+        "formatting-edge-fixtures.json",
+    ]));
+    let suite: FormattingEdgeFixtureSuite =
+        serde_json::from_value(fixture["fixture_suite"].clone())
+            .expect("formatting edge fixture suite should deserialize");
+    let expected = &fixture["expected"];
+    let categories: Vec<&str> =
+        suite.cases.iter().map(|fixture_case| fixture_case.category.as_str()).collect();
+    let conflict_marker_case_count =
+        suite.cases.iter().filter(|fixture_case| fixture_case.requires_conflict_markers).count();
+
+    assert_eq!(suite.cases.len(), expected["case_count"].as_u64().unwrap() as usize);
+    assert_eq!(serde_json::json!(categories), expected["categories"]);
+    assert_eq!(
+        conflict_marker_case_count,
+        expected["conflict_marker_case_count"].as_u64().unwrap() as usize
+    );
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
