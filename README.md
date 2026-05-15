@@ -32,6 +32,25 @@ structuredmerge-binary-merge = "0.1"
 structuredmerge-zip-merge = "0.1"
 ```
 
+## Command
+
+The Rust implementation ships the implementation-specific `smorg-rs` command.
+Use that name in git configuration unless a package manager or local install has
+provided a `smorg` symlink.
+
+```sh
+git config merge.smorg-rs.driver 'smorg-rs merge-driver %O %A %B %P'
+git config diff.smorg-rs.command 'smorg-rs diff-driver'
+smorg-rs conflicts diff path/to/file-with-conflicts.go
+smorg-rs languages --gitattributes
+```
+
+`merge-driver` updates Git's `%A` file by default, or writes to `--output` when
+used outside git. `diff-driver` accepts both the two-argument local form and the
+seven- or nine-argument forms Git passes to external diff commands.
+`conflicts diff` reports conflict-marker regions in a file that already contains
+Git conflict markers.
+
 ## Crates
 
 Core:

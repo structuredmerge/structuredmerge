@@ -1,0 +1,19 @@
+[package]
+name = "smorg-rs"
+version = "0.2.0"
+repository = "https://github.com/structuredmerge/structuredmerge-rust"
+homepage = "https://structuredmerge.org"
+authors = ["Peter H. Boling"]
+edition = "2024"
+description = "Implementation-specific StructuredMerge command for Rust"
+license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
+
+[dependencies]
+ast-merge = { version = "0.2.0", path = "../ast-merge" }
+go-merge = { version = "0.2.0", path = "../go-merge" }
+json-merge = { version = "0.2.0", path = "../json-merge" }
+plain-merge = { version = "0.2.0", path = "../plain-merge" }
+
+[[bin]]
+name = "smorg-rs"
+path = "src/main.rs"
