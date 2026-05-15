@@ -26,17 +26,19 @@ use ast_merge::{
     LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
     MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
     NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
-    NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS, PairwiseMatching,
-    PerformanceGuardrails, PolicySurface, ProfileConformanceReport, ProfileDebugOutput,
-    ProfilePromotionPolicy, ProfilePromotionReport, ProfilePromotionScope, ProfilePromotionStatus,
-    ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
-    ProviderRichnessProjection, REVIEW_TRANSPORT_VERSION, RawMerge, RenameAwareMatchingReport,
-    RenderPlanReport, RenderSafetyReport, RenderVerificationReport, ReviewHostHints,
-    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
-    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport,
-    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
-    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
-    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS,
+    PROMOTION_PROFILE_JSON_KEYED_OBJECT, PROMOTION_PROFILE_RUBY_GEMSPEC_DEPENDENCY_DECLARATIONS,
+    PairwiseMatching, PerformanceGuardrails, PolicySurface, ProfileConformanceReport,
+    ProfileDebugOutput, ProfilePromotionPolicy, ProfilePromotionReport, ProfilePromotionScope,
+    ProfilePromotionStatus, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    ProjectedChildReviewGroupProgress, ProviderRichnessProjection, REVIEW_TRANSPORT_VERSION,
+    RawMerge, RenameAwareMatchingReport, RenderPlanReport, RenderSafetyReport,
+    RenderVerificationReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
+    ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
+    SecondaryFormattingMetricsReport, SignatureMatchingParent, SignatureMatchingReport,
+    SourceTextNormalizedMatchingReport, StructuralMatchingReport, StructuredEditApplication,
+    StructuredEditApplicationEnvelope, StructuredEditBatchReport,
+    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -2036,12 +2038,15 @@ fn conforms_to_slice_912_profile_promotion_policy_fixture() {
         .iter()
         .filter(|entry| entry.scope == ProfilePromotionScope::SourceSubprofile)
         .count();
-    let json_policy =
-        policy.profiles.iter().find(|entry| entry.profile_id == "json.keyed-object").unwrap();
+    let json_policy = policy
+        .profiles
+        .iter()
+        .find(|entry| entry.profile_id == PROMOTION_PROFILE_JSON_KEYED_OBJECT)
+        .unwrap();
     let ruby_policy = policy
         .profiles
         .iter()
-        .find(|entry| entry.profile_id == "ruby.gemspec-dependency-declarations")
+        .find(|entry| entry.profile_id == PROMOTION_PROFILE_RUBY_GEMSPEC_DEPENDENCY_DECLARATIONS)
         .unwrap();
 
     assert_eq!(policy.policy_id, expected["policy_id"].as_str().unwrap());

@@ -1480,6 +1480,13 @@ pub enum ProfilePromotionScope {
     SourceSubprofile,
 }
 
+pub const PROMOTION_PROFILE_JSON_KEYED_OBJECT: &str = "json.keyed-object";
+pub const PROMOTION_PROFILE_GO_IMPORT_DECLARATIONS: &str = "go.import-declarations";
+pub const PROMOTION_PROFILE_RUST_USE_DECLARATIONS: &str = "rust.use-declarations";
+pub const PROMOTION_PROFILE_TYPESCRIPT_IMPORT_DECLARATIONS: &str = "typescript.import-declarations";
+pub const PROMOTION_PROFILE_RUBY_GEMSPEC_DEPENDENCY_DECLARATIONS: &str =
+    "ruby.gemspec-dependency-declarations";
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ProfileRecommendationGate {
     pub required_fixture_count: usize,
