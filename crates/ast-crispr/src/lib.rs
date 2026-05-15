@@ -250,6 +250,22 @@ impl OperationProfile {
     }
 }
 
+pub fn replace_operation() -> OperationProfile {
+    OperationProfile::new("replace", "required", "none", "explicit_text", true, false)
+}
+
+pub fn delete_operation() -> OperationProfile {
+    OperationProfile::new("delete", "required", "none", "none", true, false)
+}
+
+pub fn insert_operation() -> OperationProfile {
+    OperationProfile::new("insert", "none", "optional", "explicit_text", false, true)
+}
+
+pub fn move_operation() -> OperationProfile {
+    OperationProfile::new("move", "optional", "optional", "captured_text_or_explicit", true, true)
+}
+
 fn defaulted(value: &str, fallback: &str) -> String {
     if value.is_empty() { fallback } else { value }.to_string()
 }
@@ -518,10 +534,10 @@ pub fn boundary_report() -> Value {
             "match profile helpers",
             "selection profile helpers",
             "destination profile helpers",
-            "operation profile helpers"
+            "operation profile helpers",
+            "replace/delete/insert/move helpers"
         ],
         "future_exports": [
-            "replace/delete/insert/move helpers",
             "batch operation helpers"
         ],
         "metadata": {
@@ -685,6 +701,31 @@ mod tests {
                 profile_fixture["supports_if_missing"].as_bool().expect("supports if missing"),
             );
             assert_eq!(profile.report(), test_case["expected"]);
+        }
+    }
+
+    #[test]
+    fn operation_helpers_match_fixture() {
+        let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("fixtures")
+            .join("diagnostics")
+            .join("slice-922-ast-crispr-operation-helpers")
+            .join("ast-crispr-operation-helpers.json");
+        let source = fs::read_to_string(fixture_path).expect("read fixture");
+        let fixture: Value = serde_json::from_str(&source).expect("parse fixture");
+
+        for test_case in fixture["cases"].as_array().expect("cases") {
+            let profile = match test_case["helper"].as_str().expect("helper") {
+                "replace" => replace_operation(),
+                "delete" => delete_operation(),
+                "insert" => insert_operation(),
+                "move" => move_operation(),
+                helper => panic!("unknown helper {helper}"),
+            };
+            assert_eq!(profile.report(), test_case["expected_operation_profile"]);
         }
     }
 }
