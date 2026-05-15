@@ -144,8 +144,8 @@ use ast_merge::{
     conformance_manifest_review_state_envelope, conformance_review_host_hints,
     conformance_suite_definition, conformance_suite_selectors, default_conformance_family_context,
     delegated_child_apply_plan, enrich_template_plan_entries,
-    enrich_template_plan_entries_with_token_state, evaluate_template_tree_convergence,
-    execute_generic_conflict_handler,
+    enrich_template_plan_entries_with_token_state, evaluate_profile_promotion,
+    evaluate_template_tree_convergence, execute_generic_conflict_handler,
     execute_review_replay_bundle_envelope_reviewed_nested_executions,
     execute_review_replay_bundle_reviewed_nested_executions,
     execute_review_state_envelope_reviewed_nested_executions,
@@ -2067,6 +2067,55 @@ fn conforms_to_slice_912_profile_promotion_policy_fixture() {
     assert_eq!(
         json_policy.recommendation_gate.formatting_threshold,
         expected["formatting_threshold"].as_f64().unwrap()
+    );
+}
+
+#[test]
+fn conforms_to_slice_913_profile_promotion_evaluation_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-913-profile-promotion-evaluation",
+        "profile-promotion-evaluation.json",
+    ]));
+    let policy: ProfilePromotionPolicy = serde_json::from_value(fixture["policy"].clone()).unwrap();
+    let recommended_report: ProfilePromotionReport =
+        serde_json::from_value(fixture["recommended_report"].clone()).unwrap();
+    let blocked_report: ProfilePromotionReport =
+        serde_json::from_value(fixture["blocked_report"].clone()).unwrap();
+    let expected = &fixture["expected"];
+
+    let recommended = evaluate_profile_promotion(&policy, &recommended_report);
+    assert_eq!(
+        recommended.status,
+        serde_json::from_value::<ProfilePromotionStatus>(expected["recommended_status"].clone())
+            .unwrap()
+    );
+    assert_eq!(
+        recommended.blocking_reasons.len(),
+        expected["recommended_blocking_reason_count"].as_u64().unwrap() as usize
+    );
+
+    let blocked = evaluate_profile_promotion(&policy, &blocked_report);
+    assert_eq!(
+        blocked.status,
+        serde_json::from_value::<ProfilePromotionStatus>(expected["blocked_status"].clone())
+            .unwrap()
+    );
+    assert_eq!(
+        blocked.blocking_reasons.len(),
+        expected["blocked_blocking_reason_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(blocked.blocking_reasons[0], expected["first_blocking_reason"].as_str().unwrap());
+
+    let mut unknown_report = recommended_report;
+    unknown_report.profile_id = "unknown.profile".to_string();
+    let unknown = evaluate_profile_promotion(&policy, &unknown_report);
+    assert_eq!(
+        unknown.status,
+        serde_json::from_value::<ProfilePromotionStatus>(
+            expected["unknown_profile_status"].clone()
+        )
+        .unwrap()
     );
 }
 

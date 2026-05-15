@@ -1519,6 +1519,74 @@ pub struct ProfilePromotionPolicy {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProfilePromotionEvaluation {
+    pub profile_id: String,
+    pub status: ProfilePromotionStatus,
+    pub blocking_reasons: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
+pub fn evaluate_profile_promotion(
+    policy: &ProfilePromotionPolicy,
+    report: &ProfilePromotionReport,
+) -> ProfilePromotionEvaluation {
+    let Some(entry) = policy.profiles.iter().find(|entry| entry.profile_id == report.profile_id)
+    else {
+        return ProfilePromotionEvaluation {
+            profile_id: report.profile_id.clone(),
+            status: ProfilePromotionStatus::Experimental,
+            blocking_reasons: vec!["profile has no promotion policy".to_string()],
+            diagnostics: vec![],
+        };
+    };
+    let blocking_reasons = profile_promotion_blocking_reasons(entry, report);
+    let status = if blocking_reasons.is_empty()
+        && entry.eligible_statuses.contains(&ProfilePromotionStatus::Recommended)
+    {
+        ProfilePromotionStatus::Recommended
+    } else {
+        ProfilePromotionStatus::Available
+    };
+    ProfilePromotionEvaluation {
+        profile_id: report.profile_id.clone(),
+        status,
+        blocking_reasons,
+        diagnostics: vec![],
+    }
+}
+
+fn profile_promotion_blocking_reasons(
+    entry: &ProfilePromotionPolicyEntry,
+    report: &ProfilePromotionReport,
+) -> Vec<String> {
+    let mut reasons = Vec::new();
+    for gate in &report.hard_gates {
+        if gate.required && !gate.passed {
+            reasons.push(format!("required hard gate {} failed", gate.name));
+        }
+    }
+    if report.metrics.passed_fixture_count < entry.recommendation_gate.required_fixture_count {
+        reasons.push("passed fixture count is below required fixture count".to_string());
+    }
+    if report.metrics.formatting_preservation_score < entry.recommendation_gate.formatting_threshold
+    {
+        reasons.push("formatting preservation score is below threshold".to_string());
+    }
+    if report.metrics.fallback_count > entry.recommendation_gate.fallback_threshold {
+        reasons.push("fallback count exceeds threshold".to_string());
+    }
+    if report.metrics.unresolved_conflict_count
+        > entry.recommendation_gate.unresolved_conflict_threshold
+    {
+        reasons.push("unresolved conflict count exceeds threshold".to_string());
+    }
+    if entry.recommendation_gate.requires_backend_parity && !report.metrics.backend_parity_passed {
+        reasons.push("backend parity did not pass".to_string());
+    }
+    reasons
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";
