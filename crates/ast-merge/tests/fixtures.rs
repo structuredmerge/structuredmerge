@@ -28,15 +28,15 @@ use ast_merge::{
     NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
     NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS, PairwiseMatching,
     PerformanceGuardrails, PolicySurface, ProfileConformanceReport, ProfileDebugOutput,
-    ProfilePromotionReport, ProfilePromotionStatus, ProjectedChildReviewCase,
-    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, ProviderRichnessProjection,
-    REVIEW_TRANSPORT_VERSION, RawMerge, RenameAwareMatchingReport, RenderPlanReport,
-    RenderSafetyReport, RenderVerificationReport, ReviewHostHints, ReviewReplayBundle,
-    ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest, ReviewedNestedExecution,
-    ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport, SignatureMatchingParent,
-    SignatureMatchingReport, SourceTextNormalizedMatchingReport, StructuralMatchingReport,
-    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
-    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    ProfilePromotionPolicy, ProfilePromotionReport, ProfilePromotionScope, ProfilePromotionStatus,
+    ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
+    ProviderRichnessProjection, REVIEW_TRANSPORT_VERSION, RawMerge, RenameAwareMatchingReport,
+    RenderPlanReport, RenderSafetyReport, RenderVerificationReport, ReviewHostHints,
+    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
+    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport,
+    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
+    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
+    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -2008,6 +2008,65 @@ fn conforms_to_slice_911_profile_promotion_report_fixture() {
     assert_eq!(
         blocked.blocking_reasons.len(),
         expected["blocking_reason_count"].as_u64().unwrap() as usize
+    );
+}
+
+#[test]
+fn conforms_to_slice_912_profile_promotion_policy_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-912-profile-promotion-policy",
+        "profile-promotion-policy.json",
+    ]));
+    let policy: ProfilePromotionPolicy = serde_json::from_value(fixture["policy"].clone()).unwrap();
+    let expected = &fixture["expected"];
+
+    let recommended_eligible = policy
+        .profiles
+        .iter()
+        .filter(|entry| entry.eligible_statuses.contains(&ProfilePromotionStatus::Recommended))
+        .count();
+    let default_eligible = policy
+        .profiles
+        .iter()
+        .filter(|entry| entry.eligible_statuses.contains(&ProfilePromotionStatus::Default))
+        .count();
+    let source_subprofiles = policy
+        .profiles
+        .iter()
+        .filter(|entry| entry.scope == ProfilePromotionScope::SourceSubprofile)
+        .count();
+    let json_policy =
+        policy.profiles.iter().find(|entry| entry.profile_id == "json.keyed-object").unwrap();
+    let ruby_policy = policy
+        .profiles
+        .iter()
+        .find(|entry| entry.profile_id == "ruby.gemspec-dependencies")
+        .unwrap();
+
+    assert_eq!(policy.policy_id, expected["policy_id"].as_str().unwrap());
+    assert_eq!(policy.profiles.len(), expected["profile_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        policy.global_hard_gates.len(),
+        expected["global_hard_gate_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        recommended_eligible,
+        expected["recommended_eligible_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(default_eligible, expected["default_eligible_count"].as_u64().unwrap() as usize);
+    assert_eq!(source_subprofiles, expected["source_subprofile_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        json_policy.recommendation_gate.requires_cross_implementation_parity,
+        expected["json_requires_cross_implementation_parity"].as_bool().unwrap()
+    );
+    assert_eq!(
+        ruby_policy.recommendation_gate.requires_backend_parity,
+        expected["ruby_requires_backend_parity"].as_bool().unwrap()
+    );
+    assert_eq!(
+        json_policy.recommendation_gate.formatting_threshold,
+        expected["formatting_threshold"].as_f64().unwrap()
     );
 }
 

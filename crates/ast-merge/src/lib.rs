@@ -1473,6 +1473,52 @@ pub struct ProfilePromotionReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProfilePromotionScope {
+    DataFormat,
+    SourceSubprofile,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ProfileRecommendationGate {
+    pub required_fixture_count: usize,
+    pub formatting_threshold: f64,
+    pub fallback_threshold: usize,
+    pub unresolved_conflict_threshold: usize,
+    pub requires_backend_parity: bool,
+    pub requires_cross_implementation_parity: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProfileDefaultGate {
+    pub requires_recommended_status: bool,
+    pub requires_explicit_package_rollout: bool,
+    pub minimum_recommended_days: usize,
+    pub requires_narrow_scope: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ProfilePromotionPolicyEntry {
+    pub profile_id: String,
+    pub family: String,
+    pub scope: ProfilePromotionScope,
+    pub eligible_statuses: Vec<ProfilePromotionStatus>,
+    pub recommendation_gate: ProfileRecommendationGate,
+    pub default_gate: ProfileDefaultGate,
+    pub required_suites: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ProfilePromotionPolicy {
+    pub policy_id: String,
+    pub version: String,
+    pub global_hard_gates: Vec<String>,
+    pub profiles: Vec<ProfilePromotionPolicyEntry>,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";
