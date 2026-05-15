@@ -1089,6 +1089,27 @@ pub struct BackendGapConformanceReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FalseTextualConflictCase {
+    pub case_id: String,
+    pub language: String,
+    pub category: String,
+    pub base_path: String,
+    pub ours_path: String,
+    pub theirs_path: String,
+    pub expected_strategy: String,
+    pub expected_unresolved_conflict: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FalseTextualConflictSuite {
+    pub suite_id: String,
+    pub version: String,
+    pub source: String,
+    pub cases: Vec<FalseTextualConflictCase>,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";

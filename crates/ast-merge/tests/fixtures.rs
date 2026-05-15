@@ -18,13 +18,13 @@ use ast_merge::{
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
     DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FallbackUsageReport,
-    FamilyFeatureProfile, FormattingEdgeFixtureSuite, FormattingHardGateReport,
-    FormattingPreservationConformanceReport, FormattingRecommendationGate,
-    GenericConflictHandlerExecution, GoDSTProviderStackReport, GoProviderComparisonReport,
-    HostLanguageNativeProviderContracts, InconsistencyReport, LanguageProfileHandlerRegistry,
-    LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
-    MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
-    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
+    FalseTextualConflictSuite, FamilyFeatureProfile, FormattingEdgeFixtureSuite,
+    FormattingHardGateReport, FormattingPreservationConformanceReport,
+    FormattingRecommendationGate, GenericConflictHandlerExecution, GoDSTProviderStackReport,
+    GoProviderComparisonReport, HostLanguageNativeProviderContracts, InconsistencyReport,
+    LanguageProfileHandlerRegistry, LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR,
+    MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
+    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
     NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS, PairwiseMatching,
     PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, ProviderRichnessProjection, REVIEW_TRANSPORT_VERSION,
@@ -1366,6 +1366,35 @@ fn conforms_to_slice_829_backend_gap_conformance_report_fixture() {
         expected["silently_normalized"].as_bool().unwrap()
     );
     assert_eq!(report.gaps[0].diagnostic_code, expected["first_diagnostic_code"].as_str().unwrap());
+}
+
+#[test]
+fn conforms_to_slice_901_false_textual_conflicts_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-901-false-textual-conflicts",
+        "false-textual-conflicts.json",
+    ]));
+    let suite: FalseTextualConflictSuite = serde_json::from_value(fixture["suite"].clone())
+        .expect("false textual conflict suite should deserialize");
+    let expected = &fixture["expected"];
+    let languages: Vec<&str> =
+        suite.cases.iter().map(|conflict_case| conflict_case.language.as_str()).collect();
+    let categories: Vec<&str> =
+        suite.cases.iter().map(|conflict_case| conflict_case.category.as_str()).collect();
+    let unresolved_conflict_count = suite
+        .cases
+        .iter()
+        .filter(|conflict_case| conflict_case.expected_unresolved_conflict)
+        .count();
+
+    assert_eq!(suite.cases.len(), expected["case_count"].as_u64().unwrap() as usize);
+    assert_eq!(serde_json::json!(languages), expected["languages"]);
+    assert_eq!(serde_json::json!(categories), expected["categories"]);
+    assert_eq!(
+        unresolved_conflict_count,
+        expected["expected_unresolved_conflict_count"].as_u64().unwrap() as usize
+    );
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
