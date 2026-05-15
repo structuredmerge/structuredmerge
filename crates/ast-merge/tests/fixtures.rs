@@ -16,12 +16,12 @@ use ast_merge::{
     ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSelector,
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
-    DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FamilyFeatureProfile,
-    GenericConflictHandlerExecution, InconsistencyReport, LanguageProfileHandlerRegistry,
-    LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
-    MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
-    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults, PCS, PairwiseMatching,
-    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FallbackUsageReport,
+    FamilyFeatureProfile, GenericConflictHandlerExecution, InconsistencyReport,
+    LanguageProfileHandlerRegistry, LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR,
+    MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
+    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
+    PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
     RenameAwareMatchingReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
     ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
@@ -924,6 +924,36 @@ fn conforms_to_slice_811_language_profile_handler_registration_fixture() {
     assert_eq!(enabled_count, expected["enabled_count"].as_u64().unwrap() as usize);
     assert_eq!(serde_json::json!(roles), expected["roles"]);
     assert_eq!(duplicate_member_handler, expected["duplicate_member_handler"].as_str().unwrap());
+}
+
+#[test]
+fn conforms_to_slice_812_fallback_usage_machine_output_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-812-fallback-usage-machine-output",
+        "fallback-usage-machine-output.json",
+    ]));
+    let report: FallbackUsageReport = serde_json::from_value(fixture["fallback_usage"].clone())
+        .expect("fallback usage report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.mode, expected["mode"].as_str().unwrap());
+    assert_eq!(report.quiet_by_default, expected["quiet_by_default"].as_bool().unwrap());
+    assert_eq!(
+        report.machine_output.summary.fallback_count,
+        expected["fallback_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        report.machine_output.summary.conflict_count,
+        expected["conflict_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(report.git_driver_output.stdout, expected["stdout"].as_str().unwrap());
+    assert_eq!(report.git_driver_output.stderr, expected["stderr"].as_str().unwrap());
+    assert_eq!(report.git_driver_output.exit_code, expected["exit_code"].as_i64().unwrap() as i32);
+    assert_eq!(
+        report.machine_output.fallbacks[0].scope,
+        expected["first_fallback_scope"].as_str().unwrap()
+    );
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

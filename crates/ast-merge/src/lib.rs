@@ -780,6 +780,46 @@ pub struct LanguageProfileHandlerRegistry {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FallbackUsageEntry {
+    pub fallback_id: String,
+    pub strategy: String,
+    pub scope: String,
+    pub path: String,
+    pub conflict_category: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FallbackUsageSummary {
+    pub fallback_count: usize,
+    pub conflict_count: usize,
+    pub resolved_count: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FallbackUsageMachineOutput {
+    pub fallbacks: Vec<FallbackUsageEntry>,
+    pub summary: FallbackUsageSummary,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GitDriverOutput {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: i32,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FallbackUsageReport {
+    pub report_id: String,
+    pub version: String,
+    pub mode: String,
+    pub quiet_by_default: bool,
+    pub machine_output: FallbackUsageMachineOutput,
+    pub git_driver_output: GitDriverOutput,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";
