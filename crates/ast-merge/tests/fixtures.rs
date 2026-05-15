@@ -23,11 +23,11 @@ use ast_merge::{
     NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
     PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
-    RenameAwareMatchingReport, RenderPlanReport, ReviewHostHints, ReviewReplayBundle,
-    ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest, ReviewedNestedExecution,
-    ReviewedNestedExecutionEnvelope, SignatureMatchingParent, SignatureMatchingReport,
-    SourceTextNormalizedMatchingReport, StructuralMatchingReport, StructuredEditApplication,
-    StructuredEditApplicationEnvelope, StructuredEditBatchReport,
+    RenameAwareMatchingReport, RenderPlanReport, RenderVerificationReport, ReviewHostHints,
+    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
+    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SignatureMatchingParent,
+    SignatureMatchingReport, SourceTextNormalizedMatchingReport, StructuralMatchingReport,
+    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
     StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
@@ -981,6 +981,27 @@ fn conforms_to_slice_813_render_strategy_metadata_fixture() {
         report.strategies.last().unwrap().requires_reparse,
         expected["full_file_requires_reparse"].as_bool().unwrap()
     );
+}
+
+#[test]
+fn conforms_to_slice_814_reparse_after_render_verification_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-814-reparse-after-render-verification",
+        "reparse-after-render-verification.json",
+    ]));
+    let report: RenderVerificationReport =
+        serde_json::from_value(fixture["render_verification"].clone())
+            .expect("render verification report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.mode, expected["mode"].as_str().unwrap());
+    assert_eq!(report.language, expected["language"].as_str().unwrap());
+    assert_eq!(report.attempted, expected["attempted"].as_bool().unwrap());
+    assert_eq!(report.passed, expected["passed"].as_bool().unwrap());
+    assert_eq!(report.hard_gate, expected["hard_gate"].as_bool().unwrap());
+    assert_eq!(report.parse_errors.len(), expected["parse_error_count"].as_u64().unwrap() as usize);
+    assert_eq!(report.render_strategy, expected["render_strategy"].as_str().unwrap());
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

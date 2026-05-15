@@ -844,6 +844,20 @@ pub struct RenderPlanReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RenderVerificationReport {
+    pub verification_id: String,
+    pub version: String,
+    pub mode: String,
+    pub language: String,
+    pub render_strategy: String,
+    pub attempted: bool,
+    pub passed: bool,
+    pub hard_gate: bool,
+    pub parse_errors: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";
