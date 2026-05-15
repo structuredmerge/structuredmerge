@@ -21,8 +21,8 @@ use ast_merge::{
     PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
-    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, StructuredEditApplication,
-    StructuredEditApplicationEnvelope, StructuredEditBatchReport,
+    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, StructuralMatchingReport,
+    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
     StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
@@ -489,6 +489,31 @@ fn conforms_to_slice_796_merge_ir_comparison_fixture() {
     assert_eq!(report.summary.merge_ir_wins, expected["merge_ir_wins"].as_u64().unwrap() as usize);
     assert_eq!(report.summary.recommendation, expected["recommendation"].as_str().unwrap());
     assert_eq!(report.cases[4].merge_ir_advantage, "defer");
+}
+
+#[test]
+fn conforms_to_slice_797_structural_matching_baseline_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-797-structural-matching-baseline",
+        "structural-matching-baseline.json",
+    ]));
+    let report: StructuralMatchingReport = serde_json::from_value(fixture["matching"].clone())
+        .expect("structural matching report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.strategy, expected["strategy"].as_str().unwrap());
+    assert_eq!(report.matches.len(), expected["match_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        report.unmatched_from.len(),
+        expected["unmatched_from_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        report.unmatched_to.len(),
+        expected["unmatched_to_count"].as_u64().unwrap() as usize
+    );
+    assert!(!expected["move_detection"].as_bool().unwrap());
+    assert_eq!(report.matches[1].from_path, "/declarations/Greet");
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

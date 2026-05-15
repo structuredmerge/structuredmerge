@@ -367,6 +367,27 @@ pub struct MergeIRComparisonReport {
     pub summary: MergeIRComparisonSummary,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct StructuralPathMatch {
+    pub from_path: String,
+    pub to_path: String,
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub confidence: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct StructuralMatchingReport {
+    pub matching_id: String,
+    pub strategy: String,
+    pub from_revision: String,
+    pub to_revision: String,
+    pub matches: Vec<StructuralPathMatch>,
+    pub unmatched_from: Vec<String>,
+    pub unmatched_to: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {
