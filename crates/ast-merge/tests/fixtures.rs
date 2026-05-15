@@ -17,12 +17,12 @@ use ast_merge::{
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
     DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FallbackUsageReport,
-    FamilyFeatureProfile, FormattingPreservationConformanceReport, FormattingRecommendationGate,
-    GenericConflictHandlerExecution, InconsistencyReport, LanguageProfileHandlerRegistry,
-    LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
-    MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
-    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults, PCS, PairwiseMatching,
-    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    FamilyFeatureProfile, FormattingHardGateReport, FormattingPreservationConformanceReport,
+    FormattingRecommendationGate, GenericConflictHandlerExecution, InconsistencyReport,
+    LanguageProfileHandlerRegistry, LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR,
+    MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
+    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
+    PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
     RenameAwareMatchingReport, RenderPlanReport, RenderVerificationReport, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
@@ -1056,6 +1056,27 @@ fn conforms_to_slice_816_formatting_recommendation_gate_fixture() {
         expected["character_weight"].as_f64().unwrap()
     );
     assert_eq!(gate.metrics.formatting_preservation_score, expected["score"].as_f64().unwrap());
+}
+
+#[test]
+fn conforms_to_slice_817_formatting_hard_gates_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-817-formatting-hard-gates",
+        "formatting-hard-gates.json",
+    ]));
+    let report: FormattingHardGateReport =
+        serde_json::from_value(fixture["hard_gate_report"].clone())
+            .expect("formatting hard gate report should deserialize");
+    let expected = &fixture["expected"];
+    let passed_count = report.gates.iter().filter(|gate| gate.passed).count();
+    let weighted_count = report.gates.iter().filter(|gate| gate.weighted).count();
+
+    assert_eq!(report.gates.len(), expected["gate_count"].as_u64().unwrap() as usize);
+    assert_eq!(passed_count == report.gates.len(), expected["all_passed"].as_bool().unwrap());
+    assert_eq!(weighted_count, expected["weighted_gate_count"].as_u64().unwrap() as usize);
+    assert_eq!(report.gates[0].name, expected["first_gate"].as_str().unwrap());
+    assert_eq!(report.gates[1].name, expected["second_gate"].as_str().unwrap());
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

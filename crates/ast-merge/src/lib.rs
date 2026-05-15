@@ -893,6 +893,21 @@ pub struct FormattingRecommendationGate {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FormattingHardGate {
+    pub name: String,
+    pub passed: bool,
+    pub weighted: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FormattingHardGateReport {
+    pub report_id: String,
+    pub version: String,
+    pub gates: Vec<FormattingHardGate>,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";
