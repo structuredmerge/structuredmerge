@@ -17,16 +17,17 @@ use ast_merge::{
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
     DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FamilyFeatureProfile,
-    InconsistencyReport, LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR,
-    MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
-    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
-    PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
-    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
-    RenameAwareMatchingReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
-    ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
-    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
-    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
-    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    GenericConflictHandlerExecution, InconsistencyReport, LocalLineFallbackReport,
+    MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport, MoveDetectionMatchingReport,
+    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
+    NamedConformanceSuiteResults, PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
+    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
+    RawMerge, RenameAwareMatchingReport, ReviewHostHints, ReviewReplayBundle,
+    ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest, ReviewedNestedExecution,
+    ReviewedNestedExecutionEnvelope, SignatureMatchingParent, SignatureMatchingReport,
+    SourceTextNormalizedMatchingReport, StructuralMatchingReport, StructuredEditApplication,
+    StructuredEditApplicationEnvelope, StructuredEditBatchReport,
+    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -134,6 +135,7 @@ use ast_merge::{
     conformance_review_host_hints, conformance_suite_definition, conformance_suite_selectors,
     default_conformance_family_context, delegated_child_apply_plan, enrich_template_plan_entries,
     enrich_template_plan_entries_with_token_state, evaluate_template_tree_convergence,
+    execute_generic_conflict_handler,
     execute_review_replay_bundle_envelope_reviewed_nested_executions,
     execute_review_replay_bundle_reviewed_nested_executions,
     execute_review_state_envelope_reviewed_nested_executions,
@@ -849,6 +851,43 @@ fn conforms_to_slice_809_typed_conflict_handler_extension_points_fixture() {
     assert_eq!(
         report.handlers[1].fallback_scope,
         expected["second_handler_scope"].as_str().unwrap()
+    );
+}
+
+#[test]
+fn conforms_to_slice_810_generic_conflict_handler_execution_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-810-generic-conflict-handler-execution",
+        "generic-conflict-handler-execution.json",
+    ]));
+    let execution: GenericConflictHandlerExecution =
+        serde_json::from_value(fixture["execution"].clone())
+            .expect("generic conflict handler execution should deserialize");
+    let expected = &fixture["expected"];
+    let resolved_count =
+        execution.cases.iter().filter(|case| case.expected_result.resolved).count();
+    let results = execution.cases.iter().map(execute_generic_conflict_handler).collect::<Vec<_>>();
+
+    for (handler_case, result) in execution.cases.iter().zip(results.iter()) {
+        assert_eq!(
+            result, &handler_case.expected_result,
+            "unexpected handler result for {}",
+            handler_case.case_id
+        );
+    }
+
+    assert_eq!(execution.cases.len(), expected["case_count"].as_u64().unwrap() as usize);
+    assert_eq!(resolved_count, expected["resolved_count"].as_u64().unwrap() as usize);
+    assert_eq!(execution.cases[0].handler_id, expected["first_handler_id"].as_str().unwrap());
+    assert_eq!(
+        results[0].merged_children.len(),
+        expected["first_merged_child_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(execution.cases[1].handler_id, expected["second_handler_id"].as_str().unwrap());
+    assert_eq!(
+        results[1].merged_members.len(),
+        expected["second_merged_member_count"].as_u64().unwrap() as usize
     );
 }
 

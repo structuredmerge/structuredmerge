@@ -710,6 +710,170 @@ pub struct ConflictHandlerRegistryReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct HandlerChildNode {
+    pub node_id: String,
+    pub signature: String,
+    pub source: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct HandlerKeyedMember {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GenericConflictHandlerResult {
+    pub resolved: bool,
+    #[serde(default)]
+    pub merged_children: Vec<HandlerChildNode>,
+    #[serde(default)]
+    pub merged_members: Vec<HandlerKeyedMember>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GenericConflictHandlerCase {
+    pub case_id: String,
+    pub handler_id: String,
+    pub conflict_category: String,
+    #[serde(default)]
+    pub parent_policy: String,
+    #[serde(default)]
+    pub base_children: Vec<HandlerChildNode>,
+    #[serde(default)]
+    pub left_insertions: Vec<HandlerChildNode>,
+    #[serde(default)]
+    pub right_insertions: Vec<HandlerChildNode>,
+    #[serde(default)]
+    pub base_members: Vec<HandlerKeyedMember>,
+    #[serde(default)]
+    pub left_edits: Vec<HandlerKeyedMember>,
+    #[serde(default)]
+    pub right_edits: Vec<HandlerKeyedMember>,
+    pub expected_result: GenericConflictHandlerResult,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GenericConflictHandlerExecution {
+    pub execution_id: String,
+    pub version: String,
+    pub cases: Vec<GenericConflictHandlerCase>,
+    pub diagnostics: Vec<String>,
+}
+
+pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
+    "generic-independent-commutative-insertions";
+pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";
+
+pub fn execute_generic_conflict_handler(
+    handler_case: &GenericConflictHandlerCase,
+) -> GenericConflictHandlerResult {
+    match handler_case.handler_id.as_str() {
+        GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER => {
+            execute_independent_commutative_insertions(handler_case)
+        }
+        GENERIC_KEYED_MEMBER_EDIT_HANDLER => execute_independent_keyed_member_edits(handler_case),
+        _ => GenericConflictHandlerResult {
+            resolved: false,
+            merged_children: Vec::new(),
+            merged_members: Vec::new(),
+            diagnostics: vec!["unsupported generic conflict handler".to_string()],
+        },
+    }
+}
+
+fn execute_independent_commutative_insertions(
+    handler_case: &GenericConflictHandlerCase,
+) -> GenericConflictHandlerResult {
+    if handler_case.parent_policy != "commutative" {
+        return GenericConflictHandlerResult {
+            resolved: false,
+            merged_children: Vec::new(),
+            merged_members: Vec::new(),
+            diagnostics: vec![
+                "independent insertion handler requires a commutative parent".to_string(),
+            ],
+        };
+    }
+
+    let mut seen = HashSet::new();
+    let mut merged = Vec::new();
+    for node in handler_case
+        .base_children
+        .iter()
+        .chain(handler_case.left_insertions.iter())
+        .chain(handler_case.right_insertions.iter())
+    {
+        let key =
+            if node.signature.is_empty() { node.node_id.as_str() } else { node.signature.as_str() };
+        if seen.insert(key.to_string()) {
+            merged.push(node.clone());
+        }
+    }
+
+    GenericConflictHandlerResult {
+        resolved: true,
+        merged_children: merged,
+        merged_members: Vec::new(),
+        diagnostics: vec![
+            "independent insertions into a commutative parent were unioned deterministically"
+                .to_string(),
+        ],
+    }
+}
+
+fn execute_independent_keyed_member_edits(
+    handler_case: &GenericConflictHandlerCase,
+) -> GenericConflictHandlerResult {
+    fn set_member(
+        order: &mut Vec<String>,
+        values: &mut HashMap<String, String>,
+        member: &HandlerKeyedMember,
+    ) {
+        if !values.contains_key(&member.key) {
+            order.push(member.key.clone());
+        }
+        values.insert(member.key.clone(), member.value.clone());
+    }
+
+    let mut order = Vec::new();
+    let mut values = HashMap::new();
+
+    for member in &handler_case.base_members {
+        set_member(&mut order, &mut values, member);
+    }
+    for member in &handler_case.left_edits {
+        set_member(&mut order, &mut values, member);
+    }
+    for member in &handler_case.right_edits {
+        if values.get(&member.key).is_some_and(|existing| existing != &member.value)
+            && handler_case.left_edits.iter().any(|left| left.key == member.key)
+        {
+            return GenericConflictHandlerResult {
+                resolved: false,
+                merged_children: Vec::new(),
+                merged_members: Vec::new(),
+                diagnostics: vec!["keyed member was edited differently on both sides".to_string()],
+            };
+        }
+        set_member(&mut order, &mut values, member);
+    }
+
+    let merged_members = order
+        .into_iter()
+        .map(|key| HandlerKeyedMember { value: values.remove(&key).unwrap_or_default(), key })
+        .collect();
+
+    GenericConflictHandlerResult {
+        resolved: true,
+        merged_children: Vec::new(),
+        merged_members,
+        diagnostics: vec!["independent keyed member edits were merged by key".to_string()],
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {
