@@ -4,7 +4,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ast_merge::MergeResult;
+use ast_merge::{
+    MergeResult, ProfilePromotionEvaluation, ProfilePromotionStatus,
+    ProfileSelectionEnforcementMode, ProfileSelectionRequirement,
+    evaluate_profile_selection_requirement, initial_profile_promotion_policy,
+};
 use go_merge::{GoDialect, merge_go};
 use json_merge::{JsonDialect, merge_json};
 use plain_merge::merge_text;
@@ -25,6 +29,9 @@ struct MergeDriverOptions {
     fallback: String,
     check_only: bool,
     exit_code: bool,
+    profile_id: Option<String>,
+    profile_report: bool,
+    require_profile_status: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -68,7 +75,7 @@ fn run(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
     };
 
     match command.as_str() {
-        "merge-driver" => run_merge_driver(&args[1..], stderr),
+        "merge-driver" => run_merge_driver(&args[1..], stdout, stderr),
         "diff-driver" => run_diff_driver(&args[1..], stdout, stderr),
         "conflicts" => run_conflicts(&args[1..], stdout, stderr),
         "languages" => run_languages(&args[1..], stdout, stderr),
@@ -102,10 +109,20 @@ fn print_usage(out: &mut dyn Write) {
     let _ = writeln!(out, "       smorg-rs languages --gitattributes");
 }
 
-fn run_merge_driver(args: &[String], stderr: &mut dyn Write) -> i32 {
+fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
     let Some(options) = parse_merge_driver_options(args, stderr) else {
         return EXIT_USER_ERROR;
     };
+    let profile_exit = report_and_enforce_profile(
+        options.profile_id.as_deref(),
+        options.profile_report,
+        options.require_profile_status.as_deref(),
+        stdout,
+        stderr,
+    );
+    if profile_exit != EXIT_SUCCESS {
+        return profile_exit;
+    }
 
     let ancestor_source = match fs::read_to_string(&options.ancestor) {
         Ok(source) => source,
@@ -177,6 +194,9 @@ fn parse_merge_driver_options(
     let mut fallback = "full-file".to_string();
     let mut check_only = false;
     let mut exit_code = false;
+    let mut profile_id = None;
+    let mut profile_report = false;
+    let mut require_profile_status = None;
     let mut positionals = Vec::new();
 
     let mut index = 0;
@@ -205,6 +225,15 @@ fn parse_merge_driver_options(
             "--strict" => strict = true,
             "--check-only" => check_only = true,
             "--exit-code" => exit_code = true,
+            "--profile" => {
+                index += 1;
+                profile_id = args.get(index).cloned();
+            }
+            "--profile-report" => profile_report = true,
+            "--require-profile-status" => {
+                index += 1;
+                require_profile_status = args.get(index).cloned();
+            }
             value if value.starts_with("--fallback=") => {
                 fallback = value.trim_start_matches("--fallback=").to_string();
             }
@@ -241,7 +270,55 @@ fn parse_merge_driver_options(
         fallback,
         check_only,
         exit_code,
+        profile_id,
+        profile_report,
+        require_profile_status,
     })
+}
+
+fn report_and_enforce_profile(
+    profile_id: Option<&str>,
+    profile_report: bool,
+    require_status: Option<&str>,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> i32 {
+    if profile_id.is_none() && require_status.is_none() && !profile_report {
+        return EXIT_SUCCESS;
+    }
+    let profile_id = profile_id.unwrap_or(ast_merge::PROMOTION_PROFILE_JSON_KEYED_OBJECT);
+    let evaluation = ProfilePromotionEvaluation {
+        profile_id: profile_id.to_string(),
+        status: ProfilePromotionStatus::Available,
+        blocking_reasons: vec![
+            "profile promotion evidence is not loaded by this CLI command".to_string(),
+        ],
+        diagnostics: vec![],
+    };
+    let minimum_profile_status = match require_status {
+        Some("recommended") => ProfilePromotionStatus::Recommended,
+        Some("default") => ProfilePromotionStatus::Default,
+        Some(_) | None => ProfilePromotionStatus::Available,
+    };
+    let requirement = ProfileSelectionRequirement {
+        profile_id: profile_id.to_string(),
+        promotion_policy_id: initial_profile_promotion_policy().policy_id,
+        minimum_profile_status,
+        enforcement_mode: if require_status.is_some() {
+            ProfileSelectionEnforcementMode::Required
+        } else {
+            ProfileSelectionEnforcementMode::Advisory
+        },
+    };
+    let decision = evaluate_profile_selection_requirement(&requirement, None, &evaluation);
+    if profile_report {
+        let _ = writeln!(stdout, "{}", serde_json::to_string(&decision).unwrap());
+    }
+    if !decision.allowed {
+        let _ = writeln!(stderr, "{}", decision.blocking_reasons[0]);
+        return EXIT_USER_ERROR;
+    }
+    EXIT_SUCCESS
 }
 
 fn run_languages(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
@@ -741,6 +818,42 @@ mod tests {
         assert_eq!(exit, EXIT_UNRESOLVED_CONFLICT);
         let current_source = fs::read_to_string(current).expect("read current file");
         assert!(!current_source.contains(r#""other":true"#), "{current_source}");
+    }
+
+    #[test]
+    fn profile_report_and_required_status_blocks_merge() {
+        let dir = TestDir::new();
+        let ancestor = dir.write("ancestor.json", r#"{"name":"structuredmerge"}"#);
+        let current = dir.write("current.json", r#"{"name":"structuredmerge","current":true}"#);
+        let other = dir.write("other.json", r#"{"name":"structuredmerge","other":true}"#);
+
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let exit = run(
+            &[
+                "merge-driver".to_string(),
+                "--profile".to_string(),
+                "json.keyed-object".to_string(),
+                "--profile-report".to_string(),
+                "--require-profile-status".to_string(),
+                "recommended".to_string(),
+                ancestor,
+                current,
+                other,
+                "package.json".to_string(),
+            ],
+            &mut stdout,
+            &mut stderr,
+        );
+
+        assert_eq!(exit, EXIT_USER_ERROR);
+        assert!(
+            String::from_utf8_lossy(&stdout).contains(r#""rejection_code":"profile_status_unmet""#)
+        );
+        assert!(
+            String::from_utf8_lossy(&stderr)
+                .contains("profile status available is below required recommended")
+        );
     }
 
     #[test]
