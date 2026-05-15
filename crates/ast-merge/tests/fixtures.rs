@@ -16,9 +16,9 @@ use ast_merge::{
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
     DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, InconsistencyReport, MergeIR,
-    MergeIRComparisonReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
-    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults, PCS, PairwiseMatching,
-    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
+    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
+    PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
     ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SignatureMatchingParent,
@@ -577,6 +577,39 @@ fn conforms_to_slice_799_source_text_normalized_leaf_matching_fixture() {
         expected["first_match_normalized_text"].as_str().unwrap()
     );
     assert!(report.matches[0].confidence >= expected["minimum_confidence"].as_f64().unwrap());
+}
+
+#[test]
+fn conforms_to_slice_800_move_detection_opt_in_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-800-move-detection-opt-in",
+        "move-detection-opt-in.json",
+    ]));
+    let report: MoveDetectionMatchingReport = serde_json::from_value(fixture["matching"].clone())
+        .expect("move detection matching report should deserialize");
+    let expected = &fixture["expected"];
+    let move_count = report.matches.iter().filter(|node_match| node_match.moved).count();
+
+    assert_eq!(report.strategy, expected["strategy"].as_str().unwrap());
+    assert_eq!(report.capability.name, expected["capability"].as_str().unwrap());
+    assert_eq!(report.capability.enabled, expected["enabled"].as_bool().unwrap());
+    assert_eq!(report.capability.default_enabled, expected["default_enabled"].as_bool().unwrap());
+    assert_eq!(
+        report.capability.requires_stable_node_identity,
+        expected["requires_stable_node_identity"].as_bool().unwrap()
+    );
+    assert_eq!(report.matches.len(), expected["match_count"].as_u64().unwrap() as usize);
+    assert_eq!(move_count, expected["move_count"].as_u64().unwrap() as usize);
+    assert_eq!(report.matches[0].signature, expected["first_moved_signature"].as_str().unwrap());
+    assert_eq!(
+        report.matches[0].from_index,
+        expected["first_moved_from_index"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        report.matches[0].to_index,
+        expected["first_moved_to_index"].as_u64().unwrap() as usize
+    );
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

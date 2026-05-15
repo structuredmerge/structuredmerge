@@ -451,6 +451,43 @@ pub struct SourceTextNormalizedMatchingReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MoveDetectionCapability {
+    pub name: String,
+    pub enabled: bool,
+    pub default_enabled: bool,
+    pub requires_stable_node_identity: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct MoveDetectionMatch {
+    pub from_path: String,
+    pub to_path: String,
+    pub from_node_id: String,
+    pub to_node_id: String,
+    pub signature: String,
+    pub moved: bool,
+    pub from_parent_path: String,
+    pub to_parent_path: String,
+    pub from_index: usize,
+    pub to_index: usize,
+    pub confidence: f64,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct MoveDetectionMatchingReport {
+    pub matching_id: String,
+    pub strategy: String,
+    pub from_revision: String,
+    pub to_revision: String,
+    pub capability: MoveDetectionCapability,
+    pub matches: Vec<MoveDetectionMatch>,
+    pub unmatched_from: Vec<String>,
+    pub unmatched_to: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {
