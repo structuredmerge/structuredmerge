@@ -23,11 +23,12 @@ use ast_merge::{
     LanguageProfileHandlerRegistry, LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR,
     MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
     NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
-    NativeProviderMetadataReport, PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
-    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
-    RawMerge, RenameAwareMatchingReport, RenderPlanReport, RenderSafetyReport,
-    RenderVerificationReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
-    ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
+    NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS, PairwiseMatching,
+    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
+    RenameAwareMatchingReport, RenderPlanReport, RenderSafetyReport, RenderVerificationReport,
+    ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
+    ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
     SecondaryFormattingMetricsReport, SignatureMatchingParent, SignatureMatchingReport,
     SourceTextNormalizedMatchingReport, StructuralMatchingReport, StructuredEditApplication,
     StructuredEditApplicationEnvelope, StructuredEditBatchReport,
@@ -1223,6 +1224,24 @@ fn conforms_to_slice_823_host_language_native_provider_contracts_fixture() {
         contracts.providers[0].parser_name,
         expected["first_provider_parser"].as_str().unwrap()
     );
+}
+
+#[test]
+fn conforms_to_slice_824_go_native_proving_ground_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-824-go-native-proving-ground",
+        "go-native-proving-ground.json",
+    ]));
+    let report: NativeProviderProvingGroundReport =
+        serde_json::from_value(fixture["proving_ground"].clone())
+            .expect("native provider proving-ground report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.language, expected["language"].as_str().unwrap());
+    assert_eq!(report.providers.len(), expected["provider_count"].as_u64().unwrap() as usize);
+    assert_eq!(serde_json::json!(report.providers), expected["providers"]);
+    assert_eq!(serde_json::json!(report.checks), expected["checks"]);
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
