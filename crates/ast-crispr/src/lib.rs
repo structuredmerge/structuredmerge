@@ -29,6 +29,16 @@ pub struct MatchProfile {
     pub payload_kind: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SelectionProfile {
+    pub owner_scope: String,
+    pub owner_selector: String,
+    pub selector_kind: String,
+    pub selection_intent: String,
+    pub comment_region: Option<String>,
+    pub include_trailing_gap: bool,
+}
+
 struct ProfileDescriptor {
     family: &'static str,
 }
@@ -89,6 +99,60 @@ impl MatchProfile {
     }
 }
 
+impl SelectionProfile {
+    pub fn new(
+        owner_scope: &str,
+        owner_selector: &str,
+        selector_kind: &str,
+        selection_intent: &str,
+        comment_region: Option<&str>,
+        include_trailing_gap: bool,
+    ) -> Self {
+        Self {
+            owner_scope: defaulted(owner_scope, "shared_default"),
+            owner_selector: defaulted(owner_selector, "line_bound_statements"),
+            selector_kind: defaulted(selector_kind, "owner_filter"),
+            selection_intent: defaulted(selection_intent, "predicate_filter"),
+            comment_region: comment_region.map(str::to_string),
+            include_trailing_gap,
+        }
+    }
+
+    pub fn report(&self) -> Value {
+        let (owner_selector_family, known_owner_selector) =
+            descriptor_family(owner_selector_descriptor(&self.owner_selector));
+        let (selector_kind_family, known_selector_kind) =
+            descriptor_family(selector_kind_descriptor(&self.selector_kind));
+        let (selection_intent_family, known_selection_intent) =
+            descriptor_family(selection_intent_descriptor(&self.selection_intent));
+        let (comment_region_family, known_comment_region) = match self.comment_region.as_deref() {
+            Some(comment_region) => descriptor_family(comment_region_descriptor(comment_region)),
+            None => ("none", false),
+        };
+        json!({
+            "owner_scope": self.owner_scope,
+            "owner_selector": self.owner_selector,
+            "owner_selector_family": owner_selector_family,
+            "known_owner_selector": known_owner_selector,
+            "selector_kind": self.selector_kind,
+            "selector_kind_family": selector_kind_family,
+            "known_selector_kind": known_selector_kind,
+            "selection_intent": self.selection_intent,
+            "selection_intent_family": selection_intent_family,
+            "known_selection_intent": known_selection_intent,
+            "comment_region": self.comment_region,
+            "comment_region_family": comment_region_family,
+            "known_comment_region": known_comment_region,
+            "comment_anchored": selector_kind_family == "comment_anchor" || selection_intent_family == "comment" || known_comment_region,
+            "include_trailing_gap": self.include_trailing_gap
+        })
+    }
+}
+
+fn defaulted(value: &str, fallback: &str) -> String {
+    if value.is_empty() { fallback } else { value }.to_string()
+}
+
 fn descriptor_family(descriptor: Option<ProfileDescriptor>) -> (&'static str, bool) {
     match descriptor {
         Some(descriptor) => (descriptor.family, true),
@@ -117,6 +181,41 @@ fn payload_kind_descriptor(value: &str) -> Option<ProfileDescriptor> {
         "structural_owner_body" => Some(ProfileDescriptor { family: "owner_body" }),
         "comment_owned_body" => Some(ProfileDescriptor { family: "comment_owned" }),
         "section_branch" => Some(ProfileDescriptor { family: "section_branch" }),
+        _ => None,
+    }
+}
+
+fn owner_selector_descriptor(value: &str) -> Option<ProfileDescriptor> {
+    match value {
+        "line_bound_statements" => Some(ProfileDescriptor { family: "line_oriented" }),
+        "heading_sections" => Some(ProfileDescriptor { family: "section" }),
+        _ => None,
+    }
+}
+
+fn selector_kind_descriptor(value: &str) -> Option<ProfileDescriptor> {
+    match value {
+        "owner_filter" => Some(ProfileDescriptor { family: "owner_filter" }),
+        "comment_region_owner" => Some(ProfileDescriptor { family: "comment_anchor" }),
+        "heading_section" => Some(ProfileDescriptor { family: "section_branch" }),
+        _ => None,
+    }
+}
+
+fn selection_intent_descriptor(value: &str) -> Option<ProfileDescriptor> {
+    match value {
+        "predicate_filter" => Some(ProfileDescriptor { family: "predicate" }),
+        "comment_region_filter" => Some(ProfileDescriptor { family: "comment" }),
+        "section_heading" => Some(ProfileDescriptor { family: "section" }),
+        _ => None,
+    }
+}
+
+fn comment_region_descriptor(value: &str) -> Option<ProfileDescriptor> {
+    match value {
+        "leading" => Some(ProfileDescriptor { family: "leading" }),
+        "trailing" => Some(ProfileDescriptor { family: "trailing" }),
+        "inline" => Some(ProfileDescriptor { family: "inline" }),
         _ => None,
     }
 }
@@ -270,10 +369,10 @@ pub fn boundary_report() -> Value {
             "boundary report",
             "ast-merge structured-edit contract anchor",
             "limit helpers",
-            "match profile helpers"
+            "match profile helpers",
+            "selection profile helpers"
         ],
         "future_exports": [
-            "selection profile helpers",
             "destination profile helpers",
             "operation profile helpers",
             "replace/delete/insert/move helpers",
@@ -357,6 +456,33 @@ mod tests {
                 profile_fixture["start_boundary"].as_str().expect("start boundary"),
                 profile_fixture["end_boundary"].as_str().expect("end boundary"),
                 profile_fixture["payload_kind"].as_str().expect("payload kind"),
+            );
+            assert_eq!(profile.report(), test_case["expected"]);
+        }
+    }
+
+    #[test]
+    fn selection_profile_helpers_match_fixture() {
+        let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("fixtures")
+            .join("diagnostics")
+            .join("slice-919-ast-crispr-selection-profile-helpers")
+            .join("ast-crispr-selection-profile-helpers.json");
+        let source = fs::read_to_string(fixture_path).expect("read fixture");
+        let fixture: Value = serde_json::from_str(&source).expect("parse fixture");
+
+        for test_case in fixture["cases"].as_array().expect("cases") {
+            let profile_fixture = &test_case["profile"];
+            let profile = SelectionProfile::new(
+                profile_fixture["owner_scope"].as_str().expect("owner scope"),
+                profile_fixture["owner_selector"].as_str().expect("owner selector"),
+                profile_fixture["selector_kind"].as_str().expect("selector kind"),
+                profile_fixture["selection_intent"].as_str().expect("selection intent"),
+                profile_fixture["comment_region"].as_str(),
+                profile_fixture["include_trailing_gap"].as_bool().expect("include trailing gap"),
             );
             assert_eq!(profile.report(), test_case["expected"]);
         }
