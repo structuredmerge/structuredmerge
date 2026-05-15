@@ -197,6 +197,21 @@ pub struct TreeHaverProfile {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct EditProjectionSupport {
+    pub backend_ref: BackendReference,
+    pub language: String,
+    pub supports_edit_projection: bool,
+    pub native_edit_target: String,
+    pub normalized_edit_target: String,
+    pub supported_operations: Vec<String>,
+    pub required_node_fields: Vec<String>,
+    pub correlation_keys: Vec<String>,
+    pub preserves_source_fragments: bool,
+    pub unsupported_reason: Option<String>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OrderedSiblingEdge {
     pub parent_id: String,
     pub node_id: String,

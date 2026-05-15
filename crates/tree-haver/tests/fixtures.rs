@@ -4,10 +4,11 @@ use serde_json::Value;
 use tree_haver::{
     AdapterInfo, BackendCapability, BackendReference, BinaryDiagnostic, BinaryMergeReport,
     BinaryNestedDispatch, BinaryPayloadRegion, BinaryRawPayload, BinaryRenderPolicy,
-    BinaryScalarValue, ByteEditSpan, ByteRange, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis,
-    KaitaiTreeNode, NativeParserProvider, NativeProviderMetadata, NodeRole, NormalizedParseResult,
-    NormalizedTreeNode, OrderedTreePrimitives, ParseErrorTolerance, ParserRequest, PolicyReference,
-    PolicySurface, ProcessRequest, SourcePoint, SourceSpan, TreeHaverProfile, ZipUnsafeEntry,
+    BinaryScalarValue, ByteEditSpan, ByteRange, EditProjectionSupport, FeatureProfile,
+    KaitaiByteSpan, KaitaiTreeAnalysis, KaitaiTreeNode, NativeParserProvider,
+    NativeProviderMetadata, NodeRole, NormalizedParseResult, NormalizedTreeNode,
+    OrderedTreePrimitives, ParseErrorTolerance, ParserRequest, PolicyReference, PolicySurface,
+    ProcessRequest, SourcePoint, SourceSpan, TreeHaverProfile, ZipUnsafeEntry,
     byte_offset_for_point, current_backend_id, extract_source_fragment, kaitai_adapter_info,
     kaitai_feature_profile, kaitai_struct_backend, node_roles, pest_adapter_info, pest_backend,
     pest_feature_profile, process_with_language_pack, register_backend, registered_backends,
@@ -834,6 +835,35 @@ fn exposes_peg_backend_references_for_plurality_slices() {
         }),
         serde_json::json!({ "id": "pest", "family": "peg" })
     );
+}
+
+#[test]
+fn conforms_to_slice_924_tree_haver_edit_projection_support_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-924-tree-haver-edit-projection-support",
+        "edit-projection-support.json",
+    ]));
+    let support: EditProjectionSupport =
+        serde_json::from_value(fixture["support"].clone()).expect("support fixture");
+    let unsupported: EditProjectionSupport =
+        serde_json::from_value(fixture["unsupported"].clone()).expect("unsupported fixture");
+
+    assert!(support.supports_edit_projection);
+    assert_eq!(support.backend_ref.id, "go-dst");
+    assert_eq!(support.supported_operations[0], "replace_node");
+    assert_eq!(support.correlation_keys[1], "metadata.go_dst.node_path");
+    assert!(support.preserves_source_fragments);
+    assert_eq!(support.unsupported_reason, None);
+
+    assert!(!unsupported.supports_edit_projection);
+    assert_eq!(unsupported.backend_ref.id, "psych");
+    assert_eq!(
+        unsupported.unsupported_reason.as_deref(),
+        Some("backend_does_not_retain_native_tree")
+    );
+    assert!(unsupported.supported_operations.is_empty());
+    assert_eq!(unsupported.diagnostics[0], "edit projection unavailable: native tree not retained");
 }
 
 #[test]
