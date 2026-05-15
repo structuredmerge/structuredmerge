@@ -358,6 +358,15 @@ pub struct InconsistencyReport {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MergeIREvaluationReport {
+    pub merge_engine: MergeEngine,
+    pub raw_merge: RawMerge,
+    pub inconsistency_report: InconsistencyReport,
+    pub outcome: String,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct MergeIRComparisonCase {
     pub case_id: String,
     pub family: String,
@@ -384,6 +393,177 @@ pub struct MergeIRComparisonReport {
     pub prototype: String,
     pub cases: Vec<MergeIRComparisonCase>,
     pub summary: MergeIRComparisonSummary,
+}
+
+pub fn raw_merge_change_sets(raw_merge_id: &str, change_sets: &[ChangeSet]) -> RawMerge {
+    let mut input_change_set_ids = Vec::new();
+    let mut changes = Vec::new();
+
+    for change_set in change_sets {
+        input_change_set_ids.push(change_set.change_set_id.clone());
+        for change in &change_set.changes {
+            changes.push(RawMergeChange {
+                change_id: change.change_id.clone(),
+                source_change_set_id: change_set.change_set_id.clone(),
+                side: change_set.side.clone(),
+                kind: change.kind.clone(),
+                class_id: change.class_id.clone(),
+                parent_class_id: change.parent_class_id.clone(),
+                predecessor_class_id: change.predecessor_class_id.clone(),
+                successor_class_id: change.successor_class_id.clone(),
+                content_hash: change.content_hash.clone(),
+            });
+        }
+    }
+
+    RawMerge {
+        raw_merge_id: raw_merge_id.to_string(),
+        input_change_set_ids,
+        changes,
+        diagnostics: vec![
+            "raw merge intentionally preserves both sides before inconsistency detection"
+                .to_string(),
+        ],
+    }
+}
+
+pub fn detect_raw_merge_inconsistencies(
+    report_id: &str,
+    raw_merge: &RawMerge,
+) -> InconsistencyReport {
+    let mut changes_by_class: HashMap<String, Vec<&RawMergeChange>> = HashMap::new();
+    for change in &raw_merge.changes {
+        changes_by_class.entry(change.class_id.clone()).or_default().push(change);
+    }
+
+    let mut inconsistencies = Vec::new();
+    for change in &raw_merge.changes {
+        if change.kind == "move" {
+            inconsistencies.push(MergeInconsistency {
+                inconsistency_id: format!("order-{}", change.class_id),
+                category: "order_conflict".to_string(),
+                severity: "warning".to_string(),
+                class_ids: vec![change.class_id.clone()],
+                change_ids: vec![change.change_id.clone()],
+                message: "branch changes predecessor/successor ordering relation".to_string(),
+            });
+        }
+    }
+
+    let mut class_ids: Vec<String> = changes_by_class.keys().cloned().collect();
+    class_ids.sort();
+    let mut change_ids_by_class_and_kind: HashMap<String, HashMap<String, Vec<String>>> =
+        HashMap::new();
+    let mut content_hashes_by_class_and_kind: HashMap<String, HashMap<String, HashSet<String>>> =
+        HashMap::new();
+
+    for class_id in &class_ids {
+        let class_changes = changes_by_class.get(class_id).cloned().unwrap_or_default();
+        let mut change_ids_by_kind: HashMap<String, Vec<String>> = HashMap::new();
+        let mut content_hashes_by_kind: HashMap<String, HashSet<String>> = HashMap::new();
+        for change in class_changes {
+            change_ids_by_kind
+                .entry(change.kind.clone())
+                .or_default()
+                .push(change.change_id.clone());
+            content_hashes_by_kind
+                .entry(change.kind.clone())
+                .or_default()
+                .insert(change.content_hash.clone());
+        }
+        change_ids_by_class_and_kind.insert(class_id.clone(), change_ids_by_kind);
+        content_hashes_by_class_and_kind.insert(class_id.clone(), content_hashes_by_kind);
+    }
+
+    for class_id in &class_ids {
+        let change_ids_by_kind = &change_ids_by_class_and_kind[class_id];
+        let content_hashes_by_kind = &content_hashes_by_class_and_kind[class_id];
+        if change_ids_by_kind.get("insert").map_or(0, Vec::len) > 1
+            && content_hashes_by_kind.get("insert").map_or(0, HashSet::len) > 1
+        {
+            inconsistencies.push(MergeInconsistency {
+                inconsistency_id: format!("duplicate-{}", class_id),
+                category: "duplicate_insertion_conflict".to_string(),
+                severity: "error".to_string(),
+                class_ids: vec![class_id.clone()],
+                change_ids: change_ids_by_kind.get("insert").cloned().unwrap_or_default(),
+                message: "branches insert the same class with incompatible content hashes"
+                    .to_string(),
+            });
+        }
+    }
+    for class_id in &class_ids {
+        let change_ids_by_kind = &change_ids_by_class_and_kind[class_id];
+        if change_ids_by_kind.get("delete").map_or(0, Vec::len) > 0
+            && change_ids_by_kind.get("content_change").map_or(0, Vec::len) > 0
+        {
+            let mut change_ids =
+                change_ids_by_kind.get("content_change").cloned().unwrap_or_default();
+            change_ids.extend(change_ids_by_kind.get("delete").cloned().unwrap_or_default());
+            inconsistencies.push(MergeInconsistency {
+                inconsistency_id: format!("delete-edit-{}", class_id),
+                category: "delete_edit_conflict".to_string(),
+                severity: "error".to_string(),
+                class_ids: vec![class_id.clone()],
+                change_ids,
+                message: "one branch edits a class that another branch deletes".to_string(),
+            });
+        }
+    }
+    for class_id in &class_ids {
+        let change_ids_by_kind = &change_ids_by_class_and_kind[class_id];
+        let content_hashes_by_kind = &content_hashes_by_class_and_kind[class_id];
+        if change_ids_by_kind.get("content_change").map_or(0, Vec::len) > 1
+            && content_hashes_by_kind.get("content_change").map_or(0, HashSet::len) > 1
+        {
+            inconsistencies.push(MergeInconsistency {
+                inconsistency_id: format!("content-{}", class_id),
+                category: "content_conflict".to_string(),
+                severity: "error".to_string(),
+                class_ids: vec![class_id.clone()],
+                change_ids: change_ids_by_kind.get("content_change").cloned().unwrap_or_default(),
+                message: "branches change class content differently".to_string(),
+            });
+        }
+    }
+
+    InconsistencyReport {
+        report_id: report_id.to_string(),
+        raw_merge_id: raw_merge.raw_merge_id.clone(),
+        inconsistencies,
+        diagnostics: vec![
+            "inconsistency detection classifies raw merge candidates before any conflict rendering"
+                .to_string(),
+        ],
+    }
+}
+
+pub fn evaluate_merge_ir_change_sets(
+    engine: Option<MergeEngine>,
+    raw_merge_id: &str,
+    report_id: &str,
+    change_sets: &[ChangeSet],
+) -> MergeIREvaluationReport {
+    let merge_engine = normalize_merge_engine(engine);
+    let raw_merge = raw_merge_change_sets(raw_merge_id, change_sets);
+    let inconsistency_report = detect_raw_merge_inconsistencies(report_id, &raw_merge);
+    let blocking_count = inconsistency_report
+        .inconsistencies
+        .iter()
+        .filter(|inconsistency| inconsistency.severity == "error")
+        .count();
+    let outcome = if blocking_count > 0 { "blocked_by_inconsistency" } else { "clean" };
+
+    MergeIREvaluationReport {
+        merge_engine,
+        raw_merge,
+        inconsistency_report,
+        outcome: outcome.to_string(),
+        diagnostics: vec![
+            "merge_ir_experimental evaluates PCS-style change sets behind the opt-in engine flag"
+                .to_string(),
+        ],
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

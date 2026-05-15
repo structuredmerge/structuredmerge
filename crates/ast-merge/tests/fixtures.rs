@@ -285,7 +285,10 @@ use ast_merge::{
     summarize_conformance_results, summarize_named_conformance_suite_reports,
     summarize_projected_child_review_group_progress, template_token_keys,
 };
-use ast_merge::{MERGE_ENGINE_ENVIRONMENT_VARIABLE, MergeEngine, normalize_merge_engine};
+use ast_merge::{
+    MERGE_ENGINE_ENVIRONMENT_VARIABLE, MergeEngine, evaluate_merge_ir_change_sets,
+    normalize_merge_engine,
+};
 use serde_json::Value;
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -554,6 +557,50 @@ fn conforms_to_slice_795_inconsistency_detection_fixture() {
     assert_eq!(serde_json::json!(categories), expected["categories"]);
     assert_eq!(blocking_count, expected["blocking_count"].as_u64().unwrap() as usize);
     assert_eq!(report.inconsistencies[1].change_ids[1], "right-delete-greet");
+}
+
+#[test]
+fn conforms_to_slice_907_merge_ir_experimental_evaluation_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-907-merge-ir-experimental-evaluation",
+        "merge-ir-experimental-evaluation.json",
+    ]));
+    let request = &fixture["request"];
+    let expected = &fixture["expected"];
+    let change_sets: Vec<ChangeSet> = serde_json::from_value(request["change_sets"].clone())
+        .expect("change sets should deserialize");
+    let report = evaluate_merge_ir_change_sets(
+        Some(MergeEngine::MergeIrExperimental),
+        request["raw_merge_id"].as_str().unwrap(),
+        request["report_id"].as_str().unwrap(),
+        &change_sets,
+    );
+    let categories: Vec<&str> = report
+        .inconsistency_report
+        .inconsistencies
+        .iter()
+        .map(|inconsistency| inconsistency.category.as_str())
+        .collect();
+    let blocking_count = report
+        .inconsistency_report
+        .inconsistencies
+        .iter()
+        .filter(|inconsistency| inconsistency.severity == "error")
+        .count();
+
+    assert_eq!(serde_json::json!(report.merge_engine), expected["merge_engine"]);
+    assert_eq!(
+        report.raw_merge.changes.len(),
+        expected["raw_change_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        report.raw_merge.input_change_set_ids.len(),
+        expected["input_change_set_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(serde_json::json!(categories), expected["categories"]);
+    assert_eq!(blocking_count, expected["blocking_count"].as_u64().unwrap() as usize);
+    assert_eq!(report.outcome, expected["outcome"].as_str().unwrap());
 }
 
 #[test]
