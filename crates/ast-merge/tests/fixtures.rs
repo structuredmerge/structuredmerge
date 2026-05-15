@@ -19,12 +19,12 @@ use ast_merge::{
     DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FallbackUsageReport,
     FamilyFeatureProfile, FormattingEdgeFixtureSuite, FormattingHardGateReport,
     FormattingPreservationConformanceReport, FormattingRecommendationGate,
-    GenericConflictHandlerExecution, HostLanguageNativeProviderContracts, InconsistencyReport,
-    LanguageProfileHandlerRegistry, LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR,
-    MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
-    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
-    NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS, PairwiseMatching,
-    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    GenericConflictHandlerExecution, GoDSTProviderStackReport, HostLanguageNativeProviderContracts,
+    InconsistencyReport, LanguageProfileHandlerRegistry, LocalLineFallbackReport,
+    MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport, MoveDetectionMatchingReport,
+    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
+    NamedConformanceSuiteResults, NativeProviderMetadataReport, NativeProviderProvingGroundReport,
+    PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
     RenameAwareMatchingReport, RenderPlanReport, RenderSafetyReport, RenderVerificationReport,
     ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
@@ -1242,6 +1242,25 @@ fn conforms_to_slice_824_go_native_proving_ground_fixture() {
     assert_eq!(report.providers.len(), expected["provider_count"].as_u64().unwrap() as usize);
     assert_eq!(serde_json::json!(report.providers), expected["providers"]);
     assert_eq!(serde_json::json!(report.checks), expected["checks"]);
+}
+
+#[test]
+fn conforms_to_slice_825_go_dst_provider_stack_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-825-go-dst-provider-stack",
+        "go-dst-provider-stack.json",
+    ]));
+    let report: GoDSTProviderStackReport =
+        serde_json::from_value(fixture["provider_stack"].clone())
+            .expect("go-dst provider stack should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.provider_id, expected["provider_id"].as_str().unwrap());
+    assert_eq!(report.module, expected["module"].as_str().unwrap());
+    assert_eq!(report.backend_family, expected["backend_family"].as_str().unwrap());
+    assert_eq!(report.language, expected["language"].as_str().unwrap());
+    assert_eq!(report.compares_with.len(), expected["comparison_count"].as_u64().unwrap() as usize);
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
