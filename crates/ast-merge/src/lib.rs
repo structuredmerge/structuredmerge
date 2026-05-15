@@ -657,6 +657,27 @@ pub struct ConflictCategoryReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LineSpan {
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LocalLineFallbackReport {
+    pub fallback_id: String,
+    pub strategy: String,
+    pub scope: String,
+    pub path: String,
+    pub owner_path: String,
+    pub base_span: LineSpan,
+    pub left_span: LineSpan,
+    pub right_span: LineSpan,
+    pub result: String,
+    pub conflict_category: String,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {

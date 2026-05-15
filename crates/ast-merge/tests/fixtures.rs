@@ -16,10 +16,10 @@ use ast_merge::{
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
     DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FamilyFeatureProfile,
-    InconsistencyReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
-    MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
-    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults, PCS, PairwiseMatching,
-    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    InconsistencyReport, LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR,
+    MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
+    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
+    PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
     RenameAwareMatchingReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
     ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
@@ -778,6 +778,32 @@ fn conforms_to_slice_806_conflict_categories_fixture() {
     assert_eq!(report.categories[0], expected["first_category"].as_str().unwrap());
     assert_eq!(report.categories.last().unwrap(), expected["last_category"].as_str().unwrap());
     assert_eq!(parse_limited_scope, expected["parse_limited_fallback_scope"].as_str().unwrap());
+}
+
+#[test]
+fn conforms_to_slice_807_local_line_based_fallback_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-807-local-line-based-fallback",
+        "local-line-based-fallback.json",
+    ]));
+    let report: LocalLineFallbackReport = serde_json::from_value(fixture["fallback"].clone())
+        .expect("local line fallback report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.strategy, expected["strategy"].as_str().unwrap());
+    assert_eq!(report.scope, expected["scope"].as_str().unwrap());
+    assert_eq!(report.path, expected["path"].as_str().unwrap());
+    assert_eq!(report.result, expected["result"].as_str().unwrap());
+    assert_eq!(report.conflict_category, expected["conflict_category"].as_str().unwrap());
+    assert_eq!(
+        report.left_span.end_line - report.left_span.start_line + 1,
+        expected["left_line_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        report.right_span.end_line - report.right_span.start_line + 1,
+        expected["right_line_count"].as_u64().unwrap() as usize
+    );
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
