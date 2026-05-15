@@ -22,6 +22,17 @@ pub struct Limit {
     constraints: Vec<LimitConstraint>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MatchProfile {
+    pub start_boundary: String,
+    pub end_boundary: String,
+    pub payload_kind: String,
+}
+
+struct ProfileDescriptor {
+    family: &'static str,
+}
+
 impl Limit {
     pub fn new(spec: Option<&Value>) -> Result<Self, Error> {
         let default_spec = json!({"exactly": 1});
@@ -43,6 +54,70 @@ impl Limit {
             .map(|constraint| constraint.description.as_str())
             .collect::<Vec<_>>()
             .join(" and ")
+    }
+}
+
+impl MatchProfile {
+    pub fn new(start_boundary: &str, end_boundary: &str, payload_kind: &str) -> Self {
+        Self {
+            start_boundary: start_boundary.to_string(),
+            end_boundary: end_boundary.to_string(),
+            payload_kind: payload_kind.to_string(),
+        }
+    }
+
+    pub fn report(&self) -> Value {
+        let (start_family, known_start_boundary) =
+            descriptor_family(start_boundary_descriptor(&self.start_boundary));
+        let (end_family, known_end_boundary) =
+            descriptor_family(end_boundary_descriptor(&self.end_boundary));
+        let (payload_family, known_payload_kind) =
+            descriptor_family(payload_kind_descriptor(&self.payload_kind));
+        json!({
+            "start_boundary": self.start_boundary,
+            "start_boundary_family": start_family,
+            "known_start_boundary": known_start_boundary,
+            "end_boundary": self.end_boundary,
+            "end_boundary_family": end_family,
+            "known_end_boundary": known_end_boundary,
+            "payload_kind": self.payload_kind,
+            "payload_family": payload_family,
+            "known_payload_kind": known_payload_kind,
+            "comment_anchored": start_family == "comment_anchor" || payload_family == "comment_owned",
+            "trailing_gap_extended": end_family == "gap_extension"
+        })
+    }
+}
+
+fn descriptor_family(descriptor: Option<ProfileDescriptor>) -> (&'static str, bool) {
+    match descriptor {
+        Some(descriptor) => (descriptor.family, true),
+        None => ("unknown", false),
+    }
+}
+
+fn start_boundary_descriptor(value: &str) -> Option<ProfileDescriptor> {
+    match value {
+        "owner_start" => Some(ProfileDescriptor { family: "structural_owner" }),
+        "comment_region_start" => Some(ProfileDescriptor { family: "comment_anchor" }),
+        _ => None,
+    }
+}
+
+fn end_boundary_descriptor(value: &str) -> Option<ProfileDescriptor> {
+    match value {
+        "owner_end" => Some(ProfileDescriptor { family: "structural_owner" }),
+        "owner_end_plus_trailing_gap" => Some(ProfileDescriptor { family: "gap_extension" }),
+        _ => None,
+    }
+}
+
+fn payload_kind_descriptor(value: &str) -> Option<ProfileDescriptor> {
+    match value {
+        "structural_owner_body" => Some(ProfileDescriptor { family: "owner_body" }),
+        "comment_owned_body" => Some(ProfileDescriptor { family: "comment_owned" }),
+        "section_branch" => Some(ProfileDescriptor { family: "section_branch" }),
+        _ => None,
     }
 }
 
@@ -194,10 +269,10 @@ pub fn boundary_report() -> Value {
             "package identity",
             "boundary report",
             "ast-merge structured-edit contract anchor",
-            "limit helpers"
+            "limit helpers",
+            "match profile helpers"
         ],
         "future_exports": [
-            "match profile helpers",
             "selection profile helpers",
             "destination profile helpers",
             "operation profile helpers",
@@ -260,6 +335,30 @@ mod tests {
             let result = Limit::new(test_case.get("spec"));
             assert!(result.is_err());
             assert_eq!(result.err().expect("invalid limit").code, test_case["expected_error"]);
+        }
+    }
+
+    #[test]
+    fn match_profile_helpers_match_fixture() {
+        let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("fixtures")
+            .join("diagnostics")
+            .join("slice-918-ast-crispr-match-profile-helpers")
+            .join("ast-crispr-match-profile-helpers.json");
+        let source = fs::read_to_string(fixture_path).expect("read fixture");
+        let fixture: Value = serde_json::from_str(&source).expect("parse fixture");
+
+        for test_case in fixture["cases"].as_array().expect("cases") {
+            let profile_fixture = &test_case["profile"];
+            let profile = MatchProfile::new(
+                profile_fixture["start_boundary"].as_str().expect("start boundary"),
+                profile_fixture["end_boundary"].as_str().expect("end boundary"),
+                profile_fixture["payload_kind"].as_str().expect("payload kind"),
+            );
+            assert_eq!(profile.report(), test_case["expected"]);
         }
     }
 }
