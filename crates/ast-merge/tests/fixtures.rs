@@ -2041,7 +2041,7 @@ fn conforms_to_slice_912_profile_promotion_policy_fixture() {
     let ruby_policy = policy
         .profiles
         .iter()
-        .find(|entry| entry.profile_id == "ruby.gemspec-dependencies")
+        .find(|entry| entry.profile_id == "ruby.gemspec-dependency-declarations")
         .unwrap();
 
     assert_eq!(policy.policy_id, expected["policy_id"].as_str().unwrap());
