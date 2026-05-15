@@ -28,14 +28,15 @@ use ast_merge::{
     NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
     NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS, PairwiseMatching,
     PerformanceGuardrails, PolicySurface, ProfileConformanceReport, ProfileDebugOutput,
-    ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
-    ProviderRichnessProjection, REVIEW_TRANSPORT_VERSION, RawMerge, RenameAwareMatchingReport,
-    RenderPlanReport, RenderSafetyReport, RenderVerificationReport, ReviewHostHints,
-    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
-    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport,
-    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
-    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
-    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    ProfilePromotionReport, ProfilePromotionStatus, ProjectedChildReviewCase,
+    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, ProviderRichnessProjection,
+    REVIEW_TRANSPORT_VERSION, RawMerge, RenameAwareMatchingReport, RenderPlanReport,
+    RenderSafetyReport, RenderVerificationReport, ReviewHostHints, ReviewReplayBundle,
+    ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest, ReviewedNestedExecution,
+    ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport, SignatureMatchingParent,
+    SignatureMatchingReport, SourceTextNormalizedMatchingReport, StructuralMatchingReport,
+    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
+    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -1973,6 +1974,41 @@ fn conforms_to_slice_910_active_profile_reporting_fixture() {
         serde_json::from_value(fixture["debug_output"].clone()).unwrap();
     assert_eq!(debug_output.mode, expected["debug_mode"].as_str().unwrap());
     assert_eq!(debug_output.active_profile.profile_id, expected["profile_id"].as_str().unwrap());
+}
+
+#[test]
+fn conforms_to_slice_911_profile_promotion_report_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-911-profile-promotion-report",
+        "profile-promotion-report.json",
+    ]));
+    let expected = &fixture["expected"];
+
+    let report: ProfilePromotionReport = serde_json::from_value(fixture["report"].clone()).unwrap();
+    assert_eq!(report.profile_id, expected["profile_id"].as_str().unwrap());
+    assert_eq!(report.status, ProfilePromotionStatus::Recommended);
+    assert_eq!(report.hard_gates.len(), expected["hard_gate_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        report.metrics.required_fixture_count,
+        expected["required_fixture_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        report.metrics.formatting_threshold,
+        expected["formatting_threshold"].as_f64().unwrap()
+    );
+    assert_eq!(
+        report.active_profile.as_ref().unwrap().profile_id,
+        expected["profile_id"].as_str().unwrap()
+    );
+
+    let blocked: ProfilePromotionReport =
+        serde_json::from_value(fixture["blocked_report"].clone()).unwrap();
+    assert_eq!(blocked.status, ProfilePromotionStatus::Available);
+    assert_eq!(
+        blocked.blocking_reasons.len(),
+        expected["blocking_reason_count"].as_u64().unwrap() as usize
+    );
 }
 
 fn sorted_value_strings(value: &Value) -> Vec<String> {

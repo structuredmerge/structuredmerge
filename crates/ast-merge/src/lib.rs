@@ -1427,6 +1427,52 @@ pub struct ProfileDebugOutput {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProfilePromotionStatus {
+    Experimental,
+    Available,
+    Recommended,
+    Default,
+    Disabled,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProfilePromotionHardGate {
+    pub name: String,
+    pub passed: bool,
+    pub required: bool,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ProfilePromotionMetrics {
+    pub required_fixture_count: usize,
+    pub passed_fixture_count: usize,
+    pub formatting_preservation_score: f64,
+    pub formatting_threshold: f64,
+    pub fallback_count: usize,
+    pub fallback_threshold: usize,
+    pub unresolved_conflict_count: usize,
+    pub backend_parity_passed: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ProfilePromotionReport {
+    pub report_id: String,
+    pub version: String,
+    pub profile_id: String,
+    pub backend: String,
+    pub status: ProfilePromotionStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_profile: Option<ActiveProfileView>,
+    pub hard_gates: Vec<ProfilePromotionHardGate>,
+    pub metrics: ProfilePromotionMetrics,
+    pub required_suites: Vec<String>,
+    pub blocking_reasons: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";
