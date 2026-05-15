@@ -285,6 +285,7 @@ use ast_merge::{
     structured_edit_provider_executor_selection_policy_envelope, structured_edit_request_envelope,
     summarize_conformance_results, summarize_named_conformance_suite_reports,
     summarize_projected_child_review_group_progress, template_token_keys,
+    validate_language_backend_profile,
 };
 use ast_merge::{
     MERGE_ENGINE_ENVIRONMENT_VARIABLE, MergeEngine, evaluate_merge_ir_change_sets,
@@ -1899,6 +1900,82 @@ fn conforms_to_slice_908_language_backend_profile_schema_fixture() {
         profile.rules.commutative_parents[0].selector,
         expected["first_commutative_parent"].as_str().unwrap()
     );
+}
+
+#[test]
+fn conforms_to_slice_909_profile_validation_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-909-profile-validation",
+        "profile-validation.json",
+    ]));
+    let expected = &fixture["expected"];
+
+    let structural_profile: LanguageBackendProfile =
+        serde_json::from_value(fixture["structural_profile"].clone()).unwrap();
+    let structural = validate_language_backend_profile(&structural_profile, None);
+    assert_eq!(
+        sorted_strings(structural.errors.iter().map(|diagnostic| diagnostic.message.clone())),
+        sorted_value_strings(&expected["structural_errors"])
+    );
+
+    let unknown_selector_profile: LanguageBackendProfile =
+        serde_json::from_value(fixture["unknown_selector_profile"].clone()).unwrap();
+    let exhaustive_capability =
+        backend_capability_from_validation_fixture(&fixture["backend_metadata"]);
+    let exhaustive =
+        validate_language_backend_profile(&unknown_selector_profile, Some(&exhaustive_capability));
+    assert_eq!(
+        sorted_strings(exhaustive.errors.iter().map(|diagnostic| diagnostic.message.clone())),
+        sorted_value_strings(&expected["exhaustive_backend_errors"])
+    );
+
+    let partial_capability =
+        backend_capability_from_validation_fixture(&fixture["partial_backend_metadata"]);
+    let partial =
+        validate_language_backend_profile(&unknown_selector_profile, Some(&partial_capability));
+    assert!(partial.errors.is_empty());
+    assert_eq!(
+        sorted_strings(partial.warnings.iter().map(|diagnostic| diagnostic.message.clone())),
+        sorted_value_strings(&expected["partial_backend_warnings"])
+    );
+}
+
+fn sorted_value_strings(value: &Value) -> Vec<String> {
+    sorted_strings(value.as_array().unwrap().iter().map(|item| item.as_str().unwrap().to_string()))
+}
+
+fn backend_capability_from_validation_fixture(value: &Value) -> tree_haver::BackendCapability {
+    tree_haver::BackendCapability {
+        backend_ref: serde_json::from_value(value["backend_ref"].clone()).unwrap(),
+        language: "go".to_string(),
+        parser_identity: tree_haver::ParserIdentity {
+            name: "tree-sitter-go".to_string(),
+            version: "0.23.x".to_string(),
+            implementation: "kreuzberg-language-pack".to_string(),
+        },
+        language_version: tree_haver::LanguageVersion {
+            version: "go1.22".to_string(),
+            dialect: Some("go".to_string()),
+        },
+        parse_error_behavior: "strict".to_string(),
+        source_span_support: "full".to_string(),
+        source_fragment_support: "full".to_string(),
+        render_strategies: vec![],
+        semantic_role_support: "partial".to_string(),
+        normalized_tree_support: true,
+        native_node_access: false,
+        known_node_kinds: sorted_value_strings(&value["known_node_kinds"]),
+        known_fields: sorted_value_strings(&value["known_fields"]),
+        grammar_inventory: value["grammar_inventory"].as_str().unwrap().to_string(),
+        diagnostics: vec![],
+    }
+}
+
+fn sorted_strings(values: impl Iterator<Item = String>) -> Vec<String> {
+    let mut values = values.collect::<Vec<_>>();
+    values.sort();
+    values
 }
 
 #[test]

@@ -1613,6 +1613,229 @@ pub struct LanguageBackendProfile {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProfileValidationDiagnostic {
+    pub severity: String,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProfileValidationResult {
+    pub ok: bool,
+    pub errors: Vec<ProfileValidationDiagnostic>,
+    pub warnings: Vec<ProfileValidationDiagnostic>,
+    pub diagnostics: Vec<ProfileValidationDiagnostic>,
+}
+
+pub fn validate_language_backend_profile(
+    profile: &LanguageBackendProfile,
+    capability: Option<&tree_haver::BackendCapability>,
+) -> ProfileValidationResult {
+    let mut result = ProfileValidationResult {
+        ok: true,
+        errors: Vec::new(),
+        warnings: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+    let mut add_error = |result: &mut ProfileValidationResult, message: String| {
+        let diagnostic = ProfileValidationDiagnostic { severity: "error".to_string(), message };
+        result.errors.push(diagnostic.clone());
+        result.diagnostics.push(diagnostic);
+        result.ok = false;
+    };
+    let mut add_warning = |result: &mut ProfileValidationResult, message: String| {
+        let diagnostic = ProfileValidationDiagnostic { severity: "warning".to_string(), message };
+        result.warnings.push(diagnostic.clone());
+        result.diagnostics.push(diagnostic);
+    };
+
+    let valid_roles = HashSet::from([
+        "structural",
+        "token",
+        "trivia",
+        "comment",
+        "delimiter",
+        "separator",
+        "virtual",
+        "error",
+        "opaque",
+    ]);
+    for role in &profile.rules.node_roles {
+        if !valid_roles.contains(role.as_str()) {
+            add_error(&mut result, format!("invalid node role {role}"));
+        }
+    }
+
+    let mut signature_names = HashSet::new();
+    for signature in &profile.rules.signatures {
+        if signature.name.is_empty() {
+            add_error(&mut result, "signature name is required".to_string());
+        } else if !signature_names.insert(signature.name.clone()) {
+            add_error(&mut result, format!("duplicate signature name {}", signature.name));
+        }
+        if signature.selector.is_empty() {
+            add_error(&mut result, "signature selector is required".to_string());
+        }
+        if !valid_extractor(&signature.extractor) {
+            add_error(
+                &mut result,
+                format!("unsupported signature extractor {}", signature.extractor),
+            );
+        }
+    }
+
+    let mut child_groups = HashSet::new();
+    for group in &profile.rules.child_groups {
+        if group.name.is_empty() {
+            add_error(&mut result, "child group name is required".to_string());
+        } else if !child_groups.insert(group.name.clone()) {
+            add_error(&mut result, format!("duplicate child group name {}", group.name));
+        }
+    }
+    for parent in &profile.rules.commutative_parents {
+        if parent.selector.is_empty() {
+            add_error(&mut result, "commutative parent selector is required".to_string());
+        }
+        if !child_groups.contains(&parent.child_group) {
+            add_error(
+                &mut result,
+                format!(
+                    "commutative parent {} references unknown child group {}",
+                    parent.selector, parent.child_group
+                ),
+            );
+        }
+    }
+    for atomic in &profile.rules.atomic_nodes {
+        if atomic.selector.is_empty() {
+            add_error(&mut result, "atomic node selector is required".to_string());
+        }
+    }
+    for attachment in &profile.rules.comment_attachment {
+        if attachment.selector.is_empty() {
+            add_error(&mut result, "comment attachment selector is required".to_string());
+        }
+        if attachment.strategy.is_empty() {
+            add_error(&mut result, "comment attachment strategy is required".to_string());
+        }
+    }
+
+    if let Some(capability) = capability {
+        validate_backend_inventory(
+            profile,
+            capability,
+            &mut result,
+            &mut add_error,
+            &mut add_warning,
+        );
+    }
+
+    result
+}
+
+fn valid_extractor(extractor: &str) -> bool {
+    extractor == "text"
+        || extractor.starts_with("field:")
+        || extractor.starts_with("kind:")
+        || extractor.starts_with("custom:")
+}
+
+fn validate_backend_inventory(
+    profile: &LanguageBackendProfile,
+    capability: &tree_haver::BackendCapability,
+    result: &mut ProfileValidationResult,
+    add_error: &mut impl FnMut(&mut ProfileValidationResult, String),
+    add_warning: &mut impl FnMut(&mut ProfileValidationResult, String),
+) {
+    if capability.grammar_inventory.is_empty() {
+        return;
+    }
+    let node_kinds = capability.known_node_kinds.iter().collect::<HashSet<_>>();
+    let fields = capability.known_fields.iter().collect::<HashSet<_>>();
+    let exhaustive = capability.grammar_inventory == "exhaustive";
+    for atomic in &profile.rules.atomic_nodes {
+        if !atomic.selector.is_empty()
+            && !node_kinds.is_empty()
+            && !node_kinds.contains(&atomic.selector)
+        {
+            emit_profile_validation(
+                result,
+                exhaustive,
+                format!("unknown atomic node selector {}", atomic.selector),
+                add_error,
+                add_warning,
+            );
+        }
+    }
+    for signature in &profile.rules.signatures {
+        if !signature.selector.is_empty()
+            && !node_kinds.is_empty()
+            && !node_kinds.contains(&signature.selector)
+        {
+            emit_profile_validation(
+                result,
+                exhaustive,
+                format!("unknown signature selector {}", signature.selector),
+                add_error,
+                add_warning,
+            );
+        }
+        if let Some(field) = signature.extractor.strip_prefix("field:") {
+            if !fields.is_empty() && !fields.contains(&field.to_string()) {
+                emit_profile_validation(
+                    result,
+                    exhaustive,
+                    format!("unknown signature field {field}"),
+                    add_error,
+                    add_warning,
+                );
+            }
+        }
+    }
+    for parent in &profile.rules.commutative_parents {
+        if !parent.selector.is_empty()
+            && !node_kinds.is_empty()
+            && !node_kinds.contains(&parent.selector)
+        {
+            emit_profile_validation(
+                result,
+                exhaustive,
+                format!("unknown commutative parent selector {}", parent.selector),
+                add_error,
+                add_warning,
+            );
+        }
+    }
+    for attachment in &profile.rules.comment_attachment {
+        if !attachment.selector.is_empty()
+            && !node_kinds.is_empty()
+            && !node_kinds.contains(&attachment.selector)
+        {
+            emit_profile_validation(
+                result,
+                exhaustive,
+                format!("unknown comment attachment selector {}", attachment.selector),
+                add_error,
+                add_warning,
+            );
+        }
+    }
+}
+
+fn emit_profile_validation(
+    result: &mut ProfileValidationResult,
+    exhaustive: bool,
+    message: String,
+    add_error: &mut impl FnMut(&mut ProfileValidationResult, String),
+    add_warning: &mut impl FnMut(&mut ProfileValidationResult, String),
+) {
+    if exhaustive {
+        add_error(result, message);
+    } else {
+        add_warning(result, message);
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CompactRulesetDirective {
     pub name: String,
     pub arguments: Vec<String>,

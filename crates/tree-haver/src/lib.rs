@@ -112,6 +112,12 @@ pub struct BackendCapability {
     pub semantic_role_support: String,
     pub normalized_tree_support: bool,
     pub native_node_access: bool,
+    #[serde(default)]
+    pub known_node_kinds: Vec<String>,
+    #[serde(default)]
+    pub known_fields: Vec<String>,
+    #[serde(default)]
+    pub grammar_inventory: String,
     pub diagnostics: Vec<String>,
 }
 
