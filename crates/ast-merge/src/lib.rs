@@ -2787,6 +2787,12 @@ pub struct StructuredEditApplicationEnvelope {
 pub struct StructuredEditRequestEnvelope {
     pub kind: String,
     pub version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub minimum_profile_status: Option<ProfilePromotionStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub promotion_policy_id: Option<String>,
     pub request: StructuredEditRequest,
 }
 
@@ -2796,6 +2802,14 @@ pub struct StructuredEditExecutionReport {
     pub provider_family: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_backend: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_profile: Option<ActiveProfileView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_promotion_evaluation: Option<ProfilePromotionEvaluation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_selection_decision: Option<ProfileSelectionDecision>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub profile_blocking_reasons: Vec<String>,
     pub diagnostics: Vec<Diagnostic>,
     #[serde(default)]
     pub metadata: HashMap<String, serde_json::Value>,
@@ -6717,8 +6731,31 @@ pub fn structured_edit_request_envelope(
     StructuredEditRequestEnvelope {
         kind: "structured_edit_request".to_string(),
         version: STRUCTURED_EDIT_TRANSPORT_VERSION,
+        profile_id: None,
+        minimum_profile_status: None,
+        promotion_policy_id: None,
         request: request.clone(),
     }
+}
+
+pub fn profile_selection_requirement_from_request_envelope(
+    envelope: &StructuredEditRequestEnvelope,
+) -> Option<ProfileSelectionRequirement> {
+    if envelope.profile_id.is_none()
+        && envelope.minimum_profile_status.is_none()
+        && envelope.promotion_policy_id.is_none()
+    {
+        return None;
+    }
+    Some(ProfileSelectionRequirement {
+        profile_id: envelope.profile_id.clone().unwrap_or_default(),
+        promotion_policy_id: envelope.promotion_policy_id.clone().unwrap_or_default(),
+        minimum_profile_status: envelope
+            .minimum_profile_status
+            .clone()
+            .unwrap_or(ProfilePromotionStatus::Available),
+        enforcement_mode: ProfileSelectionEnforcementMode::Required,
+    })
 }
 
 pub fn import_structured_edit_request_envelope(

@@ -214,13 +214,14 @@ use ast_merge::{
     plan_named_conformance_suite_entry, plan_named_conformance_suites,
     plan_named_conformance_suites_with_diagnostics, plan_template_entries, plan_template_execution,
     plan_template_tree_execution, prepare_template_entries, preview_template_execution,
-    projected_child_group_review_request, report_conformance_manifest, report_conformance_suite,
-    report_named_conformance_suite, report_named_conformance_suite_entry,
-    report_named_conformance_suite_envelope, report_named_conformance_suite_manifest,
-    report_planned_conformance_suite, report_planned_named_conformance_suites,
-    report_template_directory_apply, report_template_directory_plan,
-    report_template_directory_runner, report_template_tree_run, resolve_conformance_family_context,
-    resolve_delegated_child_outputs, resolve_template_destination_path,
+    profile_selection_requirement_from_request_envelope, projected_child_group_review_request,
+    report_conformance_manifest, report_conformance_suite, report_named_conformance_suite,
+    report_named_conformance_suite_entry, report_named_conformance_suite_envelope,
+    report_named_conformance_suite_manifest, report_planned_conformance_suite,
+    report_planned_named_conformance_suites, report_template_directory_apply,
+    report_template_directory_plan, report_template_directory_runner, report_template_tree_run,
+    resolve_conformance_family_context, resolve_delegated_child_outputs,
+    resolve_template_destination_path,
     review_and_execute_conformance_manifest_with_replay_bundle_envelope,
     review_conformance_family_context, review_conformance_manifest,
     review_conformance_manifest_with_replay_bundle_envelope, review_projected_child_groups,
@@ -5857,6 +5858,54 @@ fn conforms_to_slice_686_structured_edit_request_envelope_application_fixture() 
             Err(expected_error)
         );
     }
+}
+
+#[test]
+fn conforms_to_slice_915_structured_edit_profile_promotion_envelope_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-915-structured-edit-profile-promotion-envelope",
+        "structured-edit-profile-promotion-envelope.json",
+    ]));
+    let request =
+        serde_json::from_value::<StructuredEditRequest>(fixture["structured_edit_request"].clone())
+            .expect("request should deserialize");
+    let mut request_envelope = structured_edit_request_envelope(&request);
+    let expected_request_envelope = serde_json::from_value::<StructuredEditRequestEnvelope>(
+        fixture["expected_request_envelope"].clone(),
+    )
+    .expect("request envelope should deserialize");
+    let expected_requirement = serde_json::from_value::<ProfileSelectionRequirement>(
+        fixture["profile_selection_requirement"].clone(),
+    )
+    .expect("profile selection requirement should deserialize");
+    request_envelope.profile_id = expected_request_envelope.profile_id.clone();
+    request_envelope.minimum_profile_status =
+        expected_request_envelope.minimum_profile_status.clone();
+    request_envelope.promotion_policy_id = expected_request_envelope.promotion_policy_id.clone();
+    assert_eq!(request_envelope, expected_request_envelope);
+    assert_eq!(
+        profile_selection_requirement_from_request_envelope(&request_envelope),
+        Some(expected_requirement)
+    );
+
+    let report = serde_json::from_value::<StructuredEditExecutionReport>(
+        fixture["structured_edit_execution_report"].clone(),
+    )
+    .expect("execution report should deserialize");
+    let expected_report_envelope = serde_json::from_value::<StructuredEditExecutionReportEnvelope>(
+        fixture["expected_execution_report_envelope"].clone(),
+    )
+    .expect("execution report envelope should deserialize");
+    assert_eq!(structured_edit_execution_report_envelope(&report), expected_report_envelope);
+    assert_eq!(
+        report.profile_selection_decision.as_ref().unwrap().rejection_code,
+        fixture["expected"]["rejection_code"].as_str().unwrap()
+    );
+    assert_eq!(
+        report.profile_blocking_reasons.len(),
+        fixture["expected"]["profile_blocking_reason_count"].as_u64().unwrap() as usize
+    );
 }
 
 #[test]
