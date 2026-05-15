@@ -1630,6 +1630,40 @@ pub struct ProfilePromotionEvaluation {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProfileSelectionEnforcementMode {
+    Advisory,
+    Required,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProfileSelectionRequirement {
+    pub profile_id: String,
+    pub promotion_policy_id: String,
+    pub minimum_profile_status: ProfilePromotionStatus,
+    pub enforcement_mode: ProfileSelectionEnforcementMode,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProfileSelectionDecision {
+    pub profile_id: String,
+    pub promotion_policy_id: String,
+    pub minimum_profile_status: ProfilePromotionStatus,
+    pub evaluated_status: ProfilePromotionStatus,
+    pub enforcement_mode: ProfileSelectionEnforcementMode,
+    pub satisfied: bool,
+    pub enforced: bool,
+    pub allowed: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub rejection_code: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_profile: Option<ActiveProfileView>,
+    pub profile_promotion_evaluation: ProfilePromotionEvaluation,
+    pub blocking_reasons: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
 pub fn evaluate_profile_promotion(
     policy: &ProfilePromotionPolicy,
     report: &ProfilePromotionReport,
@@ -1656,6 +1690,73 @@ pub fn evaluate_profile_promotion(
         status,
         blocking_reasons,
         diagnostics: vec![],
+    }
+}
+
+pub fn evaluate_profile_selection_requirement(
+    requirement: &ProfileSelectionRequirement,
+    active_profile: Option<ActiveProfileView>,
+    evaluation: &ProfilePromotionEvaluation,
+) -> ProfileSelectionDecision {
+    let satisfied = profile_promotion_status_rank(&evaluation.status)
+        >= profile_promotion_status_rank(&requirement.minimum_profile_status)
+        && evaluation.status != ProfilePromotionStatus::Disabled;
+    let enforced = requirement.enforcement_mode == ProfileSelectionEnforcementMode::Required;
+    let allowed = satisfied || !enforced;
+    let mut blocking_reasons = evaluation.blocking_reasons.clone();
+    let mut rejection_code = String::new();
+    if !satisfied {
+        blocking_reasons.insert(
+            0,
+            format!(
+                "profile status {} is below required {}",
+                profile_promotion_status_name(&evaluation.status),
+                profile_promotion_status_name(&requirement.minimum_profile_status)
+            ),
+        );
+        if enforced {
+            rejection_code = "profile_status_unmet".to_string();
+        }
+    }
+    let mut diagnostics = evaluation.diagnostics.clone();
+    if requirement.profile_id != evaluation.profile_id {
+        diagnostics
+            .push("selected profile does not match promotion evaluation profile".to_string());
+    }
+    ProfileSelectionDecision {
+        profile_id: requirement.profile_id.clone(),
+        promotion_policy_id: requirement.promotion_policy_id.clone(),
+        minimum_profile_status: requirement.minimum_profile_status.clone(),
+        evaluated_status: evaluation.status.clone(),
+        enforcement_mode: requirement.enforcement_mode.clone(),
+        satisfied,
+        enforced,
+        allowed,
+        rejection_code,
+        active_profile,
+        profile_promotion_evaluation: evaluation.clone(),
+        blocking_reasons,
+        diagnostics,
+    }
+}
+
+fn profile_promotion_status_rank(status: &ProfilePromotionStatus) -> u8 {
+    match status {
+        ProfilePromotionStatus::Experimental => 1,
+        ProfilePromotionStatus::Available => 2,
+        ProfilePromotionStatus::Recommended => 3,
+        ProfilePromotionStatus::Default => 4,
+        ProfilePromotionStatus::Disabled => 0,
+    }
+}
+
+fn profile_promotion_status_name(status: &ProfilePromotionStatus) -> &'static str {
+    match status {
+        ProfilePromotionStatus::Experimental => "experimental",
+        ProfilePromotionStatus::Available => "available",
+        ProfilePromotionStatus::Recommended => "recommended",
+        ProfilePromotionStatus::Default => "default",
+        ProfilePromotionStatus::Disabled => "disabled",
     }
 }
 

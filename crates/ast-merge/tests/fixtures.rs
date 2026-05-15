@@ -29,16 +29,16 @@ use ast_merge::{
     NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS,
     PROMOTION_PROFILE_JSON_KEYED_OBJECT, PROMOTION_PROFILE_RUBY_GEMSPEC_DEPENDENCY_DECLARATIONS,
     PairwiseMatching, PerformanceGuardrails, PolicySurface, ProfileConformanceReport,
-    ProfileDebugOutput, ProfilePromotionPolicy, ProfilePromotionReport, ProfilePromotionScope,
-    ProfilePromotionStatus, ProjectedChildReviewCase, ProjectedChildReviewGroup,
-    ProjectedChildReviewGroupProgress, ProviderRichnessProjection, REVIEW_TRANSPORT_VERSION,
-    RawMerge, RenameAwareMatchingReport, RenderPlanReport, RenderSafetyReport,
-    RenderVerificationReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
-    ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
-    SecondaryFormattingMetricsReport, SignatureMatchingParent, SignatureMatchingReport,
-    SourceTextNormalizedMatchingReport, StructuralMatchingReport, StructuredEditApplication,
-    StructuredEditApplicationEnvelope, StructuredEditBatchReport,
-    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    ProfileDebugOutput, ProfilePromotionEvaluation, ProfilePromotionPolicy, ProfilePromotionReport,
+    ProfilePromotionScope, ProfilePromotionStatus, ProfileSelectionRequirement,
+    ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
+    ProviderRichnessProjection, REVIEW_TRANSPORT_VERSION, RawMerge, RenameAwareMatchingReport,
+    RenderPlanReport, RenderSafetyReport, RenderVerificationReport, ReviewHostHints,
+    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
+    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport,
+    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
+    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
+    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -147,7 +147,8 @@ use ast_merge::{
     conformance_suite_definition, conformance_suite_selectors, default_conformance_family_context,
     delegated_child_apply_plan, enrich_template_plan_entries,
     enrich_template_plan_entries_with_token_state, evaluate_profile_promotion,
-    evaluate_template_tree_convergence, execute_generic_conflict_handler,
+    evaluate_profile_selection_requirement, evaluate_template_tree_convergence,
+    execute_generic_conflict_handler,
     execute_review_replay_bundle_envelope_reviewed_nested_executions,
     execute_review_replay_bundle_reviewed_nested_executions,
     execute_review_state_envelope_reviewed_nested_executions,
@@ -2123,6 +2124,63 @@ fn conforms_to_slice_913_profile_promotion_evaluation_fixture() {
         )
         .unwrap()
     );
+}
+
+#[test]
+fn conforms_to_slice_914_profile_selection_enforcement_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-914-profile-selection-enforcement",
+        "profile-selection-enforcement.json",
+    ]));
+    let active_profile: ActiveProfileView =
+        serde_json::from_value(fixture["active_profile"].clone()).unwrap();
+    let available_evaluation: ProfilePromotionEvaluation =
+        serde_json::from_value(fixture["available_evaluation"].clone()).unwrap();
+    let recommended_evaluation: ProfilePromotionEvaluation =
+        serde_json::from_value(fixture["recommended_evaluation"].clone()).unwrap();
+    let advisory_requirement: ProfileSelectionRequirement =
+        serde_json::from_value(fixture["advisory_requirement"].clone()).unwrap();
+    let required_requirement: ProfileSelectionRequirement =
+        serde_json::from_value(fixture["required_requirement"].clone()).unwrap();
+    let satisfied_requirement: ProfileSelectionRequirement =
+        serde_json::from_value(fixture["satisfied_requirement"].clone()).unwrap();
+    let expected = &fixture["expected"];
+
+    let advisory = evaluate_profile_selection_requirement(
+        &advisory_requirement,
+        Some(active_profile.clone()),
+        &available_evaluation,
+    );
+    assert_eq!(advisory.allowed, expected["advisory_allowed"].as_bool().unwrap());
+    assert_eq!(advisory.satisfied, expected["advisory_satisfied"].as_bool().unwrap());
+    assert_eq!(advisory.enforced, expected["advisory_enforced"].as_bool().unwrap());
+    assert_eq!(advisory.rejection_code, expected["advisory_rejection_code"].as_str().unwrap());
+
+    let required = evaluate_profile_selection_requirement(
+        &required_requirement,
+        Some(active_profile.clone()),
+        &available_evaluation,
+    );
+    assert_eq!(required.allowed, expected["required_allowed"].as_bool().unwrap());
+    assert_eq!(required.satisfied, expected["required_satisfied"].as_bool().unwrap());
+    assert_eq!(required.enforced, expected["required_enforced"].as_bool().unwrap());
+    assert_eq!(required.rejection_code, expected["required_rejection_code"].as_str().unwrap());
+    assert_eq!(
+        required.blocking_reasons[0],
+        expected["required_first_blocking_reason"].as_str().unwrap()
+    );
+
+    let satisfied = evaluate_profile_selection_requirement(
+        &satisfied_requirement,
+        Some(active_profile),
+        &recommended_evaluation,
+    );
+    assert_eq!(satisfied.allowed, expected["satisfied_allowed"].as_bool().unwrap());
+    assert_eq!(satisfied.satisfied, expected["satisfied_satisfied"].as_bool().unwrap());
+    assert_eq!(satisfied.enforced, expected["satisfied_enforced"].as_bool().unwrap());
+    assert_eq!(satisfied.rejection_code, expected["satisfied_rejection_code"].as_str().unwrap());
+    assert!(satisfied.blocking_reasons.is_empty());
 }
 
 fn sorted_value_strings(value: &Value) -> Vec<String> {
