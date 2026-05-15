@@ -235,6 +235,25 @@ pub struct BackendAvailabilityReport {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProviderDiagnostic {
+    pub severity: String,
+    pub category: String,
+    pub code: String,
+    pub message: String,
+    pub path: String,
+    pub blocking: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProviderDiagnosticsReport {
+    pub provider_id: String,
+    pub backend_ref: BackendReference,
+    pub language: String,
+    pub status: String,
+    pub diagnostics: Vec<ProviderDiagnostic>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OrderedSiblingEdge {
     pub parent_id: String,
     pub node_id: String,
@@ -824,6 +843,25 @@ pub fn build_backend_availability_report(
         }
     }
     BackendAvailabilityReport { backend_ref, status, checks, diagnostics }
+}
+
+pub fn build_provider_diagnostics_report(
+    provider_id: String,
+    backend_ref: BackendReference,
+    language: String,
+    diagnostics: Vec<ProviderDiagnostic>,
+) -> ProviderDiagnosticsReport {
+    let mut status = "clean".to_string();
+    for diagnostic in &diagnostics {
+        if diagnostic.blocking {
+            status = "blocked".to_string();
+            break;
+        }
+        if diagnostic.severity == "warning" {
+            status = "warning".to_string();
+        }
+    }
+    ProviderDiagnosticsReport { provider_id, backend_ref, language, status, diagnostics }
 }
 
 fn windows_absolute_path(path: &str) -> bool {

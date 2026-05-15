@@ -8,13 +8,13 @@ use tree_haver::{
     FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis, KaitaiTreeNode, NativeParserProvider,
     NativeProviderMetadata, NodeRole, NormalizedParseResult, NormalizedTreeNode,
     OrderedTreePrimitives, ParseErrorTolerance, ParserRequest, PolicyReference, PolicySurface,
-    ProcessRequest, SourcePoint, SourceSpan, TreeHaverProfile, ZipUnsafeEntry,
-    build_backend_availability_report, byte_offset_for_point, current_backend_id,
-    extract_source_fragment, kaitai_adapter_info, kaitai_feature_profile, kaitai_struct_backend,
-    library_path_errors, node_roles, pest_adapter_info, pest_backend, pest_feature_profile,
-    process_with_language_pack, register_backend, registered_backends, safe_backend_name,
-    safe_language_name, safe_symbol_name, sanitize_language_name, slice_byte_range,
-    validate_library_path, with_backend,
+    ProcessRequest, ProviderDiagnosticsReport, SourcePoint, SourceSpan, TreeHaverProfile,
+    ZipUnsafeEntry, build_backend_availability_report, build_provider_diagnostics_report,
+    byte_offset_for_point, current_backend_id, extract_source_fragment, kaitai_adapter_info,
+    kaitai_feature_profile, kaitai_struct_backend, library_path_errors, node_roles,
+    pest_adapter_info, pest_backend, pest_feature_profile, process_with_language_pack,
+    register_backend, registered_backends, safe_backend_name, safe_language_name, safe_symbol_name,
+    sanitize_language_name, slice_byte_range, validate_library_path, with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -924,6 +924,27 @@ fn conforms_to_slice_926_tree_haver_backend_availability_fixture() {
         let result = build_backend_availability_report(
             expected.backend_ref.clone(),
             expected.checks.clone(),
+        );
+        assert_eq!(serde_json::json!(result), fixture[name], "{name}");
+    }
+}
+
+#[test]
+fn conforms_to_slice_927_tree_haver_provider_diagnostics_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-927-tree-haver-provider-diagnostics",
+        "provider-diagnostics.json",
+    ]));
+
+    for name in ["clean_report", "warning_report", "blocked_report"] {
+        let expected: ProviderDiagnosticsReport =
+            serde_json::from_value(fixture[name].clone()).expect("provider diagnostics report");
+        let result = build_provider_diagnostics_report(
+            expected.provider_id.clone(),
+            expected.backend_ref.clone(),
+            expected.language.clone(),
+            expected.diagnostics.clone(),
         );
         assert_eq!(serde_json::json!(result), fixture[name], "{name}");
     }
