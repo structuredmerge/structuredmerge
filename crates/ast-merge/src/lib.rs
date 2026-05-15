@@ -908,6 +908,17 @@ pub struct FormattingHardGateReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct SecondaryFormattingMetricsReport {
+    pub report_id: String,
+    pub version: String,
+    pub unchanged_line_churn: usize,
+    pub output_diff_size: usize,
+    pub source_fragment_retention: f64,
+    pub weighted: bool,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";

@@ -26,10 +26,10 @@ use ast_merge::{
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
     RenameAwareMatchingReport, RenderPlanReport, RenderVerificationReport, ReviewHostHints,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
-    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SignatureMatchingParent,
-    SignatureMatchingReport, SourceTextNormalizedMatchingReport, StructuralMatchingReport,
-    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
-    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport,
+    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
+    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
+    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -1077,6 +1077,30 @@ fn conforms_to_slice_817_formatting_hard_gates_fixture() {
     assert_eq!(weighted_count, expected["weighted_gate_count"].as_u64().unwrap() as usize);
     assert_eq!(report.gates[0].name, expected["first_gate"].as_str().unwrap());
     assert_eq!(report.gates[1].name, expected["second_gate"].as_str().unwrap());
+}
+
+#[test]
+fn conforms_to_slice_818_secondary_formatting_metrics_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-818-secondary-formatting-metrics",
+        "secondary-formatting-metrics.json",
+    ]));
+    let report: SecondaryFormattingMetricsReport =
+        serde_json::from_value(fixture["secondary_metrics"].clone())
+            .expect("secondary formatting metrics report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(
+        report.unchanged_line_churn,
+        expected["unchanged_line_churn"].as_u64().unwrap() as usize
+    );
+    assert_eq!(report.output_diff_size, expected["output_diff_size"].as_u64().unwrap() as usize);
+    assert_eq!(
+        report.source_fragment_retention,
+        expected["source_fragment_retention"].as_f64().unwrap()
+    );
+    assert_eq!(report.weighted, expected["weighted"].as_bool().unwrap());
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
