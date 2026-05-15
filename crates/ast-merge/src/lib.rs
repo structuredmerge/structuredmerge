@@ -945,6 +945,17 @@ pub struct FormattingEdgeFixtureSuite {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RenderSafetyReport {
+    pub report_id: String,
+    pub version: String,
+    pub provider_id: String,
+    pub safe_to_render: bool,
+    pub outcome: String,
+    pub fallback_strategy: String,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";

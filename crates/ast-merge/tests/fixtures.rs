@@ -25,12 +25,13 @@ use ast_merge::{
     NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults, PCS, PairwiseMatching,
     PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
-    RenameAwareMatchingReport, RenderPlanReport, RenderVerificationReport, ReviewHostHints,
-    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
-    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport,
-    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
-    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
-    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    RenameAwareMatchingReport, RenderPlanReport, RenderSafetyReport, RenderVerificationReport,
+    ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
+    ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
+    SecondaryFormattingMetricsReport, SignatureMatchingParent, SignatureMatchingReport,
+    SourceTextNormalizedMatchingReport, StructuralMatchingReport, StructuredEditApplication,
+    StructuredEditApplicationEnvelope, StructuredEditBatchReport,
+    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -1148,6 +1149,30 @@ fn conforms_to_slice_820_formatting_edge_fixtures_fixture() {
         conflict_marker_case_count,
         expected["conflict_marker_case_count"].as_u64().unwrap() as usize
     );
+}
+
+#[test]
+fn conforms_to_slice_821_unsafe_render_fallback_or_failure_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-821-unsafe-render-fallback-or-failure",
+        "unsafe-render-fallback-or-failure.json",
+    ]));
+    let report: RenderSafetyReport = serde_json::from_value(fixture["render_safety"].clone())
+        .expect("render safety report should deserialize");
+    let expected = &fixture["expected"];
+    let allowed_outcomes: Vec<&str> = expected["allowed_outcomes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|outcome| outcome.as_str().unwrap())
+        .collect();
+
+    assert_eq!(report.safe_to_render, expected["safe_to_render"].as_bool().unwrap());
+    assert!(allowed_outcomes.contains(&report.outcome.as_str()));
+    assert_eq!(report.outcome, expected["outcome"].as_str().unwrap());
+    assert_eq!(report.fallback_strategy, expected["fallback_strategy"].as_str().unwrap());
+    assert_eq!(report.diagnostics.len(), expected["diagnostic_count"].as_u64().unwrap() as usize);
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
