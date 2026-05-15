@@ -876,6 +876,23 @@ pub struct FormattingPreservationConformanceReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct FormattingRecommendationWeights {
+    pub expected_output_line_diff_size: f64,
+    pub expected_output_character_diff_size: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct FormattingRecommendationGate {
+    pub gate_id: String,
+    pub version: String,
+    pub threshold: f64,
+    pub passed: bool,
+    pub weights: FormattingRecommendationWeights,
+    pub metrics: FormattingPreservationMetrics,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";

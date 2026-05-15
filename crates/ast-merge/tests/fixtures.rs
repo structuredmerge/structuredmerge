@@ -17,18 +17,19 @@ use ast_merge::{
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
     DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FallbackUsageReport,
-    FamilyFeatureProfile, FormattingPreservationConformanceReport, GenericConflictHandlerExecution,
-    InconsistencyReport, LanguageProfileHandlerRegistry, LocalLineFallbackReport,
-    MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport, MoveDetectionMatchingReport,
-    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
-    NamedConformanceSuiteResults, PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
-    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
-    RawMerge, RenameAwareMatchingReport, RenderPlanReport, RenderVerificationReport,
-    ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext,
-    ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
-    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
-    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
-    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    FamilyFeatureProfile, FormattingPreservationConformanceReport, FormattingRecommendationGate,
+    GenericConflictHandlerExecution, InconsistencyReport, LanguageProfileHandlerRegistry,
+    LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
+    MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
+    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults, PCS, PairwiseMatching,
+    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
+    RenameAwareMatchingReport, RenderPlanReport, RenderVerificationReport, ReviewHostHints,
+    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
+    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SignatureMatchingParent,
+    SignatureMatchingReport, SourceTextNormalizedMatchingReport, StructuralMatchingReport,
+    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
+    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -1030,6 +1031,31 @@ fn conforms_to_slice_815_formatting_preservation_metrics_fixture() {
         report.formatting_metrics.formatting_preservation_score,
         expected["score"].as_f64().unwrap()
     );
+}
+
+#[test]
+fn conforms_to_slice_816_formatting_recommendation_gate_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-816-formatting-recommendation-gate",
+        "formatting-recommendation-gate.json",
+    ]));
+    let gate: FormattingRecommendationGate =
+        serde_json::from_value(fixture["recommendation_gate"].clone())
+            .expect("formatting recommendation gate should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(gate.threshold, expected["threshold"].as_f64().unwrap());
+    assert_eq!(gate.passed, expected["passed"].as_bool().unwrap());
+    assert_eq!(
+        gate.weights.expected_output_line_diff_size,
+        expected["line_weight"].as_f64().unwrap()
+    );
+    assert_eq!(
+        gate.weights.expected_output_character_diff_size,
+        expected["character_weight"].as_f64().unwrap()
+    );
+    assert_eq!(gate.metrics.formatting_preservation_score, expected["score"].as_f64().unwrap());
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
