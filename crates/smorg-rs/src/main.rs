@@ -38,6 +38,8 @@ struct MergeDriverOptions {
 struct PathSettings {
     language: Option<String>,
     conflict_marker_size: usize,
+    profile_id: Option<String>,
+    require_profile_status: Option<String>,
 }
 
 #[derive(Debug)]
@@ -113,17 +115,6 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
     let Some(options) = parse_merge_driver_options(args, stderr) else {
         return EXIT_USER_ERROR;
     };
-    let profile_exit = report_and_enforce_profile(
-        options.profile_id.as_deref(),
-        options.profile_report,
-        options.require_profile_status.as_deref(),
-        stdout,
-        stderr,
-    );
-    if profile_exit != EXIT_SUCCESS {
-        return profile_exit;
-    }
-
     let ancestor_source = match fs::read_to_string(&options.ancestor) {
         Ok(source) => source,
         Err(error) => {
@@ -150,6 +141,19 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
 
     let effective_path = options.effective_path();
     let settings = load_path_settings(&effective_path);
+    let profile_id = options.profile_id.as_deref().or(settings.profile_id.as_deref());
+    let require_profile_status =
+        options.require_profile_status.as_deref().or(settings.require_profile_status.as_deref());
+    let profile_exit = report_and_enforce_profile(
+        profile_id,
+        options.profile_report,
+        require_profile_status,
+        stdout,
+        stderr,
+    );
+    if profile_exit != EXIT_SUCCESS {
+        return profile_exit;
+    }
     let mut result = merge_by_path(
         &effective_path,
         settings.language.as_deref(),
@@ -577,7 +581,12 @@ fn normalize_language(language: Option<&str>, path_name: &str) -> String {
 }
 
 fn load_path_settings(path_name: &str) -> PathSettings {
-    let mut settings = PathSettings { language: None, conflict_marker_size: 7 };
+    let mut settings = PathSettings {
+        language: None,
+        conflict_marker_size: 7,
+        profile_id: None,
+        require_profile_status: None,
+    };
     for attributes_path in attribute_files_for_path(path_name) {
         let Ok(source) = fs::read_to_string(attributes_path) else {
             continue;
@@ -622,6 +631,12 @@ fn apply_attributes(settings: &mut PathSettings, path_name: &str, source: &str) 
             match key {
                 "smorg.language" | "linguist-language" => {
                     settings.language = Some(value.to_string());
+                }
+                "smorg.profile" => {
+                    settings.profile_id = Some(value.to_string());
+                }
+                "smorg.requireProfileStatus" => {
+                    settings.require_profile_status = Some(value.to_string());
                 }
                 "conflict-marker-size" => {
                     if let Ok(marker_size) = value.parse::<usize>() {
@@ -854,6 +869,39 @@ mod tests {
             String::from_utf8_lossy(&stderr)
                 .contains("profile status available is below required recommended")
         );
+    }
+
+    #[test]
+    fn merge_driver_uses_smorg_profile_attributes() {
+        let dir = TestDir::new();
+        fs::write(
+            ".gitattributes",
+            "*.json smorg.profile=json.keyed-object smorg.requireProfileStatus=recommended\n",
+        )
+        .expect("write attributes");
+        let ancestor = dir.write("ancestor.json", r#"{"name":"structuredmerge"}"#);
+        let current = dir.write("current.json", r#"{"name":"structuredmerge","current":true}"#);
+        let other = dir.write("other.json", r#"{"name":"structuredmerge","other":true}"#);
+
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let exit = run(
+            &[
+                "merge-driver".to_string(),
+                "--profile-report".to_string(),
+                ancestor,
+                current,
+                other,
+                "package.json".to_string(),
+            ],
+            &mut stdout,
+            &mut stderr,
+        );
+
+        assert_eq!(exit, EXIT_USER_ERROR);
+        let report = String::from_utf8_lossy(&stdout);
+        assert!(report.contains(r#""profile_id":"json.keyed-object""#), "{report}");
+        assert!(report.contains(r#""rejection_code":"profile_status_unmet""#), "{report}");
     }
 
     #[test]
