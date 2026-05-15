@@ -525,6 +525,28 @@ pub struct RenameAwareMatchingReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MatchingAmbiguity {
+    pub signature: String,
+    pub scope_path: String,
+    pub from_candidates: Vec<String>,
+    pub to_candidates: Vec<String>,
+    pub selected: bool,
+    pub reason: String,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct AmbiguityMatchingReport {
+    pub matching_id: String,
+    pub strategy: String,
+    pub scope_path: String,
+    pub ambiguous: bool,
+    pub matches: Vec<SignatureNodeMatch>,
+    pub ambiguities: Vec<MatchingAmbiguity>,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {

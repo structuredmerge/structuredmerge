@@ -5,8 +5,8 @@ use std::{
 };
 
 use ast_merge::{
-    ChangeSet, ClassMappingReport, ConformanceCaseExecution, ConformanceCaseRef,
-    ConformanceCaseRequirements, ConformanceCaseResult, ConformanceCaseRun,
+    AmbiguityMatchingReport, ChangeSet, ClassMappingReport, ConformanceCaseExecution,
+    ConformanceCaseRef, ConformanceCaseRequirements, ConformanceCaseResult, ConformanceCaseRun,
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, ConformanceManifest,
     ConformanceManifestPlanningOptions, ConformanceManifestReport,
     ConformanceManifestReviewOptions, ConformanceManifestReviewState,
@@ -644,6 +644,34 @@ fn conforms_to_slice_801_rename_aware_matching_gated_fixture() {
     assert_eq!(
         report.candidates[0].stable_body_hash,
         expected["first_candidate_body_hash"].as_str().unwrap()
+    );
+}
+
+#[test]
+fn conforms_to_slice_802_ambiguity_diagnostics_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-802-ambiguity-diagnostics",
+        "ambiguity-diagnostics.json",
+    ]));
+    let report: AmbiguityMatchingReport = serde_json::from_value(fixture["matching"].clone())
+        .expect("ambiguity matching report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.strategy, expected["strategy"].as_str().unwrap());
+    assert_eq!(report.scope_path, expected["scope_path"].as_str().unwrap());
+    assert_eq!(report.ambiguous, expected["ambiguous"].as_bool().unwrap());
+    assert_eq!(report.matches.len(), expected["match_count"].as_u64().unwrap() as usize);
+    assert_eq!(report.ambiguities.len(), expected["ambiguity_count"].as_u64().unwrap() as usize);
+    assert_eq!(report.diagnostics[0].category, DiagnosticCategory::Ambiguity);
+    assert_eq!(
+        report.ambiguities[0].signature,
+        expected["first_ambiguity_signature"].as_str().unwrap()
+    );
+    assert_eq!(report.ambiguities[0].reason, expected["first_ambiguity_reason"].as_str().unwrap());
+    assert_eq!(
+        report.ambiguities[0].selected,
+        expected["first_ambiguity_selected"].as_bool().unwrap()
     );
 }
 
