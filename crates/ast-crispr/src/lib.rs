@@ -39,6 +39,14 @@ pub struct SelectionProfile {
     pub include_trailing_gap: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DestinationProfile {
+    pub resolution_kind: String,
+    pub resolution_source: String,
+    pub anchor_boundary: String,
+    pub used_if_missing: bool,
+}
+
 struct ProfileDescriptor {
     family: &'static str,
 }
@@ -149,6 +157,45 @@ impl SelectionProfile {
     }
 }
 
+impl DestinationProfile {
+    pub fn new(
+        resolution_kind: &str,
+        resolution_source: &str,
+        anchor_boundary: &str,
+        used_if_missing: bool,
+    ) -> Self {
+        Self {
+            resolution_kind: defaulted(resolution_kind, "append_fallback"),
+            resolution_source: defaulted(resolution_source, "none"),
+            anchor_boundary: defaulted(anchor_boundary, "none"),
+            used_if_missing,
+        }
+    }
+
+    pub fn report(&self) -> Value {
+        let (resolution_family, known_resolution_kind) =
+            descriptor_family(resolution_kind_descriptor(&self.resolution_kind));
+        let (resolution_source_family, known_resolution_source) =
+            descriptor_family(resolution_source_descriptor(&self.resolution_source));
+        let (anchor_boundary_family, known_anchor_boundary) =
+            descriptor_family(anchor_boundary_descriptor(&self.anchor_boundary));
+        json!({
+            "resolution_kind": self.resolution_kind,
+            "resolution_family": resolution_family,
+            "known_resolution_kind": known_resolution_kind,
+            "resolution_source": self.resolution_source,
+            "resolution_source_family": resolution_source_family,
+            "known_resolution_source": known_resolution_source,
+            "anchor_boundary": self.anchor_boundary,
+            "anchor_boundary_family": anchor_boundary_family,
+            "known_anchor_boundary": known_anchor_boundary,
+            "used_if_missing": self.used_if_missing,
+            "append_fallback": self.resolution_kind == "append_fallback",
+            "anchored": resolution_family == "anchored"
+        })
+    }
+}
+
 fn defaulted(value: &str, fallback: &str) -> String {
     if value.is_empty() { fallback } else { value }.to_string()
 }
@@ -216,6 +263,33 @@ fn comment_region_descriptor(value: &str) -> Option<ProfileDescriptor> {
         "leading" => Some(ProfileDescriptor { family: "leading" }),
         "trailing" => Some(ProfileDescriptor { family: "trailing" }),
         "inline" => Some(ProfileDescriptor { family: "inline" }),
+        _ => None,
+    }
+}
+
+fn resolution_kind_descriptor(value: &str) -> Option<ProfileDescriptor> {
+    match value {
+        "append_fallback" => Some(ProfileDescriptor { family: "append" }),
+        "anchor_after_statement" => Some(ProfileDescriptor { family: "anchored" }),
+        _ => None,
+    }
+}
+
+fn resolution_source_descriptor(value: &str) -> Option<ProfileDescriptor> {
+    match value {
+        "none" => Some(ProfileDescriptor { family: "implicit" }),
+        "callable" => Some(ProfileDescriptor { family: "callable" }),
+        "selector" => Some(ProfileDescriptor { family: "selector" }),
+        _ => None,
+    }
+}
+
+fn anchor_boundary_descriptor(value: &str) -> Option<ProfileDescriptor> {
+    match value {
+        "none" => Some(ProfileDescriptor { family: "none" }),
+        "statement_end_plus_following_gap" => {
+            Some(ProfileDescriptor { family: "gap_preserving_statement" })
+        }
         _ => None,
     }
 }
@@ -370,10 +444,10 @@ pub fn boundary_report() -> Value {
             "ast-merge structured-edit contract anchor",
             "limit helpers",
             "match profile helpers",
-            "selection profile helpers"
+            "selection profile helpers",
+            "destination profile helpers"
         ],
         "future_exports": [
-            "destination profile helpers",
             "operation profile helpers",
             "replace/delete/insert/move helpers",
             "batch operation helpers"
@@ -483,6 +557,31 @@ mod tests {
                 profile_fixture["selection_intent"].as_str().expect("selection intent"),
                 profile_fixture["comment_region"].as_str(),
                 profile_fixture["include_trailing_gap"].as_bool().expect("include trailing gap"),
+            );
+            assert_eq!(profile.report(), test_case["expected"]);
+        }
+    }
+
+    #[test]
+    fn destination_profile_helpers_match_fixture() {
+        let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("fixtures")
+            .join("diagnostics")
+            .join("slice-920-ast-crispr-destination-profile-helpers")
+            .join("ast-crispr-destination-profile-helpers.json");
+        let source = fs::read_to_string(fixture_path).expect("read fixture");
+        let fixture: Value = serde_json::from_str(&source).expect("parse fixture");
+
+        for test_case in fixture["cases"].as_array().expect("cases") {
+            let profile_fixture = &test_case["profile"];
+            let profile = DestinationProfile::new(
+                profile_fixture["resolution_kind"].as_str().expect("resolution kind"),
+                profile_fixture["resolution_source"].as_str().expect("resolution source"),
+                profile_fixture["anchor_boundary"].as_str().expect("anchor boundary"),
+                profile_fixture["used_if_missing"].as_bool().expect("used if missing"),
             );
             assert_eq!(profile.report(), test_case["expected"]);
         }
