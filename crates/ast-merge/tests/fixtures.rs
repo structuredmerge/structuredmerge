@@ -17,9 +17,9 @@ use ast_merge::{
     ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSelector,
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
-    DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FallbackUsageReport,
-    FalseTextualConflictSuite, FamilyFeatureProfile, FormattingEdgeFixtureSuite,
-    FormattingHardGateReport, FormattingPreservationConformanceReport,
+    DiagnosticSeverity, DiffDriverSmokeSuite, DiscoveredSurface, FallbackScopeReport,
+    FallbackUsageReport, FalseTextualConflictSuite, FamilyFeatureProfile,
+    FormattingEdgeFixtureSuite, FormattingHardGateReport, FormattingPreservationConformanceReport,
     FormattingRecommendationGate, GenericConflictHandlerExecution, GitDriverSmokeSuite,
     GoDSTProviderStackReport, GoProviderComparisonReport, HostLanguageNativeProviderContracts,
     InconsistencyReport, LanguageProfileHandlerRegistry, LocalLineFallbackReport,
@@ -1424,6 +1424,30 @@ fn conforms_to_slice_902_git_driver_smoke_fixtures_fixture() {
         updated_current_file_count,
         expected["updated_current_file_count"].as_u64().unwrap() as usize
     );
+}
+
+#[test]
+fn conforms_to_slice_903_diff_driver_smoke_fixtures_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-903-diff-driver-smoke-fixtures",
+        "diff-driver-smoke-fixtures.json",
+    ]));
+    let suite: DiffDriverSmokeSuite = serde_json::from_value(fixture["suite"].clone())
+        .expect("diff driver smoke suite should deserialize");
+    let expected = &fixture["expected"];
+    let argument_counts: Vec<usize> =
+        suite.cases.iter().map(|smoke_case| smoke_case.argument_count).collect();
+    let structured_diff_count = suite
+        .cases
+        .iter()
+        .filter(|smoke_case| smoke_case.expected_output_kind == "structured_diff")
+        .count();
+
+    assert_eq!(suite.driver_name, expected["driver_name"].as_str().unwrap());
+    assert_eq!(suite.cases.len(), expected["case_count"].as_u64().unwrap() as usize);
+    assert_eq!(serde_json::json!(argument_counts), expected["argument_counts"]);
+    assert_eq!(structured_diff_count, expected["structured_diff_count"].as_u64().unwrap() as usize);
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

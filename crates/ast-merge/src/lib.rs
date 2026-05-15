@@ -1131,6 +1131,24 @@ pub struct GitDriverSmokeSuite {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DiffDriverSmokeCase {
+    pub case_id: String,
+    pub argument_count: usize,
+    pub argument_roles: Vec<String>,
+    pub expected_exit_code: i32,
+    pub expected_output_kind: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DiffDriverSmokeSuite {
+    pub suite_id: String,
+    pub version: String,
+    pub driver_name: String,
+    pub cases: Vec<DiffDriverSmokeCase>,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";
