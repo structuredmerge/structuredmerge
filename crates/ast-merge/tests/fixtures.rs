@@ -19,10 +19,10 @@ use ast_merge::{
     DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FallbackUsageReport,
     FamilyFeatureProfile, FormattingEdgeFixtureSuite, FormattingHardGateReport,
     FormattingPreservationConformanceReport, FormattingRecommendationGate,
-    GenericConflictHandlerExecution, InconsistencyReport, LanguageProfileHandlerRegistry,
-    LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
-    MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
-    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
+    GenericConflictHandlerExecution, HostLanguageNativeProviderContracts, InconsistencyReport,
+    LanguageProfileHandlerRegistry, LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR,
+    MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
+    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
     NativeProviderMetadataReport, PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
     ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
     RawMerge, RenameAwareMatchingReport, RenderPlanReport, RenderSafetyReport,
@@ -1198,6 +1198,31 @@ fn conforms_to_slice_822_native_provider_metadata_fixture() {
     assert_eq!(report.semantic_role_support, expected["semantic_role_support"].as_str().unwrap());
     assert_eq!(report.retains_native_tree, expected["retains_native_tree"].as_bool().unwrap());
     assert_eq!(report.metadata_policy, expected["metadata_policy"].as_str().unwrap());
+}
+
+#[test]
+fn conforms_to_slice_823_host_language_native_provider_contracts_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-823-host-language-native-provider-contracts",
+        "host-language-native-provider-contracts.json",
+    ]));
+    let contracts: HostLanguageNativeProviderContracts =
+        serde_json::from_value(fixture["native_provider_contracts"].clone())
+            .expect("host-language native provider contracts should deserialize");
+    let expected = &fixture["expected"];
+    let provider_ids: Vec<&str> =
+        contracts.providers.iter().map(|provider| provider.provider_id.as_str()).collect();
+    let ruby_provider_count =
+        contracts.providers.iter().filter(|provider| provider.host_language == "ruby").count();
+
+    assert_eq!(contracts.providers.len(), expected["provider_count"].as_u64().unwrap() as usize);
+    assert_eq!(serde_json::json!(provider_ids), expected["provider_ids"]);
+    assert_eq!(ruby_provider_count, expected["ruby_provider_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        contracts.providers[0].parser_name,
+        expected["first_provider_parser"].as_str().unwrap()
+    );
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
