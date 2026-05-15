@@ -1169,6 +1169,24 @@ pub struct PerformanceGuardrails {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProfileSkippedRule {
+    pub rule: String,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProfileConformanceReport {
+    pub report_id: String,
+    pub version: String,
+    pub profile: String,
+    pub enabled_rules: Vec<String>,
+    pub skipped_rules: Vec<ProfileSkippedRule>,
+    pub fallback_count: usize,
+    pub unresolved_conflict_count: usize,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";

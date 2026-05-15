@@ -26,15 +26,15 @@ use ast_merge::{
     MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport, MoveDetectionMatchingReport,
     NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
     NamedConformanceSuiteResults, NativeProviderMetadataReport, NativeProviderProvingGroundReport,
-    PCS, PairwiseMatching, PerformanceGuardrails, PolicySurface, ProjectedChildReviewCase,
-    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, ProviderRichnessProjection,
-    REVIEW_TRANSPORT_VERSION, RawMerge, RenameAwareMatchingReport, RenderPlanReport,
-    RenderSafetyReport, RenderVerificationReport, ReviewHostHints, ReviewReplayBundle,
-    ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest, ReviewedNestedExecution,
-    ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport, SignatureMatchingParent,
-    SignatureMatchingReport, SourceTextNormalizedMatchingReport, StructuralMatchingReport,
-    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
-    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    PCS, PairwiseMatching, PerformanceGuardrails, PolicySurface, ProfileConformanceReport,
+    ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
+    ProviderRichnessProjection, REVIEW_TRANSPORT_VERSION, RawMerge, RenameAwareMatchingReport,
+    RenderPlanReport, RenderSafetyReport, RenderVerificationReport, ReviewHostHints,
+    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
+    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport,
+    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
+    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
+    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -1470,6 +1470,34 @@ fn conforms_to_slice_904_performance_guardrails_fixture() {
     assert_eq!(guardrails.timeout_ms, expected["timeout_ms"].as_u64().unwrap());
     assert_eq!(guardrails.timeout_diagnostic.code, expected["timeout_code"].as_str().unwrap());
     assert_eq!(guardrails.timeout_diagnostic.fallback, expected["fallback"].as_str().unwrap());
+}
+
+#[test]
+fn conforms_to_slice_905_profile_conformance_reports_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-905-profile-conformance-reports",
+        "profile-conformance-reports.json",
+    ]));
+    let report: ProfileConformanceReport = serde_json::from_value(fixture["report"].clone())
+        .expect("profile conformance report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.profile, expected["profile"].as_str().unwrap());
+    assert_eq!(
+        report.enabled_rules.len(),
+        expected["enabled_rule_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        report.skipped_rules.len(),
+        expected["skipped_rule_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(report.fallback_count, expected["fallback_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        report.unresolved_conflict_count,
+        expected["unresolved_conflict_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(report.skipped_rules[0].rule, expected["skipped_rule"].as_str().unwrap());
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
