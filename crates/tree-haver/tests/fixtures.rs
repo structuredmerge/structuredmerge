@@ -10,9 +10,10 @@ use tree_haver::{
     OrderedTreePrimitives, ParseErrorTolerance, ParserRequest, PolicyReference, PolicySurface,
     ProcessRequest, SourcePoint, SourceSpan, TreeHaverProfile, ZipUnsafeEntry,
     byte_offset_for_point, current_backend_id, extract_source_fragment, kaitai_adapter_info,
-    kaitai_feature_profile, kaitai_struct_backend, node_roles, pest_adapter_info, pest_backend,
-    pest_feature_profile, process_with_language_pack, register_backend, registered_backends,
-    slice_byte_range, with_backend,
+    kaitai_feature_profile, kaitai_struct_backend, library_path_errors, node_roles,
+    pest_adapter_info, pest_backend, pest_feature_profile, process_with_language_pack,
+    register_backend, registered_backends, safe_backend_name, safe_language_name, safe_symbol_name,
+    sanitize_language_name, slice_byte_range, validate_library_path, with_backend,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -864,6 +865,48 @@ fn conforms_to_slice_924_tree_haver_edit_projection_support_fixture() {
     );
     assert!(unsupported.supported_operations.is_empty());
     assert_eq!(unsupported.diagnostics[0], "edit projection unavailable: native tree not retained");
+}
+
+#[test]
+fn conforms_to_slice_925_tree_haver_path_validation_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-925-tree-haver-path-validation",
+        "path-validation.json",
+    ]));
+
+    for test_case in fixture["library_path_cases"].as_array().expect("library path cases") {
+        let path = test_case["path"].as_str().expect("path");
+        let validation = validate_library_path(path);
+        assert_eq!(validation.valid, test_case["expected_valid"], "{}", test_case["name"]);
+        assert_eq!(
+            serde_json::json!(library_path_errors(path)),
+            test_case["expected_errors"],
+            "{}",
+            test_case["name"]
+        );
+    }
+
+    for test_case in fixture["language_name_cases"].as_array().expect("language name cases") {
+        let value = test_case["value"].as_str().expect("value");
+        assert_eq!(safe_language_name(value), test_case["expected_valid"], "{}", test_case["name"]);
+        assert_eq!(
+            serde_json::json!(sanitize_language_name(value)),
+            test_case["expected_sanitized"],
+            "{}",
+            test_case["name"]
+        );
+    }
+
+    for test_case in fixture["symbol_name_cases"].as_array().expect("symbol name cases") {
+        let value = test_case["value"].as_str().expect("value");
+        assert_eq!(safe_symbol_name(value), test_case["expected_valid"], "{}", test_case["name"]);
+    }
+
+    for test_case in fixture["backend_name_cases"].as_array().expect("backend name cases") {
+        let value = test_case["value"].as_str().expect("value");
+        assert_eq!(safe_backend_name(value), test_case["expected_valid"], "{}", test_case["name"]);
+    }
 }
 
 #[test]

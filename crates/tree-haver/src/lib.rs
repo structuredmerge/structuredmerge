@@ -211,6 +211,13 @@ pub struct EditProjectionSupport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LibraryPathValidation {
+    pub path: String,
+    pub valid: bool,
+    pub errors: Vec<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OrderedSiblingEdge {
     pub parent_id: String,
@@ -708,6 +715,100 @@ pub fn registered_backends() -> Vec<BackendReference> {
         .collect::<Vec<_>>();
     backends.sort_by(|left, right| left.id.cmp(&right.id));
     backends
+}
+
+pub const MAX_LIBRARY_PATH_LENGTH: usize = 4096;
+
+pub fn validate_library_path(path: &str) -> LibraryPathValidation {
+    let errors = library_path_errors(path);
+    LibraryPathValidation { path: path.to_string(), valid: errors.is_empty(), errors }
+}
+
+pub fn library_path_errors(path: &str) -> Vec<String> {
+    if path.is_empty() {
+        return vec!["path_empty".to_string()];
+    }
+    let mut errors = Vec::new();
+    if path.len() > MAX_LIBRARY_PATH_LENGTH {
+        errors.push("path_too_long".to_string());
+    }
+    if path.contains('\0') {
+        errors.push("path_contains_null_byte".to_string());
+    }
+    if !path.starts_with('/') && !windows_absolute_path(path) {
+        errors.push("path_not_absolute".to_string());
+    }
+    let segments = path.split(['/', '\\']).collect::<Vec<_>>();
+    if segments.contains(&"..") {
+        errors.push("path_contains_parent_traversal".to_string());
+    }
+    if segments.contains(&".") {
+        errors.push("path_contains_current_directory_traversal".to_string());
+    }
+    if !has_allowed_library_extension(path) {
+        errors.push("path_extension_not_allowed".to_string());
+    }
+    if !valid_library_filename(filename(path)) {
+        errors.push("filename_contains_invalid_characters".to_string());
+    }
+    errors
+}
+
+pub fn safe_language_name(name: &str) -> bool {
+    name.len() <= 64
+        && name.chars().next().is_some_and(|ch| ch.is_ascii_lowercase())
+        && name.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+}
+
+pub fn sanitize_language_name(name: &str) -> Option<String> {
+    let sanitized = name
+        .to_ascii_lowercase()
+        .chars()
+        .filter(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || *ch == '_')
+        .collect::<String>();
+    if sanitized.chars().next().is_some_and(|ch| ch.is_ascii_lowercase()) {
+        Some(sanitized)
+    } else {
+        None
+    }
+}
+
+pub fn safe_symbol_name(symbol: &str) -> bool {
+    symbol.len() <= 256
+        && symbol.chars().next().is_some_and(|ch| ch.is_ascii_alphabetic() || ch == '_')
+        && symbol.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
+pub fn safe_backend_name(name: &str) -> bool {
+    name == "auto" || backend_reference(name).is_some()
+}
+
+fn windows_absolute_path(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && (bytes[2] == b'/' || bytes[2] == b'\\')
+}
+
+fn has_allowed_library_extension(path: &str) -> bool {
+    path.ends_with(".so")
+        || path.ends_with(".dylib")
+        || path.ends_with(".dll")
+        || path.rsplit_once(".so.").is_some_and(|(_, version)| {
+            !version.is_empty() && version.chars().all(|ch| ch.is_ascii_digit())
+        })
+}
+
+fn filename(path: &str) -> &str {
+    path.rsplit(['/', '\\']).next().unwrap_or(path)
+}
+
+fn valid_library_filename(filename: &str) -> bool {
+    filename.chars().next().is_some_and(|ch| ch.is_ascii_alphanumeric())
+        && filename
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-')
 }
 
 pub fn pest_adapter_info() -> AdapterInfo {
