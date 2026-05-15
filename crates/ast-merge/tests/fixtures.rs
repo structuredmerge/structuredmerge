@@ -20,13 +20,13 @@ use ast_merge::{
     DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FallbackUsageReport,
     FalseTextualConflictSuite, FamilyFeatureProfile, FormattingEdgeFixtureSuite,
     FormattingHardGateReport, FormattingPreservationConformanceReport,
-    FormattingRecommendationGate, GenericConflictHandlerExecution, GoDSTProviderStackReport,
-    GoProviderComparisonReport, HostLanguageNativeProviderContracts, InconsistencyReport,
-    LanguageProfileHandlerRegistry, LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR,
-    MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
-    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
-    NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS, PairwiseMatching,
-    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    FormattingRecommendationGate, GenericConflictHandlerExecution, GitDriverSmokeSuite,
+    GoDSTProviderStackReport, GoProviderComparisonReport, HostLanguageNativeProviderContracts,
+    InconsistencyReport, LanguageProfileHandlerRegistry, LocalLineFallbackReport,
+    MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport, MoveDetectionMatchingReport,
+    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
+    NamedConformanceSuiteResults, NativeProviderMetadataReport, NativeProviderProvingGroundReport,
+    PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, ProviderRichnessProjection, REVIEW_TRANSPORT_VERSION,
     RawMerge, RenameAwareMatchingReport, RenderPlanReport, RenderSafetyReport,
     RenderVerificationReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
@@ -1394,6 +1394,35 @@ fn conforms_to_slice_901_false_textual_conflicts_fixture() {
     assert_eq!(
         unresolved_conflict_count,
         expected["expected_unresolved_conflict_count"].as_u64().unwrap() as usize
+    );
+}
+
+#[test]
+fn conforms_to_slice_902_git_driver_smoke_fixtures_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-902-git-driver-smoke-fixtures",
+        "git-driver-smoke-fixtures.json",
+    ]));
+    let suite: GitDriverSmokeSuite = serde_json::from_value(fixture["suite"].clone())
+        .expect("git driver smoke suite should deserialize");
+    let expected = &fixture["expected"];
+    let first_case = &suite.cases[0];
+    let placeholder_set = vec![
+        first_case.ancestor_placeholder.as_str(),
+        first_case.current_placeholder.as_str(),
+        first_case.other_placeholder.as_str(),
+        first_case.path_placeholder.as_str(),
+    ];
+    let updated_current_file_count =
+        suite.cases.iter().filter(|smoke_case| smoke_case.expected_current_file_updated).count();
+
+    assert_eq!(suite.driver_name, expected["driver_name"].as_str().unwrap());
+    assert_eq!(suite.cases.len(), expected["case_count"].as_u64().unwrap() as usize);
+    assert_eq!(serde_json::json!(placeholder_set), expected["placeholder_set"]);
+    assert_eq!(
+        updated_current_file_count,
+        expected["updated_current_file_count"].as_u64().unwrap() as usize
     );
 }
 

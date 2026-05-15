@@ -1110,6 +1110,27 @@ pub struct FalseTextualConflictSuite {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GitDriverSmokeCase {
+    pub case_id: String,
+    pub family: String,
+    pub ancestor_placeholder: String,
+    pub current_placeholder: String,
+    pub other_placeholder: String,
+    pub path_placeholder: String,
+    pub expected_exit_code: i32,
+    pub expected_current_file_updated: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GitDriverSmokeSuite {
+    pub suite_id: String,
+    pub version: String,
+    pub driver_name: String,
+    pub cases: Vec<GitDriverSmokeCase>,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";
