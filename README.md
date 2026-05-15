@@ -38,6 +38,13 @@ The Rust implementation ships the implementation-specific `smorg-rs` command.
 Use that name in git configuration unless a package manager or local install has
 provided a `smorg` symlink.
 
+Package-manager formulas may expose the selected implementation as `smorg`.
+For a local user-created symlink:
+
+```sh
+ln -s "$(command -v smorg-rs)" ~/.local/bin/smorg
+```
+
 ```sh
 git config merge.smorg-rs.driver 'smorg-rs merge-driver %O %A %B %P'
 git config diff.smorg-rs.command 'smorg-rs diff-driver'
