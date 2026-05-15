@@ -1530,6 +1530,89 @@ pub struct FamilyFeatureProfile {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ParserIdentity {
+    pub parser: String,
+    pub backend: String,
+    pub backend_family: String,
+    pub parser_version: String,
+    pub language_version: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GitAttributeProfile {
+    pub attribute_namespace: String,
+    pub language_attributes: Vec<String>,
+    pub language: String,
+    pub merge_driver: String,
+    pub diff_driver: String,
+    pub conflict_marker_size_attribute: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BackendProfile {
+    pub backend: String,
+    pub family: String,
+    pub default: bool,
+    pub capabilities: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AtomicNodeRule {
+    pub selector: String,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SignatureDefinition {
+    pub name: String,
+    pub selector: String,
+    pub extractor: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommutativeParentDefinition {
+    pub selector: String,
+    pub child_group: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ChildGroupDefinition {
+    pub name: String,
+    pub separator: String,
+    pub delimiter: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommentAttachmentRule {
+    pub selector: String,
+    pub strategy: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LanguageBackendProfileRules {
+    pub node_roles: Vec<String>,
+    pub atomic_nodes: Vec<AtomicNodeRule>,
+    pub signatures: Vec<SignatureDefinition>,
+    pub commutative_parents: Vec<CommutativeParentDefinition>,
+    pub child_groups: Vec<ChildGroupDefinition>,
+    pub comment_attachment: Vec<CommentAttachmentRule>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LanguageBackendProfile {
+    pub profile_id: String,
+    pub family: String,
+    pub version: String,
+    pub parser_identity: ParserIdentity,
+    pub extensions: Vec<String>,
+    pub aliases: Vec<String>,
+    pub git_attributes: GitAttributeProfile,
+    pub supported_dialects: Vec<String>,
+    pub backends: Vec<BackendProfile>,
+    pub rules: LanguageBackendProfileRules,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CompactRulesetDirective {
     pub name: String,
     pub arguments: Vec<String>,

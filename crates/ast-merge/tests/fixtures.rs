@@ -22,19 +22,20 @@ use ast_merge::{
     FormattingEdgeFixtureSuite, FormattingHardGateReport, FormattingPreservationConformanceReport,
     FormattingRecommendationGate, GenericConflictHandlerExecution, GitDriverSmokeSuite,
     GoDSTProviderStackReport, GoProviderComparisonReport, HostLanguageNativeProviderContracts,
-    InconsistencyReport, LanguageProfileHandlerRegistry, LocalLineFallbackReport,
-    MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport, MoveDetectionMatchingReport,
-    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
-    NamedConformanceSuiteResults, NativeProviderMetadataReport, NativeProviderProvingGroundReport,
-    PCS, PairwiseMatching, PerformanceGuardrails, PolicySurface, ProfileConformanceReport,
-    ProjectedChildReviewCase, ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress,
-    ProviderRichnessProjection, REVIEW_TRANSPORT_VERSION, RawMerge, RenameAwareMatchingReport,
-    RenderPlanReport, RenderSafetyReport, RenderVerificationReport, ReviewHostHints,
-    ReviewReplayBundle, ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest,
-    ReviewedNestedExecution, ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport,
-    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
-    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
-    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    InconsistencyReport, LanguageBackendProfile, LanguageProfileHandlerRegistry,
+    LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
+    MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
+    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
+    NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS, PairwiseMatching,
+    PerformanceGuardrails, PolicySurface, ProfileConformanceReport, ProjectedChildReviewCase,
+    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, ProviderRichnessProjection,
+    REVIEW_TRANSPORT_VERSION, RawMerge, RenameAwareMatchingReport, RenderPlanReport,
+    RenderSafetyReport, RenderVerificationReport, ReviewHostHints, ReviewReplayBundle,
+    ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest, ReviewedNestedExecution,
+    ReviewedNestedExecutionEnvelope, SecondaryFormattingMetricsReport, SignatureMatchingParent,
+    SignatureMatchingReport, SourceTextNormalizedMatchingReport, StructuralMatchingReport,
+    StructuredEditApplication, StructuredEditApplicationEnvelope, StructuredEditBatchReport,
+    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -1872,6 +1873,32 @@ fn conforms_to_slice_22_shared_family_feature_profile_fixture() {
     });
 
     assert_eq!(rendered, fixture["feature_profile"]);
+}
+
+#[test]
+fn conforms_to_slice_908_language_backend_profile_schema_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-908-language-backend-profile-schema",
+        "language-backend-profile-schema.json",
+    ]));
+
+    let profile: LanguageBackendProfile =
+        serde_json::from_value(fixture["profile"].clone()).expect("profile should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(profile.profile_id, expected["profile_id"].as_str().unwrap());
+    assert_eq!(profile.family, expected["family"].as_str().unwrap());
+    assert_eq!(profile.backends[0].backend, expected["default_backend"].as_str().unwrap());
+    assert_eq!(
+        profile.git_attributes.language_attributes[0],
+        expected["primary_language_attribute"].as_str().unwrap()
+    );
+    assert_eq!(profile.rules.signatures[0].name, expected["first_signature"].as_str().unwrap());
+    assert_eq!(
+        profile.rules.commutative_parents[0].selector,
+        expected["first_commutative_parent"].as_str().unwrap()
+    );
 }
 
 #[test]
