@@ -5,11 +5,11 @@ use std::{
 };
 
 use ast_merge::{
-    AmbiguityMatchingReport, ChangeSet, ClassMappingReport, ConformanceCaseExecution,
-    ConformanceCaseRef, ConformanceCaseRequirements, ConformanceCaseResult, ConformanceCaseRun,
-    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, ConformanceManifest,
-    ConformanceManifestPlanningOptions, ConformanceManifestReport,
-    ConformanceManifestReviewOptions, ConformanceManifestReviewState,
+    AmbiguityMatchingReport, ChangeSet, ClassMappingReport, ConflictCategoryReport,
+    ConformanceCaseExecution, ConformanceCaseRef, ConformanceCaseRequirements,
+    ConformanceCaseResult, ConformanceCaseRun, ConformanceFamilyPlanContext,
+    ConformanceFeatureProfileView, ConformanceManifest, ConformanceManifestPlanningOptions,
+    ConformanceManifestReport, ConformanceManifestReviewOptions, ConformanceManifestReviewState,
     ConformanceManifestReviewStateEnvelope, ConformanceManifestReviewedNestedApplication,
     ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuiteDefinition,
     ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSelector,
@@ -754,6 +754,30 @@ fn conforms_to_slice_805_fallback_scopes_fixture() {
         report.scopes.last().unwrap().requires_source_span,
         expected["whole_file_requires_source_span"].as_bool().unwrap()
     );
+}
+
+#[test]
+fn conforms_to_slice_806_conflict_categories_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-806-conflict-categories",
+        "conflict-categories.json",
+    ]));
+    let report: ConflictCategoryReport = serde_json::from_value(fixture["conflicts"].clone())
+        .expect("conflict category report should deserialize");
+    let expected = &fixture["expected"];
+    let parse_limited_scope = report
+        .conflicts
+        .iter()
+        .find(|conflict| conflict.category == "parse_limited")
+        .map(|conflict| conflict.fallback_scope.as_str())
+        .unwrap();
+
+    assert_eq!(report.categories.len(), expected["category_count"].as_u64().unwrap() as usize);
+    assert_eq!(report.conflicts.len(), expected["conflict_count"].as_u64().unwrap() as usize);
+    assert_eq!(report.categories[0], expected["first_category"].as_str().unwrap());
+    assert_eq!(report.categories.last().unwrap(), expected["last_category"].as_str().unwrap());
+    assert_eq!(parse_limited_scope, expected["parse_limited_fallback_scope"].as_str().unwrap());
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {

@@ -639,6 +639,24 @@ pub struct FallbackScopeReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MergeConflict {
+    pub conflict_id: String,
+    pub category: String,
+    pub path: String,
+    pub fallback_scope: String,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConflictCategoryReport {
+    pub report_id: String,
+    pub version: String,
+    pub categories: Vec<String>,
+    pub conflicts: Vec<MergeConflict>,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {
