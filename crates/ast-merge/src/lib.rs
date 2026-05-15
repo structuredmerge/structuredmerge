@@ -620,6 +620,25 @@ pub struct MatchingDebugArtifacts {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FallbackScopeDefinition {
+    pub scope: String,
+    pub path: String,
+    pub owner_path: String,
+    pub covers_children: bool,
+    pub requires_source_span: bool,
+    pub description: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FallbackScopeReport {
+    pub report_id: String,
+    pub version: String,
+    pub scopes: Vec<FallbackScopeDefinition>,
+    pub default_order: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {

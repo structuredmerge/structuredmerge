@@ -15,17 +15,17 @@ use ast_merge::{
     ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSelector,
     ConformanceSuiteSubject, ConformanceSuiteSummary, ContentRecipeExecutionReportEnvelope,
     ContentRecipeExecutionRequestEnvelope, DelegatedChildOperation, DiagnosticCategory,
-    DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, InconsistencyReport,
-    MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport, MoveDetectionMatchingReport,
-    NamedConformanceSuitePlan, NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope,
-    NamedConformanceSuiteResults, PCS, PairwiseMatching, PolicySurface, ProjectedChildReviewCase,
-    ProjectedChildReviewGroup, ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION,
-    RawMerge, RenameAwareMatchingReport, ReviewHostHints, ReviewReplayBundle,
-    ReviewReplayBundleEnvelope, ReviewReplayContext, ReviewRequest, ReviewedNestedExecution,
-    ReviewedNestedExecutionEnvelope, SignatureMatchingParent, SignatureMatchingReport,
-    SourceTextNormalizedMatchingReport, StructuralMatchingReport, StructuredEditApplication,
-    StructuredEditApplicationEnvelope, StructuredEditBatchReport,
-    StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
+    DiagnosticSeverity, DiscoveredSurface, FallbackScopeReport, FamilyFeatureProfile,
+    InconsistencyReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
+    MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
+    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults, PCS, PairwiseMatching,
+    PolicySurface, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    ProjectedChildReviewGroupProgress, REVIEW_TRANSPORT_VERSION, RawMerge,
+    RenameAwareMatchingReport, ReviewHostHints, ReviewReplayBundle, ReviewReplayBundleEnvelope,
+    ReviewReplayContext, ReviewRequest, ReviewedNestedExecution, ReviewedNestedExecutionEnvelope,
+    SignatureMatchingParent, SignatureMatchingReport, SourceTextNormalizedMatchingReport,
+    StructuralMatchingReport, StructuredEditApplication, StructuredEditApplicationEnvelope,
+    StructuredEditBatchReport, StructuredEditBatchReportEnvelope, StructuredEditBatchRequest,
     StructuredEditCrisprExampleParityReport, StructuredEditDestinationProfile,
     StructuredEditExecutionReport, StructuredEditExecutionReportEnvelope,
     StructuredEditKettleJemPrimitiveGapReport, StructuredEditMatchProfile,
@@ -732,6 +732,27 @@ fn conforms_to_slice_804_matching_debug_artifacts_fixture() {
     assert_eq!(
         artifacts.rejected_matches[0].reason,
         expected["first_rejection_reason"].as_str().unwrap()
+    );
+}
+
+#[test]
+fn conforms_to_slice_805_fallback_scopes_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-805-fallback-scopes",
+        "fallback-scopes.json",
+    ]));
+    let report: FallbackScopeReport = serde_json::from_value(fixture["fallback"].clone())
+        .expect("fallback scope report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.scopes.len(), expected["scope_count"].as_u64().unwrap() as usize);
+    assert_eq!(serde_json::json!(report.default_order), expected["default_order"]);
+    assert_eq!(report.scopes[0].scope, expected["first_scope"].as_str().unwrap());
+    assert_eq!(report.scopes.last().unwrap().scope, expected["last_scope"].as_str().unwrap());
+    assert_eq!(
+        report.scopes.last().unwrap().requires_source_span,
+        expected["whole_file_requires_source_span"].as_bool().unwrap()
     );
 }
 
