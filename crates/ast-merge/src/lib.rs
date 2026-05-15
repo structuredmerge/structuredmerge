@@ -919,6 +919,17 @@ pub struct SecondaryFormattingMetricsReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct TokenSpanPreservationMetricsReport {
+    pub report_id: String,
+    pub version: String,
+    pub source_spans_available: bool,
+    pub token_preservation: f64,
+    pub span_preservation: f64,
+    pub weighted: bool,
+    pub diagnostics: Vec<String>,
+}
+
 pub const GENERIC_INDEPENDENT_COMMUTATIVE_INSERTIONS_HANDLER: &str =
     "generic-independent-commutative-insertions";
 pub const GENERIC_KEYED_MEMBER_EDIT_HANDLER: &str = "generic-keyed-member-edit";

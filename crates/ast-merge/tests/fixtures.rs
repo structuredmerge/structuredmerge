@@ -130,12 +130,13 @@ use ast_merge::{
     TemplateConvergenceResult, TemplateDestinationContext, TemplateExecutionPlanEntry,
     TemplatePlanEntry, TemplatePlanStateEntry, TemplatePlanTokenStateEntry, TemplatePreparedEntry,
     TemplatePreviewResult, TemplateStrategy, TemplateStrategyOverride, TemplateTokenConfig,
-    TemplateTreeRunReport, TemplateTreeRunResult, TieBreakMatchingReport, apply_template_execution,
-    classify_template_target_path, conformance_family_feature_profile_path,
-    conformance_fixture_path, conformance_manifest_replay_context,
-    conformance_manifest_review_request_ids, conformance_manifest_review_state_envelope,
-    conformance_review_host_hints, conformance_suite_definition, conformance_suite_selectors,
-    default_conformance_family_context, delegated_child_apply_plan, enrich_template_plan_entries,
+    TemplateTreeRunReport, TemplateTreeRunResult, TieBreakMatchingReport,
+    TokenSpanPreservationMetricsReport, apply_template_execution, classify_template_target_path,
+    conformance_family_feature_profile_path, conformance_fixture_path,
+    conformance_manifest_replay_context, conformance_manifest_review_request_ids,
+    conformance_manifest_review_state_envelope, conformance_review_host_hints,
+    conformance_suite_definition, conformance_suite_selectors, default_conformance_family_context,
+    delegated_child_apply_plan, enrich_template_plan_entries,
     enrich_template_plan_entries_with_token_state, evaluate_template_tree_convergence,
     execute_generic_conflict_handler,
     execute_review_replay_bundle_envelope_reviewed_nested_executions,
@@ -1100,6 +1101,27 @@ fn conforms_to_slice_818_secondary_formatting_metrics_fixture() {
         report.source_fragment_retention,
         expected["source_fragment_retention"].as_f64().unwrap()
     );
+    assert_eq!(report.weighted, expected["weighted"].as_bool().unwrap());
+}
+
+#[test]
+fn conforms_to_slice_819_token_span_preservation_metrics_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-819-token-span-preservation-metrics",
+        "token-span-preservation-metrics.json",
+    ]));
+    let report: TokenSpanPreservationMetricsReport =
+        serde_json::from_value(fixture["token_span_metrics"].clone())
+            .expect("token/span preservation metrics report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(
+        report.source_spans_available,
+        expected["source_spans_available"].as_bool().unwrap()
+    );
+    assert_eq!(report.token_preservation, expected["token_preservation"].as_f64().unwrap());
+    assert_eq!(report.span_preservation, expected["span_preservation"].as_f64().unwrap());
     assert_eq!(report.weighted, expected["weighted"].as_bool().unwrap());
 }
 
