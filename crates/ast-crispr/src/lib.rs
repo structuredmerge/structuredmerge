@@ -47,6 +47,16 @@ pub struct DestinationProfile {
     pub used_if_missing: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OperationProfile {
+    pub operation_kind: String,
+    pub source_requirement: String,
+    pub destination_requirement: String,
+    pub replacement_source: String,
+    pub captures_source_text: bool,
+    pub supports_if_missing: bool,
+}
+
 struct ProfileDescriptor {
     family: &'static str,
 }
@@ -196,6 +206,50 @@ impl DestinationProfile {
     }
 }
 
+impl OperationProfile {
+    pub fn new(
+        operation_kind: &str,
+        source_requirement: &str,
+        destination_requirement: &str,
+        replacement_source: &str,
+        captures_source_text: bool,
+        supports_if_missing: bool,
+    ) -> Self {
+        Self {
+            operation_kind: defaulted(operation_kind, "replace"),
+            source_requirement: defaulted(source_requirement, "required"),
+            destination_requirement: defaulted(destination_requirement, "none"),
+            replacement_source: defaulted(replacement_source, "explicit_text"),
+            captures_source_text,
+            supports_if_missing,
+        }
+    }
+
+    pub fn report(&self) -> Value {
+        let (operation_family, known_operation_kind) =
+            descriptor_family(operation_kind_descriptor(&self.operation_kind));
+        json!({
+            "operation_kind": self.operation_kind,
+            "operation_family": operation_family,
+            "known_operation_kind": known_operation_kind,
+            "source_requirement": self.source_requirement,
+            "known_source_requirement": known_requirement(&self.source_requirement),
+            "destination_requirement": self.destination_requirement,
+            "known_destination_requirement": known_requirement(&self.destination_requirement),
+            "replacement_source": self.replacement_source,
+            "known_replacement_source": known_replacement_source(&self.replacement_source),
+            "captures_source_text": self.captures_source_text,
+            "supports_if_missing": self.supports_if_missing,
+            "selects_source": self.source_requirement != "none",
+            "requires_source": self.source_requirement == "required",
+            "supports_destination": self.destination_requirement != "none",
+            "requires_destination": self.destination_requirement == "required",
+            "explicit_replacement": self.replacement_source == "explicit_text",
+            "may_reuse_captured_text": self.replacement_source == "captured_text_or_explicit"
+        })
+    }
+}
+
 fn defaulted(value: &str, fallback: &str) -> String {
     if value.is_empty() { fallback } else { value }.to_string()
 }
@@ -292,6 +346,24 @@ fn anchor_boundary_descriptor(value: &str) -> Option<ProfileDescriptor> {
         }
         _ => None,
     }
+}
+
+fn operation_kind_descriptor(value: &str) -> Option<ProfileDescriptor> {
+    match value {
+        "replace" => Some(ProfileDescriptor { family: "rewrite" }),
+        "delete" => Some(ProfileDescriptor { family: "removal" }),
+        "insert" => Some(ProfileDescriptor { family: "insertion" }),
+        "move" => Some(ProfileDescriptor { family: "relocation" }),
+        _ => None,
+    }
+}
+
+fn known_requirement(value: &str) -> bool {
+    matches!(value, "none" | "optional" | "required")
+}
+
+fn known_replacement_source(value: &str) -> bool {
+    matches!(value, "none" | "explicit_text" | "captured_text_or_explicit")
 }
 
 fn normalize_limit(spec: &Value) -> Result<Vec<LimitConstraint>, Error> {
@@ -445,10 +517,10 @@ pub fn boundary_report() -> Value {
             "limit helpers",
             "match profile helpers",
             "selection profile helpers",
-            "destination profile helpers"
+            "destination profile helpers",
+            "operation profile helpers"
         ],
         "future_exports": [
-            "operation profile helpers",
             "replace/delete/insert/move helpers",
             "batch operation helpers"
         ],
@@ -582,6 +654,35 @@ mod tests {
                 profile_fixture["resolution_source"].as_str().expect("resolution source"),
                 profile_fixture["anchor_boundary"].as_str().expect("anchor boundary"),
                 profile_fixture["used_if_missing"].as_bool().expect("used if missing"),
+            );
+            assert_eq!(profile.report(), test_case["expected"]);
+        }
+    }
+
+    #[test]
+    fn operation_profile_helpers_match_fixture() {
+        let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("fixtures")
+            .join("diagnostics")
+            .join("slice-921-ast-crispr-operation-profile-helpers")
+            .join("ast-crispr-operation-profile-helpers.json");
+        let source = fs::read_to_string(fixture_path).expect("read fixture");
+        let fixture: Value = serde_json::from_str(&source).expect("parse fixture");
+
+        for test_case in fixture["cases"].as_array().expect("cases") {
+            let profile_fixture = &test_case["profile"];
+            let profile = OperationProfile::new(
+                profile_fixture["operation_kind"].as_str().expect("operation kind"),
+                profile_fixture["source_requirement"].as_str().expect("source requirement"),
+                profile_fixture["destination_requirement"]
+                    .as_str()
+                    .expect("destination requirement"),
+                profile_fixture["replacement_source"].as_str().expect("replacement source"),
+                profile_fixture["captures_source_text"].as_bool().expect("captures source text"),
+                profile_fixture["supports_if_missing"].as_bool().expect("supports if missing"),
             );
             assert_eq!(profile.report(), test_case["expected"]);
         }
