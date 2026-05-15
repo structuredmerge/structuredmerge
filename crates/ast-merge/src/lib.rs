@@ -678,6 +678,20 @@ pub struct LocalLineFallbackReport {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConflictMarkerRenderingReport {
+    pub render_id: String,
+    pub strategy: String,
+    pub marker_size: usize,
+    pub path_label: String,
+    pub left_label: String,
+    pub base_label: String,
+    pub right_label: String,
+    pub include_base: bool,
+    pub output: String,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PolicySurface {

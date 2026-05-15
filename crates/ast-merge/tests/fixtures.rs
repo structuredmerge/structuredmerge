@@ -6,10 +6,11 @@ use std::{
 
 use ast_merge::{
     AmbiguityMatchingReport, ChangeSet, ClassMappingReport, ConflictCategoryReport,
-    ConformanceCaseExecution, ConformanceCaseRef, ConformanceCaseRequirements,
-    ConformanceCaseResult, ConformanceCaseRun, ConformanceFamilyPlanContext,
-    ConformanceFeatureProfileView, ConformanceManifest, ConformanceManifestPlanningOptions,
-    ConformanceManifestReport, ConformanceManifestReviewOptions, ConformanceManifestReviewState,
+    ConflictMarkerRenderingReport, ConformanceCaseExecution, ConformanceCaseRef,
+    ConformanceCaseRequirements, ConformanceCaseResult, ConformanceCaseRun,
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, ConformanceManifest,
+    ConformanceManifestPlanningOptions, ConformanceManifestReport,
+    ConformanceManifestReviewOptions, ConformanceManifestReviewState,
     ConformanceManifestReviewStateEnvelope, ConformanceManifestReviewedNestedApplication,
     ConformanceOutcome, ConformanceSelectionStatus, ConformanceSuiteDefinition,
     ConformanceSuitePlan, ConformanceSuiteReport, ConformanceSuiteSelector,
@@ -804,6 +805,27 @@ fn conforms_to_slice_807_local_line_based_fallback_fixture() {
         report.right_span.end_line - report.right_span.start_line + 1,
         expected["right_line_count"].as_u64().unwrap() as usize
     );
+}
+
+#[test]
+fn conforms_to_slice_808_conflict_marker_rendering_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-808-conflict-marker-rendering",
+        "conflict-marker-rendering.json",
+    ]));
+    let report: ConflictMarkerRenderingReport =
+        serde_json::from_value(fixture["rendering"].clone())
+            .expect("conflict marker rendering report should deserialize");
+    let expected = &fixture["expected"];
+
+    assert_eq!(report.strategy, expected["strategy"].as_str().unwrap());
+    assert_eq!(report.marker_size, expected["marker_size"].as_u64().unwrap() as usize);
+    assert_eq!(report.path_label, expected["path_label"].as_str().unwrap());
+    assert_eq!(report.include_base, expected["include_base"].as_bool().unwrap());
+    assert!(report.output.starts_with(expected["starts_with"].as_str().unwrap()));
+    assert!(report.output.contains(expected["contains_base_marker"].as_str().unwrap()));
+    assert!(report.output.ends_with(expected["ends_with"].as_str().unwrap()));
 }
 
 fn run_with_large_stack(test: impl FnOnce() + Send + 'static) {
