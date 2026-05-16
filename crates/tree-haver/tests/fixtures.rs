@@ -5,12 +5,13 @@ use tree_haver::{
     AdapterInfo, BackendAvailabilityReport, BackendCapability, BackendReference, BinaryDiagnostic,
     BinaryMergeReport, BinaryNestedDispatch, BinaryPayloadRegion, BinaryRawPayload,
     BinaryRenderPolicy, BinaryScalarValue, ByteEditSpan, ByteRange, EditProjectionExecutionResult,
-    EditProjectionSupport, FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis, KaitaiTreeNode,
-    NativeParserProvider, NativeProviderMetadata, NodeRole, NormalizedParseResult,
-    NormalizedTreeNode, OrderedTreePrimitives, ParseErrorTolerance, ParserRequest, PolicyReference,
-    PolicySurface, ProcessRequest, ProviderDiagnosticsReport, SourcePoint, SourceSpan,
-    TreeHaverProfile, ZipUnsafeEntry, build_backend_availability_report,
-    build_edit_projection_execution_result, build_provider_diagnostics_report,
+    EditProjectionProviderMatrix, EditProjectionProviderMatrixEntry, EditProjectionSupport,
+    FeatureProfile, KaitaiByteSpan, KaitaiTreeAnalysis, KaitaiTreeNode, NativeParserProvider,
+    NativeProviderMetadata, NodeRole, NormalizedParseResult, NormalizedTreeNode,
+    OrderedTreePrimitives, ParseErrorTolerance, ParserRequest, PolicyReference, PolicySurface,
+    ProcessRequest, ProviderDiagnosticsReport, SourcePoint, SourceSpan, TreeHaverProfile,
+    ZipUnsafeEntry, build_backend_availability_report, build_edit_projection_execution_result,
+    build_edit_projection_provider_matrix, build_provider_diagnostics_report,
     byte_offset_for_point, current_backend_id, extract_source_fragment, kaitai_adapter_info,
     kaitai_feature_profile, kaitai_struct_backend, library_path_errors, node_roles,
     pest_adapter_info, pest_backend, pest_feature_profile, process_with_language_pack,
@@ -1030,6 +1031,25 @@ fn conforms_to_slice_931_go_parser_edit_projection_contract_fixture() {
         expected.diagnostics.clone(),
     );
     assert_eq!(serde_json::json!(result), fixture["expected_result"]);
+}
+
+#[test]
+fn conforms_to_slice_932_edit_projection_provider_operation_matrix_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-932-edit-projection-provider-operation-matrix",
+        "provider-operation-matrix.json",
+    ]));
+
+    let operations: Vec<String> =
+        serde_json::from_value(fixture["operations"].clone()).expect("operations");
+    let providers: Vec<EditProjectionProviderMatrixEntry> =
+        serde_json::from_value(fixture["providers"].clone()).expect("providers");
+    let expected: EditProjectionProviderMatrix =
+        serde_json::from_value(fixture["expected_matrix"].clone()).expect("matrix");
+    let result = build_edit_projection_provider_matrix(operations, providers, Vec::new());
+    assert_eq!(serde_json::json!(result), fixture["expected_matrix"]);
+    assert_eq!(result, expected);
 }
 
 #[test]

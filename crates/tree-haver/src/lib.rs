@@ -288,6 +288,34 @@ pub struct EditProjectionExecutionResult {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct EditProjectionProviderOperation {
+    pub operation: String,
+    pub status: String,
+    pub node_scope: String,
+    pub correlation_keys: Vec<String>,
+    pub fixture_slices: Vec<String>,
+    pub formatting_preservation: String,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct EditProjectionProviderMatrixEntry {
+    pub provider_id: String,
+    pub backend_ref: BackendReference,
+    pub language: String,
+    pub formatting_preservation: String,
+    pub preserves_source_fragments: bool,
+    pub operations: Vec<EditProjectionProviderOperation>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct EditProjectionProviderMatrix {
+    pub operations: Vec<String>,
+    pub providers: Vec<EditProjectionProviderMatrixEntry>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OrderedSiblingEdge {
     pub parent_id: String,
     pub node_id: String,
@@ -920,6 +948,14 @@ pub fn build_edit_projection_execution_result(
         applied_operations,
         diagnostics,
     }
+}
+
+pub fn build_edit_projection_provider_matrix(
+    operations: Vec<String>,
+    providers: Vec<EditProjectionProviderMatrixEntry>,
+    diagnostics: Vec<String>,
+) -> EditProjectionProviderMatrix {
+    EditProjectionProviderMatrix { operations, providers, diagnostics }
 }
 
 fn windows_absolute_path(path: &str) -> bool {
