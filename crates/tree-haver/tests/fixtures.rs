@@ -1015,6 +1015,24 @@ fn conforms_to_slice_930_delete_node_edit_projection_contract_fixture() {
 }
 
 #[test]
+fn conforms_to_slice_931_go_parser_edit_projection_contract_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-931-go-parser-edit-projection-execution",
+        "edit-projection-execution.json",
+    ]));
+
+    let expected: EditProjectionExecutionResult =
+        serde_json::from_value(fixture["expected_result"].clone()).expect("execution result");
+    let result = build_edit_projection_execution_result(
+        expected.source.clone(),
+        expected.applied_operations.clone(),
+        expected.diagnostics.clone(),
+    );
+    assert_eq!(serde_json::json!(result), fixture["expected_result"]);
+}
+
+#[test]
 fn supports_temporary_backend_context_selection() {
     assert_eq!(current_backend_id(), None);
 
