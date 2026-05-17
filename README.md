@@ -58,6 +58,10 @@ seven- or nine-argument forms Git passes to external diff commands.
 `conflicts diff` reports conflict-marker regions in a file that already contains
 Git conflict markers.
 
+Current semantic merge-driver coverage is fixture-backed for JSON. Other
+language and format paths should be treated as git-compatible command surfaces
+until their `ast-merge-git` coverage is promoted.
+
 ## Crates
 
 Core:
