@@ -10,6 +10,7 @@ license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
 ast-merge = { version = "0.2.0", path = "../ast-merge" }
+ast-merge-git = { version = "0.2.0", path = "../ast-merge-git" }
 go-merge = { version = "0.2.0", path = "../go-merge" }
 json-merge = { version = "0.2.0", path = "../json-merge" }
 plain-merge = { version = "0.2.0", path = "../plain-merge" }

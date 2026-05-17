@@ -1,0 +1,17 @@
+[package]
+name = "ast-merge-git"
+version = "0.2.0"
+repository = "https://github.com/structuredmerge/structuredmerge-rust"
+homepage = "https://structuredmerge.org"
+authors = ["Peter H. Boling"]
+edition = "2024"
+description = "Git merge contracts for Structured Merge"
+license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
+
+[dependencies]
+ast-merge = { version = "0.2.0", path = "../ast-merge" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+
+[lib]
+path = "src/lib.rs"

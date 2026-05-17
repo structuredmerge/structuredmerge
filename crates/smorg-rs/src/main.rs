@@ -9,6 +9,7 @@ use ast_merge::{
     ProfileSelectionEnforcementMode, ProfileSelectionRequirement,
     evaluate_profile_selection_requirement, initial_profile_promotion_policy,
 };
+use ast_merge_git::{Merge3Request, merge3};
 use go_merge::{GoDialect, merge_go};
 use json_merge::{JsonDialect, merge_json};
 use plain_merge::merge_text;
@@ -122,8 +123,6 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
             return EXIT_USER_ERROR;
         }
     };
-    let _ = ancestor_source;
-
     let current_source = match fs::read_to_string(&options.current) {
         Ok(source) => source,
         Err(error) => {
@@ -157,8 +156,9 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
     let mut result = merge_by_path(
         &effective_path,
         settings.language.as_deref(),
-        &other_source,
+        &ancestor_source,
         &current_source,
+        &other_source,
     );
     if !result.ok || result.output.is_none() {
         if options.strict || options.fallback == "none" {
@@ -552,14 +552,39 @@ impl MergeDriverOptions {
 fn merge_by_path(
     path_name: &str,
     language: Option<&str>,
-    other_source: &str,
+    ancestor_source: &str,
     current_source: &str,
+    other_source: &str,
 ) -> MergeResult<String> {
     match normalize_language(language, path_name).as_str() {
         "go" => merge_go(other_source, current_source, GoDialect::Go),
-        "json" => merge_json(other_source, current_source, JsonDialect::Json),
+        "json" => merge3_result(merge3(&Merge3Request {
+            base_source: ancestor_source.to_string(),
+            ours_source: current_source.to_string(),
+            theirs_source: other_source.to_string(),
+            path_name: Some(path_name.to_string()),
+            language: Some("json".to_string()),
+            dialect: Some("json".to_string()),
+            profile_id: Some("json.keyed-object".to_string()),
+            fallback_policy: Some("none".to_string()),
+            conflict_marker_size: None,
+            render_policy: Some("canonical".to_string()),
+        })),
         "jsonc" => merge_json(other_source, current_source, JsonDialect::Jsonc),
         _ => merge_text(other_source, current_source),
+    }
+}
+
+fn merge3_result(result: ast_merge_git::Merge3Response) -> MergeResult<String> {
+    if result.ok {
+        MergeResult {
+            ok: true,
+            diagnostics: result.diagnostics,
+            output: result.merged_source,
+            policies: vec![],
+        }
+    } else {
+        MergeResult { ok: false, diagnostics: result.diagnostics, output: None, policies: vec![] }
     }
 }
 
@@ -801,10 +826,46 @@ mod tests {
 
         assert_eq!(exit, EXIT_UNRESOLVED_CONFLICT);
         assert!(
-            String::from_utf8_lossy(&stderr).contains("DestinationParseError"),
+            String::from_utf8_lossy(&stderr).contains("ParseError"),
             "stderr={}",
             String::from_utf8_lossy(&stderr)
         );
+        assert!(
+            String::from_utf8_lossy(&stderr).contains("ours parse error"),
+            "stderr={}",
+            String::from_utf8_lossy(&stderr)
+        );
+    }
+
+    #[test]
+    fn merge_driver_uses_ancestor_for_json_same_key_conflicts() {
+        let dir = TestDir::new();
+        let ancestor = dir.write("ancestor.json", r#"{"name":"structuredmerge"}"#);
+        let current = dir.write("current.json", r#"{"name":"ours"}"#);
+        let other = dir.write("other.json", r#"{"name":"theirs"}"#);
+
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let exit = run(
+            &[
+                "merge-driver".to_string(),
+                "--strict".to_string(),
+                ancestor,
+                current.clone(),
+                other,
+                "package.json".to_string(),
+            ],
+            &mut stdout,
+            &mut stderr,
+        );
+
+        assert_eq!(exit, EXIT_UNRESOLVED_CONFLICT);
+        assert!(
+            String::from_utf8_lossy(&stderr).contains("merge_conflict"),
+            "stderr={}",
+            String::from_utf8_lossy(&stderr)
+        );
+        assert_eq!(fs::read_to_string(current).expect("read current"), r#"{"name":"ours"}"#);
     }
 
     #[test]
