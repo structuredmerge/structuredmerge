@@ -24,9 +24,9 @@ use ast_merge::{
     FormattingRecommendationGate, GenericConflictHandlerExecution, GitDriverSmokeSuite,
     GoDSTProviderStackReport, GoProviderComparisonReport, HostLanguageNativeProviderContracts,
     InconsistencyReport, LanguageBackendProfile, LanguageProfileHandlerRegistry, LayoutGap,
-    LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
-    MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
-    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
+    LocalLineFallbackReport, MatchingDebugArtifacts, MergeDecisionRecord, MergeIR,
+    MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
+    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
     NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS,
     PROMOTION_PROFILE_JSON_KEYED_OBJECT, PROMOTION_PROFILE_RUBY_GEMSPEC_DEPENDENCY_DECLARATIONS,
     PairwiseMatching, PerformanceGuardrails, PolicySurface, ProfileConformanceReport,
@@ -295,6 +295,7 @@ use ast_merge::{
 };
 use ast_merge::{
     MERGE_ENGINE_ENVIRONMENT_VARIABLE, MergeEngine, evaluate_merge_ir_change_sets,
+    merge_decision_review_required, merge_decision_source_summary, merge_decision_summary,
     normalize_merge_engine,
 };
 use serde_json::Value;
@@ -477,6 +478,35 @@ fn conforms_to_slice_955_comment_trivia_attachment_contract_fixture() {
             .iter()
             .any(|rule| rule.as_str().unwrap().contains("passive data"))
     );
+}
+
+#[test]
+fn conforms_to_slice_956_merge_result_decision_contract_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-956-merge-result-decision-contract",
+        "merge-result-decision-contract.json",
+    ]));
+    let decisions: Vec<MergeDecisionRecord> =
+        serde_json::from_value(fixture["decisions"].clone()).expect("decisions");
+    let expected = &fixture["expected"];
+    let ordered_ids: Vec<&str> = decisions.iter().map(|decision| decision.id.as_str()).collect();
+    let unresolved_count =
+        decisions.iter().filter(|decision| decision.decision == "unresolved").count();
+
+    assert_eq!(decisions.len(), expected["decision_count"].as_u64().unwrap() as usize);
+    assert_eq!(serde_json::json!(ordered_ids), expected["ordered_decision_ids"]);
+    assert_eq!(serde_json::json!(merge_decision_summary(&decisions)), expected["decision_summary"]);
+    assert_eq!(
+        serde_json::json!(merge_decision_source_summary(&decisions)),
+        expected["source_summary"]
+    );
+    assert_eq!(unresolved_count, expected["unresolved_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        merge_decision_review_required(&decisions),
+        expected["review_required"].as_bool().unwrap()
+    );
+    assert_eq!(decisions.len(), expected["line_count"].as_u64().unwrap() as usize);
 }
 
 #[test]

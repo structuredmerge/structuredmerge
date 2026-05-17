@@ -195,6 +195,38 @@ pub struct MergeResult<TOutput> {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MergeDecisionRecord {
+    pub id: String,
+    pub decision: String,
+    pub source: String,
+    pub line: usize,
+    pub owner_id: String,
+    pub reason: String,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+pub fn merge_decision_summary(decisions: &[MergeDecisionRecord]) -> HashMap<String, usize> {
+    let mut summary = HashMap::new();
+    for decision in decisions {
+        *summary.entry(decision.decision.clone()).or_insert(0) += 1;
+    }
+    summary
+}
+
+pub fn merge_decision_source_summary(decisions: &[MergeDecisionRecord]) -> HashMap<String, usize> {
+    let mut summary = HashMap::new();
+    for decision in decisions {
+        *summary.entry(decision.source.clone()).or_insert(0) += 1;
+    }
+    summary
+}
+
+pub fn merge_decision_review_required(decisions: &[MergeDecisionRecord]) -> bool {
+    decisions.iter().any(|decision| decision.decision == "unresolved")
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct MergeIRNodeClass {
     pub class_id: String,
     pub signature: String,
