@@ -235,6 +235,266 @@ pub struct MergeIR {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LineRange {
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommentOwnerNode {
+    pub id: String,
+    pub kind: String,
+    pub semantic_roles: Vec<String>,
+    pub line_range: LineRange,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommentStyleDefinition {
+    pub style: String,
+    pub line_prefix: Option<String>,
+    pub block_prefix: Option<String>,
+    pub block_suffix: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommentLine {
+    pub text: String,
+    pub line_number: usize,
+    pub normalized_content: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommentRegion {
+    pub id: String,
+    pub kind: String,
+    pub style: String,
+    pub owner_id: String,
+    pub floating: bool,
+    pub nodes: Vec<CommentLine>,
+}
+
+impl CommentRegion {
+    pub fn start_line(&self) -> Option<usize> {
+        self.nodes.iter().map(|node| node.line_number).min()
+    }
+
+    pub fn end_line(&self) -> Option<usize> {
+        self.nodes.iter().map(|node| node.line_number).max()
+    }
+
+    pub fn text(&self) -> String {
+        self.nodes.iter().map(|node| node.text.as_str()).collect::<Vec<_>>().join("\n")
+    }
+
+    pub fn normalized_content(&self) -> String {
+        self.nodes
+            .iter()
+            .map(|node| node.normalized_content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    pub fn signature(&self) -> Vec<String> {
+        let content = self.normalized_content();
+        vec!["comment_region".to_string(), self.kind.clone(), content.chars().take(121).collect()]
+    }
+
+    pub fn freeze_actions(&self, token: &str) -> Vec<String> {
+        if token.is_empty() {
+            return Vec::new();
+        }
+        let prefix = format!("{}:", token.to_lowercase());
+        self.nodes
+            .iter()
+            .filter_map(|node| {
+                let lower = node.text.to_lowercase();
+                if lower.contains(&format!("{prefix}freeze")) {
+                    Some("freeze".to_string())
+                } else if lower.contains(&format!("{prefix}unfreeze")) {
+                    Some("unfreeze".to_string())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LayoutGap {
+    pub id: String,
+    pub kind: String,
+    pub start_line: usize,
+    pub end_line: usize,
+    pub lines: Vec<String>,
+    pub before_owner_id: Option<String>,
+    pub after_owner_id: Option<String>,
+    pub controller_side: String,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+impl LayoutGap {
+    pub fn line_count(&self) -> usize {
+        self.end_line - self.start_line + 1
+    }
+
+    pub fn blank_line_count(&self) -> usize {
+        self.lines.iter().filter(|line| line.trim().is_empty()).count()
+    }
+
+    pub fn owner_id_for(&self, side: &str) -> Option<&str> {
+        match side {
+            "before" => self.before_owner_id.as_deref(),
+            "after" => self.after_owner_id.as_deref(),
+            _ => None,
+        }
+    }
+
+    pub fn controller_owner_id(&self) -> Option<&str> {
+        self.owner_id_for(&self.controller_side)
+    }
+
+    pub fn fallback_owner_id(&self) -> Option<&str> {
+        match self.controller_side.as_str() {
+            "before" => self.after_owner_id.as_deref(),
+            "after" => self.before_owner_id.as_deref(),
+            _ => None,
+        }
+    }
+
+    pub fn effective_controller_owner_id<'a>(
+        &'a self,
+        removed_owners: &HashSet<&str>,
+    ) -> Option<&'a str> {
+        if let Some(controller) = self.controller_owner_id() {
+            if !removed_owners.contains(controller) {
+                return Some(controller);
+            }
+        }
+        self.fallback_owner_id().filter(|fallback| !removed_owners.contains(fallback))
+    }
+
+    pub fn leading_for(&self, owner_id: &str) -> bool {
+        self.after_owner_id.as_deref() == Some(owner_id)
+    }
+
+    pub fn trailing_for(&self, owner_id: &str) -> bool {
+        self.before_owner_id.as_deref() == Some(owner_id)
+    }
+
+    pub fn controls_output_for(&self, owner_id: &str) -> bool {
+        self.controller_owner_id() == Some(owner_id)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommentAttachment {
+    pub owner_id: String,
+    pub leading_region_id: Option<String>,
+    pub inline_region_id: Option<String>,
+    pub trailing_region_id: Option<String>,
+    #[serde(default)]
+    pub orphan_region_ids: Vec<String>,
+    pub leading_gap_id: Option<String>,
+    pub trailing_gap_id: Option<String>,
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+impl CommentAttachment {
+    pub fn region_count(&self, regions: &HashMap<String, CommentRegion>) -> usize {
+        [
+            self.leading_region_id.as_ref(),
+            self.inline_region_id.as_ref(),
+            self.trailing_region_id.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|id| regions.contains_key(*id))
+        .count()
+            + self.orphan_region_ids.iter().filter(|id| regions.contains_key(*id)).count()
+    }
+
+    pub fn layout_gap_count(&self, gaps: &HashMap<String, LayoutGap>) -> usize {
+        [self.leading_gap_id.as_ref(), self.trailing_gap_id.as_ref()]
+            .into_iter()
+            .flatten()
+            .filter(|id| gaps.contains_key(*id))
+            .collect::<HashSet<_>>()
+            .len()
+    }
+
+    pub fn is_empty(&self, regions: &HashMap<String, CommentRegion>) -> bool {
+        self.region_count(regions) == 0
+    }
+
+    pub fn leading_region_layout_owned(
+        &self,
+        regions: &HashMap<String, CommentRegion>,
+        gaps: &HashMap<String, LayoutGap>,
+    ) -> bool {
+        let Some(region_id) = &self.leading_region_id else {
+            return false;
+        };
+        let Some(gap_id) = &self.leading_gap_id else {
+            return false;
+        };
+        let Some(region) = regions.get(region_id) else {
+            return false;
+        };
+        let Some(gap) = gaps.get(gap_id) else {
+            return false;
+        };
+        region.floating
+            && gap.leading_for(&self.owner_id)
+            && gap.controls_output_for(&self.owner_id)
+    }
+
+    pub fn trailing_region_layout_owned(
+        &self,
+        regions: &HashMap<String, CommentRegion>,
+        gaps: &HashMap<String, LayoutGap>,
+    ) -> bool {
+        let Some(region_id) = &self.trailing_region_id else {
+            return false;
+        };
+        let Some(gap_id) = &self.trailing_gap_id else {
+            return false;
+        };
+        let Some(region) = regions.get(region_id) else {
+            return false;
+        };
+        let Some(gap) = gaps.get(gap_id) else {
+            return false;
+        };
+        region.floating
+            && gap.trailing_for(&self.owner_id)
+            && gap.controls_output_for(&self.owner_id)
+    }
+
+    pub fn freeze_marker(&self, regions: &HashMap<String, CommentRegion>, token: &str) -> bool {
+        [
+            self.leading_region_id.as_ref(),
+            self.inline_region_id.as_ref(),
+            self.trailing_region_id.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .chain(self.orphan_region_ids.iter())
+        .any(|id| {
+            regions
+                .get(id)
+                .map(|region| {
+                    let actions = region.freeze_actions(token);
+                    actions.iter().any(|action| action == "freeze" || action == "unfreeze")
+                })
+                .unwrap_or(false)
+        })
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct PairwiseNodeMatch {
     pub from_node_id: String,

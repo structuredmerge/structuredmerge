@@ -1,12 +1,13 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
 };
 
 use ast_merge::{
     ActiveProfileView, AmbiguityMatchingReport, BackendGapConformanceReport, BackendParitySuite,
-    ChangeSet, ClassMappingReport, ConflictCategoryReport, ConflictHandlerRegistryReport,
+    ChangeSet, ClassMappingReport, CommentAttachment, CommentOwnerNode, CommentRegion,
+    CommentStyleDefinition, ConflictCategoryReport, ConflictHandlerRegistryReport,
     ConflictMarkerRenderingReport, ConformanceCaseExecution, ConformanceCaseRef,
     ConformanceCaseRequirements, ConformanceCaseResult, ConformanceCaseRun,
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, ConformanceManifest,
@@ -22,7 +23,7 @@ use ast_merge::{
     FormattingEdgeFixtureSuite, FormattingHardGateReport, FormattingPreservationConformanceReport,
     FormattingRecommendationGate, GenericConflictHandlerExecution, GitDriverSmokeSuite,
     GoDSTProviderStackReport, GoProviderComparisonReport, HostLanguageNativeProviderContracts,
-    InconsistencyReport, LanguageBackendProfile, LanguageProfileHandlerRegistry,
+    InconsistencyReport, LanguageBackendProfile, LanguageProfileHandlerRegistry, LayoutGap,
     LocalLineFallbackReport, MatchingDebugArtifacts, MergeIR, MergeIRComparisonReport,
     MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
     NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
@@ -365,6 +366,117 @@ fn conforms_to_slice_790_generic_merge_ir_fixture() {
     assert_eq!(serde_json::json!(change_kinds), expected["change_kinds"]);
     assert_eq!(merge_ir.node_classes[0].node_ids["left"], "left-import-fmt");
     assert_eq!(merge_ir.changes[1].class_id.as_deref(), Some("class-import-strings"));
+}
+
+#[test]
+fn conforms_to_slice_955_comment_trivia_attachment_contract_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-955-comment-trivia-attachment-contract",
+        "comment-trivia-attachment-contract.json",
+    ]));
+    let owners: Vec<CommentOwnerNode> =
+        serde_json::from_value(fixture["owner_nodes"].clone()).expect("owners");
+    let styles: Vec<CommentStyleDefinition> =
+        serde_json::from_value(fixture["comment_styles"].clone()).expect("styles");
+    let regions: Vec<CommentRegion> =
+        serde_json::from_value(fixture["comment_regions"].clone()).expect("regions");
+    let gaps: Vec<LayoutGap> =
+        serde_json::from_value(fixture["layout_gaps"].clone()).expect("gaps");
+    let attachments: Vec<CommentAttachment> =
+        serde_json::from_value(fixture["attachments"].clone()).expect("attachments");
+    let expected = &fixture["expected"];
+
+    let regions_by_id: HashMap<String, CommentRegion> =
+        regions.iter().map(|region| (region.id.clone(), region.clone())).collect();
+    let gaps_by_id: HashMap<String, LayoutGap> =
+        gaps.iter().map(|gap| (gap.id.clone(), gap.clone())).collect();
+
+    assert_eq!(owners.len(), expected["owner_count"].as_u64().unwrap() as usize);
+    assert_eq!(regions.len(), expected["comment_region_count"].as_u64().unwrap() as usize);
+    assert_eq!(gaps.len(), expected["layout_gap_count"].as_u64().unwrap() as usize);
+    assert_eq!(attachments.len(), expected["attachment_count"].as_u64().unwrap() as usize);
+    assert_eq!(styles[0].style, "hash_comment");
+    assert_eq!(styles[0].line_prefix.as_deref(), Some("#"));
+
+    for region_fixture in fixture["comment_regions"].as_array().unwrap() {
+        let region = &regions_by_id[region_fixture["id"].as_str().unwrap()];
+        let region_expected = &region_fixture["expected"];
+
+        assert_eq!(
+            region.start_line(),
+            Some(region_expected["start_line"].as_u64().unwrap() as usize)
+        );
+        assert_eq!(region.end_line(), Some(region_expected["end_line"].as_u64().unwrap() as usize));
+        assert_eq!(region.text(), region_expected["text"].as_str().unwrap());
+        assert_eq!(
+            region.normalized_content(),
+            region_expected["normalized_content"].as_str().unwrap()
+        );
+        assert_eq!(serde_json::json!(region.signature()), region_expected["signature"]);
+        assert_eq!(
+            serde_json::json!(region.freeze_actions("smorg")),
+            region_expected["freeze_actions"]
+        );
+    }
+
+    for gap_fixture in fixture["layout_gaps"].as_array().unwrap() {
+        let gap = &gaps_by_id[gap_fixture["id"].as_str().unwrap()];
+        let gap_expected = &gap_fixture["expected"];
+
+        assert_eq!(gap.line_count(), gap_expected["line_count"].as_u64().unwrap() as usize);
+        assert_eq!(
+            gap.blank_line_count(),
+            gap_expected["blank_line_count"].as_u64().unwrap() as usize
+        );
+        assert_eq!(gap.controller_owner_id(), gap_expected["controller_owner_id"].as_str());
+        assert_eq!(gap.fallback_owner_id(), gap_expected["fallback_owner_id"].as_str());
+        if let Some(expected_fallback) =
+            gap_expected["effective_controller_with_after_removed"].as_str()
+        {
+            let removed = HashSet::from([gap.after_owner_id.as_deref().unwrap()]);
+            assert_eq!(gap.effective_controller_owner_id(&removed), Some(expected_fallback));
+        }
+    }
+
+    for (index, attachment_fixture) in fixture["attachments"].as_array().unwrap().iter().enumerate()
+    {
+        let attachment = &attachments[index];
+        let attachment_expected = &attachment_fixture["expected"];
+
+        assert_eq!(
+            attachment.region_count(&regions_by_id),
+            attachment_expected["region_count"].as_u64().unwrap() as usize
+        );
+        assert_eq!(
+            attachment.layout_gap_count(&gaps_by_id),
+            attachment_expected["layout_gap_count"].as_u64().unwrap() as usize
+        );
+        assert_eq!(
+            attachment.is_empty(&regions_by_id),
+            attachment_expected["empty"].as_bool().unwrap()
+        );
+        assert_eq!(
+            attachment.leading_region_layout_owned(&regions_by_id, &gaps_by_id),
+            attachment_expected["leading_region_layout_owned"].as_bool().unwrap()
+        );
+        assert_eq!(
+            attachment.trailing_region_layout_owned(&regions_by_id, &gaps_by_id),
+            attachment_expected["trailing_region_layout_owned"].as_bool().unwrap()
+        );
+        assert_eq!(
+            attachment.freeze_marker(&regions_by_id, "smorg"),
+            attachment_expected["freeze_marker"].as_bool().unwrap()
+        );
+    }
+
+    assert!(
+        fixture["contract_rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|rule| rule.as_str().unwrap().contains("passive data"))
+    );
 }
 
 #[test]
