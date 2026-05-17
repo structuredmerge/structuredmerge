@@ -708,6 +708,8 @@ fn print_diagnostics(stderr: &mut dyn Write, result: &MergeResult<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
+    use std::process::Command;
     use std::sync::{Mutex, MutexGuard, OnceLock};
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -866,6 +868,113 @@ mod tests {
             String::from_utf8_lossy(&stderr)
         );
         assert_eq!(fs::read_to_string(current).expect("read current"), r#"{"name":"ours"}"#);
+    }
+
+    #[test]
+    fn merge_driver_conforms_to_git_driver_json_integration_fixture() {
+        if Command::new("git").arg("--version").output().is_err() {
+            return;
+        }
+        let fixture = read_git_driver_json_fixture();
+        let cases = fixture["cases"].as_array().expect("fixture cases should be an array");
+        for case in cases {
+            let dir = TestDir::new();
+            run_git(&dir.path, &["init"]);
+            run_git(&dir.path, &["config", "user.email", "smorg-rs@example.invalid"]);
+            run_git(&dir.path, &["config", "user.name", "smorg-rs test"]);
+            dir.write(".gitattributes", "*.json merge=smorg-rs smorg.language=json\n");
+            let path_name = case["path_name"].as_str().expect("path_name should be a string");
+            dir.write(
+                path_name,
+                case["base_source"].as_str().expect("base_source should be a string"),
+            );
+            run_git(&dir.path, &["add", "."]);
+            run_git(&dir.path, &["commit", "-m", "base"]);
+
+            let ancestor =
+                dir.write("ancestor.tmp", case["base_source"].as_str().expect("base source"));
+            let current = dir.write(path_name, case["ours_source"].as_str().expect("ours source"));
+            let other =
+                dir.write("other.tmp", case["theirs_source"].as_str().expect("theirs source"));
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+
+            let exit = run(
+                &[
+                    "merge-driver".to_string(),
+                    "--strict".to_string(),
+                    ancestor,
+                    current.clone(),
+                    other,
+                    path_name.to_string(),
+                ],
+                &mut stdout,
+                &mut stderr,
+            );
+            let expected = &case["expected"];
+            assert_eq!(
+                exit,
+                expected["exit_code"].as_i64().expect("exit_code should be an integer") as i32,
+                "case={} stderr={}",
+                case["case_id"].as_str().unwrap_or_default(),
+                String::from_utf8_lossy(&stderr)
+            );
+            for needle in expected["stderr_contains"].as_array().expect("stderr_contains array") {
+                let needle = needle.as_str().expect("stderr needle should be a string");
+                assert!(
+                    String::from_utf8_lossy(&stderr).contains(needle),
+                    "case={} stderr={}",
+                    case["case_id"].as_str().unwrap_or_default(),
+                    String::from_utf8_lossy(&stderr)
+                );
+            }
+
+            let merged_source = fs::read_to_string(&current).expect("read current");
+            if let Some(merged_json) = expected.get("merged_json") {
+                let merged: Value =
+                    serde_json::from_str(&merged_source).expect("merged output should parse");
+                assert_eq!(
+                    &merged,
+                    merged_json,
+                    "case={}",
+                    case["case_id"].as_str().unwrap_or_default()
+                );
+            } else if let Some(expected_source) =
+                expected.get("merged_source").and_then(|source| source.as_str())
+            {
+                assert_eq!(
+                    merged_source,
+                    expected_source,
+                    "case={}",
+                    case["case_id"].as_str().unwrap_or_default()
+                );
+            }
+        }
+    }
+
+    fn read_git_driver_json_fixture() -> Value {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+            "../../../fixtures/diagnostics/slice-951-git-driver-json-integration/git-driver-json-integration.json",
+        );
+        let source = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read fixture {}: {error}", path.display()));
+        serde_json::from_str(&source).expect("fixture should parse")
+    }
+
+    fn run_git(dir: &Path, args: &[&str]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .output()
+            .expect("git should run");
+        assert!(
+            output.status.success(),
+            "git {} failed:\n{}{}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     #[test]
