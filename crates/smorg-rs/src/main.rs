@@ -156,19 +156,33 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
     let mut result = merge_by_path(
         &effective_path,
         settings.language.as_deref(),
+        settings.conflict_marker_size,
         &ancestor_source,
         &current_source,
         &other_source,
     );
-    if !result.ok || result.output.is_none() {
-        if options.strict || options.fallback == "none" {
-            print_diagnostics(stderr, &result);
+    if !result.ok {
+        print_diagnostics(stderr, &result);
+        if result.output.is_none() && !options.strict && options.fallback != "none" {
+            result.output = Some(current_source.clone());
+        }
+        if options.check_only {
             return EXIT_UNRESOLVED_CONFLICT;
         }
-        result.output = Some(current_source.clone());
+        if let Some(output) = result.output {
+            let output_path = options.output.as_deref().unwrap_or(&options.current);
+            if let Err(error) = fs::write(output_path, output) {
+                let _ = writeln!(stderr, "write output: {error}");
+                return EXIT_INTERNAL_ERROR;
+            }
+        }
+        return EXIT_UNRESOLVED_CONFLICT;
     }
 
-    let output = result.output.expect("fallback should provide output");
+    let Some(output) = result.output else {
+        let _ = writeln!(stderr, "merge completed without output");
+        return EXIT_INTERNAL_ERROR;
+    };
     if options.check_only {
         if options.exit_code && output != current_source {
             return EXIT_UNRESOLVED_CONFLICT;
@@ -552,6 +566,7 @@ impl MergeDriverOptions {
 fn merge_by_path(
     path_name: &str,
     language: Option<&str>,
+    conflict_marker_size: usize,
     ancestor_source: &str,
     current_source: &str,
     other_source: &str,
@@ -567,7 +582,7 @@ fn merge_by_path(
             dialect: Some("json".to_string()),
             profile_id: Some("json.keyed-object".to_string()),
             fallback_policy: Some("none".to_string()),
-            conflict_marker_size: None,
+            conflict_marker_size: Some(conflict_marker_size),
             render_policy: Some("canonical".to_string()),
         })),
         "jsonc" => merge_json(other_source, current_source, JsonDialect::Jsonc),
@@ -581,6 +596,13 @@ fn merge3_result(result: ast_merge_git::Merge3Response) -> MergeResult<String> {
             ok: true,
             diagnostics: result.diagnostics,
             output: result.merged_source,
+            policies: vec![],
+        }
+    } else if result.conflicted_source.is_some() {
+        MergeResult {
+            ok: false,
+            diagnostics: result.diagnostics,
+            output: result.conflicted_source,
             policies: vec![],
         }
     } else {
@@ -867,7 +889,13 @@ mod tests {
             "stderr={}",
             String::from_utf8_lossy(&stderr)
         );
-        assert_eq!(fs::read_to_string(current).expect("read current"), r#"{"name":"ours"}"#);
+        let current_source = fs::read_to_string(current).expect("read current");
+        for needle in ["<<<<<<< ours", "||||||| base", "=======", ">>>>>>> theirs"] {
+            assert!(
+                current_source.contains(needle),
+                "current_source missing {needle:?}: {current_source}"
+            );
+        }
     }
 
     #[test]
@@ -948,6 +976,19 @@ mod tests {
                     "case={}",
                     case["case_id"].as_str().unwrap_or_default()
                 );
+            }
+            if let Some(needles) =
+                expected.get("conflicted_source_contains").and_then(|source| source.as_array())
+            {
+                for needle in needles {
+                    let needle =
+                        needle.as_str().expect("conflicted source needle should be a string");
+                    assert!(
+                        merged_source.contains(needle),
+                        "case={} source={merged_source}",
+                        case["case_id"].as_str().unwrap_or_default()
+                    );
+                }
             }
         }
     }

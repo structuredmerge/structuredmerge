@@ -29,6 +29,7 @@ struct Expected {
     conflict_count: usize,
     conflict_categories: Option<Vec<String>>,
     conflict_paths: Option<Vec<String>>,
+    conflicted_source_contains: Option<Vec<String>>,
     reparse_after_render: Option<bool>,
 }
 
@@ -63,6 +64,14 @@ fn conforms_to_git_merge3_contract_fixture() {
                 result.conflicts.iter().map(|conflict| conflict.path.clone()).collect::<Vec<_>>();
             assert_eq!(categories, case.expected.conflict_categories.unwrap(), "{}", case.case_id);
             assert_eq!(paths, case.expected.conflict_paths.unwrap(), "{}", case.case_id);
+            for needle in case.expected.conflicted_source_contains.unwrap_or_default() {
+                assert!(
+                    result.conflicted_source.as_deref().unwrap_or_default().contains(&needle),
+                    "{} conflicted_source missing {needle:?}: {:?}",
+                    case.case_id,
+                    result.conflicted_source
+                );
+            }
         }
     }
 }

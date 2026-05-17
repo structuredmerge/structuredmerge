@@ -33,6 +33,8 @@ pub struct Merge3Response {
     pub ok: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub merged_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conflicted_source: Option<String>,
     pub conflicts: Vec<Merge3Conflict>,
     pub diagnostics: Vec<Diagnostic>,
     pub fallbacks: Vec<String>,
@@ -67,11 +69,13 @@ pub fn merge3(request: &Merge3Request) -> Merge3Response {
             request,
             false,
             None,
+            None,
             vec![],
             vec![diagnostic(
                 DiagnosticCategory::UnsupportedFeature,
                 "ast-merge-git currently supports only json merge3.",
             )],
+            None,
             None,
             None,
         ),
@@ -99,6 +103,7 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
             request,
             false,
             None,
+            Some(render_conflict_source(request, &conflicts)),
             conflicts,
             vec![diagnostic(
                 DiagnosticCategory::ConfigurationError,
@@ -106,6 +111,7 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
             )],
             None,
             None,
+            Some("full_file_conflict_markers".to_string()),
         );
     }
 
@@ -115,10 +121,12 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
         request,
         true,
         Some(merged_source),
+        None,
         vec![],
         vec![],
         Some(FormattingPreservation { line_diff_score: 1.0, character_diff_score: 1.0 }),
         Some(reparses),
+        None,
     )
 }
 
@@ -126,14 +134,17 @@ fn response(
     request: &Merge3Request,
     ok: bool,
     merged_source: Option<String>,
+    conflicted_source: Option<String>,
     conflicts: Vec<Merge3Conflict>,
     diagnostics: Vec<Diagnostic>,
     formatting_preservation: Option<FormattingPreservation>,
     reparse_after_render: Option<bool>,
+    render_strategy: Option<String>,
 ) -> Merge3Response {
     Merge3Response {
         ok,
         merged_source,
+        conflicted_source,
         conflicts,
         diagnostics,
         fallbacks: vec![],
@@ -143,7 +154,9 @@ fn response(
             dialect: request.dialect.clone().unwrap_or_default(),
         },
         render_report: Merge3RenderReport {
-            strategy: request.render_policy.clone().unwrap_or_else(|| "canonical".to_string()),
+            strategy: render_strategy
+                .or_else(|| request.render_policy.clone())
+                .unwrap_or_else(|| "canonical".to_string()),
         },
         formatting_preservation: formatting_preservation
             .unwrap_or(FormattingPreservation { line_diff_score: 0.0, character_diff_score: 0.0 }),
@@ -156,11 +169,29 @@ fn parse_error_response(request: &Merge3Request, message: String) -> Merge3Respo
         request,
         false,
         None,
+        None,
         vec![],
         vec![diagnostic(DiagnosticCategory::ParseError, &message)],
         None,
         None,
+        None,
     )
+}
+
+fn render_conflict_source(request: &Merge3Request, conflicts: &[Merge3Conflict]) -> String {
+    let marker_size = request.conflict_marker_size.unwrap_or(7).max(1);
+    [
+        format!("/* smorg structured conflicts: {} unresolved */", conflicts.len()),
+        format!("{} ours", "<".repeat(marker_size)),
+        request.ours_source.clone(),
+        format!("{} base", "|".repeat(marker_size)),
+        request.base_source.clone(),
+        "=".repeat(marker_size),
+        request.theirs_source.clone(),
+        format!("{} theirs", ">".repeat(marker_size)),
+        String::new(),
+    ]
+    .join("\n")
 }
 
 fn diagnostic(category: DiagnosticCategory, message: &str) -> Diagnostic {
