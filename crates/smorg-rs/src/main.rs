@@ -164,7 +164,12 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
     if !result.ok {
         print_diagnostics(stderr, &result);
         if result.output.is_none() && !options.strict && options.fallback != "none" {
-            result.output = Some(current_source.clone());
+            result.output = Some(full_file_conflict_output(
+                settings.conflict_marker_size,
+                &ancestor_source,
+                &current_source,
+                &other_source,
+            ));
         }
         if options.check_only {
             return EXIT_UNRESOLVED_CONFLICT;
@@ -197,6 +202,26 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
     }
 
     EXIT_SUCCESS
+}
+
+fn full_file_conflict_output(
+    marker_size: usize,
+    ancestor_source: &str,
+    current_source: &str,
+    other_source: &str,
+) -> String {
+    let marker_size = marker_size.max(1);
+    [
+        format!("{} ours", "<".repeat(marker_size)),
+        current_source.to_string(),
+        format!("{} base", "|".repeat(marker_size)),
+        ancestor_source.to_string(),
+        "=".repeat(marker_size),
+        other_source.to_string(),
+        format!("{} theirs", ">".repeat(marker_size)),
+        String::new(),
+    ]
+    .join("\n")
 }
 
 fn parse_merge_driver_options(
@@ -856,6 +881,42 @@ mod tests {
         );
         assert!(
             String::from_utf8_lossy(&stderr).contains("ours parse error"),
+            "stderr={}",
+            String::from_utf8_lossy(&stderr)
+        );
+    }
+
+    #[test]
+    fn full_file_fallback_writes_conflict_markers() {
+        let dir = TestDir::new();
+        let ancestor = dir.write("ancestor.json", r#"{"name":"structuredmerge"}"#);
+        let current = dir.write("current.json", r#"{"name":"#);
+        let other = dir.write("other.json", r#"{"other":true}"#);
+
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let exit = run(
+            &[
+                "merge-driver".to_string(),
+                ancestor,
+                current.clone(),
+                other,
+                "package.json".to_string(),
+            ],
+            &mut stdout,
+            &mut stderr,
+        );
+
+        assert_eq!(exit, EXIT_UNRESOLVED_CONFLICT);
+        let current_source = fs::read_to_string(current).expect("read current");
+        for needle in ["<<<<<<< ours", "||||||| base", "=======", ">>>>>>> theirs"] {
+            assert!(
+                current_source.contains(needle),
+                "current_source missing {needle:?}: {current_source}"
+            );
+        }
+        assert!(
+            String::from_utf8_lossy(&stderr).contains("ParseError"),
             "stderr={}",
             String::from_utf8_lossy(&stderr)
         );
