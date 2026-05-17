@@ -923,6 +923,76 @@ mod tests {
     }
 
     #[test]
+    fn merge_driver_conforms_to_git_driver_fallback_fixture() {
+        let fixture = read_git_driver_fallback_fixture();
+        let cases = fixture["cases"].as_array().expect("fixture cases should be an array");
+        for case in cases {
+            let dir = TestDir::new();
+            let ancestor =
+                dir.write("ancestor.json", case["base_source"].as_str().expect("base source"));
+            let current =
+                dir.write("current.json", case["ours_source"].as_str().expect("ours source"));
+            let other =
+                dir.write("other.json", case["theirs_source"].as_str().expect("theirs source"));
+            let mut args = vec!["merge-driver".to_string()];
+            if case["options"]["strict"].as_bool().unwrap_or(false) {
+                args.push("--strict".to_string());
+            }
+            if let Some(fallback) = case["options"]["fallback"].as_str() {
+                if fallback != "full-file" {
+                    args.push("--fallback".to_string());
+                    args.push(fallback.to_string());
+                }
+            }
+            args.extend([
+                ancestor,
+                current.clone(),
+                other,
+                case["path_name"].as_str().unwrap().to_string(),
+            ]);
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+
+            let exit = run(&args, &mut stdout, &mut stderr);
+            let expected = &case["expected"];
+            assert_eq!(
+                exit,
+                expected["exit_code"].as_i64().expect("exit code") as i32,
+                "case={} stderr={}",
+                case["case_id"].as_str().unwrap_or_default(),
+                String::from_utf8_lossy(&stderr)
+            );
+            let current_source = fs::read_to_string(current).expect("read current");
+            if let Some(expected_source) =
+                expected.get("merged_source").and_then(|source| source.as_str())
+            {
+                assert_eq!(current_source, expected_source, "case={}", case["case_id"]);
+            }
+            if let Some(needles) =
+                expected.get("source_contains").and_then(|source| source.as_array())
+            {
+                for needle in needles {
+                    let needle = needle.as_str().expect("source needle");
+                    assert!(
+                        current_source.contains(needle),
+                        "case={} source={current_source}",
+                        case["case_id"]
+                    );
+                }
+            }
+            for needle in expected["stderr_contains"].as_array().expect("stderr contains") {
+                let needle = needle.as_str().expect("stderr needle");
+                assert!(
+                    String::from_utf8_lossy(&stderr).contains(needle),
+                    "case={} stderr={}",
+                    case["case_id"],
+                    String::from_utf8_lossy(&stderr)
+                );
+            }
+        }
+    }
+
+    #[test]
     fn merge_driver_uses_ancestor_for_json_same_key_conflicts() {
         let dir = TestDir::new();
         let ancestor = dir.write("ancestor.json", r#"{"name":"structuredmerge"}"#);
@@ -1057,6 +1127,15 @@ mod tests {
     fn read_git_driver_json_fixture() -> Value {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
             "../../../fixtures/diagnostics/slice-951-git-driver-json-integration/git-driver-json-integration.json",
+        );
+        let source = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read fixture {}: {error}", path.display()));
+        serde_json::from_str(&source).expect("fixture should parse")
+    }
+
+    fn read_git_driver_fallback_fixture() -> Value {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+            "../../../fixtures/diagnostics/slice-954-git-driver-fallback/git-driver-fallback.json",
         );
         let source = fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("read fixture {}: {error}", path.display()));
