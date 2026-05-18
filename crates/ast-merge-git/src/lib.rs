@@ -451,6 +451,9 @@ struct JsonMemberRegion {
 }
 
 fn json_member_source(source: &str, key: &str) -> Option<JsonMemberRegion> {
+    if !source.contains(&format!("\"{key}\"")) {
+        return None;
+    }
     let byte_range = json_key_byte_range(source, key);
     if byte_range.end <= byte_range.start || byte_range.end > source.len() {
         return None;
@@ -472,11 +475,14 @@ fn json_owned_regions_for_conflicts(
                 return None;
             }
             let key = conflict.path.trim_start_matches('/');
+            let base_region = json_member_source(&request.base_source, key)?;
+            json_member_source(&request.ours_source, key)?;
+            json_member_source(&request.theirs_source, key)?;
             Some(OwnedRegionReport {
                 owner_path: conflict.path.clone(),
                 node_id: format!("json:key:{key}"),
                 region_kind: "node".to_string(),
-                byte_range: json_key_byte_range(&request.base_source, key),
+                byte_range: base_region.byte_range,
                 line_range: SourceRange { start: 1, end: 1 },
                 attached_spans: vec![],
                 backend_id: "native-json".to_string(),
