@@ -28,6 +28,13 @@ pub struct Merge3Conflict {
     pub message: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ChangeClassification {
+    pub path: String,
+    pub ours: String,
+    pub theirs: String,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Merge3Response {
     pub ok: bool,
@@ -36,6 +43,7 @@ pub struct Merge3Response {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conflicted_source: Option<String>,
     pub conflicts: Vec<Merge3Conflict>,
+    pub change_classifications: Vec<ChangeClassification>,
     pub diagnostics: Vec<Diagnostic>,
     pub fallbacks: Vec<String>,
     pub profile: Merge3Profile,
@@ -140,6 +148,7 @@ pub fn merge3(request: &Merge3Request) -> Merge3Response {
             None,
             None,
             vec![],
+            vec![],
             vec![diagnostic(
                 DiagnosticCategory::UnsupportedFeature,
                 "ast-merge-git currently supports only json merge3.",
@@ -167,6 +176,7 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
     };
 
     let mut conflicts = Vec::new();
+    let change_classifications = classify_json_changes(&base, &ours, &theirs);
     let merged = merge_json_value(&base, &ours, &theirs, "", &mut conflicts);
     if !conflicts.is_empty() {
         let owned_regions = json_owned_regions_for_conflicts(request, &conflicts);
@@ -185,6 +195,7 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
             None,
             Some(conflicted_source),
             conflicts,
+            change_classifications,
             vec![diagnostic(
                 DiagnosticCategory::ConfigurationError,
                 "merge_conflict: merge3 found unresolved conflict(s).",
@@ -204,6 +215,7 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
         Some(merged_source),
         None,
         vec![],
+        change_classifications,
         vec![],
         vec![],
         Some(FormattingPreservation { line_diff_score: 1.0, character_diff_score: 1.0 }),
@@ -257,6 +269,7 @@ fn response(
     merged_source: Option<String>,
     conflicted_source: Option<String>,
     conflicts: Vec<Merge3Conflict>,
+    change_classifications: Vec<ChangeClassification>,
     diagnostics: Vec<Diagnostic>,
     owned_regions: Vec<OwnedRegionReport>,
     formatting_preservation: Option<FormattingPreservation>,
@@ -273,6 +286,7 @@ fn response(
         merged_source,
         conflicted_source,
         conflicts,
+        change_classifications,
         diagnostics,
         fallbacks: vec![],
         profile: Merge3Profile {
@@ -390,6 +404,7 @@ fn parse_error_response(request: &Merge3Request, message: String) -> Merge3Respo
         false,
         None,
         None,
+        vec![],
         vec![],
         vec![diagnostic(DiagnosticCategory::ParseError, &message)],
         vec![],
@@ -574,6 +589,58 @@ fn merge_json_objects(
         }
     }
     result
+}
+
+fn classify_json_changes(base: &Value, ours: &Value, theirs: &Value) -> Vec<ChangeClassification> {
+    match (base.as_object(), ours.as_object(), theirs.as_object()) {
+        (Some(base_map), Some(ours_map), Some(theirs_map)) => {
+            let keys = base_map
+                .keys()
+                .chain(ours_map.keys())
+                .chain(theirs_map.keys())
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            keys.into_iter()
+                .filter_map(|key| {
+                    let ours_change =
+                        classify_json_value_change(base_map.get(&key), ours_map.get(&key));
+                    let theirs_change =
+                        classify_json_value_change(base_map.get(&key), theirs_map.get(&key));
+                    if ours_change == "unchanged" && theirs_change == "unchanged" {
+                        return None;
+                    }
+                    Some(ChangeClassification {
+                        path: json_pointer_join("", &key),
+                        ours: ours_change,
+                        theirs: theirs_change,
+                    })
+                })
+                .collect()
+        }
+        _ => {
+            let ours_change = classify_json_value_change(Some(base), Some(ours));
+            let theirs_change = classify_json_value_change(Some(base), Some(theirs));
+            if ours_change == "unchanged" && theirs_change == "unchanged" {
+                vec![]
+            } else {
+                vec![ChangeClassification {
+                    path: "/".to_string(),
+                    ours: ours_change,
+                    theirs: theirs_change,
+                }]
+            }
+        }
+    }
+}
+
+fn classify_json_value_change(base: Option<&Value>, value: Option<&Value>) -> String {
+    match (base, value) {
+        (None, None) => "unchanged".to_string(),
+        (None, Some(_)) => "added".to_string(),
+        (Some(_), None) => "deleted".to_string(),
+        (Some(base), Some(value)) if base == value => "unchanged".to_string(),
+        _ => "edited".to_string(),
+    }
 }
 
 fn merge_json_entry(

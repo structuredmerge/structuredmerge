@@ -27,6 +27,7 @@ struct Expected {
     ok: bool,
     merged_json: Option<Value>,
     conflict_count: usize,
+    change_classifications: Option<Vec<ast_merge_git::ChangeClassification>>,
     conflict_categories: Option<Vec<String>>,
     conflict_paths: Option<Vec<String>>,
     conflicted_source_contains: Option<Vec<String>>,
@@ -94,6 +95,9 @@ fn conforms_to_git_merge3_contract_fixture() {
         let result = merge3(&case.request);
         assert_eq!(result.ok, case.expected.ok, "{}", case.case_id);
         assert_eq!(result.conflicts.len(), case.expected.conflict_count, "{}", case.case_id);
+        if let Some(expected_classifications) = case.expected.change_classifications {
+            assert_eq!(result.change_classifications, expected_classifications, "{}", case.case_id);
+        }
         assert_eq!(
             result.reparse_after_render, case.expected.reparse_after_render,
             "{}",
