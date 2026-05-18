@@ -1,4 +1,4 @@
-use ast_merge_git::{Merge3Request, merge3};
+use ast_merge_git::{Merge3Request, merge_comment_delta, merge3};
 use serde::Deserialize;
 use serde_json::Value;
 use std::{fs, path::PathBuf};
@@ -31,6 +31,36 @@ struct Expected {
     conflict_paths: Option<Vec<String>>,
     conflicted_source_contains: Option<Vec<String>>,
     reparse_after_render: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CommentDeltaFixture {
+    contract: Contract,
+    owner: CommentDeltaOwner,
+    cases: Vec<CommentDeltaCase>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CommentDeltaOwner {
+    path: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CommentDeltaCase {
+    case_id: String,
+    base_comment: Option<String>,
+    ours_comment: Option<String>,
+    theirs_comment: Option<String>,
+    expected: CommentDeltaExpected,
+}
+
+#[derive(Debug, Deserialize)]
+struct CommentDeltaExpected {
+    ok: bool,
+    merged_comment: Option<String>,
+    conflict_count: usize,
+    conflict_categories: Option<Vec<String>>,
+    comment_owner_path: Option<String>,
 }
 
 #[test]
@@ -72,6 +102,40 @@ fn conforms_to_git_merge3_contract_fixture() {
                     result.conflicted_source
                 );
             }
+        }
+    }
+}
+
+#[test]
+fn conforms_to_git_comment_delta_semantics_fixture() {
+    let fixture: CommentDeltaFixture = read_fixture(&[
+        "diagnostics",
+        "slice-953-git-comment-delta-semantics",
+        "git-comment-delta-semantics.json",
+    ]);
+    assert_eq!(fixture.contract.package, "ast-merge-git");
+    assert_eq!(fixture.contract.operation, "comment_delta_semantics");
+
+    for case in fixture.cases {
+        let result = merge_comment_delta(
+            case.base_comment.as_deref(),
+            case.ours_comment.as_deref(),
+            case.theirs_comment.as_deref(),
+            &fixture.owner.path,
+        );
+        assert_eq!(result.ok, case.expected.ok, "{}", case.case_id);
+        assert_eq!(result.conflicts.len(), case.expected.conflict_count, "{}", case.case_id);
+        assert_eq!(result.merged_comment, case.expected.merged_comment, "{}", case.case_id);
+        if let Some(expected_categories) = case.expected.conflict_categories {
+            let categories = result
+                .conflicts
+                .iter()
+                .map(|conflict| conflict.category.clone())
+                .collect::<Vec<_>>();
+            assert_eq!(categories, expected_categories, "{}", case.case_id);
+        }
+        if let Some(expected_owner_path) = case.expected.comment_owner_path {
+            assert_eq!(fixture.owner.path, expected_owner_path, "{}", case.case_id);
         }
     }
 }

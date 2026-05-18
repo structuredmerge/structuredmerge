@@ -45,6 +45,13 @@ pub struct Merge3Response {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CommentDeltaResult {
+    pub ok: bool,
+    pub merged_comment: Option<String>,
+    pub conflicts: Vec<Merge3Conflict>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Merge3Profile {
     pub profile_id: String,
     pub language: String,
@@ -128,6 +135,45 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
         Some(reparses),
         None,
     )
+}
+
+pub fn merge_comment_delta(
+    base_comment: Option<&str>,
+    ours_comment: Option<&str>,
+    theirs_comment: Option<&str>,
+    owner_path: &str,
+) -> CommentDeltaResult {
+    let mut conflicts = Vec::new();
+    let merged_comment = if ours_comment == theirs_comment {
+        ours_comment.map(str::to_string)
+    } else if base_comment == ours_comment {
+        theirs_comment.map(str::to_string)
+    } else if base_comment == theirs_comment {
+        ours_comment.map(str::to_string)
+    } else if ours_comment.is_none() {
+        conflicts.push(comment_conflict(
+            "delete_edit",
+            owner_path,
+            "ours deleted a comment that theirs edited",
+        ));
+        None
+    } else if theirs_comment.is_none() {
+        conflicts.push(comment_conflict(
+            "delete_edit",
+            owner_path,
+            "theirs deleted a comment that ours edited",
+        ));
+        None
+    } else {
+        conflicts.push(comment_conflict(
+            "edit_edit",
+            owner_path,
+            "comment changed differently in ours and theirs",
+        ));
+        None
+    };
+
+    CommentDeltaResult { ok: conflicts.is_empty(), merged_comment, conflicts }
 }
 
 fn response(
@@ -304,6 +350,15 @@ fn add_conflict(conflicts: &mut Vec<Merge3Conflict>, category: &str, path: &str,
         path: if path.is_empty() { "/".to_string() } else { path.to_string() },
         message: message.to_string(),
     });
+}
+
+fn comment_conflict(category: &str, path: &str, message: &str) -> Merge3Conflict {
+    Merge3Conflict {
+        conflict_id: "comment-conflict-1".to_string(),
+        category: category.to_string(),
+        path: if path.is_empty() { "/".to_string() } else { path.to_string() },
+        message: message.to_string(),
+    }
 }
 
 fn json_pointer_join(parent: &str, token: &str) -> String {
