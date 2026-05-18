@@ -32,6 +32,7 @@ struct Expected {
     conflicted_source_contains: Option<Vec<String>>,
     reparse_after_render: Option<bool>,
     render_report: Option<ast_merge_git::Merge3RenderReport>,
+    formatting_preservation: Option<ast_merge_git::FormattingPreservation>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -82,6 +83,13 @@ fn conforms_to_git_merge3_contract_fixture() {
         );
         if let Some(expected_render_report) = case.expected.render_report {
             assert_eq!(result.render_report, expected_render_report, "{}", case.case_id);
+        }
+        if let Some(expected_formatting_preservation) = case.expected.formatting_preservation {
+            assert_eq!(
+                result.formatting_preservation, expected_formatting_preservation,
+                "{}",
+                case.case_id
+            );
         }
         if result.ok {
             let merged: Value =
