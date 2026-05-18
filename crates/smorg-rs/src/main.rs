@@ -13,6 +13,7 @@ use ast_merge_git::{Merge3Request, merge3};
 use go_merge::{GoDialect, merge_go};
 use json_merge::{JsonDialect, merge_json};
 use plain_merge::merge_text;
+use serde_json::json;
 
 const EXIT_SUCCESS: i32 = 0;
 const EXIT_UNRESOLVED_CONFLICT: i32 = 1;
@@ -30,6 +31,7 @@ struct MergeDriverOptions {
     fallback: String,
     check_only: bool,
     exit_code: bool,
+    report_path: Option<String>,
     profile_id: Option<String>,
     profile_report: bool,
     require_profile_status: Option<String>,
@@ -97,7 +99,7 @@ fn run(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
 fn print_usage(out: &mut dyn Write) {
     let _ = writeln!(
         out,
-        "usage: smorg-rs merge-driver [--path-name PATH] [--output PATH] [--strict] [--fallback=none|line|local|full-file] %O %A %B [%P]"
+        "usage: smorg-rs merge-driver [--path-name PATH] [--output PATH] [--report PATH] [--strict] [--fallback=none|line|local|full-file] %O %A %B [%P]"
     );
     let _ = writeln!(
         out,
@@ -163,13 +165,32 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
     );
     if !result.ok {
         print_diagnostics(stderr, &result);
+        let mut fallbacks = Vec::new();
         if result.output.is_none() && !options.strict && options.fallback != "none" {
+            fallbacks.push(json!({
+                "mode": "full_file",
+                "requested_mode": options.fallback,
+                "reason": fallback_reason(&result.diagnostics),
+                "applied": true
+            }));
             result.output = Some(full_file_conflict_output(
                 settings.conflict_marker_size,
                 &ancestor_source,
                 &current_source,
                 &other_source,
             ));
+        }
+        let report_exit = write_merge_driver_machine_report(
+            options.report_path.as_deref(),
+            &effective_path,
+            false,
+            EXIT_UNRESOLVED_CONFLICT,
+            &fallbacks,
+            &result.diagnostics,
+            stderr,
+        );
+        if report_exit != EXIT_SUCCESS {
+            return report_exit;
         }
         if options.check_only {
             return EXIT_UNRESOLVED_CONFLICT;
@@ -189,6 +210,23 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
         return EXIT_INTERNAL_ERROR;
     };
     if options.check_only {
+        let exit_code = if options.exit_code && output != current_source {
+            EXIT_UNRESOLVED_CONFLICT
+        } else {
+            EXIT_SUCCESS
+        };
+        let report_exit = write_merge_driver_machine_report(
+            options.report_path.as_deref(),
+            &effective_path,
+            true,
+            exit_code,
+            &[],
+            &result.diagnostics,
+            stderr,
+        );
+        if report_exit != EXIT_SUCCESS {
+            return report_exit;
+        }
         if options.exit_code && output != current_source {
             return EXIT_UNRESOLVED_CONFLICT;
         }
@@ -200,8 +238,61 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
         let _ = writeln!(stderr, "write output: {error}");
         return EXIT_INTERNAL_ERROR;
     }
+    let report_exit = write_merge_driver_machine_report(
+        options.report_path.as_deref(),
+        &effective_path,
+        true,
+        EXIT_SUCCESS,
+        &[],
+        &result.diagnostics,
+        stderr,
+    );
+    if report_exit != EXIT_SUCCESS {
+        return report_exit;
+    }
 
     EXIT_SUCCESS
+}
+
+fn write_merge_driver_machine_report(
+    report_path: Option<&str>,
+    path_name: &str,
+    ok: bool,
+    exit_code: i32,
+    fallbacks: &[serde_json::Value],
+    diagnostics: &[ast_merge::Diagnostic],
+    stderr: &mut dyn Write,
+) -> i32 {
+    let Some(report_path) = report_path else {
+        return EXIT_SUCCESS;
+    };
+    let report = json!({
+        "command": "merge-driver",
+        "path_name": path_name,
+        "ok": ok,
+        "exit_code": exit_code,
+        "fallbacks": fallbacks,
+        "diagnostics": diagnostics
+    });
+    let Ok(source) = serde_json::to_string_pretty(&report) else {
+        let _ = writeln!(stderr, "write report: failed to serialize report");
+        return EXIT_INTERNAL_ERROR;
+    };
+    if let Err(error) = fs::write(report_path, format!("{source}\n")) {
+        let _ = writeln!(stderr, "write report: {error}");
+        return EXIT_INTERNAL_ERROR;
+    }
+    EXIT_SUCCESS
+}
+
+fn fallback_reason(diagnostics: &[ast_merge::Diagnostic]) -> String {
+    diagnostics.first().map_or_else(
+        || "structured_merge_failed".to_string(),
+        |diagnostic| match serde_json::to_value(diagnostic.category) {
+            Ok(serde_json::Value::String(category)) => category,
+            _ => "structured_merge_failed".to_string(),
+        },
+    )
 }
 
 fn full_file_conflict_output(
@@ -237,6 +328,7 @@ fn parse_merge_driver_options(
     let mut fallback = "full-file".to_string();
     let mut check_only = false;
     let mut exit_code = false;
+    let mut report_path = None;
     let mut profile_id = None;
     let mut profile_report = false;
     let mut require_profile_status = None;
@@ -264,6 +356,10 @@ fn parse_merge_driver_options(
             "--output" => {
                 index += 1;
                 output = args.get(index).cloned();
+            }
+            "--report" => {
+                index += 1;
+                report_path = args.get(index).cloned();
             }
             "--strict" => strict = true,
             "--check-only" => check_only = true,
@@ -313,6 +409,7 @@ fn parse_merge_driver_options(
         fallback,
         check_only,
         exit_code,
+        report_path,
         profile_id,
         profile_report,
         require_profile_status,
@@ -934,6 +1031,7 @@ mod tests {
                 dir.write("current.json", case["ours_source"].as_str().expect("ours source"));
             let other =
                 dir.write("other.json", case["theirs_source"].as_str().expect("theirs source"));
+            let report_path = dir.path.join("merge-report.json").to_string_lossy().to_string();
             let mut args = vec!["merge-driver".to_string()];
             if case["options"]["strict"].as_bool().unwrap_or(false) {
                 args.push("--strict".to_string());
@@ -944,6 +1042,8 @@ mod tests {
                     args.push(fallback.to_string());
                 }
             }
+            args.push("--report".to_string());
+            args.push(report_path.clone());
             args.extend([
                 ancestor,
                 current.clone(),
@@ -989,6 +1089,7 @@ mod tests {
                     String::from_utf8_lossy(&stderr)
                 );
             }
+            assert_fallback_machine_report(&report_path, &expected["machine_report"]);
         }
     }
 
@@ -1140,6 +1241,22 @@ mod tests {
         let source = fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("read fixture {}: {error}", path.display()));
         serde_json::from_str(&source).expect("fixture should parse")
+    }
+
+    fn assert_fallback_machine_report(report_path: &str, expected: &Value) {
+        let report_source = fs::read_to_string(report_path).expect("read machine report");
+        let report: Value = serde_json::from_str(&report_source).expect("parse machine report");
+        assert_eq!(report["ok"], expected["ok"]);
+        assert_eq!(report["exit_code"], expected["exit_code"]);
+        assert_eq!(report["fallbacks"], expected["fallbacks"]);
+        let diagnostics = serde_json::to_string(&report["diagnostics"]).expect("diagnostics json");
+        for needle in expected["diagnostics_contain"].as_array().expect("diagnostics") {
+            let needle = needle.as_str().expect("diagnostic needle");
+            assert!(
+                diagnostics.contains(needle),
+                "diagnostics should contain {needle:?}: {diagnostics}"
+            );
+        }
     }
 
     fn run_git(dir: &Path, args: &[&str]) {
