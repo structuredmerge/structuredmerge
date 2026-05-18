@@ -74,6 +74,10 @@ struct MergeDriverResult {
     owned_regions: Vec<ast_merge_git::OwnedRegionReport>,
     render_report: Option<ast_merge_git::Merge3RenderReport>,
     profile: Option<ast_merge_git::Merge3Profile>,
+    reparse_after_render: Option<bool>,
+    formatting_preservation: Option<ast_merge_git::FormattingPreservation>,
+    secondary_formatting_metrics: Option<ast_merge_git::SecondaryFormattingMetrics>,
+    default_driver_evaluation: Option<ast_merge_git::DefaultDriverEvaluation>,
 }
 
 fn main() {
@@ -199,6 +203,10 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
             &result.owned_regions,
             result.render_report.as_ref(),
             result.profile.as_ref(),
+            result.reparse_after_render.as_ref(),
+            result.formatting_preservation.as_ref(),
+            result.secondary_formatting_metrics.as_ref(),
+            result.default_driver_evaluation.as_ref(),
             &result.diagnostics,
             stderr,
         );
@@ -237,6 +245,10 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
             &result.owned_regions,
             result.render_report.as_ref(),
             result.profile.as_ref(),
+            result.reparse_after_render.as_ref(),
+            result.formatting_preservation.as_ref(),
+            result.secondary_formatting_metrics.as_ref(),
+            result.default_driver_evaluation.as_ref(),
             &result.diagnostics,
             stderr,
         );
@@ -263,6 +275,10 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
         &result.owned_regions,
         result.render_report.as_ref(),
         result.profile.as_ref(),
+        result.reparse_after_render.as_ref(),
+        result.formatting_preservation.as_ref(),
+        result.secondary_formatting_metrics.as_ref(),
+        result.default_driver_evaluation.as_ref(),
         &result.diagnostics,
         stderr,
     );
@@ -282,6 +298,10 @@ fn write_merge_driver_machine_report(
     owned_regions: &[ast_merge_git::OwnedRegionReport],
     render_report: Option<&ast_merge_git::Merge3RenderReport>,
     profile: Option<&ast_merge_git::Merge3Profile>,
+    reparse_after_render: Option<&bool>,
+    formatting_preservation: Option<&ast_merge_git::FormattingPreservation>,
+    secondary_formatting_metrics: Option<&ast_merge_git::SecondaryFormattingMetrics>,
+    default_driver_evaluation: Option<&ast_merge_git::DefaultDriverEvaluation>,
     diagnostics: &[ast_merge::Diagnostic],
     stderr: &mut dyn Write,
 ) -> i32 {
@@ -296,6 +316,10 @@ fn write_merge_driver_machine_report(
         "fallbacks": fallbacks,
         "owned_regions": owned_regions,
         "render_report": render_report,
+        "reparse_after_render": reparse_after_render,
+        "formatting_preservation": formatting_preservation,
+        "secondary_formatting_metrics": secondary_formatting_metrics,
+        "default_driver_evaluation": default_driver_evaluation,
         "profile": profile,
         "diagnostics": diagnostics
     });
@@ -747,10 +771,18 @@ fn merge_driver_result(result: MergeResult<String>) -> MergeDriverResult {
         owned_regions: vec![],
         render_report: None,
         profile: None,
+        reparse_after_render: None,
+        formatting_preservation: None,
+        secondary_formatting_metrics: None,
+        default_driver_evaluation: None,
     }
 }
 
 fn merge3_result(result: ast_merge_git::Merge3Response) -> MergeDriverResult {
+    let reparse_after_render = result.reparse_after_render;
+    let formatting_preservation = Some(result.formatting_preservation);
+    let secondary_formatting_metrics = Some(result.secondary_formatting_metrics);
+    let default_driver_evaluation = Some(result.default_driver_evaluation);
     if result.ok {
         MergeDriverResult {
             ok: true,
@@ -759,6 +791,10 @@ fn merge3_result(result: ast_merge_git::Merge3Response) -> MergeDriverResult {
             owned_regions: result.owned_regions,
             render_report: Some(result.render_report),
             profile: Some(result.profile),
+            reparse_after_render,
+            formatting_preservation,
+            secondary_formatting_metrics,
+            default_driver_evaluation,
         }
     } else if result.conflicted_source.is_some() {
         MergeDriverResult {
@@ -768,6 +804,10 @@ fn merge3_result(result: ast_merge_git::Merge3Response) -> MergeDriverResult {
             owned_regions: result.owned_regions,
             render_report: Some(result.render_report),
             profile: Some(result.profile),
+            reparse_after_render,
+            formatting_preservation,
+            secondary_formatting_metrics,
+            default_driver_evaluation,
         }
     } else {
         MergeDriverResult {
@@ -777,6 +817,10 @@ fn merge3_result(result: ast_merge_git::Merge3Response) -> MergeDriverResult {
             owned_regions: result.owned_regions,
             render_report: Some(result.render_report),
             profile: Some(result.profile),
+            reparse_after_render,
+            formatting_preservation,
+            secondary_formatting_metrics,
+            default_driver_evaluation,
         }
     }
 }
@@ -1224,6 +1268,8 @@ mod tests {
         assert_eq!(report["owned_regions"][0]["region_kind"], "node");
         assert_eq!(report["profile"]["profile_id"], "json.keyed-object");
         assert_eq!(report["profile"]["language"], "json");
+        assert!(report["formatting_preservation"]["line_diff_score"].is_number());
+        assert!(report["default_driver_evaluation"]["status"].is_string());
     }
 
     #[test]
