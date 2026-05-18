@@ -175,11 +175,15 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
         } else {
             "owned_region_conflict_markers"
         };
+        let conflicted_source = owned_regions
+            .first()
+            .and_then(|region| render_json_owned_region_conflict_source(request, region))
+            .unwrap_or_else(|| render_conflict_source(request, &conflicts));
         return response(
             request,
             false,
             None,
-            Some(render_conflict_source(request, &conflicts)),
+            Some(conflicted_source),
             conflicts,
             vec![diagnostic(
                 DiagnosticCategory::ConfigurationError,
@@ -409,6 +413,52 @@ fn render_conflict_source(request: &Merge3Request, conflicts: &[Merge3Conflict])
         String::new(),
     ]
     .join("\n")
+}
+
+fn render_json_owned_region_conflict_source(
+    request: &Merge3Request,
+    region: &OwnedRegionReport,
+) -> Option<String> {
+    if region.region_kind != "node" {
+        return None;
+    }
+    let key = region.owner_path.trim_start_matches('/');
+    let ours_region = json_member_source(&request.ours_source, key)?;
+    let base_region = json_member_source(&request.base_source, key)?;
+    let theirs_region = json_member_source(&request.theirs_source, key)?;
+    let marker_size = request.conflict_marker_size.unwrap_or(7).max(1);
+    let replacement = [
+        format!("{} ours", "<".repeat(marker_size)),
+        ours_region.text,
+        format!("{} base", "|".repeat(marker_size)),
+        base_region.text,
+        "=".repeat(marker_size),
+        theirs_region.text,
+        format!("{} theirs", ">".repeat(marker_size)),
+    ]
+    .join("\n");
+    Some(format!(
+        "{}{}{}",
+        &request.ours_source[..ours_region.byte_range.start],
+        replacement,
+        &request.ours_source[ours_region.byte_range.end..]
+    ))
+}
+
+struct JsonMemberRegion {
+    byte_range: SourceRange,
+    text: String,
+}
+
+fn json_member_source(source: &str, key: &str) -> Option<JsonMemberRegion> {
+    let byte_range = json_key_byte_range(source, key);
+    if byte_range.end <= byte_range.start || byte_range.end > source.len() {
+        return None;
+    }
+    Some(JsonMemberRegion {
+        byte_range: byte_range.clone(),
+        text: source[byte_range.start..byte_range.end].to_string(),
+    })
 }
 
 fn json_owned_regions_for_conflicts(

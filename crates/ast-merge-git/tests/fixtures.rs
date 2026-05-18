@@ -30,6 +30,7 @@ struct Expected {
     conflict_categories: Option<Vec<String>>,
     conflict_paths: Option<Vec<String>>,
     conflicted_source_contains: Option<Vec<String>>,
+    conflicted_source_not_contains: Option<Vec<String>>,
     reparse_after_render: Option<bool>,
     render_report: Option<ast_merge_git::Merge3RenderReport>,
     formatting_preservation: Option<ast_merge_git::FormattingPreservation>,
@@ -161,6 +162,14 @@ fn conforms_to_git_merge3_contract_fixture() {
                 assert!(
                     result.conflicted_source.as_deref().unwrap_or_default().contains(&needle),
                     "{} conflicted_source missing {needle:?}: {:?}",
+                    case.case_id,
+                    result.conflicted_source
+                );
+            }
+            for needle in case.expected.conflicted_source_not_contains.unwrap_or_default() {
+                assert!(
+                    !result.conflicted_source.as_deref().unwrap_or_default().contains(&needle),
+                    "{} conflicted_source should not contain {needle:?}: {:?}",
                     case.case_id,
                     result.conflicted_source
                 );
