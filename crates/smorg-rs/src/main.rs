@@ -73,6 +73,7 @@ struct MergeDriverResult {
     output: Option<String>,
     owned_regions: Vec<ast_merge_git::OwnedRegionReport>,
     render_report: Option<ast_merge_git::Merge3RenderReport>,
+    profile: Option<ast_merge_git::Merge3Profile>,
 }
 
 fn main() {
@@ -197,6 +198,7 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
             &fallbacks,
             &result.owned_regions,
             result.render_report.as_ref(),
+            result.profile.as_ref(),
             &result.diagnostics,
             stderr,
         );
@@ -234,6 +236,7 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
             &[],
             &result.owned_regions,
             result.render_report.as_ref(),
+            result.profile.as_ref(),
             &result.diagnostics,
             stderr,
         );
@@ -259,6 +262,7 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
         &[],
         &result.owned_regions,
         result.render_report.as_ref(),
+        result.profile.as_ref(),
         &result.diagnostics,
         stderr,
     );
@@ -277,6 +281,7 @@ fn write_merge_driver_machine_report(
     fallbacks: &[serde_json::Value],
     owned_regions: &[ast_merge_git::OwnedRegionReport],
     render_report: Option<&ast_merge_git::Merge3RenderReport>,
+    profile: Option<&ast_merge_git::Merge3Profile>,
     diagnostics: &[ast_merge::Diagnostic],
     stderr: &mut dyn Write,
 ) -> i32 {
@@ -291,6 +296,7 @@ fn write_merge_driver_machine_report(
         "fallbacks": fallbacks,
         "owned_regions": owned_regions,
         "render_report": render_report,
+        "profile": profile,
         "diagnostics": diagnostics
     });
     let Ok(source) = serde_json::to_string_pretty(&report) else {
@@ -740,6 +746,7 @@ fn merge_driver_result(result: MergeResult<String>) -> MergeDriverResult {
         output: result.output,
         owned_regions: vec![],
         render_report: None,
+        profile: None,
     }
 }
 
@@ -751,6 +758,7 @@ fn merge3_result(result: ast_merge_git::Merge3Response) -> MergeDriverResult {
             output: result.merged_source,
             owned_regions: result.owned_regions,
             render_report: Some(result.render_report),
+            profile: Some(result.profile),
         }
     } else if result.conflicted_source.is_some() {
         MergeDriverResult {
@@ -759,6 +767,7 @@ fn merge3_result(result: ast_merge_git::Merge3Response) -> MergeDriverResult {
             output: result.conflicted_source,
             owned_regions: result.owned_regions,
             render_report: Some(result.render_report),
+            profile: Some(result.profile),
         }
     } else {
         MergeDriverResult {
@@ -767,6 +776,7 @@ fn merge3_result(result: ast_merge_git::Merge3Response) -> MergeDriverResult {
             output: None,
             owned_regions: result.owned_regions,
             render_report: Some(result.render_report),
+            profile: Some(result.profile),
         }
     }
 }
@@ -1212,6 +1222,8 @@ mod tests {
         assert_eq!(report["render_report"]["strategy"], "owned_region_conflict_markers");
         assert_eq!(report["owned_regions"][0]["owner_path"], "/enabled");
         assert_eq!(report["owned_regions"][0]["region_kind"], "node");
+        assert_eq!(report["profile"]["profile_id"], "json.keyed-object");
+        assert_eq!(report["profile"]["language"], "json");
     }
 
     #[test]
