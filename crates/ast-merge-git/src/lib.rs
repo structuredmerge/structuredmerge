@@ -42,6 +42,7 @@ pub struct Merge3Response {
     pub render_report: Merge3RenderReport,
     pub formatting_preservation: FormattingPreservation,
     pub secondary_formatting_metrics: SecondaryFormattingMetrics,
+    pub default_driver_evaluation: DefaultDriverEvaluation,
     pub reparse_after_render: Option<bool>,
 }
 
@@ -81,6 +82,23 @@ pub struct SecondaryFormattingMetrics {
     pub source_fragment_retention: f64,
     pub weighted: bool,
     pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct DefaultDriverEvaluation {
+    pub status: String,
+    pub formatting_threshold: f64,
+    pub formatting_score: f64,
+    pub hard_gates: Vec<HardGate>,
+    pub blocking_reasons: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct HardGate {
+    pub name: String,
+    pub passed: bool,
+    pub weighted: bool,
 }
 
 pub fn merge3(request: &Merge3Request) -> Merge3Response {
@@ -202,6 +220,10 @@ fn response(
     render_strategy: Option<String>,
 ) -> Merge3Response {
     let has_merged_source = merged_source.is_some();
+    let formatting = formatting_preservation
+        .clone()
+        .unwrap_or(FormattingPreservation { line_diff_score: 0.0, character_diff_score: 0.0 });
+    let render_report = render_report(request, render_strategy);
     Merge3Response {
         ok,
         merged_source,
@@ -214,10 +236,14 @@ fn response(
             language: normalize_language(request),
             dialect: request.dialect.clone().unwrap_or_default(),
         },
-        render_report: render_report(request, render_strategy),
-        formatting_preservation: formatting_preservation
-            .unwrap_or(FormattingPreservation { line_diff_score: 0.0, character_diff_score: 0.0 }),
+        render_report: render_report.clone(),
+        formatting_preservation: formatting.clone(),
         secondary_formatting_metrics: secondary_formatting_metrics(has_merged_source),
+        default_driver_evaluation: default_driver_evaluation(
+            &formatting,
+            reparse_after_render,
+            &render_report,
+        ),
         reparse_after_render,
     }
 }
@@ -242,6 +268,62 @@ fn secondary_formatting_metrics(merged: bool) -> SecondaryFormattingMetrics {
         diagnostics: vec![
             "unresolved conflict did not produce a merged source-fragment retention measurement"
                 .to_string(),
+        ],
+    }
+}
+
+fn default_driver_evaluation(
+    formatting: &FormattingPreservation,
+    reparse_after_render: Option<bool>,
+    render_report: &Merge3RenderReport,
+) -> DefaultDriverEvaluation {
+    let threshold = 0.95;
+    let score = (formatting.line_diff_score + formatting.character_diff_score) / 2.0;
+    let reparse_passed = reparse_after_render == Some(true);
+    let no_full_file_rewrite = render_report.strategy != "full_file_conflict_markers";
+    let coherent_conflict_markers = render_report.strategy != "full_file_conflict_markers";
+    let mut blocking_reasons = Vec::new();
+    if !reparse_passed {
+        blocking_reasons.push("rendered output did not reparse".to_string());
+    }
+    if score < threshold {
+        blocking_reasons.push("formatting score is below threshold".to_string());
+    }
+    if !no_full_file_rewrite {
+        blocking_reasons.push("full-file rewrite or conflict markers were used".to_string());
+    }
+    if !coherent_conflict_markers {
+        blocking_reasons
+            .push("conflict marker placement is not syntactically coherent".to_string());
+    }
+    DefaultDriverEvaluation {
+        status: if blocking_reasons.is_empty() {
+            "recommended".to_string()
+        } else {
+            "not_recommended".to_string()
+        },
+        formatting_threshold: threshold,
+        formatting_score: score,
+        hard_gates: vec![
+            HardGate {
+                name: "reparse_after_render".to_string(),
+                passed: reparse_passed,
+                weighted: false,
+            },
+            HardGate {
+                name: "no_full_file_rewrite".to_string(),
+                passed: no_full_file_rewrite,
+                weighted: false,
+            },
+            HardGate {
+                name: "coherent_conflict_marker_placement".to_string(),
+                passed: coherent_conflict_markers,
+                weighted: false,
+            },
+        ],
+        blocking_reasons,
+        diagnostics: vec![
+            "default-driver evaluation is advisory unless explicitly required".to_string(),
         ],
     }
 }

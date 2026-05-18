@@ -34,6 +34,7 @@ struct Expected {
     render_report: Option<ast_merge_git::Merge3RenderReport>,
     formatting_preservation: Option<ast_merge_git::FormattingPreservation>,
     secondary_formatting_metrics: Option<ast_merge_git::SecondaryFormattingMetrics>,
+    default_driver_evaluation: Option<ast_merge_git::DefaultDriverEvaluation>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -95,6 +96,13 @@ fn conforms_to_git_merge3_contract_fixture() {
         if let Some(expected_secondary_metrics) = case.expected.secondary_formatting_metrics {
             assert_eq!(
                 result.secondary_formatting_metrics, expected_secondary_metrics,
+                "{}",
+                case.case_id
+            );
+        }
+        if let Some(expected_default_driver_evaluation) = case.expected.default_driver_evaluation {
+            assert_eq!(
+                result.default_driver_evaluation, expected_default_driver_evaluation,
                 "{}",
                 case.case_id
             );
