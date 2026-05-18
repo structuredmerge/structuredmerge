@@ -40,6 +40,7 @@ pub struct Merge3Response {
     pub fallbacks: Vec<String>,
     pub profile: Merge3Profile,
     pub render_report: Merge3RenderReport,
+    pub owned_regions: Vec<OwnedRegionReport>,
     pub formatting_preservation: FormattingPreservation,
     pub secondary_formatting_metrics: SecondaryFormattingMetrics,
     pub default_driver_evaluation: DefaultDriverEvaluation,
@@ -67,6 +68,35 @@ pub struct Merge3RenderReport {
     pub backend_id: String,
     #[serde(default)]
     pub parser_identity: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SourceRange {
+    pub start: usize,
+    pub end: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AttachedSpan {
+    pub kind: String,
+    pub line_range: SourceRange,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub byte_range: Option<SourceRange>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct OwnedRegionReport {
+    pub owner_path: String,
+    pub node_id: String,
+    pub region_kind: String,
+    pub byte_range: SourceRange,
+    pub line_range: SourceRange,
+    pub attached_spans: Vec<AttachedSpan>,
+    pub backend_id: String,
+    pub parser_identity: String,
+    pub can_replace: bool,
+    pub can_line_merge: bool,
+    pub requires_reparse: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -114,6 +144,7 @@ pub fn merge3(request: &Merge3Request) -> Merge3Response {
                 DiagnosticCategory::UnsupportedFeature,
                 "ast-merge-git currently supports only json merge3.",
             )],
+            vec![],
             None,
             None,
             None,
@@ -138,6 +169,12 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
     let mut conflicts = Vec::new();
     let merged = merge_json_value(&base, &ours, &theirs, "", &mut conflicts);
     if !conflicts.is_empty() {
+        let owned_regions = json_owned_regions_for_conflicts(request, &conflicts);
+        let render_strategy = if owned_regions.is_empty() {
+            "full_file_conflict_markers"
+        } else {
+            "owned_region_conflict_markers"
+        };
         return response(
             request,
             false,
@@ -148,9 +185,10 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
                 DiagnosticCategory::ConfigurationError,
                 "merge_conflict: merge3 found unresolved conflict(s).",
             )],
+            owned_regions,
             None,
             None,
-            Some("full_file_conflict_markers".to_string()),
+            Some(render_strategy.to_string()),
         );
     }
 
@@ -161,6 +199,7 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
         true,
         Some(merged_source),
         None,
+        vec![],
         vec![],
         vec![],
         Some(FormattingPreservation { line_diff_score: 1.0, character_diff_score: 1.0 }),
@@ -215,6 +254,7 @@ fn response(
     conflicted_source: Option<String>,
     conflicts: Vec<Merge3Conflict>,
     diagnostics: Vec<Diagnostic>,
+    owned_regions: Vec<OwnedRegionReport>,
     formatting_preservation: Option<FormattingPreservation>,
     reparse_after_render: Option<bool>,
     render_strategy: Option<String>,
@@ -237,6 +277,7 @@ fn response(
             dialect: request.dialect.clone().unwrap_or_default(),
         },
         render_report: render_report.clone(),
+        owned_regions,
         formatting_preservation: formatting.clone(),
         secondary_formatting_metrics: secondary_formatting_metrics(has_merged_source),
         default_driver_evaluation: default_driver_evaluation(
@@ -347,6 +388,7 @@ fn parse_error_response(request: &Merge3Request, message: String) -> Merge3Respo
         None,
         vec![],
         vec![diagnostic(DiagnosticCategory::ParseError, &message)],
+        vec![],
         None,
         None,
         None,
@@ -367,6 +409,50 @@ fn render_conflict_source(request: &Merge3Request, conflicts: &[Merge3Conflict])
         String::new(),
     ]
     .join("\n")
+}
+
+fn json_owned_regions_for_conflicts(
+    request: &Merge3Request,
+    conflicts: &[Merge3Conflict],
+) -> Vec<OwnedRegionReport> {
+    conflicts
+        .iter()
+        .filter_map(|conflict| {
+            if !conflict.path.starts_with('/') || conflict.path.matches('/').count() != 1 {
+                return None;
+            }
+            let key = conflict.path.trim_start_matches('/');
+            Some(OwnedRegionReport {
+                owner_path: conflict.path.clone(),
+                node_id: format!("json:key:{key}"),
+                region_kind: "node".to_string(),
+                byte_range: json_key_byte_range(&request.base_source, key),
+                line_range: SourceRange { start: 1, end: 1 },
+                attached_spans: vec![],
+                backend_id: "native-json".to_string(),
+                parser_identity: "standard-json".to_string(),
+                can_replace: true,
+                can_line_merge: false,
+                requires_reparse: true,
+            })
+        })
+        .collect()
+}
+
+fn json_key_byte_range(source: &str, key: &str) -> SourceRange {
+    let needle = format!("\"{key}\"");
+    let Some(start) = source.find(&needle) else {
+        return SourceRange { start: 0, end: source.len() };
+    };
+    let mut end = start + needle.len();
+    while end < source.len() {
+        let current = source.as_bytes()[end] as char;
+        if current == ',' || current == '}' {
+            break;
+        }
+        end += 1;
+    }
+    SourceRange { start, end }
 }
 
 fn diagnostic(category: DiagnosticCategory, message: &str) -> Diagnostic {

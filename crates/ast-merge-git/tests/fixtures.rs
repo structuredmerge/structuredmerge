@@ -35,6 +35,21 @@ struct Expected {
     formatting_preservation: Option<ast_merge_git::FormattingPreservation>,
     secondary_formatting_metrics: Option<ast_merge_git::SecondaryFormattingMetrics>,
     default_driver_evaluation: Option<ast_merge_git::DefaultDriverEvaluation>,
+    owned_regions: Option<Vec<ExpectedOwnedRegion>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExpectedOwnedRegion {
+    owner_path: String,
+    node_id: String,
+    region_kind: String,
+    line_range: ast_merge_git::SourceRange,
+    attached_spans: Vec<ast_merge_git::AttachedSpan>,
+    backend_id: String,
+    parser_identity: String,
+    can_replace: bool,
+    can_line_merge: bool,
+    requires_reparse: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -106,6 +121,26 @@ fn conforms_to_git_merge3_contract_fixture() {
                 "{}",
                 case.case_id
             );
+        }
+        if let Some(expected_owned_regions) = case.expected.owned_regions {
+            assert_eq!(
+                result.owned_regions.len(),
+                expected_owned_regions.len(),
+                "{}",
+                case.case_id
+            );
+            for (actual, expected) in result.owned_regions.iter().zip(expected_owned_regions) {
+                assert_eq!(actual.owner_path, expected.owner_path, "{}", case.case_id);
+                assert_eq!(actual.node_id, expected.node_id, "{}", case.case_id);
+                assert_eq!(actual.region_kind, expected.region_kind, "{}", case.case_id);
+                assert_eq!(actual.line_range, expected.line_range, "{}", case.case_id);
+                assert_eq!(actual.attached_spans, expected.attached_spans, "{}", case.case_id);
+                assert_eq!(actual.backend_id, expected.backend_id, "{}", case.case_id);
+                assert_eq!(actual.parser_identity, expected.parser_identity, "{}", case.case_id);
+                assert_eq!(actual.can_replace, expected.can_replace, "{}", case.case_id);
+                assert_eq!(actual.can_line_merge, expected.can_line_merge, "{}", case.case_id);
+                assert_eq!(actual.requires_reparse, expected.requires_reparse, "{}", case.case_id);
+            }
         }
         if result.ok {
             let merged: Value =
