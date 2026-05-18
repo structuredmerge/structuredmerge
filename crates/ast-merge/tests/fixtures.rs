@@ -21,12 +21,13 @@ use ast_merge::{
     DiagnosticSeverity, DiffDriverSmokeSuite, DiscoveredSurface, FallbackScopeReport,
     FallbackUsageReport, FalseTextualConflictSuite, FamilyFeatureProfile,
     FormattingEdgeFixtureSuite, FormattingHardGateReport, FormattingPreservationConformanceReport,
-    FormattingRecommendationGate, GenericConflictHandlerExecution, GitDriverSmokeSuite,
-    GoDSTProviderStackReport, GoProviderComparisonReport, HostLanguageNativeProviderContracts,
-    InconsistencyReport, LanguageBackendProfile, LanguageProfileHandlerRegistry, LayoutGap,
-    LocalLineFallbackReport, MatchingDebugArtifacts, MergeDecisionRecord, MergeIR,
-    MergeIRComparisonReport, MoveDetectionMatchingReport, NamedConformanceSuitePlan,
-    NamedConformanceSuiteReport, NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
+    FormattingRecommendationGate, FreezeDirectiveBlock, FreezeDirectiveDiagnostic,
+    GenericConflictHandlerExecution, GitDriverSmokeSuite, GoDSTProviderStackReport,
+    GoProviderComparisonReport, HostLanguageNativeProviderContracts, InconsistencyReport,
+    LanguageBackendProfile, LanguageProfileHandlerRegistry, LayoutGap, LocalLineFallbackReport,
+    MatchingDebugArtifacts, MergeDecisionRecord, MergeIR, MergeIRComparisonReport,
+    MoveDetectionMatchingReport, NamedConformanceSuitePlan, NamedConformanceSuiteReport,
+    NamedConformanceSuiteReportEnvelope, NamedConformanceSuiteResults,
     NativeProviderMetadataReport, NativeProviderProvingGroundReport, PCS,
     PROMOTION_PROFILE_JSON_KEYED_OBJECT, PROMOTION_PROFILE_RUBY_GEMSPEC_DEPENDENCY_DECLARATIONS,
     PairwiseMatching, PerformanceGuardrails, PolicySurface, ProfileConformanceReport,
@@ -294,9 +295,9 @@ use ast_merge::{
     validate_language_backend_profile,
 };
 use ast_merge::{
-    MERGE_ENGINE_ENVIRONMENT_VARIABLE, MergeEngine, evaluate_merge_ir_change_sets,
-    merge_decision_review_required, merge_decision_source_summary, merge_decision_summary,
-    normalize_merge_engine,
+    MERGE_ENGINE_ENVIRONMENT_VARIABLE, MergeEngine, detect_freeze_directive_blocks,
+    evaluate_merge_ir_change_sets, freeze_directive_block_for_line, merge_decision_review_required,
+    merge_decision_source_summary, merge_decision_summary, normalize_merge_engine,
 };
 use serde_json::Value;
 
@@ -507,6 +508,67 @@ fn conforms_to_slice_956_merge_result_decision_contract_fixture() {
         expected["review_required"].as_bool().unwrap()
     );
     assert_eq!(decisions.len(), expected["line_count"].as_u64().unwrap() as usize);
+}
+
+#[test]
+fn conforms_to_slice_957_freeze_directive_execution_contract_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "diagnostics",
+        "slice-957-freeze-directive-execution-contract",
+        "freeze-directive-execution-contract.json",
+    ]));
+    let cases = fixture["cases"].as_array().unwrap();
+    let expected = &fixture["expected"];
+    let mut valid_count = 0;
+    let mut invalid_count = 0;
+
+    for test_case in cases {
+        let case_expected = &test_case["expected"];
+        let lines: Vec<String> = serde_json::from_value(test_case["lines"].clone()).unwrap();
+        let (blocks, diagnostics) = detect_freeze_directive_blocks(
+            test_case["id"].as_str().unwrap(),
+            &lines,
+            test_case["token"].as_str().unwrap(),
+            test_case["style"].as_str().unwrap(),
+        );
+
+        if case_expected["valid"].as_bool().unwrap() {
+            valid_count += 1;
+        } else {
+            invalid_count += 1;
+        }
+
+        assert_eq!(blocks.len(), case_expected["block_count"].as_u64().unwrap() as usize);
+        assert_eq!(diagnostics.len(), case_expected["diagnostic_count"].as_u64().unwrap() as usize);
+        assert_eq!(diagnostics.is_empty(), case_expected["valid"].as_bool().unwrap());
+
+        if !blocks.is_empty() {
+            let expected_blocks: Vec<FreezeDirectiveBlock> =
+                serde_json::from_value(case_expected["blocks"].clone()).unwrap();
+            assert_eq!(blocks, expected_blocks);
+        }
+        if !diagnostics.is_empty() {
+            let expected_diagnostics: Vec<FreezeDirectiveDiagnostic> =
+                serde_json::from_value(case_expected["diagnostics"].clone()).unwrap();
+            for (diagnostic, expected_diagnostic) in diagnostics.iter().zip(expected_diagnostics) {
+                assert_eq!(diagnostic.category, expected_diagnostic.category);
+                assert_eq!(diagnostic.severity, expected_diagnostic.severity);
+                assert_eq!(diagnostic.line, expected_diagnostic.line);
+            }
+        }
+        for query in case_expected["line_queries"].as_array().unwrap() {
+            let block =
+                freeze_directive_block_for_line(&blocks, query["line"].as_u64().unwrap() as usize);
+            assert_eq!(block.is_some(), query["in_freeze"].as_bool().unwrap());
+            if let Some(block) = block {
+                assert_eq!(Some(block.id.as_str()), query["block_id"].as_str());
+            }
+        }
+    }
+
+    assert_eq!(cases.len(), expected["case_count"].as_u64().unwrap() as usize);
+    assert_eq!(valid_count, expected["valid_case_count"].as_u64().unwrap() as usize);
+    assert_eq!(invalid_count, expected["invalid_case_count"].as_u64().unwrap() as usize);
 }
 
 #[test]

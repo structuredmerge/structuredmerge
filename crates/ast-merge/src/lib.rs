@@ -227,6 +227,149 @@ pub fn merge_decision_review_required(decisions: &[MergeDecisionRecord]) -> bool
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FreezeDirectiveBlock {
+    pub id: String,
+    #[serde(default)]
+    pub style: String,
+    #[serde(default)]
+    pub token: String,
+    pub start_line: usize,
+    pub end_line: usize,
+    pub reason: String,
+    pub content_lines: Vec<String>,
+    pub merge_policy: String,
+    pub decision: String,
+    pub signature: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FreezeDirectiveDiagnostic {
+    pub category: String,
+    pub severity: String,
+    #[serde(default)]
+    pub message: String,
+    pub line: usize,
+}
+
+pub fn detect_freeze_directive_blocks(
+    case_id: &str,
+    lines: &[String],
+    token: &str,
+    style: &str,
+) -> (Vec<FreezeDirectiveBlock>, Vec<FreezeDirectiveDiagnostic>) {
+    let mut blocks = Vec::new();
+    let mut diagnostics = Vec::new();
+    let mut open_line: Option<usize> = None;
+    let mut reason = String::new();
+
+    for (index, line) in lines.iter().enumerate() {
+        let line_number = index + 1;
+        let Some((action, marker_reason)) = freeze_directive_action(line, token, style) else {
+            continue;
+        };
+
+        match action.as_str() {
+            "freeze" => {
+                if open_line.is_some() {
+                    diagnostics.push(FreezeDirectiveDiagnostic {
+                        category: "nested_freeze_open".to_string(),
+                        severity: "error".to_string(),
+                        message: String::new(),
+                        line: line_number,
+                    });
+                    continue;
+                }
+                open_line = Some(line_number);
+                reason = marker_reason;
+            }
+            "unfreeze" => {
+                let Some(start) = open_line else {
+                    diagnostics.push(FreezeDirectiveDiagnostic {
+                        category: "unmatched_freeze_close".to_string(),
+                        severity: "error".to_string(),
+                        message: String::new(),
+                        line: line_number,
+                    });
+                    continue;
+                };
+                let end = line_number;
+                blocks.push(FreezeDirectiveBlock {
+                    id: format!("freeze:{case_id}:{start}-{end}"),
+                    style: style.to_string(),
+                    token: token.to_string(),
+                    start_line: start,
+                    end_line: end,
+                    reason: reason.clone(),
+                    content_lines: lines[start - 1..end].to_vec(),
+                    merge_policy: "destination".to_string(),
+                    decision: "freeze_block".to_string(),
+                    signature: vec!["freeze_block".to_string(), start.to_string(), end.to_string()],
+                });
+                open_line = None;
+                reason.clear();
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(line) = open_line {
+        diagnostics.push(FreezeDirectiveDiagnostic {
+            category: "unclosed_freeze_open".to_string(),
+            severity: "error".to_string(),
+            message: String::new(),
+            line,
+        });
+        return (Vec::new(), diagnostics);
+    }
+    if !diagnostics.is_empty() {
+        return (Vec::new(), diagnostics);
+    }
+    (blocks, diagnostics)
+}
+
+pub fn freeze_directive_block_for_line(
+    blocks: &[FreezeDirectiveBlock],
+    line: usize,
+) -> Option<&FreezeDirectiveBlock> {
+    blocks.iter().find(|block| line >= block.start_line && line <= block.end_line)
+}
+
+fn freeze_directive_action(line: &str, token: &str, style: &str) -> Option<(String, String)> {
+    let content = freeze_directive_comment_content(line, style)?;
+    let prefix = format!("{}:", token.to_lowercase());
+    let lower = content.to_lowercase();
+    if !lower.starts_with(&prefix) {
+        return None;
+    }
+    let remainder = content[prefix.len()..].trim().to_string();
+    let lower_remainder = remainder.to_lowercase();
+    if lower_remainder.starts_with("unfreeze") {
+        Some(("unfreeze".to_string(), remainder["unfreeze".len()..].trim().to_string()))
+    } else if lower_remainder.starts_with("freeze") {
+        Some(("freeze".to_string(), remainder["freeze".len()..].trim().to_string()))
+    } else {
+        None
+    }
+}
+
+fn freeze_directive_comment_content(line: &str, style: &str) -> Option<String> {
+    let trimmed = line.trim();
+    match style {
+        "hash_comment" => trimmed.strip_prefix('#').map(|value| value.trim().to_string()),
+        "c_style_line" => trimmed.strip_prefix("//").map(|value| value.trim().to_string()),
+        "html_comment" => trimmed
+            .strip_prefix("<!--")
+            .and_then(|value| value.strip_suffix("-->"))
+            .map(|value| value.trim().to_string()),
+        "c_style_block" => trimmed
+            .strip_prefix("/*")
+            .and_then(|value| value.strip_suffix("*/"))
+            .map(|value| value.trim().to_string()),
+        _ => None,
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct MergeIRNodeClass {
     pub class_id: String,
     pub signature: String,
