@@ -61,6 +61,10 @@ pub struct Merge3Profile {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Merge3RenderReport {
     pub strategy: String,
+    #[serde(default)]
+    pub backend_id: String,
+    #[serde(default)]
+    pub parser_identity: String,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -199,15 +203,22 @@ fn response(
             language: normalize_language(request),
             dialect: request.dialect.clone().unwrap_or_default(),
         },
-        render_report: Merge3RenderReport {
-            strategy: render_strategy
-                .or_else(|| request.render_policy.clone())
-                .unwrap_or_else(|| "canonical".to_string()),
-        },
+        render_report: render_report(request, render_strategy),
         formatting_preservation: formatting_preservation
             .unwrap_or(FormattingPreservation { line_diff_score: 0.0, character_diff_score: 0.0 }),
         reparse_after_render,
     }
+}
+
+fn render_report(request: &Merge3Request, render_strategy: Option<String>) -> Merge3RenderReport {
+    let strategy = render_strategy
+        .or_else(|| request.render_policy.clone())
+        .unwrap_or_else(|| "canonical".to_string());
+    let (backend_id, parser_identity) = match normalize_language(request).as_str() {
+        "json" => ("native-json".to_string(), "standard-json".to_string()),
+        _ => (String::new(), String::new()),
+    };
+    Merge3RenderReport { strategy, backend_id, parser_identity }
 }
 
 fn parse_error_response(request: &Merge3Request, message: String) -> Merge3Response {

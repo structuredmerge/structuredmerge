@@ -31,6 +31,7 @@ struct Expected {
     conflict_paths: Option<Vec<String>>,
     conflicted_source_contains: Option<Vec<String>>,
     reparse_after_render: Option<bool>,
+    render_report: Option<ast_merge_git::Merge3RenderReport>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,6 +80,9 @@ fn conforms_to_git_merge3_contract_fixture() {
             "{}",
             case.case_id
         );
+        if let Some(expected_render_report) = case.expected.render_report {
+            assert_eq!(result.render_report, expected_render_report, "{}", case.case_id);
+        }
         if result.ok {
             let merged: Value =
                 serde_json::from_str(result.merged_source.as_deref().unwrap_or_default())
