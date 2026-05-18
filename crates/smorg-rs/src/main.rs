@@ -1399,6 +1399,17 @@ mod tests {
                 "diagnostics should contain {needle:?}: {diagnostics}"
             );
         }
+        if let Some(required_fields) =
+            expected.get("required_fields").and_then(|value| value.as_array())
+        {
+            for field in required_fields {
+                let field = field.as_str().expect("required field should be a string");
+                assert!(
+                    report.get(field).is_some(),
+                    "report missing required field {field:?}: {report}"
+                );
+            }
+        }
     }
 
     fn run_git(dir: &Path, args: &[&str]) {
