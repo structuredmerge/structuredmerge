@@ -41,6 +41,7 @@ pub struct Merge3Response {
     pub profile: Merge3Profile,
     pub render_report: Merge3RenderReport,
     pub formatting_preservation: FormattingPreservation,
+    pub secondary_formatting_metrics: SecondaryFormattingMetrics,
     pub reparse_after_render: Option<bool>,
 }
 
@@ -71,6 +72,15 @@ pub struct Merge3RenderReport {
 pub struct FormattingPreservation {
     pub line_diff_score: f64,
     pub character_diff_score: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct SecondaryFormattingMetrics {
+    pub unchanged_line_churn: usize,
+    pub output_diff_size: usize,
+    pub source_fragment_retention: f64,
+    pub weighted: bool,
+    pub diagnostics: Vec<String>,
 }
 
 pub fn merge3(request: &Merge3Request) -> Merge3Response {
@@ -191,6 +201,7 @@ fn response(
     reparse_after_render: Option<bool>,
     render_strategy: Option<String>,
 ) -> Merge3Response {
+    let has_merged_source = merged_source.is_some();
     Merge3Response {
         ok,
         merged_source,
@@ -206,7 +217,32 @@ fn response(
         render_report: render_report(request, render_strategy),
         formatting_preservation: formatting_preservation
             .unwrap_or(FormattingPreservation { line_diff_score: 0.0, character_diff_score: 0.0 }),
+        secondary_formatting_metrics: secondary_formatting_metrics(has_merged_source),
         reparse_after_render,
+    }
+}
+
+fn secondary_formatting_metrics(merged: bool) -> SecondaryFormattingMetrics {
+    if merged {
+        return SecondaryFormattingMetrics {
+            unchanged_line_churn: 0,
+            output_diff_size: 0,
+            source_fragment_retention: 1.0,
+            weighted: false,
+            diagnostics: vec![
+                "canonical JSON has no trivia-preserving source fragments yet".to_string(),
+            ],
+        };
+    }
+    SecondaryFormattingMetrics {
+        unchanged_line_churn: 0,
+        output_diff_size: 0,
+        source_fragment_retention: 0.0,
+        weighted: false,
+        diagnostics: vec![
+            "unresolved conflict did not produce a merged source-fragment retention measurement"
+                .to_string(),
+        ],
     }
 }
 
