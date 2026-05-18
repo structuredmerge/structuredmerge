@@ -71,6 +71,7 @@ struct MergeDriverResult {
     ok: bool,
     diagnostics: Vec<ast_merge::Diagnostic>,
     output: Option<String>,
+    change_classifications: Vec<ast_merge_git::ChangeClassification>,
     owned_regions: Vec<ast_merge_git::OwnedRegionReport>,
     render_report: Option<ast_merge_git::Merge3RenderReport>,
     profile: Option<ast_merge_git::Merge3Profile>,
@@ -200,6 +201,7 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
             false,
             EXIT_UNRESOLVED_CONFLICT,
             &fallbacks,
+            &result.change_classifications,
             &result.owned_regions,
             result.render_report.as_ref(),
             result.profile.as_ref(),
@@ -242,6 +244,7 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
             true,
             exit_code,
             &[],
+            &result.change_classifications,
             &result.owned_regions,
             result.render_report.as_ref(),
             result.profile.as_ref(),
@@ -272,6 +275,7 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
         true,
         EXIT_SUCCESS,
         &[],
+        &result.change_classifications,
         &result.owned_regions,
         result.render_report.as_ref(),
         result.profile.as_ref(),
@@ -295,6 +299,7 @@ fn write_merge_driver_machine_report(
     ok: bool,
     exit_code: i32,
     fallbacks: &[serde_json::Value],
+    change_classifications: &[ast_merge_git::ChangeClassification],
     owned_regions: &[ast_merge_git::OwnedRegionReport],
     render_report: Option<&ast_merge_git::Merge3RenderReport>,
     profile: Option<&ast_merge_git::Merge3Profile>,
@@ -314,6 +319,7 @@ fn write_merge_driver_machine_report(
         "ok": ok,
         "exit_code": exit_code,
         "fallbacks": fallbacks,
+        "change_classifications": change_classifications,
         "owned_regions": owned_regions,
         "render_report": render_report,
         "reparse_after_render": reparse_after_render,
@@ -768,6 +774,7 @@ fn merge_driver_result(result: MergeResult<String>) -> MergeDriverResult {
         ok: result.ok,
         diagnostics: result.diagnostics,
         output: result.output,
+        change_classifications: vec![],
         owned_regions: vec![],
         render_report: None,
         profile: None,
@@ -788,6 +795,7 @@ fn merge3_result(result: ast_merge_git::Merge3Response) -> MergeDriverResult {
             ok: true,
             diagnostics: result.diagnostics,
             output: result.merged_source,
+            change_classifications: result.change_classifications,
             owned_regions: result.owned_regions,
             render_report: Some(result.render_report),
             profile: Some(result.profile),
@@ -801,6 +809,7 @@ fn merge3_result(result: ast_merge_git::Merge3Response) -> MergeDriverResult {
             ok: false,
             diagnostics: result.diagnostics,
             output: result.conflicted_source,
+            change_classifications: result.change_classifications,
             owned_regions: result.owned_regions,
             render_report: Some(result.render_report),
             profile: Some(result.profile),
@@ -814,6 +823,7 @@ fn merge3_result(result: ast_merge_git::Merge3Response) -> MergeDriverResult {
             ok: false,
             diagnostics: result.diagnostics,
             output: None,
+            change_classifications: result.change_classifications,
             owned_regions: result.owned_regions,
             render_report: Some(result.render_report),
             profile: Some(result.profile),
@@ -1264,6 +1274,9 @@ mod tests {
         let report_source = fs::read_to_string(report_path).expect("read machine report");
         let report: Value = serde_json::from_str(&report_source).expect("parse machine report");
         assert_eq!(report["render_report"]["strategy"], "owned_region_conflict_markers");
+        assert_eq!(report["change_classifications"][0]["path"], "/enabled");
+        assert_eq!(report["change_classifications"][0]["ours"], "edited");
+        assert_eq!(report["change_classifications"][0]["theirs"], "edited");
         assert_eq!(report["owned_regions"][0]["owner_path"], "/enabled");
         assert_eq!(report["owned_regions"][0]["region_kind"], "node");
         assert_eq!(report["profile"]["profile_id"], "json.keyed-object");
