@@ -1089,6 +1089,19 @@ mod tests {
                     String::from_utf8_lossy(&stderr)
                 );
             }
+            if let Some(needles) =
+                expected.get("stderr_not_contains").and_then(|value| value.as_array())
+            {
+                for needle in needles {
+                    let needle = needle.as_str().expect("stderr needle");
+                    assert!(
+                        !String::from_utf8_lossy(&stderr).contains(needle),
+                        "case={} stderr={}",
+                        case["case_id"],
+                        String::from_utf8_lossy(&stderr)
+                    );
+                }
+            }
             assert_fallback_machine_report(&report_path, &expected["machine_report"]);
         }
     }
