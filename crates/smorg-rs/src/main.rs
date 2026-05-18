@@ -66,6 +66,15 @@ struct ConflictRegion {
     end_line: usize,
 }
 
+#[derive(Debug)]
+struct MergeDriverResult {
+    ok: bool,
+    diagnostics: Vec<ast_merge::Diagnostic>,
+    output: Option<String>,
+    owned_regions: Vec<ast_merge_git::OwnedRegionReport>,
+    render_report: Option<ast_merge_git::Merge3RenderReport>,
+}
+
 fn main() {
     let args = env::args().skip(1).collect::<Vec<_>>();
     let mut stdout = io::stdout();
@@ -186,6 +195,8 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
             false,
             EXIT_UNRESOLVED_CONFLICT,
             &fallbacks,
+            &result.owned_regions,
+            result.render_report.as_ref(),
             &result.diagnostics,
             stderr,
         );
@@ -221,6 +232,8 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
             true,
             exit_code,
             &[],
+            &result.owned_regions,
+            result.render_report.as_ref(),
             &result.diagnostics,
             stderr,
         );
@@ -244,6 +257,8 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
         true,
         EXIT_SUCCESS,
         &[],
+        &result.owned_regions,
+        result.render_report.as_ref(),
         &result.diagnostics,
         stderr,
     );
@@ -260,6 +275,8 @@ fn write_merge_driver_machine_report(
     ok: bool,
     exit_code: i32,
     fallbacks: &[serde_json::Value],
+    owned_regions: &[ast_merge_git::OwnedRegionReport],
+    render_report: Option<&ast_merge_git::Merge3RenderReport>,
     diagnostics: &[ast_merge::Diagnostic],
     stderr: &mut dyn Write,
 ) -> i32 {
@@ -272,6 +289,8 @@ fn write_merge_driver_machine_report(
         "ok": ok,
         "exit_code": exit_code,
         "fallbacks": fallbacks,
+        "owned_regions": owned_regions,
+        "render_report": render_report,
         "diagnostics": diagnostics
     });
     let Ok(source) = serde_json::to_string_pretty(&report) else {
@@ -692,9 +711,9 @@ fn merge_by_path(
     ancestor_source: &str,
     current_source: &str,
     other_source: &str,
-) -> MergeResult<String> {
+) -> MergeDriverResult {
     match normalize_language(language, path_name).as_str() {
-        "go" => merge_go(other_source, current_source, GoDialect::Go),
+        "go" => merge_driver_result(merge_go(other_source, current_source, GoDialect::Go)),
         "json" => merge3_result(merge3(&Merge3Request {
             base_source: ancestor_source.to_string(),
             ours_source: current_source.to_string(),
@@ -707,28 +726,48 @@ fn merge_by_path(
             conflict_marker_size: Some(conflict_marker_size),
             render_policy: Some("canonical".to_string()),
         })),
-        "jsonc" => merge_json(other_source, current_source, JsonDialect::Jsonc),
-        _ => merge_text(other_source, current_source),
+        "jsonc" => {
+            merge_driver_result(merge_json(other_source, current_source, JsonDialect::Jsonc))
+        }
+        _ => merge_driver_result(merge_text(other_source, current_source)),
     }
 }
 
-fn merge3_result(result: ast_merge_git::Merge3Response) -> MergeResult<String> {
+fn merge_driver_result(result: MergeResult<String>) -> MergeDriverResult {
+    MergeDriverResult {
+        ok: result.ok,
+        diagnostics: result.diagnostics,
+        output: result.output,
+        owned_regions: vec![],
+        render_report: None,
+    }
+}
+
+fn merge3_result(result: ast_merge_git::Merge3Response) -> MergeDriverResult {
     if result.ok {
-        MergeResult {
+        MergeDriverResult {
             ok: true,
             diagnostics: result.diagnostics,
             output: result.merged_source,
-            policies: vec![],
+            owned_regions: result.owned_regions,
+            render_report: Some(result.render_report),
         }
     } else if result.conflicted_source.is_some() {
-        MergeResult {
+        MergeDriverResult {
             ok: false,
             diagnostics: result.diagnostics,
             output: result.conflicted_source,
-            policies: vec![],
+            owned_regions: result.owned_regions,
+            render_report: Some(result.render_report),
         }
     } else {
-        MergeResult { ok: false, diagnostics: result.diagnostics, output: None, policies: vec![] }
+        MergeDriverResult {
+            ok: false,
+            diagnostics: result.diagnostics,
+            output: None,
+            owned_regions: result.owned_regions,
+            render_report: Some(result.render_report),
+        }
     }
 }
 
@@ -843,7 +882,7 @@ fn simple_glob_matches(pattern: &str, value: &str) -> bool {
     pattern == value
 }
 
-fn print_diagnostics(stderr: &mut dyn Write, result: &MergeResult<String>) {
+fn print_diagnostics(stderr: &mut dyn Write, result: &MergeDriverResult) {
     for diagnostic in &result.diagnostics {
         let _ = writeln!(stderr, "{:?}: {}", diagnostic.category, diagnostic.message);
     }
@@ -1141,6 +1180,38 @@ mod tests {
                 "current_source missing {needle:?}: {current_source}"
             );
         }
+    }
+
+    #[test]
+    fn merge_driver_report_includes_owned_regions() {
+        let dir = TestDir::new();
+        let ancestor = dir.write("ancestor.json", r#"{"name":"demo","enabled":true}"#);
+        let current = dir.write("current.json", r#"{"name":"demo","enabled":false}"#);
+        let other = dir.write("other.json", r#"{"name":"demo","enabled":"yes"}"#);
+        let report_path = dir.path.join("merge-report.json").to_string_lossy().to_string();
+
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let exit = run(
+            &[
+                "merge-driver".to_string(),
+                "--report".to_string(),
+                report_path.clone(),
+                ancestor,
+                current,
+                other,
+                "package.json".to_string(),
+            ],
+            &mut stdout,
+            &mut stderr,
+        );
+
+        assert_eq!(exit, EXIT_UNRESOLVED_CONFLICT);
+        let report_source = fs::read_to_string(report_path).expect("read machine report");
+        let report: Value = serde_json::from_str(&report_source).expect("parse machine report");
+        assert_eq!(report["render_report"]["strategy"], "owned_region_conflict_markers");
+        assert_eq!(report["owned_regions"][0]["owner_path"], "/enabled");
+        assert_eq!(report["owned_regions"][0]["region_kind"], "node");
     }
 
     #[test]
