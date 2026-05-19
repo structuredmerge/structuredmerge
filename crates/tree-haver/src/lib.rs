@@ -1094,7 +1094,7 @@ pub fn parse_with_language_pack(request: &ParserRequest) -> ParseResult<Language
     }
 
     match get_parser(&request.language).and_then(|mut parser| {
-        parser.parse(&request.source, None).ok_or_else(|| {
+        parser.parse(&request.source).ok_or_else(|| {
             tree_sitter_language_pack::Error::ParserSetup("parser returned no tree".to_string())
         })
     }) {
