@@ -158,12 +158,7 @@ pub fn yaml_plan_context_with_backend(backend: YamlBackend) -> ConformanceFamily
         family_profile: FamilyFeatureProfile {
             family: backend_profile.family.to_string(),
             supported_dialects: vec!["yaml".to_string()],
-            supported_policies: backend_profile
-                .supported_policies
-                .clone()
-                .into_iter()
-                .map(Into::into)
-                .collect(),
+            supported_policies: backend_profile.supported_policies.clone(),
         },
         feature_profile: Some(ConformanceFeatureProfileView {
             backend: backend_profile.backend,

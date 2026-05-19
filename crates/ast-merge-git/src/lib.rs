@@ -263,6 +263,7 @@ pub fn merge_comment_delta(
     CommentDeltaResult { ok: conflicts.is_empty(), merged_comment, conflicts }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn response(
     request: &Merge3Request,
     ok: bool,

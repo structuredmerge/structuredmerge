@@ -326,7 +326,7 @@ fn conforms_to_mini_template_tree_directory_apply_convergence_fixture() {
         &fixture_root.join("template"),
         &destination_root,
         &context,
-        default_strategy.clone(),
+        default_strategy,
         &overrides,
         &replacements,
         multi_family_merge_callback,

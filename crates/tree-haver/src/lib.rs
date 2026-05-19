@@ -6,9 +6,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use tree_sitter_language_pack::{
-    PackConfig, ProcessConfig, configure, parse_string, process, tree_has_error_nodes,
-};
+use tree_sitter_language_pack::{PackConfig, ProcessConfig, configure, get_parser, process};
 
 pub const PACKAGE_NAME: &str = "tree-haver";
 
@@ -374,6 +372,10 @@ impl ByteRange {
         self.end_byte.saturating_sub(self.start_byte)
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn contains_byte(&self, offset: usize) -> bool {
         self.is_valid() && offset >= self.start_byte && offset < self.end_byte
     }
@@ -632,9 +634,7 @@ pub fn slice_byte_range(source: &str, byte_range: &ByteRange) -> Result<String, 
         ));
     }
 
-    std::str::from_utf8(&source.as_bytes()[byte_range.start_byte..byte_range.end_byte])
-        .map(str::to_string)
-        .map_err(|error| error.to_string())
+    Ok(source[byte_range.start_byte..byte_range.end_byte].to_string())
 }
 
 pub fn extract_source_fragment(source: &str, span: &SourceSpan, strategy: &str) -> SourceFragment {
@@ -1093,9 +1093,13 @@ pub fn parse_with_language_pack(request: &ParserRequest) -> ParseResult<Language
         };
     }
 
-    match parse_string(&request.language, request.source.as_bytes()) {
+    match get_parser(&request.language).and_then(|mut parser| {
+        parser.parse(&request.source, None).ok_or_else(|| {
+            tree_sitter_language_pack::Error::ParserSetup("parser returned no tree".to_string())
+        })
+    }) {
         Ok(tree) => {
-            let has_error = tree_has_error_nodes(&tree);
+            let has_error = tree.root_node().has_error();
             if has_error {
                 ParseResult {
                     ok: false,

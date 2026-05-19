@@ -294,6 +294,7 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
     EXIT_SUCCESS
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write_merge_driver_machine_report(
     report_path: Option<&str>,
     path_name: &str,
