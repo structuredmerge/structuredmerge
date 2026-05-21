@@ -6,6 +6,7 @@ use syn::{File, Item};
 use tree_haver::{
     BackendReference, ParserRequest, ProcessRequest, kreuzberg_language_pack_backend,
     language_pack_adapter_info, parse_with_language_pack, process_with_language_pack,
+    structured_import_source_diagnostics,
 };
 
 pub const PACKAGE_NAME: &str = "rust-merge";
@@ -110,10 +111,6 @@ fn line_anchored_span(source: &str, start: usize, end: usize) -> String {
     source[line_start..end].trim().to_string()
 }
 
-fn normalize_rust_import_path(import_source: &str) -> String {
-    import_source.trim().trim_start_matches("use ").trim_end_matches(';').trim().to_string()
-}
-
 pub fn rust_feature_profile() -> RustFeatureProfile {
     let shared = FamilyFeatureProfile {
         family: "rust".to_string(),
@@ -200,13 +197,23 @@ pub fn parse_rust_with_backend(
     }
 
     let analysis = processed.analysis.expect("successful process should include analysis");
+    let import_diagnostics = structured_import_source_diagnostics("rust", &analysis.imports);
+    if !import_diagnostics.is_empty() {
+        return ParseResult {
+            ok: false,
+            diagnostics: import_diagnostics.into_iter().map(Into::into).collect(),
+            analysis: None,
+            policies: vec![],
+        };
+    }
+
     let imports = analysis
         .imports
         .iter()
         .enumerate()
         .map(|(index, item)| ModuleImport {
             path: format!("/imports/{index}"),
-            match_key: normalize_rust_import_path(&item.source),
+            match_key: item.source.clone(),
             text: format!("{}\n", slice_span(source, item.span.start_byte, item.span.end_byte)),
         })
         .collect::<Vec<_>>();

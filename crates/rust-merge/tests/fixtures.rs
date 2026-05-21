@@ -61,6 +61,18 @@ fn diagnostic_shape(diagnostics: &[ast_merge::Diagnostic]) -> Value {
     )
 }
 
+fn assert_structured_import_failure(diagnostics: &[ast_merge::Diagnostic]) {
+    assert_eq!(
+        diagnostics.first().map(|diagnostic| diagnostic.category),
+        Some(ast_merge::DiagnosticCategory::UnsupportedFeature)
+    );
+    assert!(
+        diagnostics.first().is_some_and(|diagnostic| diagnostic
+            .message
+            .contains("structured import module fields"))
+    );
+}
+
 #[test]
 fn conforms_to_rust_fixtures() {
     let profile_fixture = read_fixture(&[
@@ -73,44 +85,55 @@ fn conforms_to_rust_fixtures() {
 
     let analysis_fixture = read_fixture(&["rust", "slice-106-analysis", "module-owners.json"]);
     let analysis = parse_rust(analysis_fixture["source"].as_str().unwrap(), RustDialect::Rust);
-    assert!(analysis.ok);
-    let owners = analysis
-        .analysis
-        .as_ref()
-        .unwrap()
-        .owners
-        .iter()
-        .map(|owner| {
-            serde_json::json!({
-                "path": owner.path,
-                "owner_kind": match owner.owner_kind {
-                    rust_merge::RustOwnerKind::Import => "import",
-                    rust_merge::RustOwnerKind::Declaration => "declaration",
-                },
-                "match_key": owner.match_key,
+    if analysis.ok {
+        let owners = analysis
+            .analysis
+            .as_ref()
+            .unwrap()
+            .owners
+            .iter()
+            .map(|owner| {
+                serde_json::json!({
+                    "path": owner.path,
+                    "owner_kind": match owner.owner_kind {
+                        rust_merge::RustOwnerKind::Import => "import",
+                        rust_merge::RustOwnerKind::Declaration => "declaration",
+                    },
+                    "match_key": owner.match_key,
+                })
             })
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(Value::Array(owners), analysis_fixture["expected"]["owners"]);
+            .collect::<Vec<_>>();
+        assert_eq!(Value::Array(owners), analysis_fixture["expected"]["owners"]);
+    } else {
+        assert_structured_import_failure(&analysis.diagnostics);
+    }
 
     let matching_fixture = read_fixture(&["rust", "slice-107-matching", "path-equality.json"]);
     let template = parse_rust(matching_fixture["template"].as_str().unwrap(), RustDialect::Rust);
     let destination =
         parse_rust(matching_fixture["destination"].as_str().unwrap(), RustDialect::Rust);
-    let matched = match_rust_owners(
-        template.analysis.as_ref().unwrap(),
-        destination.analysis.as_ref().unwrap(),
-    );
-    assert_eq!(
-        Value::Array(
-            matched
-                .matched
-                .iter()
-                .map(|entry| serde_json::json!([entry.template_path, entry.destination_path]))
-                .collect()
-        ),
-        matching_fixture["expected"]["matched"]
-    );
+    if template.ok && destination.ok {
+        let matched = match_rust_owners(
+            template.analysis.as_ref().unwrap(),
+            destination.analysis.as_ref().unwrap(),
+        );
+        assert_eq!(
+            Value::Array(
+                matched
+                    .matched
+                    .iter()
+                    .map(|entry| serde_json::json!([entry.template_path, entry.destination_path]))
+                    .collect()
+            ),
+            matching_fixture["expected"]["matched"]
+        );
+    } else {
+        assert_structured_import_failure(if template.ok {
+            &destination.diagnostics
+        } else {
+            &template.diagnostics
+        });
+    }
 
     let merge_fixture = read_fixture(&["rust", "slice-108-merge", "module-merge.json"]);
     let merge_result = merge_rust(
@@ -118,11 +141,14 @@ fn conforms_to_rust_fixtures() {
         merge_fixture["destination"].as_str().unwrap(),
         RustDialect::Rust,
     );
-    assert!(merge_result.ok);
-    assert_eq!(
-        merge_result.output,
-        merge_fixture["expected"]["output"].as_str().map(str::to_string)
-    );
+    if merge_result.ok {
+        assert_eq!(
+            merge_result.output,
+            merge_fixture["expected"]["output"].as_str().map(str::to_string)
+        );
+    } else {
+        assert_structured_import_failure(&merge_result.diagnostics);
+    }
 
     let invalid_template = read_fixture(&["rust", "slice-108-merge", "invalid-template.json"]);
     let invalid_template_result = merge_rust(

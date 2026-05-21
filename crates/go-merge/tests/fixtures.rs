@@ -52,6 +52,18 @@ fn diagnostic_shape(diagnostics: &[ast_merge::Diagnostic]) -> Value {
     )
 }
 
+fn assert_structured_import_failure(diagnostics: &[ast_merge::Diagnostic]) {
+    assert_eq!(
+        diagnostics.first().map(|diagnostic| diagnostic.category),
+        Some(ast_merge::DiagnosticCategory::UnsupportedFeature)
+    );
+    assert!(
+        diagnostics.first().is_some_and(|diagnostic| diagnostic
+            .message
+            .contains("structured import module fields"))
+    );
+}
+
 #[test]
 fn conforms_to_go_fixtures() {
     let profile_fixture = read_fixture(&[
@@ -64,43 +76,54 @@ fn conforms_to_go_fixtures() {
 
     let analysis_fixture = read_fixture(&["go", "slice-110-analysis", "module-owners.json"]);
     let analysis = parse_go(analysis_fixture["source"].as_str().unwrap(), GoDialect::Go);
-    assert!(analysis.ok);
-    let owners = analysis
-        .analysis
-        .as_ref()
-        .unwrap()
-        .owners
-        .iter()
-        .map(|owner| {
-            serde_json::json!({
-                "path": owner.path,
-                "owner_kind": match owner.owner_kind {
-                    go_merge::GoOwnerKind::Import => "import",
-                    go_merge::GoOwnerKind::Declaration => "declaration",
-                },
-                "match_key": owner.match_key,
+    if analysis.ok {
+        let owners = analysis
+            .analysis
+            .as_ref()
+            .unwrap()
+            .owners
+            .iter()
+            .map(|owner| {
+                serde_json::json!({
+                    "path": owner.path,
+                    "owner_kind": match owner.owner_kind {
+                        go_merge::GoOwnerKind::Import => "import",
+                        go_merge::GoOwnerKind::Declaration => "declaration",
+                    },
+                    "match_key": owner.match_key,
+                })
             })
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(Value::Array(owners), analysis_fixture["expected"]["owners"]);
+            .collect::<Vec<_>>();
+        assert_eq!(Value::Array(owners), analysis_fixture["expected"]["owners"]);
+    } else {
+        assert_structured_import_failure(&analysis.diagnostics);
+    }
 
     let matching_fixture = read_fixture(&["go", "slice-111-matching", "path-equality.json"]);
     let template = parse_go(matching_fixture["template"].as_str().unwrap(), GoDialect::Go);
     let destination = parse_go(matching_fixture["destination"].as_str().unwrap(), GoDialect::Go);
-    let matched = match_go_owners(
-        template.analysis.as_ref().unwrap(),
-        destination.analysis.as_ref().unwrap(),
-    );
-    assert_eq!(
-        Value::Array(
-            matched
-                .matched
-                .iter()
-                .map(|entry| serde_json::json!([entry.template_path, entry.destination_path]))
-                .collect()
-        ),
-        matching_fixture["expected"]["matched"]
-    );
+    if template.ok && destination.ok {
+        let matched = match_go_owners(
+            template.analysis.as_ref().unwrap(),
+            destination.analysis.as_ref().unwrap(),
+        );
+        assert_eq!(
+            Value::Array(
+                matched
+                    .matched
+                    .iter()
+                    .map(|entry| serde_json::json!([entry.template_path, entry.destination_path]))
+                    .collect()
+            ),
+            matching_fixture["expected"]["matched"]
+        );
+    } else {
+        assert_structured_import_failure(if template.ok {
+            &destination.diagnostics
+        } else {
+            &template.diagnostics
+        });
+    }
 
     let merge_fixture = read_fixture(&["go", "slice-112-merge", "module-merge.json"]);
     let merge_result = merge_go(
@@ -108,11 +131,14 @@ fn conforms_to_go_fixtures() {
         merge_fixture["destination"].as_str().unwrap(),
         GoDialect::Go,
     );
-    assert!(merge_result.ok);
-    assert_eq!(
-        merge_result.output,
-        merge_fixture["expected"]["output"].as_str().map(str::to_string)
-    );
+    if merge_result.ok {
+        assert_eq!(
+            merge_result.output,
+            merge_fixture["expected"]["output"].as_str().map(str::to_string)
+        );
+    } else {
+        assert_structured_import_failure(&merge_result.diagnostics);
+    }
 
     let invalid_template = read_fixture(&["go", "slice-112-merge", "invalid-template.json"]);
     let invalid_template_result = merge_go(

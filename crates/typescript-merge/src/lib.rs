@@ -5,6 +5,7 @@ use ast_merge::{
 use tree_haver::{
     BackendReference, ParserRequest, ProcessRequest, kreuzberg_language_pack_backend,
     language_pack_adapter_info, parse_with_language_pack, process_with_language_pack,
+    structured_import_source_diagnostics,
 };
 
 pub const PACKAGE_NAME: &str = "typescript-merge";
@@ -183,6 +184,16 @@ pub fn parse_typescript(
     }
 
     let analysis = processed.analysis.expect("successful process should include analysis");
+    let import_diagnostics = structured_import_source_diagnostics("typescript", &analysis.imports);
+    if !import_diagnostics.is_empty() {
+        return ParseResult {
+            ok: false,
+            diagnostics: import_diagnostics.into_iter().map(Into::into).collect(),
+            analysis: None,
+            policies: vec![],
+        };
+    }
+
     let imports = analysis
         .imports
         .iter()

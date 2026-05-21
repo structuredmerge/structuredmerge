@@ -5,6 +5,7 @@ use ast_merge::{
 use tree_haver::{
     BackendReference, ParserRequest, ProcessRequest, kreuzberg_language_pack_backend,
     language_pack_adapter_info, parse_with_language_pack, process_with_language_pack,
+    structured_import_source_diagnostics,
 };
 
 pub const PACKAGE_NAME: &str = "go-merge";
@@ -108,14 +109,6 @@ fn line_anchored_span(source: &str, start: usize, end: usize) -> String {
     source[line_start..end].trim().to_string()
 }
 
-fn normalize_go_import_path(import_source: &str) -> String {
-    import_source
-        .split('"')
-        .nth(1)
-        .unwrap_or(import_source.trim().trim_start_matches("import ").trim())
-        .to_string()
-}
-
 pub fn go_feature_profile() -> GoFeatureProfile {
     let shared = FamilyFeatureProfile {
         family: "go".to_string(),
@@ -182,9 +175,19 @@ pub fn parse_go(source: &str, _dialect: GoDialect) -> ParseResult<GoAnalysis> {
     }
 
     let analysis = processed.analysis.expect("successful process should include analysis");
+    let import_diagnostics = structured_import_source_diagnostics("go", &analysis.imports);
+    if !import_diagnostics.is_empty() {
+        return ParseResult {
+            ok: false,
+            diagnostics: import_diagnostics.into_iter().map(Into::into).collect(),
+            analysis: None,
+            policies: vec![],
+        };
+    }
+
     let mut deduped_imports = std::collections::BTreeMap::<String, ModuleImport>::new();
     for item in &analysis.imports {
-        let match_key = normalize_go_import_path(&item.source);
+        let match_key = item.source.clone();
         let candidate = ModuleImport {
             path: String::new(),
             match_key: match_key.clone(),

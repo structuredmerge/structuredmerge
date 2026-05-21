@@ -690,8 +690,33 @@ pub struct ProcessStructureItem {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProcessImportInfo {
     pub source: String,
+    pub source_kind: ProcessImportSourceKind,
     pub items: Vec<String>,
     pub span: ProcessSpan,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProcessImportSourceKind {
+    Module,
+    RawSource,
+}
+
+pub fn structured_import_source_diagnostics(
+    language: &str,
+    imports: &[ProcessImportInfo],
+) -> Vec<Diagnostic> {
+    if imports.iter().all(|item| item.source_kind == ProcessImportSourceKind::Module) {
+        return vec![];
+    }
+
+    vec![Diagnostic {
+        severity: DiagnosticSeverity::Error,
+        category: DiagnosticCategory::UnsupportedFeature,
+        message: format!(
+            "tree-sitter-language-pack did not provide structured import module fields for {language}; report this as a backend import-record bug."
+        ),
+        path: None,
+    }]
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1160,31 +1185,11 @@ fn structure_kind_name(kind: &tree_sitter_language_pack::StructureKind) -> Strin
     }
 }
 
-fn normalize_typescript_import(item: &tree_sitter_language_pack::ImportInfo) -> ProcessImportInfo {
-    let source_match = item
-        .source
-        .split("from")
-        .nth(1)
-        .and_then(|tail| tail.split(['"', '\'']).nth(1))
-        .or_else(|| item.source.split(['"', '\'']).nth(1))
-        .unwrap_or(item.source.as_str())
-        .to_string();
-    let items = item
-        .source
-        .split('{')
-        .nth(1)
-        .and_then(|tail| tail.split('}').next())
-        .map(|raw| {
-            raw.split(',')
-                .map(|part| part.replace("type", "").trim().to_string())
-                .filter(|part| !part.is_empty())
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-
+fn process_import_info(item: &tree_sitter_language_pack::ImportInfo) -> ProcessImportInfo {
     ProcessImportInfo {
-        source: source_match,
-        items,
+        source: item.source.clone(),
+        source_kind: ProcessImportSourceKind::RawSource,
+        items: item.items.clone(),
         span: ProcessSpan {
             start_byte: item.span.start_byte,
             end_byte: item.span.end_byte,
@@ -1243,28 +1248,7 @@ pub fn process_with_language_pack(
                         },
                     })
                     .collect(),
-                imports: result
-                    .imports
-                    .iter()
-                    .map(|item| {
-                        if request.language == "typescript" {
-                            normalize_typescript_import(item)
-                        } else {
-                            ProcessImportInfo {
-                                source: item.source.clone(),
-                                items: item.items.clone(),
-                                span: ProcessSpan {
-                                    start_byte: item.span.start_byte,
-                                    end_byte: item.span.end_byte,
-                                    start_row: item.span.start_line,
-                                    start_col: item.span.start_column,
-                                    end_row: item.span.end_line,
-                                    end_col: item.span.end_column,
-                                },
-                            }
-                        }
-                    })
-                    .collect(),
+                imports: result.imports.iter().map(process_import_info).collect(),
                 diagnostics: result
                     .diagnostics
                     .iter()
