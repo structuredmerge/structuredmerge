@@ -199,25 +199,11 @@ fn conforms_to_rust_backend_fixtures() {
         RustDialect::Rust,
         RustBackend::Native,
     );
-    assert!(native_result.ok);
-    let owners = native_result
-        .analysis
-        .as_ref()
-        .unwrap()
-        .owners
-        .iter()
-        .map(|owner| {
-            serde_json::json!({
-                "path": owner.path,
-                "owner_kind": match owner.owner_kind {
-                    rust_merge::RustOwnerKind::Import => "import",
-                    rust_merge::RustOwnerKind::Declaration => "declaration",
-                },
-                "match_key": owner.match_key,
-            })
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(Value::Array(owners), parity_fixture["expected"]["owners"]);
+    assert!(!native_result.ok);
+    assert_eq!(
+        native_result.diagnostics.first().map(|diagnostic| diagnostic.category),
+        Some(ast_merge::DiagnosticCategory::UnsupportedFeature)
+    );
 
     let merge_result = merge_rust_with_backend(
         parity_fixture["template"].as_str().unwrap(),
@@ -225,10 +211,10 @@ fn conforms_to_rust_backend_fixtures() {
         RustDialect::Rust,
         RustBackend::Native,
     );
-    assert!(merge_result.ok);
+    assert!(!merge_result.ok);
     assert_eq!(
-        merge_result.output,
-        parity_fixture["expected"]["output"].as_str().map(str::to_string)
+        merge_result.diagnostics.first().map(|diagnostic| diagnostic.category),
+        Some(ast_merge::DiagnosticCategory::UnsupportedFeature)
     );
 
     let backend_profiles = read_fixture(&[

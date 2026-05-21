@@ -2,7 +2,7 @@ use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult,
     ParseResult, PolicyReference, PolicySurface,
 };
-use syn::{File, Item};
+use syn::File;
 use tree_haver::{
     BackendReference, ParserRequest, ProcessRequest, kreuzberg_language_pack_backend,
     language_pack_adapter_info, parse_with_language_pack, process_with_language_pack,
@@ -391,7 +391,7 @@ pub fn merge_rust_with_backend(
 }
 
 fn parse_rust_native(source: &str) -> ParseResult<RustAnalysis> {
-    let file: File = match syn::parse_file(source) {
+    let _file: File = match syn::parse_file(source) {
         Ok(file) => file,
         Err(error) => {
             return ParseResult {
@@ -409,111 +409,16 @@ fn parse_rust_native(source: &str) -> ParseResult<RustAnalysis> {
         }
     };
 
-    let imports = extract_rust_imports(source)
-        .into_iter()
-        .enumerate()
-        .map(|(index, (match_key, text))| ModuleImport {
-            path: format!("/imports/{index}"),
-            match_key,
-            text,
-        })
-        .collect::<Vec<_>>();
-    let mut declarations = file
-        .items
-        .iter()
-        .filter_map(|item| match item {
-            Item::Fn(item_fn) => Some(item_fn.sig.ident.to_string()),
-            Item::Struct(item_struct) => Some(item_struct.ident.to_string()),
-            _ => None,
-        })
-        .filter_map(|name| {
-            extract_named_rust_item(source, &name).map(|text| ModuleDeclaration {
-                path: format!("/declarations/{name}"),
-                match_key: name,
-                text,
-            })
-        })
-        .collect::<Vec<_>>();
-    declarations.sort_by(|left, right| left.path.cmp(&right.path));
-
     ParseResult {
-        ok: true,
-        diagnostics: vec![],
-        analysis: Some(RustAnalysis {
-            dialect: RustDialect::Rust,
-            source: source.to_string(),
-            owners: [
-                imports
-                    .iter()
-                    .map(|item| RustOwner {
-                        path: item.path.clone(),
-                        owner_kind: RustOwnerKind::Import,
-                        match_key: Some(item.match_key.clone()),
-                    })
-                    .collect::<Vec<_>>(),
-                declarations
-                    .iter()
-                    .map(|item| RustOwner {
-                        path: item.path.clone(),
-                        owner_kind: RustOwnerKind::Declaration,
-                        match_key: Some(item.match_key.clone()),
-                    })
-                    .collect::<Vec<_>>(),
-            ]
-            .concat(),
-            imports,
-            declarations,
-        }),
+        ok: false,
+        diagnostics: vec![ast_merge::Diagnostic {
+            severity: ast_merge::DiagnosticSeverity::Error,
+            category: ast_merge::DiagnosticCategory::UnsupportedFeature,
+            message: "syn backend parsed the file but does not expose source spans required for source-preserving Rust merges; enable a span-capable native backend before using RustBackend::Native.".to_string(),
+            path: None,
+            review: None,
+        }],
+        analysis: None,
         policies: vec![],
     }
-}
-
-fn extract_rust_imports(source: &str) -> Vec<(String, String)> {
-    source
-        .lines()
-        .filter_map(|line| {
-            let trimmed = line.trim();
-            if !trimmed.starts_with("use ") {
-                return None;
-            }
-
-            Some((
-                trimmed.trim_start_matches("use ").trim_end_matches(';').trim().to_string(),
-                format!("{trimmed}\n"),
-            ))
-        })
-        .collect()
-}
-
-fn extract_named_rust_item(source: &str, name: &str) -> Option<String> {
-    for keyword in ["pub fn ", "fn ", "pub struct ", "struct "] {
-        if let Some(index) = source.find(&format!("{keyword}{name}")) {
-            return Some(extract_rust_block_or_line(source, index));
-        }
-    }
-    None
-}
-
-fn extract_rust_block_or_line(source: &str, start: usize) -> String {
-    let rest = &source[start..];
-    let first_line = rest.lines().next().unwrap_or_default().trim();
-    if first_line.ends_with(';') {
-        return format!("{first_line}\n");
-    }
-
-    if let Some(open_brace) = rest.find('{') {
-        let mut depth = 0usize;
-        for (offset, ch) in rest[open_brace..].char_indices() {
-            if ch == '{' {
-                depth += 1;
-            } else if ch == '}' {
-                depth -= 1;
-                if depth == 0 {
-                    return format!("{}\n", rest[..open_brace + offset + 1].trim());
-                }
-            }
-        }
-    }
-
-    format!("{first_line}\n")
 }
