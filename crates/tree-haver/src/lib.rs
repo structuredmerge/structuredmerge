@@ -1185,11 +1185,104 @@ fn structure_kind_name(kind: &tree_sitter_language_pack::StructureKind) -> Strin
     }
 }
 
-fn process_import_info(item: &tree_sitter_language_pack::ImportInfo) -> ProcessImportInfo {
+fn quoted_module_source(source: &str) -> Option<String> {
+    let trimmed = source.trim();
+    let quote_index = trimmed.find(['"', '\''])?;
+    let quote = trimmed.as_bytes()[quote_index] as char;
+    let rest = &trimmed[quote_index + 1..];
+    let end_index = rest.find(quote)?;
+    Some(rest[..end_index].to_string())
+}
+
+fn raw_import_module_source(language: &str, import_source: &str) -> Option<String> {
+    let trimmed = import_source.trim().trim_end_matches(';').trim();
+    if trimmed.is_empty() || trimmed.contains('\n') {
+        return None;
+    }
+
+    match language {
+        "rust" => trimmed
+            .strip_prefix("use ")
+            .or_else(|| trimmed.strip_prefix("pub use "))
+            .map(str::trim)
+            .filter(|module| !module.is_empty())
+            .map(ToString::to_string),
+        "go" => trimmed
+            .strip_prefix("import ")
+            .and_then(quoted_module_source)
+            .or_else(|| quoted_module_source(trimmed)),
+        "typescript" | "javascript" => {
+            if let Some((_, module_part)) = trimmed.split_once(" from ") {
+                quoted_module_source(module_part)
+            } else {
+                trimmed.strip_prefix("import ").and_then(quoted_module_source)
+            }
+        }
+        _ => None,
+    }
+}
+
+fn raw_import_items(language: &str, import_source: &str) -> Vec<String> {
+    if !matches!(language, "typescript" | "javascript") {
+        return vec![];
+    }
+
+    let Some(start_index) = import_source.find('{') else {
+        return vec![];
+    };
+    let Some(end_offset) = import_source[start_index + 1..].find('}') else {
+        return vec![];
+    };
+    let items_source = &import_source[start_index + 1..start_index + 1 + end_offset];
+
+    items_source
+        .split(',')
+        .filter_map(|item| {
+            let item = item.trim().strip_prefix("type ").unwrap_or(item.trim()).trim();
+            if item.is_empty() {
+                return None;
+            }
+            Some(item.split_once(" as ").map(|(_, alias)| alias).unwrap_or(item).trim().to_string())
+        })
+        .collect()
+}
+
+fn process_import_source(
+    language: &str,
+    source: &str,
+    item: &tree_sitter_language_pack::ImportInfo,
+) -> (String, ProcessImportSourceKind) {
+    let import_source = item.source.trim();
+    if let Some(module_source) = raw_import_module_source(language, import_source) {
+        return (module_source, ProcessImportSourceKind::Module);
+    }
+
+    let span_source =
+        source.get(item.span.start_byte..item.span.end_byte).map(str::trim).unwrap_or_default();
+
+    if span_source == import_source {
+        (item.source.clone(), ProcessImportSourceKind::RawSource)
+    } else {
+        (item.source.clone(), ProcessImportSourceKind::Module)
+    }
+}
+
+fn process_import_info(
+    language: &str,
+    source: &str,
+    item: &tree_sitter_language_pack::ImportInfo,
+) -> ProcessImportInfo {
+    let (source, source_kind) = process_import_source(language, source, item);
+    let items = if item.items.is_empty() {
+        raw_import_items(language, &item.source)
+    } else {
+        item.items.clone()
+    };
+
     ProcessImportInfo {
-        source: item.source.clone(),
-        source_kind: ProcessImportSourceKind::RawSource,
-        items: item.items.clone(),
+        source,
+        source_kind,
+        items,
         span: ProcessSpan {
             start_byte: item.span.start_byte,
             end_byte: item.span.end_byte,
@@ -1248,7 +1341,11 @@ pub fn process_with_language_pack(
                         },
                     })
                     .collect(),
-                imports: result.imports.iter().map(process_import_info).collect(),
+                imports: result
+                    .imports
+                    .iter()
+                    .map(|item| process_import_info(&request.language, &request.source, item))
+                    .collect(),
                 diagnostics: result
                     .diagnostics
                     .iter()
@@ -1315,5 +1412,40 @@ mod tests {
             result.diagnostics[0].message,
             "tree-sitter-language-pack reported syntax errors for json."
         );
+    }
+
+    #[test]
+    fn classifies_structured_import_module_sources() {
+        let cases = [
+            ("rust", "use std::fmt;\n\npub fn answer() -> i32 {\n    2\n}\n", "std::fmt"),
+            (
+                "typescript",
+                "import { x } from './x';\n\nexport function answer() {\n  return 2;\n}\n",
+                "./x",
+            ),
+            ("go", "package main\n\nimport \"fmt\"\n\nfunc answer() int {\n\treturn 2\n}\n", "fmt"),
+        ];
+
+        for (language, source, expected_source) in cases {
+            let result = process_with_language_pack(&ProcessRequest {
+                source: source.to_string(),
+                language: language.to_string(),
+            });
+            assert!(result.ok, "{language} diagnostics: {:?}", result.diagnostics);
+            let analysis = result.analysis.expect("process should include analysis");
+            assert_eq!(
+                analysis.imports.first().map(|item| item.source.as_str()),
+                Some(expected_source),
+                "{language} import source"
+            );
+            assert!(
+                analysis
+                    .imports
+                    .iter()
+                    .all(|item| item.source_kind == ProcessImportSourceKind::Module),
+                "{language} imports should be classified as module sources: {:?}",
+                analysis.imports
+            );
+        }
     }
 }
