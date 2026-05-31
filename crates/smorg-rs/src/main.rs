@@ -1374,6 +1374,7 @@ mod tests {
     #[test]
     fn git_install_writes_local_semantic_attributes() {
         let _dir = TestDir::new();
+        let fixture = read_git_install_report_fixture();
         let mut stdout = Vec::new();
         let mut stderr = Vec::new();
         let exit = run(
@@ -1384,11 +1385,30 @@ mod tests {
 
         assert_eq!(exit, EXIT_SUCCESS, "stderr={}", String::from_utf8_lossy(&stderr));
         let report: Value = serde_json::from_slice(&stdout).expect("json report");
-        assert_eq!(report["report_version"], 1);
-        assert_eq!(report["profile"], "semantic-diff");
-        assert_eq!(report["scope"], "local");
+        assert_eq!(report["report_version"], fixture["report"]["report_version"]);
+        assert_eq!(report["ok"], fixture["report"]["ok"]);
+        assert_eq!(report["profile"], fixture["report"]["profile"]);
+        assert_eq!(report["scope"], fixture["report"]["scope"]);
+        let step = &report["install_steps"][0];
+        assert_eq!(step["name"], fixture["report"]["step"]["name"]);
+        assert_eq!(step["status"], fixture["report"]["step"]["status"]);
+        let diagnostics = step["diagnostics"].as_array().expect("diagnostics");
+        let diagnostic_keys = diagnostics
+            .iter()
+            .filter_map(|diagnostic| diagnostic["key"].as_str())
+            .collect::<Vec<_>>();
+        for expected_key in
+            fixture["report"]["diagnostic_keys"].as_array().expect("diagnostic_keys")
+        {
+            assert!(diagnostic_keys.contains(&expected_key.as_str().unwrap()));
+        }
         let attributes = fs::read_to_string(".gitattributes").expect("read attributes");
-        assert!(attributes.contains("*.json merge=smorg-rs diff=smorg-rs smorg.language=json"));
+        assert!(
+            attributes.contains(
+                fixture["implementations"]["rust"]["attribute_contains"].as_str().unwrap()
+            ),
+            "{attributes}"
+        );
     }
 
     #[test]
@@ -1755,6 +1775,15 @@ mod tests {
     fn read_git_driver_fallback_fixture() -> Value {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
             "../../../fixtures/diagnostics/slice-954-git-driver-fallback/git-driver-fallback.json",
+        );
+        let source = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read fixture {}: {error}", path.display()));
+        serde_json::from_str(&source).expect("fixture should parse")
+    }
+
+    fn read_git_install_report_fixture() -> Value {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+            "../../../fixtures/diagnostics/slice-1017-git-driver-opt-in-setup/git-install-report.json",
         );
         let source = fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("read fixture {}: {error}", path.display()));
