@@ -575,6 +575,7 @@ fn run_git(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i
     let step = execute_git_install(&options);
     let ok = step["status"] == "succeeded" || step["status"] == "planned";
     let report = json!({
+        "report_version": 1,
         "ok": ok,
         "profile": options.profile.as_str(),
         "scope": options.scope.as_str(),
@@ -1383,6 +1384,7 @@ mod tests {
 
         assert_eq!(exit, EXIT_SUCCESS, "stderr={}", String::from_utf8_lossy(&stderr));
         let report: Value = serde_json::from_slice(&stdout).expect("json report");
+        assert_eq!(report["report_version"], 1);
         assert_eq!(report["profile"], "semantic-diff");
         assert_eq!(report["scope"], "local");
         let attributes = fs::read_to_string(".gitattributes").expect("read attributes");
