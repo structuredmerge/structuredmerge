@@ -1772,6 +1772,7 @@ pub struct DiffDriverSmokeCase {
     pub argument_roles: Vec<String>,
     pub expected_exit_code: i32,
     pub expected_output_kind: String,
+    pub expected_output_fragments: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

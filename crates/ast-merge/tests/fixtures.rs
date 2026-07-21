@@ -1772,11 +1772,24 @@ fn conforms_to_slice_903_diff_driver_smoke_fixtures_fixture() {
         .iter()
         .filter(|smoke_case| smoke_case.expected_output_kind == "structured_diff")
         .count();
+    let reviewable_output_case_count = suite
+        .cases
+        .iter()
+        .filter(|smoke_case| !smoke_case.expected_output_fragments.is_empty())
+        .count();
 
     assert_eq!(suite.driver_name, expected["driver_name"].as_str().unwrap());
     assert_eq!(suite.cases.len(), expected["case_count"].as_u64().unwrap() as usize);
     assert_eq!(serde_json::json!(argument_counts), expected["argument_counts"]);
     assert_eq!(structured_diff_count, expected["structured_diff_count"].as_u64().unwrap() as usize);
+    assert_eq!(
+        reviewable_output_case_count,
+        expected["reviewable_output_case_count"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        fixture["suite"]["real_source_pairs"].as_array().unwrap().len(),
+        expected["real_source_pair_count"].as_u64().unwrap() as usize
+    );
 }
 
 #[test]

@@ -932,6 +932,38 @@ fn print_structured_diff(
     let _ = writeln!(stdout, "status changed");
     let _ = writeln!(stdout, "old-lines {}", line_count(old_source));
     let _ = writeln!(stdout, "new-lines {}", line_count(new_source));
+    print_structured_diff_review_hunk(stdout, path_name, old_source, new_source);
+}
+
+fn print_structured_diff_review_hunk(
+    stdout: &mut dyn Write,
+    path_name: &str,
+    old_source: &str,
+    new_source: &str,
+) {
+    let old_lines = diff_source_lines(old_source);
+    let new_lines = diff_source_lines(new_source);
+    let _ = writeln!(stdout, "review-diff unified");
+    let _ = writeln!(stdout, "--- a/{path_name}");
+    let _ = writeln!(stdout, "+++ b/{path_name}");
+    let _ = writeln!(stdout, "@@ -1,{} +1,{} @@", old_lines.len(), new_lines.len());
+    for line in old_lines {
+        write_diff_line(stdout, "-", line);
+    }
+    for line in new_lines {
+        write_diff_line(stdout, "+", line);
+    }
+}
+
+fn diff_source_lines(source: &str) -> Vec<&str> {
+    if source.is_empty() { Vec::new() } else { source.split_inclusive('\n').collect() }
+}
+
+fn write_diff_line(stdout: &mut dyn Write, prefix: &str, line: &str) {
+    let _ = write!(stdout, "{prefix}{line}");
+    if !line.ends_with('\n') {
+        let _ = writeln!(stdout);
+    }
 }
 
 fn line_count(source: &str) -> usize {
@@ -1970,6 +2002,11 @@ mod tests {
         let output = String::from_utf8(stdout).expect("utf8 output");
         assert!(output.contains("structured-diff main.go"), "{output}");
         assert!(output.contains("status changed"), "{output}");
+        for fragment in
+            ["review-diff unified", "@@ -1,3 +1,3 @@", "-func Old() {}", "+func New() {}"]
+        {
+            assert!(output.contains(fragment), "{output}");
+        }
     }
 
     #[test]
@@ -1999,6 +2036,11 @@ mod tests {
             assert_eq!(exit, EXIT_SUCCESS, "stderr={}", String::from_utf8_lossy(&stderr));
             let output = String::from_utf8(stdout).expect("utf8 output");
             assert!(output.contains("structured-diff package.json"), "{output}");
+            for fragment in
+                ["review-diff unified", "@@ -1,1 +1,1 @@", r#"-{"old":true}"#, r#"+{"new":true}"#]
+            {
+                assert!(output.contains(fragment), "{output}");
+            }
         }
     }
 
