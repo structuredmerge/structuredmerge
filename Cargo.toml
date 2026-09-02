@@ -1,3 +1,11 @@
 [workspace]
-members = ["crates/*"]
+members = [
+  "crates/*",
+  "packages/ruby/ext/structuredmerge_host_prototype_core_rb/native",
+]
 resolver = "2"
+
+[workspace.lints]
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(alef)", 'cfg(feature, values("alef-meta"))'] }

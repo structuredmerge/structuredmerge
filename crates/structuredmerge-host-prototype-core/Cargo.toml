@@ -1,0 +1,16 @@
+[package]
+name = "structuredmerge-host-prototype-core"
+version = "0.2.0"
+authors = ["Peter H. Boling"]
+edition = "2024"
+description = "Experimental host-provider bridge core for StructuredMerge"
+homepage = "https://structuredmerge.org"
+repository = "https://github.com/structuredmerge/structuredmerge-rust"
+license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
+publish = false
+
+[dependencies]
+parking_lot = "0.12"
+
+[lib]
+path = "src/lib.rs"

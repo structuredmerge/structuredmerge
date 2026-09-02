@@ -1,0 +1,41 @@
+[workspace]
+alef_version = "0.81.0"
+languages = ["ruby"]
+
+[workspace.scaffold]
+description = "Generated Ruby host-provider prototype for StructuredMerge"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/structuredmerge/structuredmerge"
+authors = ["Peter Boling"]
+
+[[crates]]
+name = "structuredmerge-host-prototype-core"
+sources = ["crates/structuredmerge-host-prototype-core/src/lib.rs"]
+version_from = "crates/structuredmerge-host-prototype-core/Cargo.toml"
+core_import = "structuredmerge_host_prototype_core"
+error_type = "HostPrototypeError"
+error_constructor = "structuredmerge_host_prototype_core::HostPrototypeError::new({msg})"
+
+[crates.ruby]
+gem_name = "structuredmerge_host_prototype"
+scaffold_output = "packages/ruby"
+
+[crates.output]
+ruby = "packages/ruby/ext/structuredmerge_host_prototype_core_rb/src/"
+
+[[crates.trait_bridges]]
+trait_name = "WorkflowHost"
+super_trait = "Plugin"
+registry_getter = "structuredmerge_host_prototype_core::registry::get_workflow_host_registry"
+register_fn = "register_workflow_host"
+unregister_fn = "unregister_workflow_host"
+clear_fn = "clear_workflow_hosts"
+
+[crates.include]
+types = ["HostPrototypeError", "Plugin", "WorkflowHost"]
+functions = [
+  "unregister_workflow_host",
+  "clear_workflow_hosts",
+  "execute_identity",
+  "registered_workflow_hosts",
+]
