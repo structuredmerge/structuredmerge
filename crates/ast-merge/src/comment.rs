@@ -81,6 +81,57 @@ pub fn normalized_root_layout_owners(
     Ok(owners)
 }
 
+pub fn normalized_layout_owners_for_kinds(
+    source: &str,
+    root_id: &str,
+    nodes: &[NormalizedTreeNode],
+    owner_kinds: &[&str],
+) -> Result<Vec<LayoutOwner>, String> {
+    let line_count = source_lines(source).len();
+    let nodes_by_id = nodes
+        .iter()
+        .map(|node| (node.id.as_str(), node))
+        .collect::<std::collections::HashMap<_, _>>();
+    let root = nodes_by_id
+        .get(root_id)
+        .copied()
+        .ok_or_else(|| "normalized tree omitted its root node".to_string())?;
+    let candidates = nodes
+        .iter()
+        .filter(|node| {
+            owner_kinds.contains(&node.kind.as_str())
+                && node.span.range.start_byte < node.span.range.end_byte
+        })
+        .map(|node| (normalized_node_depth(node, &nodes_by_id), node))
+        .collect::<Vec<_>>();
+    let Some(minimum_depth) = candidates.iter().map(|(depth, _)| *depth).min() else {
+        return Ok(vec![normalized_layout_owner(root, line_count)]);
+    };
+    let mut owners = candidates
+        .into_iter()
+        .filter(|(depth, _)| *depth == minimum_depth)
+        .map(|(_, node)| normalized_layout_owner(node, line_count))
+        .collect::<Vec<_>>();
+    owners.sort_by_key(|owner| (owner.start_line, owner.end_line, owner.owner_id.clone()));
+    if owners.windows(2).any(|pair| pair[1].start_line <= pair[0].end_line) {
+        return Ok(vec![normalized_layout_owner(root, line_count)]);
+    }
+    Ok(owners)
+}
+
+fn normalized_node_depth(
+    node: &NormalizedTreeNode,
+    nodes: &std::collections::HashMap<&str, &NormalizedTreeNode>,
+) -> usize {
+    let mut depth = 0;
+    let mut parent_id = node.parent_id.as_deref();
+    while let Some(id) = parent_id {
+        depth += 1;
+        parent_id = nodes.get(id).and_then(|parent| parent.parent_id.as_deref());
+    }
+    depth
+}
+
 fn source_lines(source: &str) -> Vec<String> {
     let mut lines = source.split('\n').map(str::to_string).collect::<Vec<_>>();
     if source.ends_with('\n') && lines.last().is_some_and(String::is_empty) {

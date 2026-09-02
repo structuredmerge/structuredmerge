@@ -1,10 +1,11 @@
 use ast_merge::{
-    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference,
-    PolicySurface, match_owner_paths,
+    CommentAttachment, CommentRegion, ConformanceFamilyPlanContext, ConformanceFeatureProfileView,
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile, LayoutGap,
+    MergeResult, ParseResult, PolicyReference, PolicySurface,
+    augment_normalized_comments_with_owners, match_owner_paths, normalized_layout_owners_for_kinds,
 };
 use serde_json::{Map, Value};
-use tree_haver::{ParserRequest, parse_with_language_pack};
+use tree_haver::{ParserRequest, parse_normalized_with_language_pack};
 
 pub const PACKAGE_NAME: &str = "yaml-merge";
 
@@ -57,6 +58,9 @@ pub struct YamlAnalysis {
     pub normalized_source: String,
     pub root_kind: YamlRootKind,
     pub owners: Vec<YamlOwner>,
+    pub comment_regions: Vec<CommentRegion>,
+    pub layout_gaps: Vec<LayoutGap>,
+    pub comment_attachments: Vec<CommentAttachment>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -344,7 +348,7 @@ pub fn parse_yaml_with_backend(
         };
     }
 
-    let backend_result = parse_with_language_pack(&ParserRequest {
+    let backend_result = parse_normalized_with_language_pack(&ParserRequest {
         source: source.to_string(),
         language: "yaml".to_string(),
         dialect: Some("yaml".to_string()),
@@ -352,14 +356,60 @@ pub fn parse_yaml_with_backend(
     if !backend_result.ok {
         return ParseResult {
             ok: false,
-            diagnostics: backend_result.diagnostics.into_iter().map(Into::into).collect(),
+            diagnostics: backend_result
+                .diagnostics
+                .iter()
+                .map(|message| parse_error(message))
+                .collect(),
             analysis: None,
             policies: vec![],
         };
     }
 
+    let layout_owners = match normalized_layout_owners_for_kinds(
+        source,
+        &backend_result.root_id,
+        &backend_result.nodes,
+        &["block_mapping_pair", "flow_pair"],
+    ) {
+        Ok(owners) => owners,
+        Err(error) => {
+            return ParseResult {
+                ok: false,
+                diagnostics: vec![parse_error(&error)],
+                analysis: None,
+                policies: vec![],
+            };
+        }
+    };
+    let augmentation = match augment_normalized_comments_with_owners(
+        source,
+        &layout_owners,
+        &backend_result.nodes,
+        "hash_comment",
+        normalize_yaml_comment,
+    ) {
+        Ok(augmentation) => augmentation,
+        Err(error) => {
+            return ParseResult {
+                ok: false,
+                diagnostics: vec![parse_error(&error)],
+                analysis: None,
+                policies: vec![],
+            };
+        }
+    };
+
     match parse_yaml_value(source, backend) {
-        Ok(parsed) => analyze_yaml_value(parsed, dialect),
+        Ok(parsed) => {
+            let mut analyzed = analyze_yaml_value(parsed, dialect);
+            if let Some(analysis) = analyzed.analysis.as_mut() {
+                analysis.comment_regions = augmentation.regions;
+                analysis.layout_gaps = augmentation.gaps;
+                analysis.comment_attachments = augmentation.attachments;
+            }
+            analyzed
+        }
         Err(diagnostic) => ParseResult {
             ok: false,
             diagnostics: vec![diagnostic],
@@ -367,6 +417,10 @@ pub fn parse_yaml_with_backend(
             policies: vec![],
         },
     }
+}
+
+fn normalize_yaml_comment(text: &str) -> String {
+    text.trim().strip_prefix('#').unwrap_or(text.trim()).trim().to_string()
 }
 
 pub fn analyze_yaml_value(parsed: Value, dialect: YamlDialect) -> ParseResult<YamlAnalysis> {
@@ -398,6 +452,9 @@ pub fn analyze_yaml_value(parsed: Value, dialect: YamlDialect) -> ParseResult<Ya
                     normalized_source: canonical_yaml(&mapping),
                     root_kind: YamlRootKind::Mapping,
                     owners: collect_yaml_owners(&mapping, ""),
+                    comment_regions: vec![],
+                    layout_gaps: vec![],
+                    comment_attachments: vec![],
                 }),
                 policies: vec![],
             }

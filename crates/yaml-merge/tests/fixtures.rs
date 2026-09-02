@@ -308,6 +308,23 @@ fn conforms_to_slice_96_yaml_parse_fixtures() {
 }
 
 #[test]
+fn projects_yaml_comments_and_blank_lines_through_shared_ownership() {
+    let result = parse_yaml_with_backend(
+        "# package\nname: structuredmerge\n\n# status\nenabled: true\n",
+        YamlDialect::Yaml,
+        YamlBackend::KreuzbergLanguagePack,
+    );
+    let analysis = result.analysis.expect("analysis should exist");
+
+    assert_eq!(analysis.comment_regions.len(), 2);
+    assert_eq!(analysis.comment_regions[0].normalized_content(), "package");
+    assert_eq!(analysis.comment_regions[1].normalized_content(), "status");
+    assert_eq!(analysis.layout_gaps.len(), 1);
+    assert_eq!(analysis.layout_gaps[0].lines, [""]);
+    assert_eq!(analysis.comment_attachments.len(), 2);
+}
+
+#[test]
 fn conforms_to_slice_97_yaml_structure_fixture() {
     let fixture = read_fixture(&["yaml", "slice-97-structure", "mapping-and-sequence.json"]);
 
