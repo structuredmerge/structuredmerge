@@ -1,57 +1,12 @@
+use ast_merge::DiagnosticCategory;
 use ast_merge_git::{Merge3Request, merge_comment_delta, merge3};
 use serde::Deserialize;
-use serde_json::Value;
 use std::{fs, path::PathBuf};
-
-#[derive(Debug, Deserialize)]
-struct Fixture {
-    contract: Contract,
-    cases: Vec<FixtureCase>,
-}
 
 #[derive(Debug, Deserialize)]
 struct Contract {
     package: String,
     operation: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct FixtureCase {
-    case_id: String,
-    request: Merge3Request,
-    expected: Expected,
-}
-
-#[derive(Debug, Deserialize)]
-struct Expected {
-    ok: bool,
-    merged_json: Option<Value>,
-    conflict_count: usize,
-    change_classifications: Option<Vec<ast_merge_git::ChangeClassification>>,
-    conflict_categories: Option<Vec<String>>,
-    conflict_paths: Option<Vec<String>>,
-    conflicted_source_contains: Option<Vec<String>>,
-    conflicted_source_not_contains: Option<Vec<String>>,
-    reparse_after_render: Option<bool>,
-    render_report: Option<ast_merge_git::Merge3RenderReport>,
-    formatting_preservation: Option<ast_merge_git::FormattingPreservation>,
-    secondary_formatting_metrics: Option<ast_merge_git::SecondaryFormattingMetrics>,
-    default_driver_evaluation: Option<ast_merge_git::DefaultDriverEvaluation>,
-    owned_regions: Option<Vec<ExpectedOwnedRegion>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ExpectedOwnedRegion {
-    owner_path: String,
-    node_id: String,
-    region_kind: String,
-    line_range: ast_merge_git::SourceRange,
-    attached_spans: Vec<ast_merge_git::AttachedSpan>,
-    backend_id: String,
-    parser_identity: String,
-    can_replace: bool,
-    can_line_merge: bool,
-    requires_reparse: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -84,102 +39,79 @@ struct CommentDeltaExpected {
     comment_owner_path: Option<String>,
 }
 
-#[test]
-fn conforms_to_git_merge3_contract_fixture() {
-    let fixture: Fixture =
-        read_fixture(&["diagnostics", "slice-950-git-merge3-contract", "git-merge3-contract.json"]);
-    assert_eq!(fixture.contract.package, "ast-merge-git");
-    assert_eq!(fixture.contract.operation, "merge3");
-
-    for case in fixture.cases {
-        let result = merge3(&case.request);
-        assert_eq!(result.ok, case.expected.ok, "{}", case.case_id);
-        assert_eq!(result.conflicts.len(), case.expected.conflict_count, "{}", case.case_id);
-        if let Some(expected_classifications) = case.expected.change_classifications {
-            assert_eq!(result.change_classifications, expected_classifications, "{}", case.case_id);
-        }
-        assert_eq!(
-            result.reparse_after_render, case.expected.reparse_after_render,
-            "{}",
-            case.case_id
-        );
-        if let Some(expected_render_report) = case.expected.render_report {
-            assert_eq!(result.render_report, expected_render_report, "{}", case.case_id);
-        }
-        if let Some(expected_formatting_preservation) = case.expected.formatting_preservation {
-            assert_eq!(
-                result.formatting_preservation, expected_formatting_preservation,
-                "{}",
-                case.case_id
-            );
-        }
-        if let Some(expected_secondary_metrics) = case.expected.secondary_formatting_metrics {
-            assert_eq!(
-                result.secondary_formatting_metrics, expected_secondary_metrics,
-                "{}",
-                case.case_id
-            );
-        }
-        if let Some(expected_default_driver_evaluation) = case.expected.default_driver_evaluation {
-            assert_eq!(
-                result.default_driver_evaluation, expected_default_driver_evaluation,
-                "{}",
-                case.case_id
-            );
-        }
-        if let Some(expected_owned_regions) = case.expected.owned_regions {
-            assert_eq!(
-                result.owned_regions.len(),
-                expected_owned_regions.len(),
-                "{}",
-                case.case_id
-            );
-            for (actual, expected) in result.owned_regions.iter().zip(expected_owned_regions) {
-                assert_eq!(actual.owner_path, expected.owner_path, "{}", case.case_id);
-                assert_eq!(actual.node_id, expected.node_id, "{}", case.case_id);
-                assert_eq!(actual.region_kind, expected.region_kind, "{}", case.case_id);
-                assert_eq!(actual.line_range, expected.line_range, "{}", case.case_id);
-                assert_eq!(actual.attached_spans, expected.attached_spans, "{}", case.case_id);
-                assert_eq!(actual.backend_id, expected.backend_id, "{}", case.case_id);
-                assert_eq!(actual.parser_identity, expected.parser_identity, "{}", case.case_id);
-                assert_eq!(actual.can_replace, expected.can_replace, "{}", case.case_id);
-                assert_eq!(actual.can_line_merge, expected.can_line_merge, "{}", case.case_id);
-                assert_eq!(actual.requires_reparse, expected.requires_reparse, "{}", case.case_id);
-            }
-        }
-        if result.ok {
-            let merged: Value =
-                serde_json::from_str(result.merged_source.as_deref().unwrap_or_default())
-                    .expect("merged source should parse");
-            assert_eq!(merged, case.expected.merged_json.unwrap(), "{}", case.case_id);
-        } else {
-            let categories = result
-                .conflicts
-                .iter()
-                .map(|conflict| conflict.category.clone())
-                .collect::<Vec<_>>();
-            let paths =
-                result.conflicts.iter().map(|conflict| conflict.path.clone()).collect::<Vec<_>>();
-            assert_eq!(categories, case.expected.conflict_categories.unwrap(), "{}", case.case_id);
-            assert_eq!(paths, case.expected.conflict_paths.unwrap(), "{}", case.case_id);
-            for needle in case.expected.conflicted_source_contains.unwrap_or_default() {
-                assert!(
-                    result.conflicted_source.as_deref().unwrap_or_default().contains(&needle),
-                    "{} conflicted_source missing {needle:?}: {:?}",
-                    case.case_id,
-                    result.conflicted_source
-                );
-            }
-            for needle in case.expected.conflicted_source_not_contains.unwrap_or_default() {
-                assert!(
-                    !result.conflicted_source.as_deref().unwrap_or_default().contains(&needle),
-                    "{} conflicted_source should not contain {needle:?}: {:?}",
-                    case.case_id,
-                    result.conflicted_source
-                );
-            }
-        }
+fn json_request(base: &str, ours: &str, theirs: &str, dialect: &str) -> Merge3Request {
+    Merge3Request {
+        base_source: base.to_string(),
+        ours_source: ours.to_string(),
+        theirs_source: theirs.to_string(),
+        path_name: Some(format!("fixture.{dialect}")),
+        language: Some(dialect.to_string()),
+        dialect: Some(dialect.to_string()),
+        profile_id: Some("source_preserving".to_string()),
+        fallback_policy: Some("none".to_string()),
+        conflict_marker_size: Some(7),
+        render_policy: Some("source_preserving_edits".to_string()),
     }
+}
+
+#[test]
+fn delegates_json_to_the_source_preserving_substrate() {
+    let result = merge3(&json_request(
+        "{\n  \"shared\": true\n}\n",
+        "{\n  \"shared\": true,\n  \"ours\": 1\n}\n",
+        "{\n  \"shared\": true,\n  \"theirs\": 2\n}\n",
+        "json",
+    ));
+
+    assert!(result.ok);
+    assert_eq!(
+        result.merged_source.as_deref(),
+        Some("{\n  \"shared\": true,\n  \"ours\": 1,\n  \"theirs\": 2\n}\n")
+    );
+    assert_eq!(result.render_report.strategy, "source_preserving_edits");
+    assert_eq!(result.render_report.backend_id, "tree-sitter-language-pack");
+    assert_eq!(result.render_report.parser_identity, "tree-haver");
+}
+
+#[test]
+fn preserves_jsonc_comments_through_the_same_substrate() {
+    let result = merge3(&json_request(
+        "{\n  // retained\n  \"shared\": true\n}\n",
+        "{\n  // retained\n  \"shared\": true,\n  \"ours\": 1\n}\n",
+        "{\n  // retained\n  \"shared\": true,\n  \"theirs\": 2\n}\n",
+        "jsonc",
+    ));
+
+    assert!(result.ok);
+    assert!(result.merged_source.unwrap().contains("// retained"));
+}
+
+#[test]
+fn propagates_structural_conflicts_without_guessing_source_ranges() {
+    let result = merge3(&json_request(
+        "{\"enabled\":true}",
+        "{\"enabled\":false}",
+        "{\"enabled\":\"yes\"}",
+        "json",
+    ));
+
+    assert!(!result.ok);
+    assert_eq!(result.conflicts.len(), 1);
+    assert_eq!(result.conflicts[0].category, "modify_modify");
+    assert_eq!(result.conflicts[0].path, "/enabled");
+    assert!(result.conflicted_source.is_none());
+    assert!(result.owned_regions.is_empty());
+}
+
+#[test]
+fn fails_closed_on_tree_haver_parse_errors() {
+    let result =
+        merge3(&json_request("{\"ok\":true}\n", "{\"ok\": tru\n", "{\"ok\":false}\n", "json"));
+
+    assert!(!result.ok);
+    assert!(result.conflicts.is_empty());
+    assert_eq!(result.diagnostics[0].category, DiagnosticCategory::ParseError);
+    assert!(result.diagnostics[0].message.starts_with("ours parse error:"));
 }
 
 #[test]

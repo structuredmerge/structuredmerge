@@ -1,8 +1,6 @@
-use std::collections::BTreeSet;
-
-use ast_merge::{Diagnostic, DiagnosticCategory, DiagnosticSeverity};
+use ast_merge::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, ThreeWayMergeOutcome};
+use json_merge::{JsonDialect, merge_json_three_way};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 
 pub const PACKAGE_NAME: &str = "ast-merge-git";
 
@@ -141,7 +139,7 @@ pub struct HardGate {
 
 pub fn merge3(request: &Merge3Request) -> Merge3Response {
     match normalize_language(request).as_str() {
-        "json" => merge3_json(request),
+        "json" | "jsonc" | "json5" => merge3_json(request),
         _ => response(
             request,
             false,
@@ -162,66 +160,63 @@ pub fn merge3(request: &Merge3Request) -> Merge3Response {
 }
 
 pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
-    let base = match parse_json_role("base", &request.base_source) {
-        Ok(value) => value,
-        Err(error) => return parse_error_response(request, error),
-    };
-    let ours = match parse_json_role("ours", &request.ours_source) {
-        Ok(value) => value,
-        Err(error) => return parse_error_response(request, error),
-    };
-    let theirs = match parse_json_role("theirs", &request.theirs_source) {
-        Ok(value) => value,
-        Err(error) => return parse_error_response(request, error),
-    };
-
-    let mut conflicts = Vec::new();
-    let change_classifications = classify_json_changes(&base, &ours, &theirs);
-    let merged = merge_json_value(&base, &ours, &theirs, "", &mut conflicts);
-    if !conflicts.is_empty() {
-        let owned_regions = json_owned_regions_for_conflicts(request, &conflicts);
-        let render_strategy = if owned_regions.is_empty() {
-            "full_file_conflict_markers"
-        } else {
-            "owned_region_conflict_markers"
-        };
-        let conflicted_source = owned_regions
-            .first()
-            .and_then(|region| render_json_owned_region_conflict_source(request, region))
-            .unwrap_or_else(|| render_conflict_source(request, &conflicts));
-        return response(
+    let result = merge_json_three_way(
+        &request.base_source,
+        &request.ours_source,
+        &request.theirs_source,
+        json_dialect(request),
+    );
+    let conflicts = result
+        .conflicts
+        .into_iter()
+        .map(|conflict| Merge3Conflict {
+            conflict_id: conflict.conflict_id,
+            category: conflict.category,
+            path: conflict.path,
+            message: conflict.message,
+        })
+        .collect();
+    match result.outcome {
+        ThreeWayMergeOutcome::Clean => response(
+            request,
+            true,
+            result.output,
+            None,
+            conflicts,
+            vec![],
+            result.diagnostics,
+            vec![],
+            Some(FormattingPreservation { line_diff_score: 1.0, character_diff_score: 1.0 }),
+            Some(true),
+            Some("source_preserving_edits".to_string()),
+        ),
+        ThreeWayMergeOutcome::Conflict => response(
             request,
             false,
             None,
-            Some(conflicted_source),
+            None,
             conflicts,
-            change_classifications,
-            vec![diagnostic(
-                DiagnosticCategory::ConfigurationError,
-                "merge_conflict: merge3 found unresolved conflict(s).",
-            )],
-            owned_regions,
+            vec![],
+            result.diagnostics,
+            vec![],
             None,
             None,
-            Some(render_strategy.to_string()),
-        );
+            Some("unrendered_structural_conflict".to_string()),
+        ),
+        ThreeWayMergeOutcome::Error => response(
+            request,
+            false,
+            None,
+            None,
+            conflicts,
+            vec![],
+            result.diagnostics,
+            vec![],
+            None,
+            None,
+            Some("not_rendered".to_string()),
+        ),
     }
-
-    let merged_source = serde_json::to_string(&merged).expect("merged json should render");
-    let reparses = serde_json::from_str::<Value>(&merged_source).is_ok();
-    response(
-        request,
-        true,
-        Some(merged_source),
-        None,
-        vec![],
-        change_classifications,
-        vec![],
-        vec![],
-        Some(FormattingPreservation { line_diff_score: 1.0, character_diff_score: 1.0 }),
-        Some(reparses),
-        None,
-    )
 }
 
 pub fn merge_comment_delta(
@@ -315,9 +310,7 @@ fn secondary_formatting_metrics(merged: bool) -> SecondaryFormattingMetrics {
             output_diff_size: 0,
             source_fragment_retention: 1.0,
             weighted: false,
-            diagnostics: vec![
-                "canonical JSON has no trivia-preserving source fragments yet".to_string(),
-            ],
+            diagnostics: vec!["json-merge rendered source-preserving edits".to_string()],
         };
     }
     SecondaryFormattingMetrics {
@@ -393,138 +386,12 @@ fn render_report(request: &Merge3Request, render_strategy: Option<String>) -> Me
         .or_else(|| request.render_policy.clone())
         .unwrap_or_else(|| "canonical".to_string());
     let (backend_id, parser_identity) = match normalize_language(request).as_str() {
-        "json" => ("native-json".to_string(), "standard-json".to_string()),
+        "json" | "jsonc" | "json5" => {
+            ("tree-sitter-language-pack".to_string(), "tree-haver".to_string())
+        }
         _ => (String::new(), String::new()),
     };
     Merge3RenderReport { strategy, backend_id, parser_identity }
-}
-
-fn parse_error_response(request: &Merge3Request, message: String) -> Merge3Response {
-    response(
-        request,
-        false,
-        None,
-        None,
-        vec![],
-        vec![],
-        vec![diagnostic(DiagnosticCategory::ParseError, &message)],
-        vec![],
-        None,
-        None,
-        None,
-    )
-}
-
-fn render_conflict_source(request: &Merge3Request, conflicts: &[Merge3Conflict]) -> String {
-    let marker_size = request.conflict_marker_size.unwrap_or(7).max(1);
-    [
-        format!("/* smorg structured conflicts: {} unresolved */", conflicts.len()),
-        format!("{} ours", "<".repeat(marker_size)),
-        request.ours_source.clone(),
-        format!("{} base", "|".repeat(marker_size)),
-        request.base_source.clone(),
-        "=".repeat(marker_size),
-        request.theirs_source.clone(),
-        format!("{} theirs", ">".repeat(marker_size)),
-        String::new(),
-    ]
-    .join("\n")
-}
-
-fn render_json_owned_region_conflict_source(
-    request: &Merge3Request,
-    region: &OwnedRegionReport,
-) -> Option<String> {
-    if region.region_kind != "node" {
-        return None;
-    }
-    let key = region.owner_path.trim_start_matches('/');
-    let ours_region = json_member_source(&request.ours_source, key)?;
-    let base_region = json_member_source(&request.base_source, key)?;
-    let theirs_region = json_member_source(&request.theirs_source, key)?;
-    let marker_size = request.conflict_marker_size.unwrap_or(7).max(1);
-    let replacement = [
-        format!("{} ours", "<".repeat(marker_size)),
-        ours_region.text,
-        format!("{} base", "|".repeat(marker_size)),
-        base_region.text,
-        "=".repeat(marker_size),
-        theirs_region.text,
-        format!("{} theirs", ">".repeat(marker_size)),
-    ]
-    .join("\n");
-    Some(format!(
-        "{}{}{}",
-        &request.ours_source[..ours_region.byte_range.start],
-        replacement,
-        &request.ours_source[ours_region.byte_range.end..]
-    ))
-}
-
-struct JsonMemberRegion {
-    byte_range: SourceRange,
-    text: String,
-}
-
-fn json_member_source(source: &str, key: &str) -> Option<JsonMemberRegion> {
-    if !source.contains(&format!("\"{key}\"")) {
-        return None;
-    }
-    let byte_range = json_key_byte_range(source, key);
-    if byte_range.end <= byte_range.start || byte_range.end > source.len() {
-        return None;
-    }
-    Some(JsonMemberRegion {
-        byte_range: byte_range.clone(),
-        text: source[byte_range.start..byte_range.end].to_string(),
-    })
-}
-
-fn json_owned_regions_for_conflicts(
-    request: &Merge3Request,
-    conflicts: &[Merge3Conflict],
-) -> Vec<OwnedRegionReport> {
-    conflicts
-        .iter()
-        .filter_map(|conflict| {
-            if !conflict.path.starts_with('/') || conflict.path.matches('/').count() != 1 {
-                return None;
-            }
-            let key = conflict.path.trim_start_matches('/');
-            let base_region = json_member_source(&request.base_source, key)?;
-            json_member_source(&request.ours_source, key)?;
-            json_member_source(&request.theirs_source, key)?;
-            Some(OwnedRegionReport {
-                owner_path: conflict.path.clone(),
-                node_id: format!("json:key:{key}"),
-                region_kind: "node".to_string(),
-                byte_range: base_region.byte_range,
-                line_range: SourceRange { start: 1, end: 1 },
-                attached_spans: vec![],
-                backend_id: "native-json".to_string(),
-                parser_identity: "standard-json".to_string(),
-                can_replace: true,
-                can_line_merge: false,
-                requires_reparse: true,
-            })
-        })
-        .collect()
-}
-
-fn json_key_byte_range(source: &str, key: &str) -> SourceRange {
-    let needle = format!("\"{key}\"");
-    let Some(start) = source.find(&needle) else {
-        return SourceRange { start: 0, end: source.len() };
-    };
-    let mut end = start + needle.len();
-    while end < source.len() {
-        let current = source.as_bytes()[end] as char;
-        if current == ',' || current == '}' {
-            break;
-        }
-        end += 1;
-    }
-    SourceRange { start, end }
 }
 
 fn diagnostic(category: DiagnosticCategory, message: &str) -> Diagnostic {
@@ -537,160 +404,6 @@ fn diagnostic(category: DiagnosticCategory, message: &str) -> Diagnostic {
     }
 }
 
-fn parse_json_role(role: &str, source: &str) -> Result<Value, String> {
-    serde_json::from_str(source).map_err(|error| format!("{role} parse error: {error}"))
-}
-
-fn merge_json_value(
-    base: &Value,
-    ours: &Value,
-    theirs: &Value,
-    path: &str,
-    conflicts: &mut Vec<Merge3Conflict>,
-) -> Value {
-    if ours == theirs {
-        return ours.clone();
-    }
-    if base == ours {
-        return theirs.clone();
-    }
-    if base == theirs {
-        return ours.clone();
-    }
-    if let (Value::Object(base_map), Value::Object(ours_map), Value::Object(theirs_map)) =
-        (base, ours, theirs)
-    {
-        return Value::Object(merge_json_objects(base_map, ours_map, theirs_map, path, conflicts));
-    }
-
-    add_conflict(conflicts, "edit_edit", path, "value changed differently in ours and theirs");
-    ours.clone()
-}
-
-fn merge_json_objects(
-    base: &Map<String, Value>,
-    ours: &Map<String, Value>,
-    theirs: &Map<String, Value>,
-    path: &str,
-    conflicts: &mut Vec<Merge3Conflict>,
-) -> Map<String, Value> {
-    let keys =
-        base.keys().chain(ours.keys()).chain(theirs.keys()).cloned().collect::<BTreeSet<_>>();
-    let mut result = Map::new();
-    for key in keys {
-        let (merged, keep) = merge_json_entry(
-            base.get(&key),
-            ours.get(&key),
-            theirs.get(&key),
-            &json_pointer_join(path, &key),
-            conflicts,
-        );
-        if keep {
-            result.insert(key, merged.expect("kept entry should have value"));
-        }
-    }
-    result
-}
-
-fn classify_json_changes(base: &Value, ours: &Value, theirs: &Value) -> Vec<ChangeClassification> {
-    match (base.as_object(), ours.as_object(), theirs.as_object()) {
-        (Some(base_map), Some(ours_map), Some(theirs_map)) => {
-            let keys = base_map
-                .keys()
-                .chain(ours_map.keys())
-                .chain(theirs_map.keys())
-                .cloned()
-                .collect::<BTreeSet<_>>();
-            keys.into_iter()
-                .filter_map(|key| {
-                    let ours_change =
-                        classify_json_value_change(base_map.get(&key), ours_map.get(&key));
-                    let theirs_change =
-                        classify_json_value_change(base_map.get(&key), theirs_map.get(&key));
-                    if ours_change == "unchanged" && theirs_change == "unchanged" {
-                        return None;
-                    }
-                    Some(ChangeClassification {
-                        path: json_pointer_join("", &key),
-                        ours: ours_change,
-                        theirs: theirs_change,
-                    })
-                })
-                .collect()
-        }
-        _ => {
-            let ours_change = classify_json_value_change(Some(base), Some(ours));
-            let theirs_change = classify_json_value_change(Some(base), Some(theirs));
-            if ours_change == "unchanged" && theirs_change == "unchanged" {
-                vec![]
-            } else {
-                vec![ChangeClassification {
-                    path: "/".to_string(),
-                    ours: ours_change,
-                    theirs: theirs_change,
-                }]
-            }
-        }
-    }
-}
-
-fn classify_json_value_change(base: Option<&Value>, value: Option<&Value>) -> String {
-    match (base, value) {
-        (None, None) => "unchanged".to_string(),
-        (None, Some(_)) => "added".to_string(),
-        (Some(_), None) => "deleted".to_string(),
-        (Some(base), Some(value)) if base == value => "unchanged".to_string(),
-        _ => "edited".to_string(),
-    }
-}
-
-fn merge_json_entry(
-    base: Option<&Value>,
-    ours: Option<&Value>,
-    theirs: Option<&Value>,
-    path: &str,
-    conflicts: &mut Vec<Merge3Conflict>,
-) -> (Option<Value>, bool) {
-    match (base, ours, theirs) {
-        (None, None, None) => (None, false),
-        (None, None, Some(theirs)) => (Some(theirs.clone()), true),
-        (None, Some(ours), None) => (Some(ours.clone()), true),
-        (None, Some(ours), Some(theirs)) if ours == theirs => (Some(ours.clone()), true),
-        (None, Some(ours), Some(_)) => {
-            add_conflict(
-                conflicts,
-                "add_add",
-                path,
-                "same path added differently in ours and theirs",
-            );
-            (Some(ours.clone()), true)
-        }
-        (Some(_), None, None) => (None, false),
-        (Some(base), None, Some(theirs)) if base == theirs => (None, false),
-        (Some(base), Some(ours), None) if base == ours => (None, false),
-        (Some(_), None, Some(theirs)) => {
-            add_conflict(conflicts, "delete_edit", path, "ours deleted a value that theirs edited");
-            (Some(theirs.clone()), true)
-        }
-        (Some(_), Some(ours), None) => {
-            add_conflict(conflicts, "delete_edit", path, "theirs deleted a value that ours edited");
-            (Some(ours.clone()), true)
-        }
-        (Some(base), Some(ours), Some(theirs)) => {
-            (Some(merge_json_value(base, ours, theirs, path, conflicts)), true)
-        }
-    }
-}
-
-fn add_conflict(conflicts: &mut Vec<Merge3Conflict>, category: &str, path: &str, message: &str) {
-    conflicts.push(Merge3Conflict {
-        conflict_id: format!("conflict-{}", conflicts.len() + 1),
-        category: category.to_string(),
-        path: if path.is_empty() { "/".to_string() } else { path.to_string() },
-        message: message.to_string(),
-    });
-}
-
 fn comment_conflict(category: &str, path: &str, message: &str) -> Merge3Conflict {
     Merge3Conflict {
         conflict_id: "comment-conflict-1".to_string(),
@@ -700,18 +413,25 @@ fn comment_conflict(category: &str, path: &str, message: &str) -> Merge3Conflict
     }
 }
 
-fn json_pointer_join(parent: &str, token: &str) -> String {
-    let escaped = token.replace('~', "~0").replace('/', "~1");
-    if parent.is_empty() { format!("/{escaped}") } else { format!("{parent}/{escaped}") }
-}
-
 fn normalize_language(request: &Merge3Request) -> String {
     let language = request.language.as_deref().unwrap_or_default().trim().to_ascii_lowercase();
-    if language == "json" {
-        return "json".to_string();
+    if matches!(language.as_str(), "json" | "jsonc" | "json5") {
+        return language;
     }
-    if request.path_name.as_deref().unwrap_or_default().to_ascii_lowercase().ends_with(".json") {
-        return "json".to_string();
+    let path = request.path_name.as_deref().unwrap_or_default().to_ascii_lowercase();
+    for dialect in ["json", "jsonc", "json5"] {
+        if path.ends_with(&format!(".{dialect}")) {
+            return dialect.to_string();
+        }
     }
     language
+}
+
+fn json_dialect(request: &Merge3Request) -> JsonDialect {
+    let dialect = request.dialect.clone().unwrap_or_else(|| normalize_language(request));
+    match dialect.as_str() {
+        "jsonc" => JsonDialect::Jsonc,
+        "json5" => JsonDialect::Json5,
+        _ => JsonDialect::Json,
+    }
 }
