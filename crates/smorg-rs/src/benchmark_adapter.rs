@@ -11,6 +11,7 @@ use json_merge::{
     JsonDialect, json_semantically_equivalent, merge_json_source_preserving, merge_json_three_way,
 };
 use serde::Deserialize;
+use yaml_merge::{YamlDialect, merge_yaml};
 
 const REQUEST_SCHEMA: &str = "structuredmerge.benchmark.adapter-request/v1";
 const RESPONSE_SCHEMA: &str = "structuredmerge.benchmark.adapter-response/v1";
@@ -28,6 +29,12 @@ struct Request {
 struct Selector {
     family: String,
     dialect: String,
+}
+
+#[derive(Clone, Copy)]
+enum BenchmarkDialect {
+    Json(JsonDialect),
+    Yaml(YamlDialect),
 }
 
 pub fn serve(input: &mut dyn BufRead, output: &mut dyn Write) -> Result<(), String> {
@@ -54,7 +61,12 @@ pub fn run_merge2_files(args: &[String], output: &mut dyn Write, error: &mut dyn
         let incoming = read_source(&args[0], "incoming")?;
         let current = read_source(&args[1], "current")?;
         let dialect = selected_dialect(&args[2])?;
-        Ok::<_, String>(merge_json_source_preserving(&incoming, &current, dialect))
+        Ok::<_, String>(match dialect {
+            BenchmarkDialect::Json(dialect) => {
+                merge_json_source_preserving(&incoming, &current, dialect)
+            }
+            BenchmarkDialect::Yaml(dialect) => merge_yaml(&incoming, &current, dialect),
+        })
     })();
     match result {
         Ok(result) if result.ok => {
@@ -84,7 +96,9 @@ pub fn run_diff_files(args: &[String], output: &mut dyn Write, error: &mut dyn W
     let result = (|| {
         let before = read_source(&args[0], "before")?;
         let after = read_source(&args[1], "after")?;
-        let dialect = selected_dialect(&args[2])?;
+        let BenchmarkDialect::Json(dialect) = selected_dialect(&args[2])? else {
+            return Err("unsupported benchmark diff family: yaml".to_string());
+        };
         json_semantically_equivalent(&before, &after, dialect)
     })();
     match result {
@@ -118,7 +132,9 @@ pub fn run_merge3_files(args: &[String], error: &mut dyn Write) -> i32 {
         let base = read_source(&args[0], "base")?;
         let ours = read_source(&args[1], "ours")?;
         let theirs = read_source(&args[2], "theirs")?;
-        let dialect = selected_dialect(&args[3])?;
+        let BenchmarkDialect::Json(dialect) = selected_dialect(&args[3])? else {
+            return Err("unsupported benchmark merge3 family: yaml".to_string());
+        };
         Ok::<_, String>(merge_json_three_way(&base, &ours, &theirs, dialect))
     })();
     match result {
@@ -150,12 +166,12 @@ fn read_source(path: &str, role: &str) -> Result<String, String> {
     fs::read_to_string(path).map_err(|error| format!("read {role} source {path:?}: {error}"))
 }
 
-fn selected_dialect(path: &str) -> Result<JsonDialect, String> {
+fn selected_dialect(path: &str) -> Result<BenchmarkDialect, String> {
     if let Ok(dialect) = env::var("AST_MERGE_DIALECT") {
-        return parse_dialect(&dialect);
+        return parse_benchmark_dialect(&dialect);
     }
     let extension = path.rsplit_once('.').map(|(_, extension)| extension).unwrap_or("json");
-    parse_dialect(extension)
+    parse_benchmark_dialect(extension)
 }
 
 fn write_diagnostics(error: &mut dyn Write, diagnostics: &[ast_merge::Diagnostic]) {
@@ -207,9 +223,14 @@ fn execute(request: Request) -> Result<(i32, String, serde_json::Value), String>
     if request.schema_version != REQUEST_SCHEMA {
         return Err(format!("unsupported request schema: {}", request.schema_version));
     }
-    if request.selector.family != "json" {
-        return Err(format!("unsupported benchmark family: {}", request.selector.family));
+    match request.selector.family.as_str() {
+        "json" => execute_json(request),
+        "yaml" => execute_yaml(request),
+        family => Err(format!("unsupported benchmark family: {family}")),
     }
+}
+
+fn execute_json(request: Request) -> Result<(i32, String, serde_json::Value), String> {
     let dialect = parse_dialect(&request.selector.dialect)?;
     match request.operation.as_str() {
         "diff2" => {
@@ -263,6 +284,24 @@ fn execute(request: Request) -> Result<(i32, String, serde_json::Value), String>
     }
 }
 
+fn execute_yaml(request: Request) -> Result<(i32, String, serde_json::Value), String> {
+    if request.selector.dialect != "yaml" {
+        return Err(format!("unsupported YAML dialect: {}", request.selector.dialect));
+    }
+    if request.operation != "merge2" {
+        return Err(format!("unsupported YAML benchmark operation: {}", request.operation));
+    }
+
+    let incoming = source(&request.sources, "incoming")?;
+    let current = source(&request.sources, "current")?;
+    let result = merge_yaml(&incoming, &current, YamlDialect::Yaml);
+    let status = if result.ok { 0 } else { 2 };
+    let output = result.output.clone().unwrap_or_default();
+    let result = serde_json::to_value(result)
+        .map_err(|error| format!("serialize merge2 result: {error}"))?;
+    Ok((status, output, result))
+}
+
 fn source(sources: &BTreeMap<String, String>, role: &str) -> Result<String, String> {
     let encoded = sources.get(role).ok_or_else(|| format!("missing {role} source"))?;
     let bytes =
@@ -276,6 +315,14 @@ pub fn parse_dialect(value: &str) -> Result<JsonDialect, String> {
         "jsonc" => Ok(JsonDialect::Jsonc),
         "json5" => Ok(JsonDialect::Json5),
         _ => Err(format!("unsupported JSON dialect: {value}")),
+    }
+}
+
+fn parse_benchmark_dialect(value: &str) -> Result<BenchmarkDialect, String> {
+    if value.trim().eq_ignore_ascii_case("yaml") || value.trim().eq_ignore_ascii_case("yml") {
+        Ok(BenchmarkDialect::Yaml(YamlDialect::Yaml))
+    } else {
+        parse_dialect(value).map(BenchmarkDialect::Json)
     }
 }
 
@@ -310,14 +357,19 @@ mod tests {
         path.to_string_lossy().into_owned()
     }
 
-    fn request(operation: &str, dialect: &str, sources: &[(&str, &str)]) -> String {
+    fn request_for(
+        operation: &str,
+        family: &str,
+        dialect: &str,
+        sources: &[(&str, &str)],
+    ) -> String {
         serde_json::json!({
             "schema_version": REQUEST_SCHEMA,
             "request_id": "request-1",
             "operation": operation,
             "selector": {
-                "provider_id": "ruby.json",
-                "family": "json",
+                "provider_id": format!("rust.{family}"),
+                "family": family,
                 "dialect": dialect,
                 "backend": "kreuzberg-language-pack",
                 "profile": "source_preserving",
@@ -329,6 +381,10 @@ mod tests {
             }).collect::<BTreeMap<_, _>>()
         })
         .to_string()
+    }
+
+    fn request(operation: &str, dialect: &str, sources: &[(&str, &str)]) -> String {
+        request_for(operation, "json", dialect, sources)
     }
 
     #[test]
@@ -368,6 +424,36 @@ mod tests {
             )
             .unwrap(),
             "{\"left\":2,\"right\":2}"
+        );
+    }
+
+    #[test]
+    fn serves_yaml_merge2_without_claiming_yaml_merge3() {
+        let merge2 = execute_line(&request_for(
+            "merge2",
+            "yaml",
+            "yaml",
+            &[
+                ("incoming", "service:\n  image: app:latest\n  replicas: 1\n"),
+                ("current", "service:\n  replicas: 3\n"),
+            ],
+        ));
+        let merge3 = execute_line(&request_for(
+            "merge3",
+            "yaml",
+            "yaml",
+            &[("base", "a: 1\n"), ("ours", "a: 2\n"), ("theirs", "a: 3\n")],
+        ));
+
+        assert_eq!(merge2["status"], 0);
+        assert_eq!(
+            String::from_utf8(STANDARD.decode(merge2["output_base64"].as_str().unwrap()).unwrap())
+                .unwrap(),
+            "service:\n  image: app:latest\n  replicas: 3\n"
+        );
+        assert_eq!(merge3["status"], 2);
+        assert!(
+            merge3["stderr"].as_str().unwrap().contains("unsupported YAML benchmark operation")
         );
     }
 

@@ -11,10 +11,17 @@
   },
   "source_root": ".",
   "provider": {
-    "merge_provider": {
-      "provider_id": "rust.json",
-      "package": "json-merge",
-      "profile": "source_preserving"
+    "merge_providers": {
+      "json": {
+        "provider_id": "rust.json",
+        "package": "json-merge",
+        "profile": "source_preserving"
+      },
+      "yaml": {
+        "provider_id": "rust.yaml",
+        "package": "yaml-merge",
+        "profile": "source_preserving"
+      }
     },
     "parser_provider": {
       "provider_id": "tree-sitter-language-pack",
@@ -25,8 +32,20 @@
   },
   "supports": {
     "operations": ["merge2", "merge3", "metamorphic"],
-    "families": ["json"],
-    "dialects": ["json", "jsonc", "json5"]
+    "families": ["json", "yaml"],
+    "dialects": ["json", "jsonc", "json5", "yaml"],
+    "combinations": [
+      {
+        "family": "json",
+        "operations": ["merge2", "merge3", "metamorphic"],
+        "dialects": ["json", "jsonc", "json5"]
+      },
+      {
+        "family": "yaml",
+        "operations": ["merge2"],
+        "dialects": ["yaml"]
+      }
+    ]
   },
   "environment": {
     "runtime": "rust",
