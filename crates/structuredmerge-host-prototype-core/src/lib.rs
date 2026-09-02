@@ -28,7 +28,15 @@ struct IdentityWorkerTask {
     cancelled: Arc<AtomicBool>,
 }
 
+struct PreparedIdentityWorker {
+    provider: Arc<ProviderEntry<dyn WorkflowHost>>,
+    request: Vec<u8>,
+    cancelled: Arc<AtomicBool>,
+}
+
 static IDENTITY_WORKERS: OnceLock<Mutex<BTreeMap<u64, IdentityWorkerTask>>> = OnceLock::new();
+static PREPARED_IDENTITY_WORKERS: OnceLock<Mutex<BTreeMap<u64, PreparedIdentityWorker>>> =
+    OnceLock::new();
 static NEXT_IDENTITY_WORKER_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -468,59 +476,113 @@ pub fn start_identity_worker(
     provider_name: String,
     request: Vec<u8>,
 ) -> Result<u64, HostPrototypeError> {
+    let task_id = prepare_identity_worker(provider_name, request)?;
+    dispatch_identity_worker(task_id)?;
+    Ok(task_id)
+}
+
+pub fn prepare_identity_worker(
+    provider_name: String,
+    request: Vec<u8>,
+) -> Result<u64, HostPrototypeError> {
     let provider = registry::get_workflow_host_registry().read().get(&provider_name)?;
     let task_id = NEXT_IDENTITY_WORKER_ID.fetch_add(1, Ordering::Relaxed);
     if task_id == 0 {
         return Err(HostPrototypeError::new("identity worker task ID space exhausted"));
     }
 
-    let (sender, receiver) = mpsc::sync_channel(1);
-    let cancelled = Arc::new(AtomicBool::new(false));
-    let worker_cancelled = Arc::clone(&cancelled);
-    std::thread::Builder::new()
-        .name(format!("structuredmerge-host-{task_id}"))
-        .spawn(move || {
-            let result = if worker_cancelled.load(Ordering::Acquire) {
-                Err(HostPrototypeError::new(format!(
-                    "identity worker cancelled before invocation: {task_id}"
-                )))
-            } else {
-                let result = provider.provider.execute_cancellable_batch(task_id, request);
-                if worker_cancelled.load(Ordering::Acquire) {
-                    Err(HostPrototypeError::new(format!(
-                        "identity worker cancelled after invocation: {task_id}"
-                    )))
-                } else {
-                    result
-                }
-            };
-            let _ = sender.send(result);
-        })
-        .map_err(|error| {
-            HostPrototypeError::new(format!("failed to start identity worker: {error}"))
-        })?;
-    IDENTITY_WORKERS
-        .get_or_init(Default::default)
-        .lock()
-        .insert(task_id, IdentityWorkerTask { receiver, cancelled });
+    PREPARED_IDENTITY_WORKERS.get_or_init(Default::default).lock().insert(
+        task_id,
+        PreparedIdentityWorker { provider, request, cancelled: Arc::new(AtomicBool::new(false)) },
+    );
     Ok(task_id)
 }
 
-pub fn cancel_identity_worker(task_id: u64) -> Result<(), HostPrototypeError> {
-    let workers = IDENTITY_WORKERS.get_or_init(Default::default).lock();
-    let task = workers
-        .get(&task_id)
-        .ok_or_else(|| HostPrototypeError::new(format!("identity worker not found: {task_id}")))?;
-    task.cancelled.store(true, Ordering::Release);
+fn execute_identity_worker(
+    task_id: u64,
+    provider: Arc<ProviderEntry<dyn WorkflowHost>>,
+    request: Vec<u8>,
+    cancelled: &AtomicBool,
+) -> IdentityWorkerResult {
+    if cancelled.load(Ordering::Acquire) {
+        return Err(HostPrototypeError::new(format!(
+            "identity worker cancelled before invocation: {task_id}"
+        )));
+    }
+
+    let result = provider.provider.execute_cancellable_batch(task_id, request);
+    if cancelled.load(Ordering::Acquire) {
+        Err(HostPrototypeError::new(format!(
+            "identity worker cancelled after invocation: {task_id}"
+        )))
+    } else {
+        result
+    }
+}
+
+pub fn dispatch_identity_worker(task_id: u64) -> Result<(), HostPrototypeError> {
+    let prepared = PREPARED_IDENTITY_WORKERS
+        .get_or_init(Default::default)
+        .lock()
+        .remove(&task_id)
+        .ok_or_else(|| {
+            HostPrototypeError::new(format!("prepared identity worker not found: {task_id}"))
+        })?;
+
+    let (sender, receiver) = mpsc::sync_channel(1);
+    let worker_cancelled = Arc::clone(&prepared.cancelled);
+    IDENTITY_WORKERS.get_or_init(Default::default).lock().insert(
+        task_id,
+        IdentityWorkerTask { receiver, cancelled: Arc::clone(&prepared.cancelled) },
+    );
+
+    if prepared.cancelled.load(Ordering::Acquire) {
+        let _ = sender.send(Err(HostPrototypeError::new(format!(
+            "identity worker cancelled before enqueue: {task_id}"
+        ))));
+        return Ok(());
+    }
+
+    let spawn_result = std::thread::Builder::new()
+        .name(format!("structuredmerge-host-{task_id}"))
+        .spawn(move || {
+            let result = execute_identity_worker(
+                task_id,
+                prepared.provider,
+                prepared.request,
+                worker_cancelled.as_ref(),
+            );
+            let _ = sender.send(result);
+        });
+    if let Err(error) = spawn_result {
+        IDENTITY_WORKERS.get_or_init(Default::default).lock().remove(&task_id);
+        return Err(HostPrototypeError::new(format!("failed to start identity worker: {error}")));
+    }
     Ok(())
 }
 
+pub fn cancel_identity_worker(task_id: u64) -> Result<(), HostPrototypeError> {
+    if let Some(task) = PREPARED_IDENTITY_WORKERS.get_or_init(Default::default).lock().get(&task_id)
+    {
+        task.cancelled.store(true, Ordering::Release);
+        return Ok(());
+    }
+    if let Some(task) = IDENTITY_WORKERS.get_or_init(Default::default).lock().get(&task_id) {
+        task.cancelled.store(true, Ordering::Release);
+        return Ok(());
+    }
+    Err(HostPrototypeError::new(format!("identity worker not found: {task_id}")))
+}
+
 pub fn identity_worker_cancelled(task_id: u64) -> Result<bool, HostPrototypeError> {
-    let workers = IDENTITY_WORKERS.get_or_init(Default::default).lock();
-    let task = workers
-        .get(&task_id)
-        .ok_or_else(|| HostPrototypeError::new(format!("identity worker not found: {task_id}")))?;
-    Ok(task.cancelled.load(Ordering::Acquire))
+    if let Some(task) = PREPARED_IDENTITY_WORKERS.get_or_init(Default::default).lock().get(&task_id)
+    {
+        return Ok(task.cancelled.load(Ordering::Acquire));
+    }
+    if let Some(task) = IDENTITY_WORKERS.get_or_init(Default::default).lock().get(&task_id) {
+        return Ok(task.cancelled.load(Ordering::Acquire));
+    }
+    Err(HostPrototypeError::new(format!("identity worker not found: {task_id}")))
 }
 
 pub fn poll_identity_worker(task_id: u64) -> Result<Option<Vec<u8>>, HostPrototypeError> {
@@ -856,6 +918,18 @@ mod tests {
 
         assert_eq!(result, payload);
         workflow_host::unregister_workflow_host(provider_name).unwrap();
+    }
+
+    #[test]
+    fn native_identity_worker_rechecks_cancellation_before_invocation() {
+        let mut registry = WorkflowHostRegistry::default();
+        registry.insert(identity("identity.cancelled")).unwrap();
+        let provider = registry.get("identity.cancelled").unwrap();
+        let cancelled = AtomicBool::new(true);
+
+        let error = execute_identity_worker(42, provider, vec![0, 0xff], &cancelled).unwrap_err();
+
+        assert_eq!(error.message(), "identity worker cancelled before invocation: 42");
     }
 
     #[test]

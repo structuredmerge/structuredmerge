@@ -568,6 +568,19 @@ RSpec.describe StructuredmergeHostPrototype do
       .to raise_error(RuntimeError, /identity worker not found/)
   end
 
+  it "cancels a prepared task before enqueue without invoking Ruby" do
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.cancel-before-enqueue")
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.cancel-before-enqueue")
+    task_id = described_class.prepare_identity_worker("ruby.cancel-before-enqueue", [0, 255])
+
+    described_class.cancel_identity_worker(task_id)
+    described_class.dispatch_identity_worker(task_id)
+
+    expect { wait_for_identity_worker(task_id) }
+      .to raise_error(RuntimeError, /identity worker cancelled before enqueue/)
+    expect(provider.requests).to be_empty
+  end
+
   it "lets an in-flight snapshot finish before finalizing an unregistered provider" do
     provider = HostPrototypeFixtures::BlockingWorkflowHost.new("ruby.in-flight")
     StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.in-flight")

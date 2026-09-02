@@ -51,6 +51,8 @@ functions = [
   "clear_workflow_hosts",
   "execute_identity",
   "start_identity_worker",
+  "prepare_identity_worker",
+  "dispatch_identity_worker",
   "poll_identity_worker",
   "cancel_identity_worker",
   "identity_worker_cancelled",
