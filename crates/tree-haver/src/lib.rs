@@ -460,6 +460,85 @@ pub struct NormalizedTreeNode {
     pub metadata: BTreeMap<String, BTreeMap<String, String>>,
 }
 
+#[derive(Debug)]
+pub struct NormalizedTreeIndex<'a> {
+    nodes_by_id: HashMap<&'a str, &'a NormalizedTreeNode>,
+}
+
+impl<'a> NormalizedTreeIndex<'a> {
+    pub fn new(nodes: &'a [NormalizedTreeNode]) -> Result<Self, String> {
+        let mut nodes_by_id = HashMap::with_capacity(nodes.len());
+        for node in nodes {
+            if nodes_by_id.insert(node.id.as_str(), node).is_some() {
+                return Err(format!("normalized tree contains duplicate node id {:?}", node.id));
+            }
+        }
+        for node in nodes {
+            if let Some(parent_id) = node.parent_id.as_deref()
+                && !nodes_by_id.contains_key(parent_id)
+            {
+                return Err(format!(
+                    "normalized node {:?} references missing parent {:?}",
+                    node.id, parent_id
+                ));
+            }
+            for child_id in &node.child_ids {
+                let child = nodes_by_id.get(child_id.as_str()).ok_or_else(|| {
+                    format!("normalized node {:?} references missing child {:?}", node.id, child_id)
+                })?;
+                if child.parent_id.as_deref() != Some(node.id.as_str()) {
+                    return Err(format!(
+                        "normalized child {:?} does not reference parent {:?}",
+                        child.id, node.id
+                    ));
+                }
+            }
+        }
+        Ok(Self { nodes_by_id })
+    }
+
+    pub fn node(&self, id: &str) -> Option<&'a NormalizedTreeNode> {
+        self.nodes_by_id.get(id).copied()
+    }
+
+    pub fn root(&self, id: &str) -> Result<&'a NormalizedTreeNode, String> {
+        let node =
+            self.node(id).ok_or_else(|| format!("normalized tree has no root node {id:?}"))?;
+        if node.parent_id.is_some() {
+            return Err(format!("normalized root node {id:?} has a parent"));
+        }
+        Ok(node)
+    }
+
+    pub fn children(&self, node: &NormalizedTreeNode) -> Vec<&'a NormalizedTreeNode> {
+        node.child_ids.iter().filter_map(|id| self.node(id)).collect()
+    }
+
+    pub fn find_descendant(
+        &self,
+        node: &NormalizedTreeNode,
+        predicate: impl Fn(&NormalizedTreeNode) -> bool,
+    ) -> Option<&'a NormalizedTreeNode> {
+        self.find_descendant_with(node, &predicate)
+    }
+
+    fn find_descendant_with(
+        &self,
+        node: &NormalizedTreeNode,
+        predicate: &impl Fn(&NormalizedTreeNode) -> bool,
+    ) -> Option<&'a NormalizedTreeNode> {
+        for child in self.children(node) {
+            if predicate(child) {
+                return Some(child);
+            }
+            if let Some(found) = self.find_descendant_with(child, predicate) {
+                return Some(found);
+            }
+        }
+        None
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SourceFragment {
     pub text: String,
@@ -1631,6 +1710,27 @@ mod tests {
         );
         assert!(
             result.nodes.iter().any(|node| node.kind == "," && node.role == NodeRole::Separator)
+        );
+
+        let index = NormalizedTreeIndex::new(&result.nodes).expect("normalized tree should index");
+        let root = index.root(&result.root_id).expect("normalized tree should expose its root");
+        assert_eq!(root.kind, "document");
+        assert!(index.find_descendant(root, |node| node.kind == "pair").is_some());
+    }
+
+    #[test]
+    fn normalized_tree_index_rejects_broken_relationships() {
+        let result = parse_normalized_with_language_pack(&ParserRequest {
+            source: "{\"answer\": 42}\n".to_string(),
+            language: "json".to_string(),
+            dialect: Some("json".to_string()),
+        });
+        let mut nodes = result.nodes;
+        nodes[0].child_ids.push("missing".to_string());
+
+        assert_eq!(
+            NormalizedTreeIndex::new(&nodes).unwrap_err(),
+            format!("normalized node {:?} references missing child \"missing\"", nodes[0].id)
         );
     }
 

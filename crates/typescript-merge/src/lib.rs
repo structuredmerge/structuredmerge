@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
     DiagnosticSeverity, FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference,
@@ -7,8 +5,9 @@ use ast_merge::{
     merge_source_preserving_owners,
 };
 use tree_haver::{
-    BackendReference, NormalizedTreeNode, ParserRequest, kreuzberg_language_pack_backend,
-    language_pack_adapter_info, parse_normalized_with_language_pack,
+    BackendReference, NormalizedTreeIndex, NormalizedTreeNode, ParserRequest,
+    kreuzberg_language_pack_backend, language_pack_adapter_info,
+    parse_normalized_with_language_pack,
 };
 
 pub const PACKAGE_NAME: &str = "typescript-merge";
@@ -172,11 +171,14 @@ pub fn parse_typescript(
             policies: vec![],
         };
     }
-    let nodes_by_id = nodes_by_id(&parsed.nodes);
-    let Some(root) = nodes_by_id.get(parsed.root_id.as_str()).copied() else {
-        return parse_error("normalized TypeScript parse has no root node");
+    let index = match NormalizedTreeIndex::new(&parsed.nodes) {
+        Ok(index) => index,
+        Err(message) => return parse_error(message),
     };
-    let top_level = child_nodes(root, &nodes_by_id);
+    let Ok(root) = index.root(&parsed.root_id) else {
+        return parse_error("normalized TypeScript parse has no valid root node");
+    };
+    let top_level = index.children(root);
     let mut imports = Vec::new();
     let mut declarations = Vec::new();
     for node in top_level {
@@ -184,8 +186,7 @@ pub fn parse_typescript(
             continue;
         }
         if node.kind == "import_statement" {
-            let Some(module) = descendant(node, &nodes_by_id, |child| child.kind == "string")
-            else {
+            let Some(module) = index.find_descendant(node, |child| child.kind == "string") else {
                 return parse_error("TypeScript import has no literal module source");
             };
             let match_key = unquote(module.source_fragment.trim());
@@ -199,8 +200,8 @@ pub fn parse_typescript(
             });
             continue;
         }
-        let declaration = declaration_node(node, &nodes_by_id);
-        let Some(name) = declaration.and_then(|value| declaration_name(value, &nodes_by_id)) else {
+        let declaration = declaration_node(node, &index);
+        let Some(name) = declaration.and_then(|value| declaration_name(value, &index)) else {
             return parse_error(format!("unsupported top-level TypeScript node {:?}", node.kind));
         };
         declarations.push(ModuleDeclaration {
@@ -281,19 +282,16 @@ fn parse_source_preserving_typescript(
     if !parsed.source_fragments_available {
         return Err("TypeScript parser did not retain source fragments".to_string());
     }
-    let nodes_by_id = nodes_by_id(&parsed.nodes);
-    let root = nodes_by_id
-        .get(parsed.root_id.as_str())
-        .copied()
-        .ok_or_else(|| "normalized TypeScript parse has no root node".to_string())?;
+    let index = NormalizedTreeIndex::new(&parsed.nodes)?;
+    let root = index.root(&parsed.root_id)?;
     let mut owners = Vec::new();
-    for node in child_nodes(root, &nodes_by_id) {
+    for node in index.children(root) {
         if node.kind == "comment" {
             continue;
         }
-        let declaration = declaration_node(node, &nodes_by_id)
+        let declaration = declaration_node(node, &index)
             .ok_or_else(|| format!("unsupported top-level TypeScript node {:?}", node.kind))?;
-        let name = declaration_name(declaration, &nodes_by_id)
+        let name = declaration_name(declaration, &index)
             .ok_or_else(|| format!("TypeScript declaration {:?} has no stable name", node.kind))?;
         let kind = declaration_kind(declaration);
         let path = format!("/{kind}:{name}");
@@ -313,42 +311,16 @@ fn parse_source_preserving_typescript(
     Ok(SourcePreservingOwnerDocument { source: source.to_string(), owners })
 }
 
-fn nodes_by_id(nodes: &[NormalizedTreeNode]) -> HashMap<&str, &NormalizedTreeNode> {
-    nodes.iter().map(|node| (node.id.as_str(), node)).collect()
-}
-
-fn child_nodes<'a>(
-    node: &NormalizedTreeNode,
-    nodes: &HashMap<&str, &'a NormalizedTreeNode>,
-) -> Vec<&'a NormalizedTreeNode> {
-    node.child_ids.iter().filter_map(|id| nodes.get(id.as_str()).copied()).collect()
-}
-
-fn descendant<'a>(
-    node: &'a NormalizedTreeNode,
-    nodes: &HashMap<&str, &'a NormalizedTreeNode>,
-    predicate: impl Fn(&NormalizedTreeNode) -> bool + Copy,
-) -> Option<&'a NormalizedTreeNode> {
-    for child in child_nodes(node, nodes) {
-        if predicate(child) {
-            return Some(child);
-        }
-        if let Some(found) = descendant(child, nodes, predicate) {
-            return Some(found);
-        }
-    }
-    None
-}
-
 fn declaration_node<'a>(
     node: &'a NormalizedTreeNode,
-    nodes: &HashMap<&str, &'a NormalizedTreeNode>,
+    index: &NormalizedTreeIndex<'a>,
 ) -> Option<&'a NormalizedTreeNode> {
     if supported_declaration_kind(&node.kind) {
         return Some(node);
     }
     if node.kind == "export_statement" || node.kind == "ambient_declaration" {
-        return child_nodes(node, nodes)
+        return index
+            .children(node)
             .into_iter()
             .find(|child| supported_declaration_kind(&child.kind));
     }
@@ -368,15 +340,14 @@ fn supported_declaration_kind(kind: &str) -> bool {
     )
 }
 
-fn declaration_name(
-    node: &NormalizedTreeNode,
-    nodes: &HashMap<&str, &NormalizedTreeNode>,
-) -> Option<String> {
-    child_nodes(node, nodes)
+fn declaration_name(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> Option<String> {
+    index
+        .children(node)
         .into_iter()
         .find(|child| child.field_name.as_deref() == Some("name"))
         .or_else(|| {
-            child_nodes(node, nodes)
+            index
+                .children(node)
                 .into_iter()
                 .find(|child| matches!(child.kind.as_str(), "identifier" | "type_identifier"))
         })
