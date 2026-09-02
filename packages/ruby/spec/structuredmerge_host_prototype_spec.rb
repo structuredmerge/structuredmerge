@@ -1,8 +1,36 @@
 # frozen_string_literal: true
 
 require_relative "../lib/structuredmerge_host_prototype"
+require "digest"
+require "json"
 
 RSpec.describe StructuredmergeHostPrototype do
+  def identity_cases
+    path = File.expand_path(
+      "../../../../fixtures/diagnostics/slice-1033-ruby-generated-host-prototype/identity-corpus.json",
+      __dir__
+    )
+    JSON.parse(File.binread(path)).fetch("cases")
+  end
+
+  def materialize_identity_payload(recipe)
+    case recipe.fetch("kind")
+    when "hex"
+      [recipe.fetch("value")].pack("H*")
+    when "utf8"
+      recipe.fetch("value").encode(Encoding::UTF_8).b
+    when "repeat_byte"
+      recipe.fetch("byte").chr.b * recipe.fetch("count")
+    else
+      raise "unsupported identity payload recipe: #{recipe.inspect}"
+    end
+  end
+
+  def verify_identity_bytes(bytes, test_case)
+    expect(bytes.bytesize).to eq(test_case.fetch("byte_length")), test_case.fetch("id")
+    expect(Digest::SHA256.hexdigest(bytes)).to eq(test_case.fetch("sha256")), test_case.fetch("id")
+  end
+
   class IdentityWorkflowHost
     attr_reader :requests, :shutdown_count
 
@@ -52,17 +80,24 @@ RSpec.describe StructuredmergeHostPrototype do
   end
 
 
-  it "round trips arbitrary bytes through a Ruby parser host" do
+  it "round trips the shared byte corpus through a Ruby parser host" do
     provider = IdentityParserHost.new
-    payload = "\x00\xff\r\nA\x00".b
     StructuredmergeHostPrototypeCore.register_parser_host(provider, "ruby.parser.identity")
 
-    probe = described_class.probe_with_parser("ruby.parser.identity", payload.bytes)
-    parse = described_class.parse_with_parser("ruby.parser.identity", payload.bytes)
+    identity_cases.each do |test_case|
+      payload = materialize_identity_payload(test_case.fetch("payload"))
+      verify_identity_bytes(payload, test_case)
 
-    expect(probe.pack("C*")).to eq(payload)
-    expect(parse.pack("C*")).to eq(payload)
-    expect(provider.requests).to eq([payload, payload])
+      probe = described_class.probe_with_parser("ruby.parser.identity", payload.bytes).pack("C*")
+      parse = described_class.parse_with_parser("ruby.parser.identity", payload.bytes).pack("C*")
+
+      verify_identity_bytes(probe, test_case)
+      verify_identity_bytes(parse, test_case)
+      expect(probe).to eq(payload), test_case.fetch("id")
+      expect(parse).to eq(payload), test_case.fetch("id")
+    end
+
+    expect(provider.requests).to all(have_attributes(encoding: Encoding::ASCII_8BIT))
     expect(described_class.registered_parser_hosts).to eq(["ruby.parser.identity"])
   end
 
@@ -70,16 +105,20 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(described_class::VERSION).to match(/\A\d+\.\d+\.\d+/)
   end
 
-  it "round trips arbitrary bytes through a Ruby workflow host" do
+  it "round trips the shared byte corpus through a Ruby workflow host" do
     provider = IdentityWorkflowHost.new
-    payload = "\x00\xff\r\nA\x00".b
     StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.identity")
 
-    result = described_class.execute_identity("ruby.identity", payload.bytes)
+    identity_cases.each do |test_case|
+      payload = materialize_identity_payload(test_case.fetch("payload"))
+      verify_identity_bytes(payload, test_case)
+      result = described_class.execute_identity("ruby.identity", payload.bytes).pack("C*")
 
-    expect(result.pack("C*")).to eq(payload)
-    expect(provider.requests).to contain_exactly(payload)
-    expect(provider.requests.first.encoding).to eq(Encoding::ASCII_8BIT)
+      verify_identity_bytes(result, test_case)
+      expect(result).to eq(payload), test_case.fetch("id")
+    end
+
+    expect(provider.requests).to all(have_attributes(encoding: Encoding::ASCII_8BIT))
     expect(described_class.registered_workflow_hosts).to eq(["ruby.identity"])
   end
 
