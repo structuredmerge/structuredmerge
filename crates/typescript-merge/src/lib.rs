@@ -1,8 +1,9 @@
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult,
-    ParseResult, PolicyReference, PolicySurface, SourcePreservingOwner,
+    NamedOwnerKind, NamedOwnerProjectionPolicy, ParseResult, PolicyReference, PolicySurface,
     SourcePreservingOwnerDocument, ThreeWayMergeResult, merge_source_preserving_owners,
-    normalized_parse_error_result, parse_error_result, three_way_parse_error,
+    normalized_parse_error_result, parse_error_result, project_named_top_level_owners,
+    three_way_parse_error,
 };
 use tree_haver::{
     BackendReference, NormalizedTreeIndex, NormalizedTreeNode, ParserRequest,
@@ -11,6 +12,16 @@ use tree_haver::{
 };
 
 pub const PACKAGE_NAME: &str = "typescript-merge";
+
+const TYPESCRIPT_DECLARATION_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
+    NamedOwnerKind { node_kind: "class_declaration", path_kind: "class" },
+    NamedOwnerKind { node_kind: "enum_declaration", path_kind: "enum" },
+    NamedOwnerKind { node_kind: "function_declaration", path_kind: "function" },
+    NamedOwnerKind { node_kind: "function_signature", path_kind: "function_signature" },
+    NamedOwnerKind { node_kind: "interface_declaration", path_kind: "interface" },
+    NamedOwnerKind { node_kind: "internal_module", path_kind: "internal_module" },
+    NamedOwnerKind { node_kind: "type_alias_declaration", path_kind: "type_alias" },
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TypeScriptDialect {
@@ -277,33 +288,20 @@ fn parse_source_preserving_typescript(
     if !parsed.source_fragments_available {
         return Err("TypeScript parser did not retain source fragments".to_string());
     }
-    let index = NormalizedTreeIndex::new(&parsed.nodes)?;
-    let root = index.root(&parsed.root_id)?;
-    let mut owners = Vec::new();
-    for node in index.children(root) {
-        if node.kind == "comment" {
-            continue;
-        }
-        let declaration = declaration_node(node, &index)
-            .ok_or_else(|| format!("unsupported top-level TypeScript node {:?}", node.kind))?;
-        let name = declaration_name(declaration, &index)
-            .ok_or_else(|| format!("TypeScript declaration {:?} has no stable name", node.kind))?;
-        let kind = declaration_kind(declaration);
-        let path = format!("/{kind}:{name}");
-        owners.push(SourcePreservingOwner {
-            id: path.clone(),
-            path,
-            fingerprint: node.source_fragment.clone(),
-            start_byte: node.span.range.start_byte,
-            end_byte: node.span.range.end_byte,
-            start_line: node.span.start_point.row + 1,
-            end_line: node.span.end_point.row + 1,
-        });
-    }
-    if owners.is_empty() {
-        return Err("TypeScript document has no supported top-level declarations".to_string());
-    }
-    Ok(SourcePreservingOwnerDocument { source: source.to_string(), owners })
+    project_named_top_level_owners(
+        source,
+        &parsed.root_id,
+        &parsed.nodes,
+        NamedOwnerProjectionPolicy {
+            family: "TypeScript",
+            owner_kinds: TYPESCRIPT_DECLARATION_OWNER_KINDS,
+            ignored_kinds: &[],
+            wrapper_kinds: &["export_statement", "ambient_declaration"],
+            name_fields: &["name"],
+            fallback_name_kinds: &["identifier", "type_identifier"],
+            accept_any_named_kind: false,
+        },
+    )
 }
 
 fn declaration_node<'a>(
@@ -347,10 +345,6 @@ fn declaration_name(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) 
                 .find(|child| matches!(child.kind.as_str(), "identifier" | "type_identifier"))
         })
         .map(|child| child.source_fragment.clone())
-}
-
-fn declaration_kind(node: &NormalizedTreeNode) -> &str {
-    node.kind.strip_suffix("_declaration").unwrap_or(node.kind.as_str())
 }
 
 fn unquote(value: &str) -> String {

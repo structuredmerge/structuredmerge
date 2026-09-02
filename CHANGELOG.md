@@ -32,3 +32,5 @@
   while retaining Go-specific import and declaration behavior in its substrate.
 - Route Rust-language three-way function ownership through the shared
   projection while preserving its separate TSLP and native analysis contracts.
+- Route TypeScript and TSX three-way declaration ownership through the shared
+  projection, including the existing export and ambient wrapper policy.
