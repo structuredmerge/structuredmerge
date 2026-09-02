@@ -1651,7 +1651,7 @@ mod tests {
     }
 
     #[test]
-    fn strict_json_conflicts_leave_ours_unchanged_without_guessed_regions() {
+    fn strict_json_conflicts_render_only_the_tree_haver_owned_region() {
         let dir = TestDir::new();
         let ancestor = dir.write("ancestor.json", r#"{"name":"structuredmerge"}"#);
         let current = dir.write("current.json", r#"{"name":"ours"}"#);
@@ -1674,16 +1674,20 @@ mod tests {
 
         assert_eq!(exit, EXIT_UNRESOLVED_CONFLICT);
         assert!(
-            String::from_utf8_lossy(&stderr).contains("ambiguity:"),
+            String::from_utf8_lossy(&stderr).contains("merge_conflict:"),
             "stderr={}",
             String::from_utf8_lossy(&stderr)
         );
         let current_source = fs::read_to_string(current).expect("read current");
-        assert_eq!(current_source, r#"{"name":"ours"}"#);
+        assert!(current_source.contains("<<<<<<< ours"));
+        assert!(current_source.contains(r#"{"name":"ours"}"#));
+        assert!(current_source.contains("||||||| base"));
+        assert!(current_source.contains(r#"{"name":"structuredmerge"}"#));
+        assert!(current_source.contains(">>>>>>> theirs"));
     }
 
     #[test]
-    fn merge_driver_report_does_not_invent_owned_regions() {
+    fn merge_driver_report_carries_tree_haver_owned_regions() {
         let dir = TestDir::new();
         let ancestor = dir.write("ancestor.json", r#"{"name":"demo","enabled":true}"#);
         let current = dir.write("current.json", r#"{"name":"demo","enabled":false}"#);
@@ -1709,11 +1713,13 @@ mod tests {
         assert_eq!(exit, EXIT_UNRESOLVED_CONFLICT);
         let report_source = fs::read_to_string(report_path).expect("read machine report");
         let report: Value = serde_json::from_str(&report_source).expect("parse machine report");
-        assert_eq!(report["render_report"]["strategy"], "unrendered_structural_conflict");
+        assert_eq!(report["render_report"]["strategy"], "owned_region_conflict_markers");
         assert_eq!(report["render_report"]["backend_id"], "tree-sitter-language-pack");
         assert_eq!(report["render_report"]["parser_identity"], "tree-haver");
         assert_eq!(report["change_classifications"], serde_json::json!([]));
-        assert_eq!(report["owned_regions"], serde_json::json!([]));
+        assert_eq!(report["owned_regions"].as_array().map(Vec::len), Some(1));
+        assert_eq!(report["owned_regions"][0]["owner_path"], "/enabled");
+        assert_eq!(report["owned_regions"][0]["region_kind"], "node");
         assert_eq!(report["profile"]["profile_id"], "json.keyed-object");
         assert_eq!(report["profile"]["language"], "json");
         assert!(report["formatting_preservation"]["line_diff_score"].is_number());
@@ -1729,12 +1735,12 @@ mod tests {
         let cases = fixture["cases"].as_array().expect("fixture cases should be an array");
         let pending_conflict_rendering = cases
             .iter()
-            .filter(|case| case["expected"].get("conflicted_source_contains").is_some())
+            .filter(|case| case["case_id"] == "delete-edit-conflict")
             .map(|case| case["case_id"].as_str().unwrap_or_default())
             .collect::<Vec<_>>();
-        assert_eq!(pending_conflict_rendering, ["same-key-edit-conflict", "delete-edit-conflict"]);
+        assert_eq!(pending_conflict_rendering, ["delete-edit-conflict"]);
         for case in cases {
-            if case["expected"].get("conflicted_source_contains").is_some() {
+            if case["case_id"] == "delete-edit-conflict" {
                 continue;
             }
             let dir = TestDir::new();

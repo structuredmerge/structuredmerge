@@ -41,6 +41,7 @@ fn diagnostic_shape(diagnostics: &[ast_merge::Diagnostic]) -> Value {
                         ast_merge::DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
                         ast_merge::DiagnosticCategory::FallbackApplied => "fallback_applied",
                         ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
+                        ast_merge::DiagnosticCategory::MergeConflict => "merge_conflict",
                         ast_merge::DiagnosticCategory::AssumedDefault => "assumed_default",
                         ast_merge::DiagnosticCategory::ConfigurationError => "configuration_error",
                         ast_merge::DiagnosticCategory::ReplayRejected => "replay_rejected",

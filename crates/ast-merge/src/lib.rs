@@ -48,6 +48,7 @@ pub enum DiagnosticCategory {
     UnsupportedFeature,
     FallbackApplied,
     Ambiguity,
+    MergeConflict,
     KindMismatch,
     UnsupportedVersion,
     AssumedDefault,

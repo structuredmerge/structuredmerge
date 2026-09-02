@@ -172,6 +172,7 @@ fn diagnostic_category_name(category: DiagnosticCategory) -> &'static str {
         DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
         DiagnosticCategory::FallbackApplied => "fallback_applied",
         DiagnosticCategory::Ambiguity => "ambiguity",
+        DiagnosticCategory::MergeConflict => "merge_conflict",
         DiagnosticCategory::KindMismatch => "kind_mismatch",
         DiagnosticCategory::UnsupportedVersion => "unsupported_version",
         DiagnosticCategory::AssumedDefault => "assumed_default",

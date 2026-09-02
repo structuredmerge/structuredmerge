@@ -1,4 +1,9 @@
-use ast_merge::{Diagnostic, DiagnosticCategory, DiagnosticSeverity, ThreeWayMergeOutcome};
+use std::collections::HashMap;
+
+use ast_merge::{
+    ConflictAlternativeState, Diagnostic, DiagnosticCategory, DiagnosticSeverity, MergeConflict,
+    SourceRevision, ThreeWayMergeOutcome, localized_conflict_render_plan, render_source_plan,
+};
 use json_merge::{JsonDialect, merge_json_three_way};
 use serde::{Deserialize, Serialize};
 
@@ -160,7 +165,7 @@ pub fn merge3(request: &Merge3Request) -> Merge3Response {
 }
 
 pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
-    let result = merge_json_three_way(
+    let mut result = merge_json_three_way(
         &request.base_source,
         &request.ours_source,
         &request.theirs_source,
@@ -168,14 +173,14 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
     );
     let conflicts = result
         .conflicts
-        .into_iter()
+        .iter()
         .map(|conflict| Merge3Conflict {
-            conflict_id: conflict.conflict_id,
-            category: conflict.category,
-            path: conflict.path,
-            message: conflict.message,
+            conflict_id: conflict.conflict_id.clone(),
+            category: conflict.category.clone(),
+            path: conflict.path.clone(),
+            message: conflict.message.clone(),
         })
-        .collect();
+        .collect::<Vec<_>>();
     match result.outcome {
         ThreeWayMergeOutcome::Clean => response(
             request,
@@ -190,19 +195,38 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
             Some(true),
             Some("source_preserving_edits".to_string()),
         ),
-        ThreeWayMergeOutcome::Conflict => response(
-            request,
-            false,
-            None,
-            None,
-            conflicts,
-            vec![],
-            result.diagnostics,
-            vec![],
-            None,
-            None,
-            Some("unrendered_structural_conflict".to_string()),
-        ),
+        ThreeWayMergeOutcome::Conflict => {
+            let owned_regions = json_owned_region_reports(&result.conflicts);
+            let rendered = render_json_conflicts(request, &result.conflicts);
+            if let Err(message) = &rendered {
+                result.diagnostics.push(Diagnostic {
+                    severity: DiagnosticSeverity::Warning,
+                    category: DiagnosticCategory::UnsupportedFeature,
+                    message: format!("localized conflict render unavailable: {message}"),
+                    path: None,
+                    review: None,
+                });
+            }
+            let (conflicted_source, strategy, reparse) = match rendered {
+                Ok(source) => {
+                    (Some(source), "owned_region_conflict_markers".to_string(), Some(false))
+                }
+                Err(_) => (None, "unrendered_structural_conflict".to_string(), None),
+            };
+            response(
+                request,
+                false,
+                None,
+                conflicted_source,
+                conflicts,
+                vec![],
+                result.diagnostics,
+                owned_regions,
+                None,
+                reparse,
+                Some(strategy),
+            )
+        }
         ThreeWayMergeOutcome::Error => response(
             request,
             false,
@@ -217,6 +241,51 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
             Some("not_rendered".to_string()),
         ),
     }
+}
+
+fn render_json_conflicts(
+    request: &Merge3Request,
+    conflicts: &[MergeConflict],
+) -> Result<String, String> {
+    let sources = HashMap::from([
+        (SourceRevision::Base, request.base_source.clone()),
+        (SourceRevision::Ours, request.ours_source.clone()),
+        (SourceRevision::Theirs, request.theirs_source.clone()),
+    ]);
+    let plan = localized_conflict_render_plan(
+        sources,
+        conflicts,
+        request.conflict_marker_size.unwrap_or(7),
+    )
+    .map_err(|error| error.to_string())?;
+    render_source_plan(&plan).map(|result| result.content).map_err(|error| error.to_string())
+}
+
+fn json_owned_region_reports(conflicts: &[MergeConflict]) -> Vec<OwnedRegionReport> {
+    conflicts
+        .iter()
+        .filter_map(|conflict| {
+            let alternative = conflict.alternatives.iter().find(|alternative| {
+                alternative.revision == SourceRevision::Ours
+                    && alternative.state == ConflictAlternativeState::Present
+                    && alternative.regions.len() == 1
+            })?;
+            let region = &alternative.regions[0];
+            Some(OwnedRegionReport {
+                owner_path: conflict.path.clone(),
+                node_id: region.node_id.clone(),
+                region_kind: region.region_kind.clone(),
+                byte_range: SourceRange { start: region.start_byte, end: region.end_byte },
+                line_range: SourceRange { start: region.start_line, end: region.end_line },
+                attached_spans: vec![],
+                backend_id: "tree-sitter-language-pack".to_string(),
+                parser_identity: "tree-haver".to_string(),
+                can_replace: true,
+                can_line_merge: false,
+                requires_reparse: true,
+            })
+        })
+        .collect()
 }
 
 pub fn merge_comment_delta(

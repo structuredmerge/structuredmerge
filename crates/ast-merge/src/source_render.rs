@@ -20,6 +20,8 @@ pub enum ConflictAlternativeState {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OwnedSourceRegion {
+    pub node_id: String,
+    pub region_kind: String,
     pub start_byte: usize,
     pub end_byte: usize,
     pub start_line: usize,
@@ -261,6 +263,7 @@ impl SourceRenderPlan {
                         return Err(SourceRenderError::new("marker_size must be at least one"));
                     }
                     for side in [&conflict.base, &conflict.ours, &conflict.theirs] {
+                        let mut side_content = String::new();
                         for child in side {
                             let content = match child {
                                 ConflictSideFragment::Source(source) => {
@@ -270,11 +273,12 @@ impl SourceRenderPlan {
                                     fragment.content.clone()
                                 }
                             };
-                            if !content.is_empty() && !content.ends_with('\n') {
-                                return Err(SourceRenderError::new(
-                                    "every conflict-side fragment must end at a line boundary",
-                                ));
-                            }
+                            side_content.push_str(&content);
+                        }
+                        if !side_content.is_empty() && !side_content.ends_with('\n') {
+                            return Err(SourceRenderError::new(
+                                "every conflict side must end at a line boundary",
+                            ));
                         }
                     }
                 }
@@ -348,9 +352,9 @@ pub fn localized_conflict_render_plan(
         }
         fragments.push(RenderFragment::Conflict(ConflictFragment {
             conflict_id: conflict.conflict_id.clone(),
-            base: vec![source_conflict_side(SourceRevision::Base, base)],
-            ours: vec![source_conflict_side(SourceRevision::Ours, ours)],
-            theirs: vec![source_conflict_side(SourceRevision::Theirs, theirs)],
+            base: source_conflict_side(&sources, SourceRevision::Base, base)?,
+            ours: source_conflict_side(&sources, SourceRevision::Ours, ours)?,
+            theirs: source_conflict_side(&sources, SourceRevision::Theirs, theirs)?,
             labels: ConflictLabels::default(),
             marker_size,
             metadata: HashMap::from([
@@ -408,10 +412,11 @@ fn required_conflict_region(
 }
 
 fn source_conflict_side(
+    sources: &HashMap<SourceRevision, String>,
     revision: SourceRevision,
     region: &OwnedSourceRegion,
-) -> ConflictSideFragment {
-    ConflictSideFragment::Source(SourceFragment {
+) -> Result<Vec<ConflictSideFragment>, SourceRenderError> {
+    let fragment = SourceFragment {
         revision,
         start_line: region.start_line,
         end_line: region.end_line,
@@ -419,7 +424,25 @@ fn source_conflict_side(
             ("start_byte".to_string(), serde_json::json!(region.start_byte)),
             ("end_byte".to_string(), serde_json::json!(region.end_byte)),
         ]),
-    })
+    };
+    let lines = source_lines(source_for_revision(sources, revision)?);
+    if region.end_line > lines.len() {
+        return Err(SourceRenderError::new(format!(
+            "{revision:?} conflict region exceeds source line count {}",
+            lines.len()
+        )));
+    }
+    let content = lines[(region.start_line - 1)..region.end_line].concat();
+    let mut fragments = vec![ConflictSideFragment::Source(fragment)];
+    if !content.ends_with('\n') {
+        fragments.push(ConflictSideFragment::Synthesized(SynthesizedFragment {
+            content: "\n".to_string(),
+            reason: "conflict_line_boundary".to_string(),
+            producer: "ast-merge".to_string(),
+            metadata: HashMap::new(),
+        }));
+    }
+    Ok(fragments)
 }
 
 struct SourcePlanRenderer<'a> {
@@ -731,7 +754,14 @@ mod tests {
         ConflictAlternative {
             revision,
             state: ConflictAlternativeState::Present,
-            regions: vec![OwnedSourceRegion { start_byte, end_byte, start_line, end_line }],
+            regions: vec![OwnedSourceRegion {
+                node_id: format!("{revision:?}:{start_byte}-{end_byte}"),
+                region_kind: "node".to_string(),
+                start_byte,
+                end_byte,
+                start_line,
+                end_line,
+            }],
         }
     }
 

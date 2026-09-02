@@ -293,6 +293,8 @@ fn build_object(
 
 fn owned_region(node: &NormalizedTreeNode) -> OwnedSourceRegion {
     OwnedSourceRegion {
+        node_id: node.id.clone(),
+        region_kind: "node".to_string(),
         start_byte: node.span.range.start_byte,
         end_byte: node.span.range.end_byte,
         start_line: node.span.start_point.row + 1,
@@ -945,7 +947,7 @@ fn conflict_diagnostics(conflicts: &[MergeConflict]) -> Vec<Diagnostic> {
         .iter()
         .map(|conflict| Diagnostic {
             path: Some(conflict.path.clone()),
-            ..diagnostic(DiagnosticCategory::Ambiguity, conflict.message.clone())
+            ..diagnostic(DiagnosticCategory::MergeConflict, conflict.message.clone())
         })
         .collect()
 }

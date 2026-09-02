@@ -87,7 +87,7 @@ fn preserves_jsonc_comments_through_the_same_substrate() {
 }
 
 #[test]
-fn propagates_structural_conflicts_without_guessing_source_ranges() {
+fn renders_structural_conflicts_from_tree_haver_owned_regions() {
     let result = merge3(&json_request(
         "{\"enabled\":true}",
         "{\"enabled\":false}",
@@ -99,8 +99,21 @@ fn propagates_structural_conflicts_without_guessing_source_ranges() {
     assert_eq!(result.conflicts.len(), 1);
     assert_eq!(result.conflicts[0].category, "modify_modify");
     assert_eq!(result.conflicts[0].path, "/enabled");
-    assert!(result.conflicted_source.is_none());
-    assert!(result.owned_regions.is_empty());
+    let conflicted = result.conflicted_source.expect("localized conflict source");
+    assert!(conflicted.contains("<<<<<<< ours"));
+    assert!(conflicted.contains("\"enabled\":false"));
+    assert!(conflicted.contains("||||||| base"));
+    assert!(conflicted.contains("\"enabled\":true"));
+    assert!(conflicted.contains("======="));
+    assert!(conflicted.contains("\"enabled\":\"yes\""));
+    assert!(conflicted.contains(">>>>>>> theirs"));
+    assert_eq!(result.render_report.strategy, "owned_region_conflict_markers");
+    assert_eq!(result.owned_regions.len(), 1);
+    assert_eq!(result.owned_regions[0].owner_path, "/enabled");
+    assert_eq!(result.owned_regions[0].region_kind, "node");
+    assert_eq!(result.owned_regions[0].line_range.start, 1);
+    assert_eq!(result.owned_regions[0].line_range.end, 1);
+    assert!(result.owned_regions[0].byte_range.start < result.owned_regions[0].byte_range.end);
 }
 
 #[test]
