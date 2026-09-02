@@ -1,12 +1,54 @@
 # frozen_string_literal: true
 
 require_relative "../lib/structuredmerge_host_prototype"
+require_relative "../lib/structuredmerge_host_prototype/workflow_provider"
 require "digest"
 require "json"
 require "rbconfig"
 require "weakref"
 
 module HostPrototypeFixtures
+  class MergeProvider
+    attr_reader :requests
+
+    def initialize
+      @requests = []
+    end
+
+    def provider_id = "ruby.yaml.psych"
+    def family = "yaml"
+    def package_version = "test"
+
+    def capabilities
+      {operations: %i[analyze diff2 merge2 merge3], backends: %i[psych]}
+    end
+
+    def analyze(request)
+      @requests << request
+      {
+        schema: "https://structuredmerge.org/schemas/provider-result/v1.json",
+        operation: :analyze,
+        ok: true,
+        provider: {provider_id: provider_id},
+        profile: {},
+        diagnostics: [],
+        changes: [],
+        conflicts: [],
+        fallbacks: [],
+        render_report: {},
+        verification: {},
+        analysis: {source_bytes: request.fetch(:source).bytesize},
+        extensions: [
+          {
+            schema: "structuredmerge.extension/ruby-psych/v1",
+            namespace: "ruby-psych",
+            payload: {native_tree_visibility: "provider_internal"}
+          }
+        ]
+      }
+    end
+  end
+
   class IdentityWorkflowHost
     attr_reader :callback_thread_ids, :detached_requests, :requests, :shutdown_count, :typed_requests
 
@@ -395,6 +437,74 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(request.items.map(&:offset)).to eq([0, payloads.fetch(0).bytesize])
     expect(request.items.map(&:byte_length)).to eq(payloads.map(&:bytesize))
     expect(request.items.map(&:sha256)).to eq(digests)
+  end
+
+  # rubocop:disable-next RSpec/ExampleLength -- end-to-end transport evidence keeps envelope and assertions together
+  it "dispatches an operation envelope to a Ruby merge provider and retains extensions" do
+    merge_provider = HostPrototypeFixtures::MergeProvider.new
+    host = described_class::WorkflowProvider.new(
+      host_id: "host.ruby.yaml.psych",
+      provider: merge_provider
+    )
+    StructuredmergeHostPrototypeCore.register_workflow_host(host, host.host_id)
+    source = "# docs\nname: structuredmerge\n".b
+    source_id = "source:yaml:current"
+    inbound_extension = {
+      "schema" => "structuredmerge.extension/caller/v1",
+      "namespace" => "caller",
+      "payload" => {"retained" => true}
+    }
+    operation_request = JSON.generate(
+      "schema" => "structuredmerge.operation-request/v1",
+      "request_id" => "operation:analyze:psych:001",
+      "operation" => "analyze",
+      "provider_selection" => {
+        "provider_id" => "ruby.yaml.psych",
+        "family" => "yaml",
+        "dialect" => "yaml",
+        "profile_id" => "source_preserving"
+      },
+      "parser_selection" => {"backend" => "psych"},
+      "sources" => {
+        "source" => {
+          "source_id" => source_id,
+          "byte_length" => source.bytesize,
+          "sha256" => Digest::SHA256.hexdigest(source),
+          "encoding" => "utf-8"
+        }
+      },
+      "extensions" => [inbound_extension],
+      "metadata" => {}
+    ).b
+    segments = [operation_request, source]
+    response = described_class.execute_typed_workflow(
+      host.host_id,
+      [described_class::WorkflowProvider::REQUEST_SEGMENT_ID, source_id],
+      segments.map(&:bytesize),
+      segments.map { |segment| Digest::SHA256.hexdigest(segment) },
+      segments.join.bytes
+    ).pack("C*")
+    result = JSON.parse(response)
+
+    expect(result).to include(
+      "schema" => "https://structuredmerge.org/schemas/provider-result/v1.json",
+      "operation" => "analyze",
+      "request_id" => "operation:analyze:psych:001",
+      "ok" => true
+    )
+    expect(result.fetch("extensions")).to eq(
+      [
+        inbound_extension,
+        {
+          "schema" => "structuredmerge.extension/ruby-psych/v1",
+          "namespace" => "ruby-psych",
+          "payload" => {"native_tree_visibility" => "provider_internal"}
+        }
+      ]
+    )
+    expect(merge_provider.requests).to contain_exactly(
+      hash_including(source: source.force_encoding(Encoding::UTF_8), backend: "psych")
+    )
   end
 
   it "rejects invalid typed batch metadata before invoking Ruby" do

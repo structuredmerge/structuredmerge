@@ -1017,6 +1017,18 @@ pub fn execute_typed_identity(
     Ok(result)
 }
 
+pub fn execute_typed_workflow(
+    provider_name: String,
+    source_ids: Vec<String>,
+    source_lengths: Vec<u64>,
+    source_digests: Vec<String>,
+    source: Vec<u8>,
+) -> Result<Vec<u8>, HostPrototypeError> {
+    let request = validated_batch_request(source_ids, source_lengths, source_digests, &source)?;
+    let provider = registry::get_workflow_host_registry().read().get(&provider_name)?;
+    provider.provider.execute_typed_batch(request, source)
+}
+
 pub fn execute_in_process_identity(
     source_ids: Vec<String>,
     source_lengths: Vec<u64>,
@@ -1156,6 +1168,7 @@ mod tests {
 
     struct IdentityHost {
         name: String,
+        typed_response: Option<Vec<u8>>,
     }
 
     impl Plugin for IdentityHost {
@@ -1220,7 +1233,7 @@ mod tests {
             _request: HostBatchRequest,
             source: Vec<u8>,
         ) -> Result<Vec<u8>, HostPrototypeError> {
-            Ok(source)
+            Ok(self.typed_response.clone().unwrap_or(source))
         }
 
         fn execute_detached_batch(&self, request: Vec<u8>) -> Result<Vec<u8>, HostPrototypeError> {
@@ -1229,11 +1242,11 @@ mod tests {
     }
 
     fn identity(name: &str) -> Arc<dyn WorkflowHost> {
-        Arc::new(IdentityHost { name: name.to_owned() })
+        Arc::new(IdentityHost { name: name.to_owned(), typed_response: None })
     }
 
     fn identity_parser(name: &str) -> Arc<dyn ParserHost> {
-        Arc::new(IdentityHost { name: name.to_owned() })
+        Arc::new(IdentityHost { name: name.to_owned(), typed_response: None })
     }
 
     #[test]
@@ -1246,6 +1259,33 @@ mod tests {
             registry.get("identity").unwrap().provider.execute_batch(input.clone()).unwrap();
 
         assert_eq!(output, input);
+    }
+
+    #[test]
+    fn typed_workflow_returns_provider_result_bytes() {
+        let provider_name = "workflow.typed-result";
+        let _ = workflow_host::unregister_workflow_host(provider_name);
+        let response =
+            br#"{"schema":"https://structuredmerge.org/schemas/provider-result/v1.json"}"#.to_vec();
+        register_workflow_host(Arc::new(IdentityHost {
+            name: provider_name.to_owned(),
+            typed_response: Some(response.clone()),
+        }))
+        .unwrap();
+        let source = b"operation-requestyaml: true\n".to_vec();
+        let parts = [b"operation-request".as_slice(), b"yaml: true\n".as_slice()];
+
+        let result = execute_typed_workflow(
+            provider_name.to_owned(),
+            vec!["operation-request".to_owned(), "source:yaml".to_owned()],
+            parts.iter().map(|part| part.len() as u64).collect(),
+            parts.iter().map(|part| format!("{:x}", Sha256::digest(part))).collect(),
+            source,
+        )
+        .unwrap();
+
+        assert_eq!(result, response);
+        workflow_host::unregister_workflow_host(provider_name).unwrap();
     }
 
     #[test]

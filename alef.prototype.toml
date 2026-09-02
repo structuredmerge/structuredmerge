@@ -64,6 +64,7 @@ functions = [
   "shutdown_host_runtime",
   "execute_in_process_identity",
   "execute_typed_identity",
+  "execute_typed_workflow",
   "execute_detached_identity",
   "registered_workflow_hosts",
   "replace_parser_host",
