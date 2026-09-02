@@ -1,11 +1,13 @@
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult,
-    ParseResult, PolicyReference, PolicySurface,
+    ParseResult, PolicyReference, PolicySurface, SourcePreservingOwner,
+    SourcePreservingOwnerDocument, ThreeWayMergeResult, merge_source_preserving_owners,
+    normalized_parse_error_result, parse_error_result, three_way_parse_error,
 };
 use tree_haver::{
-    BackendReference, ParserRequest, ProcessRequest, kreuzberg_language_pack_backend,
-    language_pack_adapter_info, parse_with_language_pack, process_with_language_pack,
-    structured_import_source_diagnostics,
+    BackendReference, NormalizedTreeIndex, NormalizedTreeNode, ParserRequest,
+    kreuzberg_language_pack_backend, language_pack_adapter_info,
+    parse_normalized_with_language_pack,
 };
 
 pub const PACKAGE_NAME: &str = "go-merge";
@@ -96,10 +98,6 @@ fn parse_request(source: &str) -> ParserRequest {
     }
 }
 
-fn process_request(source: &str) -> ProcessRequest {
-    ProcessRequest { source: source.to_string(), language: "go".to_string() }
-}
-
 fn slice_span(source: &str, start: usize, end: usize) -> String {
     source[start..end].trim().to_string()
 }
@@ -154,74 +152,59 @@ pub fn go_backends() -> Vec<GoBackend> {
 }
 
 pub fn parse_go(source: &str, _dialect: GoDialect) -> ParseResult<GoAnalysis> {
-    let parsed = parse_with_language_pack(&parse_request(source));
+    let parsed = parse_normalized_with_language_pack(&parse_request(source));
     if !parsed.ok {
-        return ParseResult {
-            ok: false,
-            diagnostics: parsed.diagnostics.into_iter().map(Into::into).collect(),
-            analysis: None,
-            policies: vec![],
-        };
+        return normalized_parse_error_result(parsed.diagnostics);
     }
-
-    let processed = process_with_language_pack(&process_request(source));
-    if !processed.ok {
-        return ParseResult {
-            ok: false,
-            diagnostics: processed.diagnostics.into_iter().map(Into::into).collect(),
-            analysis: None,
-            policies: vec![],
-        };
-    }
-
-    let analysis = processed.analysis.expect("successful process should include analysis");
-    let import_diagnostics = structured_import_source_diagnostics("go", &analysis.imports);
-    if !import_diagnostics.is_empty() {
-        return ParseResult {
-            ok: false,
-            diagnostics: import_diagnostics.into_iter().map(Into::into).collect(),
-            analysis: None,
-            policies: vec![],
-        };
-    }
-
-    let mut deduped_imports = std::collections::BTreeMap::<String, ModuleImport>::new();
-    for item in &analysis.imports {
-        let match_key = item.source.clone();
-        let candidate = ModuleImport {
-            path: String::new(),
-            match_key: match_key.clone(),
-            text: format!("{}\n", slice_span(source, item.span.start_byte, item.span.end_byte)),
-        };
-        match deduped_imports.get(&match_key) {
-            Some(current) if current.text.len() >= candidate.text.len() => {}
-            _ => {
-                deduped_imports.insert(match_key, candidate);
+    let index = match NormalizedTreeIndex::new(&parsed.nodes) {
+        Ok(index) => index,
+        Err(message) => return parse_error_result(message),
+    };
+    let root = match index.root(&parsed.root_id) {
+        Ok(root) => root,
+        Err(message) => return parse_error_result(message),
+    };
+    let mut imports = Vec::new();
+    let mut declarations = Vec::new();
+    for node in index.children(root) {
+        match node.kind.as_str() {
+            "comment" | "package_clause" => {}
+            "import_declaration" => {
+                let paths = go_import_paths(node, &index);
+                if paths.len() != 1 {
+                    return parse_error_result(
+                        "Go grouped or source-less imports are unsupported by merge2",
+                    );
+                }
+                imports.push(ModuleImport {
+                    path: format!("/imports/{}", imports.len()),
+                    match_key: paths[0].clone(),
+                    text: format!(
+                        "{}\n",
+                        slice_span(source, node.span.range.start_byte, node.span.range.end_byte)
+                    ),
+                });
             }
+            "function_declaration" => {
+                let Some(name) = declaration_name(node, &index) else {
+                    return parse_error_result("Go function declaration has no stable name");
+                };
+                declarations.push(ModuleDeclaration {
+                    path: format!("/declarations/{name}"),
+                    match_key: name,
+                    text: format!(
+                        "{}\n",
+                        line_anchored_span(
+                            source,
+                            node.span.range.start_byte,
+                            node.span.range.end_byte
+                        )
+                    ),
+                });
+            }
+            kind => return parse_error_result(format!("unsupported top-level Go node {kind:?}")),
         }
     }
-    let imports = deduped_imports
-        .into_values()
-        .enumerate()
-        .map(|(index, mut item)| {
-            item.path = format!("/imports/{index}");
-            item
-        })
-        .collect::<Vec<_>>();
-    let mut declarations = analysis
-        .structure
-        .iter()
-        .filter_map(|item| {
-            item.name.as_ref().map(|name| ModuleDeclaration {
-                path: format!("/declarations/{name}"),
-                match_key: name.clone(),
-                text: format!(
-                    "{}\n",
-                    line_anchored_span(source, item.span.start_byte, item.span.end_byte)
-                ),
-            })
-        })
-        .collect::<Vec<_>>();
     declarations.sort_by(|left, right| left.path.cmp(&right.path));
 
     ParseResult {
@@ -254,6 +237,95 @@ pub fn parse_go(source: &str, _dialect: GoDialect) -> ParseResult<GoAnalysis> {
         }),
         policies: vec![],
     }
+}
+
+pub fn merge_go_three_way(
+    base_source: &str,
+    ours_source: &str,
+    theirs_source: &str,
+    _dialect: GoDialect,
+) -> ThreeWayMergeResult<String> {
+    let base = match parse_source_preserving_go(base_source) {
+        Ok(document) => document,
+        Err(message) => return three_way_parse_error("base", message),
+    };
+    let ours = match parse_source_preserving_go(ours_source) {
+        Ok(document) => document,
+        Err(message) => return three_way_parse_error("ours", message),
+    };
+    let theirs = match parse_source_preserving_go(theirs_source) {
+        Ok(document) => document,
+        Err(message) => return three_way_parse_error("theirs", message),
+    };
+
+    merge_source_preserving_owners(base, ours, theirs, parse_source_preserving_go)
+}
+
+fn parse_source_preserving_go(source: &str) -> Result<SourcePreservingOwnerDocument, String> {
+    let parsed = parse_normalized_with_language_pack(&parse_request(source));
+    if !parsed.ok {
+        return Err(parsed.diagnostics.join("; "));
+    }
+    if !parsed.source_fragments_available {
+        return Err("Go parser did not retain source fragments".to_string());
+    }
+    let index = NormalizedTreeIndex::new(&parsed.nodes)?;
+    let root = index.root(&parsed.root_id)?;
+    let mut owners = Vec::new();
+    for node in index.children(root) {
+        match node.kind.as_str() {
+            "comment" | "package_clause" | "import_declaration" => {}
+            "function_declaration" => {
+                let name = declaration_name(node, &index)
+                    .ok_or_else(|| "Go function declaration has no stable name".to_string())?;
+                let path = format!("/function:{name}");
+                owners.push(SourcePreservingOwner {
+                    id: path.clone(),
+                    path,
+                    fingerprint: node.source_fragment.clone(),
+                    start_byte: node.span.range.start_byte,
+                    end_byte: node.span.range.end_byte,
+                    start_line: node.span.start_point.row + 1,
+                    end_line: node.span.end_point.row + 1,
+                });
+            }
+            kind => return Err(format!("unsupported top-level Go node {kind:?}")),
+        }
+    }
+    if owners.is_empty() {
+        return Err("Go document has no supported top-level functions".to_string());
+    }
+    Ok(SourcePreservingOwnerDocument { source: source.to_string(), owners })
+}
+
+fn go_import_paths(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> Vec<String> {
+    index
+        .descendants(node)
+        .into_iter()
+        .filter(|child| {
+            matches!(child.kind.as_str(), "interpreted_string_literal" | "raw_string_literal")
+        })
+        .map(|child| unquote(child.source_fragment.trim()))
+        .collect()
+}
+
+fn declaration_name(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> Option<String> {
+    index
+        .children(node)
+        .into_iter()
+        .find(|child| child.field_name.as_deref() == Some("name"))
+        .or_else(|| index.children(node).into_iter().find(|child| child.kind == "identifier"))
+        .map(|child| child.source_fragment.clone())
+}
+
+fn unquote(value: &str) -> String {
+    if value.len() >= 2 {
+        let bytes = value.as_bytes();
+        if matches!(bytes[0], b'`' | b'"') && bytes[0] == bytes[value.len() - 1] {
+            return value[1..value.len() - 1].to_string();
+        }
+    }
+    value.to_string()
 }
 
 pub fn match_go_owners(template: &GoAnalysis, destination: &GoAnalysis) -> GoOwnerMatchResult {

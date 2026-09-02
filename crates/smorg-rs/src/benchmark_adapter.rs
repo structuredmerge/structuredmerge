@@ -7,6 +7,7 @@ use std::{
 
 use ast_merge::{DiagnosticCategory, ThreeWayMergeOutcome};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use go_merge::{GoDialect, merge_go_three_way};
 use json_merge::{
     JsonDialect, json_semantically_equivalent, merge_json_source_preserving, merge_json_three_way,
 };
@@ -38,6 +39,7 @@ struct Selector {
 
 #[derive(Clone, Copy)]
 enum BenchmarkDialect {
+    Go(GoDialect),
     Json(JsonDialect),
     Markdown(MarkdownDialect),
     Rbs(RbsDialect),
@@ -72,6 +74,9 @@ pub fn run_merge2_files(args: &[String], output: &mut dyn Write, error: &mut dyn
         let current = read_source(&args[1], "current")?;
         let dialect = selected_dialect(&args[2])?;
         Ok::<_, String>(match dialect {
+            BenchmarkDialect::Go(_) => {
+                return Err("Go merge2 is not source-preserving yet".to_string());
+            }
             BenchmarkDialect::Json(dialect) => {
                 merge_json_source_preserving(&incoming, &current, dialect)
             }
@@ -157,6 +162,7 @@ pub fn run_merge3_files(args: &[String], error: &mut dyn Write) -> i32 {
         let theirs = read_source(&args[2], "theirs")?;
         let dialect = selected_dialect(&args[3])?;
         let result = match dialect {
+            BenchmarkDialect::Go(dialect) => merge_go_three_way(&base, &ours, &theirs, dialect),
             BenchmarkDialect::Json(dialect) => merge_json_three_way(&base, &ours, &theirs, dialect),
             BenchmarkDialect::TypeScript(dialect) => {
                 merge_typescript_three_way(&base, &ours, &theirs, dialect)
@@ -209,6 +215,7 @@ fn selected_dialect(path: &str) -> Result<BenchmarkDialect, String> {
 
 fn benchmark_family(dialect: BenchmarkDialect) -> &'static str {
     match dialect {
+        BenchmarkDialect::Go(_) => "go",
         BenchmarkDialect::Json(_) => "json",
         BenchmarkDialect::Markdown(_) => "markdown",
         BenchmarkDialect::Rbs(_) => "rbs",
@@ -269,6 +276,7 @@ fn execute(request: Request) -> Result<(i32, String, serde_json::Value), String>
         return Err(format!("unsupported request schema: {}", request.schema_version));
     }
     match request.selector.family.as_str() {
+        "go" => execute_go(request),
         "json" => execute_json(request),
         "markdown" => execute_markdown(request),
         "rbs" => execute_rbs(request),
@@ -278,6 +286,29 @@ fn execute(request: Request) -> Result<(i32, String, serde_json::Value), String>
         "yaml" => execute_yaml(request),
         family => Err(format!("unsupported benchmark family: {family}")),
     }
+}
+
+fn execute_go(request: Request) -> Result<(i32, String, serde_json::Value), String> {
+    if request.selector.dialect != "go" {
+        return Err(format!("unsupported Go dialect: {}", request.selector.dialect));
+    }
+    if request.operation != "merge3" {
+        return Err(format!("unsupported Go benchmark operation: {}", request.operation));
+    }
+
+    let base = source(&request.sources, "base")?;
+    let ours = source(&request.sources, "ours")?;
+    let theirs = source(&request.sources, "theirs")?;
+    let result = merge_go_three_way(&base, &ours, &theirs, GoDialect::Go);
+    let status = match result.outcome {
+        ThreeWayMergeOutcome::Clean => 0,
+        ThreeWayMergeOutcome::Conflict => 1,
+        ThreeWayMergeOutcome::Error => 2,
+    };
+    let output = result.output.clone().unwrap_or_default();
+    let result = serde_json::to_value(result)
+        .map_err(|error| format!("serialize Go merge3 result: {error}"))?;
+    Ok((status, output, result))
 }
 
 fn execute_typescript(request: Request) -> Result<(i32, String, serde_json::Value), String> {
@@ -466,7 +497,9 @@ pub fn parse_dialect(value: &str) -> Result<JsonDialect, String> {
 }
 
 fn parse_benchmark_dialect(value: &str) -> Result<BenchmarkDialect, String> {
-    if value.trim().eq_ignore_ascii_case("toml") {
+    if value.trim().eq_ignore_ascii_case("go") {
+        Ok(BenchmarkDialect::Go(GoDialect::Go))
+    } else if value.trim().eq_ignore_ascii_case("toml") {
         Ok(BenchmarkDialect::Toml(TomlDialect::Toml))
     } else if value.trim().eq_ignore_ascii_case("markdown")
         || value.trim().eq_ignore_ascii_case("md")
@@ -650,6 +683,39 @@ mod tests {
         assert!(
             merge3["stderr"].as_str().unwrap().contains("unsupported Markdown benchmark operation")
         );
+    }
+
+    #[test]
+    fn serves_source_preserving_go_merge3_without_claiming_merge2() {
+        let base =
+            "package main\n\nfunc left() int { return 1 }\n\nfunc right() int { return 1 }\n";
+        let ours =
+            "package main\n\nfunc left() int { return 2 }\n\nfunc right() int { return 1 }\n";
+        let theirs =
+            "package main\n\nfunc left() int { return 1 }\n\nfunc right() int { return 2 }\n";
+        let expected =
+            "package main\n\nfunc left() int { return 2 }\n\nfunc right() int { return 2 }\n";
+        let merge3 = execute_line(&request_for(
+            "merge3",
+            "go",
+            "go",
+            &[("base", base), ("ours", ours), ("theirs", theirs)],
+        ));
+        let merge2 = execute_line(&request_for(
+            "merge2",
+            "go",
+            "go",
+            &[("incoming", theirs), ("current", ours)],
+        ));
+
+        assert_eq!(merge3["status"], 0);
+        assert_eq!(
+            String::from_utf8(STANDARD.decode(merge3["output_base64"].as_str().unwrap()).unwrap())
+                .unwrap(),
+            expected
+        );
+        assert_eq!(merge2["status"], 2);
+        assert!(merge2["stderr"].as_str().unwrap().contains("unsupported Go benchmark operation"));
     }
 
     #[test]

@@ -514,6 +514,12 @@ impl<'a> NormalizedTreeIndex<'a> {
         node.child_ids.iter().filter_map(|id| self.node(id)).collect()
     }
 
+    pub fn descendants(&self, node: &NormalizedTreeNode) -> Vec<&'a NormalizedTreeNode> {
+        let mut descendants = Vec::new();
+        self.collect_descendants(node, &mut descendants);
+        descendants
+    }
+
     pub fn find_descendant(
         &self,
         node: &NormalizedTreeNode,
@@ -536,6 +542,17 @@ impl<'a> NormalizedTreeIndex<'a> {
             }
         }
         None
+    }
+
+    fn collect_descendants(
+        &self,
+        node: &NormalizedTreeNode,
+        descendants: &mut Vec<&'a NormalizedTreeNode>,
+    ) {
+        for child in self.children(node) {
+            descendants.push(child);
+            self.collect_descendants(child, descendants);
+        }
     }
 }
 
@@ -1716,6 +1733,7 @@ mod tests {
         let root = index.root(&result.root_id).expect("normalized tree should expose its root");
         assert_eq!(root.kind, "document");
         assert!(index.find_descendant(root, |node| node.kind == "pair").is_some());
+        assert_eq!(index.descendants(root).len(), result.nodes.len() - 1);
     }
 
     #[test]

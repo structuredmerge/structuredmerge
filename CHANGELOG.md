@@ -11,3 +11,5 @@
   fail-closed node lookup, root validation, child traversal, and descendant search.
 - Share parser diagnostic conversion and role-attributed three-way parse failure
   construction from `ast-merge` instead of redefining them in format providers.
+- Route Go analysis through TreeHaver's normalized TSLP parser and add a
+  fail-closed, source-preserving top-level function three-way merge provider.

@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf};
 
 use go_merge::{
     GoBackend, GoDialect, go_backend_feature_profile, go_backends, go_feature_profile,
-    go_plan_context, match_go_owners, merge_go, parse_go,
+    go_plan_context, match_go_owners, merge_go, merge_go_three_way, parse_go,
 };
 use serde_json::Value;
 
@@ -16,6 +16,48 @@ fn fixture_path(parts: &[&str]) -> PathBuf {
         path.push(part);
     }
     path
+}
+
+#[test]
+fn merges_independent_function_edits_with_exact_source_preservation() {
+    let base = "package main\n\nfunc left() int { return 1 }\n\nfunc right() int { return 1 }\n";
+    let ours = "package main\n\nfunc left() int { return 2 }\n\nfunc right() int { return 1 }\n";
+    let theirs = "package main\n\nfunc left() int { return 1 }\n\nfunc right() int { return 2 }\n";
+
+    let result = merge_go_three_way(base, ours, theirs, GoDialect::Go);
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
+    assert_eq!(
+        result.output.as_deref(),
+        Some("package main\n\nfunc left() int { return 2 }\n\nfunc right() int { return 2 }\n")
+    );
+}
+
+#[test]
+fn rejects_ambiguous_go_three_way_inputs_without_fallback() {
+    let base = "package main\n\nfunc value() int { return 1 }\n";
+    let ours = "package main\n\nfunc value() int { return 2 }\n";
+    let theirs = "package main\n\nfunc value() int { return 3 }\n";
+    let conflict = merge_go_three_way(base, ours, theirs, GoDialect::Go);
+    assert_eq!(conflict.outcome, ast_merge::ThreeWayMergeOutcome::Conflict);
+    assert_eq!(conflict.conflicts[0].path, "/function:value");
+
+    let malformed =
+        merge_go_three_way(base, ours, "package main\n\nfunc value( {\n", GoDialect::Go);
+    assert_eq!(malformed.outcome, ast_merge::ThreeWayMergeOutcome::Error);
+    assert_eq!(malformed.diagnostics[0].category, ast_merge::DiagnosticCategory::ParseError);
+
+    let changed_layout = merge_go_three_way(
+        base,
+        ours,
+        "package changed\n\nfunc value() int { return 1 }\n",
+        GoDialect::Go,
+    );
+    assert_eq!(changed_layout.outcome, ast_merge::ThreeWayMergeOutcome::Error);
+    assert_eq!(
+        changed_layout.diagnostics[0].category,
+        ast_merge::DiagnosticCategory::UnsupportedFeature
+    );
 }
 
 fn read_fixture(parts: &[&str]) -> Value {
