@@ -1,7 +1,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ast_merge::{
-    Diagnostic, DiagnosticCategory, DiagnosticSeverity, MergeConflict, MergeResult, SourceEdit,
+    ConflictAlternative, ConflictAlternativeState, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, MergeConflict, MergeResult, OwnedSourceRegion, SourceEdit, SourceRevision,
     ThreeWayMergeOutcome, ThreeWayMergeResult, apply_source_edits,
 };
 use tree_haver::{
@@ -21,6 +22,7 @@ pub(crate) enum JsonSemanticValue {
 pub(crate) struct JsonSyntaxMember {
     pub key: String,
     pub pair_range: ByteRange,
+    pub owned_region: OwnedSourceRegion,
     pub pair_source: String,
     pub value: JsonSyntaxValue,
 }
@@ -29,6 +31,7 @@ pub(crate) struct JsonSyntaxMember {
 pub(crate) struct JsonSyntaxValue {
     pub node_id: String,
     pub range: ByteRange,
+    pub owned_region: OwnedSourceRegion,
     pub source: String,
     pub semantic: JsonSemanticValue,
     pub members: Vec<JsonSyntaxMember>,
@@ -204,6 +207,7 @@ fn build_value(
     nodes: &HashMap<&str, &NormalizedTreeNode>,
 ) -> Result<JsonSyntaxValue, String> {
     let range = node.span.range.clone();
+    let owned_region = owned_region(node);
     match node.kind.as_str() {
         "object" => build_object(node, nodes, range),
         "array" => {
@@ -214,6 +218,7 @@ fn build_value(
             Ok(JsonSyntaxValue {
                 node_id: node.id.clone(),
                 range,
+                owned_region,
                 source: node.source_fragment.clone(),
                 semantic: JsonSemanticValue::Array(
                     elements.iter().map(|element| element.semantic.clone()).collect(),
@@ -226,6 +231,7 @@ fn build_value(
         _ => Ok(JsonSyntaxValue {
             node_id: node.id.clone(),
             range,
+            owned_region,
             source: node.source_fragment.clone(),
             semantic: JsonSemanticValue::Scalar {
                 kind: node.kind.clone(),
@@ -267,6 +273,7 @@ fn build_object(
         members.push(JsonSyntaxMember {
             key,
             pair_range: pair.span.range.clone(),
+            owned_region: owned_region(pair),
             pair_source: pair.source_fragment.clone(),
             value,
         });
@@ -275,12 +282,22 @@ fn build_object(
     Ok(JsonSyntaxValue {
         node_id: node.id.clone(),
         range,
+        owned_region: owned_region(node),
         source: node.source_fragment.clone(),
         semantic: JsonSemanticValue::Object(semantic),
         members,
         elements: vec![],
         closing_byte: closing_delimiter_byte(node, nodes, "}"),
     })
+}
+
+fn owned_region(node: &NormalizedTreeNode) -> OwnedSourceRegion {
+    OwnedSourceRegion {
+        start_byte: node.span.range.start_byte,
+        end_byte: node.span.range.end_byte,
+        start_line: node.span.start_point.row + 1,
+        end_line: node.span.end_point.row + 1,
+    }
 }
 
 fn semantic_children<'a>(
@@ -384,6 +401,35 @@ struct MergePlan {
 
 impl MergePlan {
     fn conflict(&mut self, path: &str, category: &str, message: impl Into<String>) {
+        self.conflict_with_alternatives(path, category, message, vec![]);
+    }
+
+    fn conflict_with_regions(
+        &mut self,
+        path: &str,
+        category: &str,
+        message: impl Into<String>,
+        regions: [&OwnedSourceRegion; 3],
+    ) {
+        self.conflict_with_alternatives(
+            path,
+            category,
+            message,
+            [SourceRevision::Base, SourceRevision::Ours, SourceRevision::Theirs]
+                .into_iter()
+                .zip(regions)
+                .map(|(revision, region)| present_alternative(revision, region))
+                .collect(),
+        );
+    }
+
+    fn conflict_with_alternatives(
+        &mut self,
+        path: &str,
+        category: &str,
+        message: impl Into<String>,
+        alternatives: Vec<ConflictAlternative>,
+    ) {
         let message = message.into();
         self.conflicts.push(MergeConflict {
             conflict_id: format!("json:{}:{}", category, self.conflicts.len() + 1),
@@ -391,7 +437,7 @@ impl MergePlan {
             path: path.to_string(),
             fallback_scope: path.to_string(),
             message,
-            alternatives: vec![],
+            alternatives,
         });
     }
 
@@ -427,6 +473,21 @@ impl MergePlan {
             .additions
             .push(ObjectAddition { before_byte, pair_source: donor.pair_source.clone() });
     }
+}
+
+fn present_alternative(
+    revision: SourceRevision,
+    region: &OwnedSourceRegion,
+) -> ConflictAlternative {
+    ConflictAlternative {
+        revision,
+        state: ConflictAlternativeState::Present,
+        regions: vec![region.clone()],
+    }
+}
+
+fn absent_alternative(revision: SourceRevision) -> ConflictAlternative {
+    ConflictAlternative { revision, state: ConflictAlternativeState::Absent, regions: vec![] }
 }
 
 pub fn merge_json_source_preserving(
@@ -501,7 +562,11 @@ pub fn merge_json_three_way(
             path: "".to_string(),
             fallback_scope: "".to_string(),
             message: "duplicate JSON array identities prevent deterministic matching".to_string(),
-            alternatives: vec![],
+            alternatives: vec![
+                present_alternative(SourceRevision::Base, &base.root.owned_region),
+                present_alternative(SourceRevision::Ours, &ours.root.owned_region),
+                present_alternative(SourceRevision::Theirs, &theirs.root.owned_region),
+            ],
         };
         return conflicted_three_way(vec![conflict]);
     }
@@ -513,7 +578,14 @@ pub fn merge_json_three_way(
     }
 
     let mut plan = MergePlan::default();
-    let expected = merge_three_values(&base.root, &ours.root, &theirs.root, "", &mut plan);
+    let expected = merge_three_values(
+        &base.root,
+        &ours.root,
+        &theirs.root,
+        "",
+        [&base.root.owned_region, &ours.root.owned_region, &theirs.root.owned_region],
+        &mut plan,
+    );
     if !plan.conflicts.is_empty() {
         return conflicted_three_way(plan.conflicts);
     }
@@ -575,6 +647,7 @@ fn merge_three_values(
     ours: &JsonSyntaxValue,
     theirs: &JsonSyntaxValue,
     path: &str,
+    owned_regions: [&OwnedSourceRegion; 3],
     plan: &mut MergePlan,
 ) -> JsonSemanticValue {
     if ours.semantic == theirs.semantic {
@@ -598,7 +671,12 @@ fn merge_three_values(
         JsonSemanticValue::Object(theirs_values),
     ) = (&base.semantic, &ours.semantic, &theirs.semantic)
     else {
-        plan.conflict(path, "modify_modify", "both sides changed the same JSON value");
+        plan.conflict_with_regions(
+            path,
+            "modify_modify",
+            "both sides changed the same JSON value",
+            owned_regions,
+        );
         return ours.semantic.clone();
     };
 
@@ -630,11 +708,23 @@ fn merge_three_values(
             (Some(_), None, None, _, _, _) => {}
             (Some(base_value), None, Some(theirs_value), _, _, _) if base_value == theirs_value => {
             }
-            (Some(base_value), Some(ours_value), None, _, _, _) if base_value == ours_value => {
-                plan.conflict(
+            (
+                Some(base_value),
+                Some(ours_value),
+                None,
+                Some(base_member),
+                Some(ours_member),
+                None,
+            ) if base_value == ours_value => {
+                plan.conflict_with_alternatives(
                     &child_path,
                     "delete_requires_owner_edit",
                     "theirs deleted a JSON owner that is still present in ours",
+                    vec![
+                        present_alternative(SourceRevision::Base, &base_member.owned_region),
+                        present_alternative(SourceRevision::Ours, &ours_member.owned_region),
+                        absent_alternative(SourceRevision::Theirs),
+                    ],
                 );
             }
             (
@@ -652,20 +742,40 @@ fn merge_three_values(
                         &ours_member.value,
                         &theirs_member.value,
                         &child_path,
+                        [
+                            &base_member.owned_region,
+                            &ours_member.owned_region,
+                            &theirs_member.owned_region,
+                        ],
                         plan,
                     ),
                 );
             }
-            _ => {
-                plan.conflict(
+            (_, _, _, base_member, ours_member, theirs_member) => {
+                plan.conflict_with_alternatives(
                     &child_path,
                     "ambiguous_owner_change",
                     "JSON owner addition, deletion, or modification is ambiguous",
+                    vec![
+                        alternative_for_member(SourceRevision::Base, base_member),
+                        alternative_for_member(SourceRevision::Ours, ours_member),
+                        alternative_for_member(SourceRevision::Theirs, theirs_member),
+                    ],
                 );
             }
         }
     }
     JsonSemanticValue::Object(merged)
+}
+
+fn alternative_for_member(
+    revision: SourceRevision,
+    member: Option<&JsonSyntaxMember>,
+) -> ConflictAlternative {
+    member.map_or_else(
+        || absent_alternative(revision),
+        |member| present_alternative(revision, &member.owned_region),
+    )
 }
 
 fn render_plan(source: &str, mut plan: MergePlan) -> Result<String, String> {
@@ -1011,6 +1121,14 @@ mod tests {
         );
         assert_eq!(same_owner.outcome, ThreeWayMergeOutcome::Conflict);
         assert_eq!(same_owner.conflicts[0].path, "/region");
+        assert_eq!(same_owner.conflicts[0].alternatives.len(), 3);
+        assert!(
+            same_owner.conflicts[0]
+                .alternatives
+                .iter()
+                .all(|alternative| alternative.state == ConflictAlternativeState::Present)
+        );
+        assert_eq!(same_owner.conflicts[0].alternatives[1].regions[0].start_line, 1);
 
         let duplicate = merge_json_three_way(
             "{\"items\":[{\"id\":\"same\",\"v\":1},{\"id\":\"same\",\"v\":1}]}\n",
@@ -1020,6 +1138,26 @@ mod tests {
         );
         assert_eq!(duplicate.outcome, ThreeWayMergeOutcome::Conflict);
         assert_eq!(duplicate.conflicts[0].category, "ambiguous_identity");
+        assert_eq!(duplicate.conflicts[0].alternatives.len(), 3);
+    }
+
+    #[test]
+    fn records_absent_conflict_alternatives_without_inventing_a_region() {
+        let result = merge_json_three_way(
+            "{\n  \"enabled\": true,\n  \"stable\": 1\n}\n",
+            "{\n  \"enabled\": true,\n  \"stable\": 2\n}\n",
+            "{\n  \"stable\": 1\n}\n",
+            JsonDialect::Json,
+        );
+
+        assert_eq!(result.outcome, ThreeWayMergeOutcome::Conflict);
+        let theirs = result.conflicts[0]
+            .alternatives
+            .iter()
+            .find(|alternative| alternative.revision == SourceRevision::Theirs)
+            .unwrap();
+        assert_eq!(theirs.state, ConflictAlternativeState::Absent);
+        assert!(theirs.regions.is_empty());
     }
 
     #[test]
