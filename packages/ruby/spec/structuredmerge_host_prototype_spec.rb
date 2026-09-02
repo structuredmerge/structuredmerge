@@ -71,6 +71,28 @@ module HostPrototypeFixtures
     end
   end
 
+  class BlockingWorkflowHost < IdentityWorkflowHost
+    def initialize(id)
+      super
+      @entered = Queue.new
+      @release = Queue.new
+    end
+
+    def execute_batch(request)
+      @entered << true
+      @release.pop
+      super
+    end
+
+    def wait_until_entered
+      @entered.pop
+    end
+
+    def release
+      @release << true
+    end
+  end
+
   class LifecycleWorkflowHost
     attr_reader :events, :shutdown_count
 
@@ -141,6 +163,18 @@ RSpec.describe StructuredmergeHostPrototype do
   def verify_identity_bytes(bytes, test_case)
     expect(bytes.bytesize).to eq(test_case.fetch("byte_length")), test_case.fetch("id")
     expect(Digest::SHA256.hexdigest(bytes)).to eq(test_case.fetch("sha256")), test_case.fetch("id")
+  end
+
+  def wait_for_identity_worker(task_id)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+    loop do
+      result = described_class.poll_identity_worker(task_id)
+      return result unless result.nil?
+
+      raise "native worker timed out" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+      sleep(0.001)
+    end
   end
 
   before do
@@ -474,21 +508,9 @@ RSpec.describe StructuredmergeHostPrototype do
     tasks = payloads.map do |payload|
       described_class.start_identity_worker("ruby.native-workers", payload)
     end
-    results = {}
-    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
-    until results.length == tasks.length
-      tasks.each do |task_id|
-        next if results.key?(task_id)
+    results = tasks.map { |task_id| wait_for_identity_worker(task_id) }
 
-        result = described_class.poll_identity_worker(task_id)
-        results[task_id] = result unless result.nil?
-      end
-      raise "native workers timed out" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
-
-      sleep(0.001)
-    end
-
-    expect(tasks.map { |task_id| results.fetch(task_id) }).to match_array(payloads)
+    expect(results).to match_array(payloads)
     expect(provider_ref.callback_thread_ids.length).to eq(payloads.length)
     expect(provider_ref.callback_thread_ids).to all(eq(provider_ref.callback_thread_ids.first))
     expect(provider_ref.callback_thread_ids).not_to include(caller_thread_id)
@@ -501,20 +523,29 @@ RSpec.describe StructuredmergeHostPrototype do
     end
     StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.native-failure")
     task_id = described_class.start_identity_worker("ruby.native-failure", [0, 255])
+
+    expect { wait_for_identity_worker(task_id) }
+      .to raise_error(RuntimeError, /Ruby method 'execute_batch' failed: native callback exploded/)
+  end
+
+  it "lets an in-flight snapshot finish before finalizing an unregistered provider" do
+    provider = HostPrototypeFixtures::BlockingWorkflowHost.new("ruby.in-flight")
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.in-flight")
+    task_id = described_class.start_identity_worker("ruby.in-flight", [0, 255, 13, 10])
+    provider.wait_until_entered
+
+    described_class.unregister_workflow_host("ruby.in-flight")
+
+    expect(described_class.registered_workflow_hosts).to be_empty
+    expect(provider.shutdown_count).to eq(0)
+    expect { described_class.execute_identity("ruby.in-flight", []) }
+      .to raise_error(RuntimeError, /provider not registered/)
+
+    provider.release
+    expect(wait_for_identity_worker(task_id)).to eq([0, 255, 13, 10])
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
-
-    loop do
-      begin
-        result = described_class.poll_identity_worker(task_id)
-      rescue RuntimeError => e
-        expect(e.message).to include("Ruby method 'execute_batch' failed: native callback exploded")
-        break
-      end
-      raise "native worker returned without its Ruby exception" unless result.nil?
-      raise "native worker timed out" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
-
-      sleep(0.001)
-    end
+    sleep(0.001) while provider.shutdown_count.zero? && Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+    expect(provider.shutdown_count).to eq(1)
   end
 
   it "validates and initializes a provider before publication" do

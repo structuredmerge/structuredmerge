@@ -5,7 +5,7 @@ use std::{
     io::Write,
     sync::{
         Arc, OnceLock,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc::{self, Receiver, TryRecvError},
     },
 };
@@ -113,14 +113,44 @@ pub trait ParserHost: Plugin {
     fn parse_batch(&self, request: Vec<u8>) -> Result<Vec<u8>, HostPrototypeError>;
 }
 
+struct ProviderEntry<P: Plugin + ?Sized> {
+    provider: Arc<P>,
+    finalized: AtomicBool,
+}
+
+impl<P: Plugin + ?Sized> ProviderEntry<P> {
+    fn new(provider: Arc<P>) -> Self {
+        Self { provider, finalized: AtomicBool::new(false) }
+    }
+
+    fn finalize(&self) -> Result<(), HostPrototypeError> {
+        if self.finalized.swap(true, Ordering::AcqRel) {
+            return Ok(());
+        }
+        self.provider.shutdown()
+    }
+}
+
+impl<P: Plugin + ?Sized> Drop for ProviderEntry<P> {
+    fn drop(&mut self) {
+        let _ = self.finalize();
+    }
+}
+
+fn finalize_if_unleased<P: Plugin + ?Sized>(
+    entry: Arc<ProviderEntry<P>>,
+) -> Result<(), HostPrototypeError> {
+    if Arc::strong_count(&entry) == 1 { entry.finalize() } else { Ok(()) }
+}
+
 #[derive(Default)]
 pub struct WorkflowHostRegistry {
-    providers: BTreeMap<String, Arc<dyn WorkflowHost>>,
+    providers: BTreeMap<String, Arc<ProviderEntry<dyn WorkflowHost>>>,
 }
 
 #[derive(Default)]
 pub struct ParserHostRegistry {
-    providers: BTreeMap<String, Arc<dyn ParserHost>>,
+    providers: BTreeMap<String, Arc<ProviderEntry<dyn ParserHost>>>,
 }
 
 impl ParserHostRegistry {
@@ -132,24 +162,27 @@ impl ParserHostRegistry {
         if self.providers.contains_key(&name) {
             return Err(HostPrototypeError::new(format!("provider already registered: {name}")));
         }
-        self.providers.insert(name, provider);
+        self.providers.insert(name, Arc::new(ProviderEntry::new(provider)));
         Ok(())
     }
 
-    fn get(&self, name: &str) -> Result<Arc<dyn ParserHost>, HostPrototypeError> {
+    fn get(&self, name: &str) -> Result<Arc<ProviderEntry<dyn ParserHost>>, HostPrototypeError> {
         self.providers
             .get(name)
             .cloned()
             .ok_or_else(|| HostPrototypeError::new(format!("provider not registered: {name}")))
     }
 
-    fn remove(&mut self, name: &str) -> Result<Arc<dyn ParserHost>, HostPrototypeError> {
+    fn remove(
+        &mut self,
+        name: &str,
+    ) -> Result<Arc<ProviderEntry<dyn ParserHost>>, HostPrototypeError> {
         self.providers
             .remove(name)
             .ok_or_else(|| HostPrototypeError::new(format!("provider not registered: {name}")))
     }
 
-    fn drain(&mut self) -> Vec<Arc<dyn ParserHost>> {
+    fn drain(&mut self) -> Vec<Arc<ProviderEntry<dyn ParserHost>>> {
         std::mem::take(&mut self.providers).into_values().collect()
     }
 
@@ -171,24 +204,27 @@ impl WorkflowHostRegistry {
         if self.providers.contains_key(&name) {
             return Err(HostPrototypeError::new(format!("provider already registered: {name}")));
         }
-        self.providers.insert(name, provider);
+        self.providers.insert(name, Arc::new(ProviderEntry::new(provider)));
         Ok(())
     }
 
-    fn get(&self, name: &str) -> Result<Arc<dyn WorkflowHost>, HostPrototypeError> {
+    fn get(&self, name: &str) -> Result<Arc<ProviderEntry<dyn WorkflowHost>>, HostPrototypeError> {
         self.providers
             .get(name)
             .cloned()
             .ok_or_else(|| HostPrototypeError::new(format!("provider not registered: {name}")))
     }
 
-    fn remove(&mut self, name: &str) -> Result<Arc<dyn WorkflowHost>, HostPrototypeError> {
+    fn remove(
+        &mut self,
+        name: &str,
+    ) -> Result<Arc<ProviderEntry<dyn WorkflowHost>>, HostPrototypeError> {
         self.providers
             .remove(name)
             .ok_or_else(|| HostPrototypeError::new(format!("provider not registered: {name}")))
     }
 
-    fn drain(&mut self) -> Vec<Arc<dyn WorkflowHost>> {
+    fn drain(&mut self) -> Vec<Arc<ProviderEntry<dyn WorkflowHost>>> {
         std::mem::take(&mut self.providers).into_values().collect()
     }
 
@@ -307,19 +343,20 @@ pub mod registry {
 }
 
 pub mod workflow_host {
-    use super::{HostPrototypeError, registry};
+    use super::{HostPrototypeError, finalize_if_unleased, registry};
 
     pub fn unregister_workflow_host(name: &str) -> Result<(), HostPrototypeError> {
         let provider = registry::get_workflow_host_registry().write().remove(name)?;
-        provider.shutdown()
+        finalize_if_unleased(provider)
     }
 
     pub fn clear_workflow_hosts() -> Result<(), HostPrototypeError> {
         let providers = registry::get_workflow_host_registry().write().drain();
         let mut failures = Vec::new();
         for provider in providers {
-            if let Err(error) = provider.shutdown() {
-                failures.push(format!("{}: {error}", provider.name()));
+            let name = provider.provider.name().to_owned();
+            if let Err(error) = finalize_if_unleased(provider) {
+                failures.push(format!("{name}: {error}"));
             }
         }
         if failures.is_empty() {
@@ -334,19 +371,20 @@ pub mod workflow_host {
 }
 
 pub mod parser_host {
-    use super::{HostPrototypeError, registry};
+    use super::{HostPrototypeError, finalize_if_unleased, registry};
 
     pub fn unregister_parser_host(name: &str) -> Result<(), HostPrototypeError> {
         let provider = registry::get_parser_host_registry().write().remove(name)?;
-        provider.shutdown()
+        finalize_if_unleased(provider)
     }
 
     pub fn clear_parser_hosts() -> Result<(), HostPrototypeError> {
         let providers = registry::get_parser_host_registry().write().drain();
         let mut failures = Vec::new();
         for provider in providers {
-            if let Err(error) = provider.shutdown() {
-                failures.push(format!("{}: {error}", provider.name()));
+            let name = provider.provider.name().to_owned();
+            if let Err(error) = finalize_if_unleased(provider) {
+                failures.push(format!("{name}: {error}"));
             }
         }
         if failures.is_empty() {
@@ -413,7 +451,7 @@ pub fn execute_identity(
     request: Vec<u8>,
 ) -> Result<Vec<u8>, HostPrototypeError> {
     let provider = registry::get_workflow_host_registry().read().get(&provider_name)?;
-    provider.execute_batch(request)
+    provider.provider.execute_batch(request)
 }
 
 pub fn start_identity_worker(
@@ -430,7 +468,7 @@ pub fn start_identity_worker(
     std::thread::Builder::new()
         .name(format!("structuredmerge-host-{task_id}"))
         .spawn(move || {
-            let _ = sender.send(provider.execute_batch(request));
+            let _ = sender.send(provider.provider.execute_batch(request));
         })
         .map_err(|error| {
             HostPrototypeError::new(format!("failed to start identity worker: {error}"))
@@ -527,7 +565,7 @@ pub fn execute_typed_identity(
 ) -> Result<Vec<u8>, HostPrototypeError> {
     let request = validated_batch_request(source_ids, source_lengths, source_digests, &source)?;
     let provider = registry::get_workflow_host_registry().read().get(&provider_name)?;
-    let result = provider.execute_typed_batch(request, source.clone())?;
+    let result = provider.provider.execute_typed_batch(request, source.clone())?;
     if result != source {
         return Err(HostPrototypeError::new("typed identity host changed source bytes"));
     }
@@ -575,7 +613,7 @@ pub fn execute_detached_identity(
     })?;
 
     let provider = registry::get_workflow_host_registry().read().get(&provider_name)?;
-    let result_bytes = provider.execute_detached_batch(envelope_bytes.clone())?;
+    let result_bytes = provider.provider.execute_detached_batch(envelope_bytes.clone())?;
     let result: DetachedBatchEnvelope = serde_json::from_slice(&result_bytes).map_err(|error| {
         HostPrototypeError::new(format!("invalid detached result envelope: {error}"))
     })?;
@@ -610,7 +648,7 @@ pub fn probe_with_parser(
     request: Vec<u8>,
 ) -> Result<Vec<u8>, HostPrototypeError> {
     let provider = registry::get_parser_host_registry().read().get(&provider_name)?;
-    provider.probe_batch(request)
+    provider.provider.probe_batch(request)
 }
 
 pub fn parse_with_parser(
@@ -618,7 +656,7 @@ pub fn parse_with_parser(
     request: Vec<u8>,
 ) -> Result<Vec<u8>, HostPrototypeError> {
     let provider = registry::get_parser_host_registry().read().get(&provider_name)?;
-    provider.parse_batch(request)
+    provider.provider.parse_batch(request)
 }
 
 pub fn registered_parser_hosts() -> Vec<String> {
@@ -701,7 +739,8 @@ mod tests {
         registry.insert(identity("identity")).unwrap();
 
         let input = vec![0, 0xff, b'\r', b'\n', b'a', 0];
-        let output = registry.get("identity").unwrap().execute_batch(input.clone()).unwrap();
+        let output =
+            registry.get("identity").unwrap().provider.execute_batch(input.clone()).unwrap();
 
         assert_eq!(output, input);
     }
@@ -723,7 +762,7 @@ mod tests {
 
         let provider = registry.remove("identity").unwrap();
 
-        assert_eq!(provider.name(), "identity");
+        assert_eq!(provider.provider.name(), "identity");
         let error = match registry.get("identity") {
             Ok(_) => panic!("removed provider remained available"),
             Err(error) => error,
@@ -739,8 +778,8 @@ mod tests {
 
         let provider = registry.get("identity.parser").unwrap();
 
-        assert_eq!(provider.probe_batch(payload.clone()).unwrap(), payload);
-        assert_eq!(provider.parse_batch(payload.clone()).unwrap(), payload);
+        assert_eq!(provider.provider.probe_batch(payload.clone()).unwrap(), payload);
+        assert_eq!(provider.provider.parse_batch(payload.clone()).unwrap(), payload);
     }
 
     #[test]
