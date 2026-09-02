@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 
 pub mod portable_benchmark_contract;
 pub use portable_benchmark_contract::*;
+pub mod matching;
+pub use matching::*;
 pub mod source_render;
 pub use source_render::*;
 

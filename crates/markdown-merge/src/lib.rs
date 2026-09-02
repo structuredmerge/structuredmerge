@@ -7,7 +7,7 @@ use ast_merge::{
     DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, MergeResult, ParseResult,
     ReviewReplayBundle, ReviewReplayBundleEnvelope, SurfaceOwnerKind, SurfaceOwnerRef,
     execute_reviewed_nested_merge, import_conformance_manifest_review_state_envelope,
-    import_review_replay_bundle_envelope,
+    import_review_replay_bundle_envelope, match_owner_paths,
 };
 use tree_haver::{ParserRequest, parse_with_language_pack};
 
@@ -357,38 +357,30 @@ pub fn match_markdown_owners(
     template: MarkdownAnalysis,
     destination: MarkdownAnalysis,
 ) -> MarkdownOwnerMatchResult {
-    let destination_paths = destination
-        .owners
-        .iter()
-        .map(|owner| owner.path.clone())
-        .collect::<std::collections::HashSet<_>>();
-    let template_paths = template
-        .owners
-        .iter()
-        .map(|owner| owner.path.clone())
-        .collect::<std::collections::HashSet<_>>();
-
+    let result = match_owner_paths(
+        &template.owners,
+        &destination.owners,
+        |owner| owner.path.as_str(),
+        |owner| owner.path.as_str(),
+    );
     MarkdownOwnerMatchResult {
-        matched: template
-            .owners
+        matched: result
+            .matched
             .iter()
-            .filter(|owner| destination_paths.contains(&owner.path))
-            .map(|owner| MarkdownOwnerMatch {
-                template_path: owner.path.clone(),
-                destination_path: owner.path.clone(),
+            .map(|entry| MarkdownOwnerMatch {
+                template_path: template.owners[entry.template_index].path.clone(),
+                destination_path: destination.owners[entry.destination_index].path.clone(),
             })
             .collect(),
-        unmatched_template: template
-            .owners
+        unmatched_template: result
+            .unmatched_template
             .iter()
-            .map(|owner| owner.path.clone())
-            .filter(|path| !destination_paths.contains(path))
+            .map(|index| template.owners[*index].path.clone())
             .collect(),
-        unmatched_destination: destination
-            .owners
+        unmatched_destination: result
+            .unmatched_destination
             .iter()
-            .map(|owner| owner.path.clone())
-            .filter(|path| !template_paths.contains(path))
+            .map(|index| destination.owners[*index].path.clone())
             .collect(),
     }
 }

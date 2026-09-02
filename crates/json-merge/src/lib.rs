@@ -1,6 +1,6 @@
 use ast_merge::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile, MergeResult,
-    ParseResult, PolicyReference, PolicySurface,
+    ParseResult, PolicyReference, PolicySurface, match_owner_paths,
 };
 use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest};
 
@@ -176,39 +176,32 @@ pub fn match_json_owners(
     template: &JsonAnalysis,
     destination: &JsonAnalysis,
 ) -> JsonOwnerMatchResult {
-    let destination_paths: std::collections::BTreeSet<&str> =
-        destination.owners.iter().map(|owner| owner.path.as_str()).collect();
-    let template_paths: std::collections::BTreeSet<&str> =
-        template.owners.iter().map(|owner| owner.path.as_str()).collect();
-
-    let matched = template
-        .owners
-        .iter()
-        .map(|owner| owner.path.as_str())
-        .filter(|path| destination_paths.contains(path))
-        .map(|path| JsonOwnerMatch {
-            template_path: path.to_string(),
-            destination_path: path.to_string(),
-        })
-        .collect();
-
-    let unmatched_template = template
-        .owners
-        .iter()
-        .map(|owner| owner.path.as_str())
-        .filter(|path| !destination_paths.contains(path))
-        .map(str::to_string)
-        .collect();
-
-    let unmatched_destination = destination
-        .owners
-        .iter()
-        .map(|owner| owner.path.as_str())
-        .filter(|path| !template_paths.contains(path))
-        .map(str::to_string)
-        .collect();
-
-    JsonOwnerMatchResult { matched, unmatched_template, unmatched_destination }
+    let result = match_owner_paths(
+        &template.owners,
+        &destination.owners,
+        |owner| owner.path.as_str(),
+        |owner| owner.path.as_str(),
+    );
+    JsonOwnerMatchResult {
+        matched: result
+            .matched
+            .iter()
+            .map(|entry| JsonOwnerMatch {
+                template_path: template.owners[entry.template_index].path.clone(),
+                destination_path: destination.owners[entry.destination_index].path.clone(),
+            })
+            .collect(),
+        unmatched_template: result
+            .unmatched_template
+            .iter()
+            .map(|index| template.owners[*index].path.clone())
+            .collect(),
+        unmatched_destination: result
+            .unmatched_destination
+            .iter()
+            .map(|index| destination.owners[*index].path.clone())
+            .collect(),
+    }
 }
 
 pub fn merge_json(

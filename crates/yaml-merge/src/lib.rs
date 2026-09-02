@@ -1,7 +1,7 @@
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
     DiagnosticSeverity, FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference,
-    PolicySurface,
+    PolicySurface, match_owner_paths,
 };
 use serde_json::{Map, Value};
 use tree_haver::{ParserRequest, parse_with_language_pack};
@@ -415,38 +415,30 @@ pub fn match_yaml_owners(
     template: &YamlAnalysis,
     destination: &YamlAnalysis,
 ) -> YamlOwnerMatchResult {
-    let destination_owners = destination
-        .owners
-        .iter()
-        .map(|owner| owner.path.clone())
-        .collect::<std::collections::HashSet<_>>();
-    let template_owners = template
-        .owners
-        .iter()
-        .map(|owner| owner.path.clone())
-        .collect::<std::collections::HashSet<_>>();
-
+    let result = match_owner_paths(
+        &template.owners,
+        &destination.owners,
+        |owner| owner.path.as_str(),
+        |owner| owner.path.as_str(),
+    );
     YamlOwnerMatchResult {
-        matched: template
-            .owners
+        matched: result
+            .matched
             .iter()
-            .filter(|owner| destination_owners.contains(&owner.path))
-            .map(|owner| YamlOwnerMatch {
-                template_path: owner.path.clone(),
-                destination_path: owner.path.clone(),
+            .map(|entry| YamlOwnerMatch {
+                template_path: template.owners[entry.template_index].path.clone(),
+                destination_path: destination.owners[entry.destination_index].path.clone(),
             })
             .collect(),
-        unmatched_template: template
-            .owners
+        unmatched_template: result
+            .unmatched_template
             .iter()
-            .map(|owner| owner.path.clone())
-            .filter(|path| !destination_owners.contains(path))
+            .map(|index| template.owners[*index].path.clone())
             .collect(),
-        unmatched_destination: destination
-            .owners
+        unmatched_destination: result
+            .unmatched_destination
             .iter()
-            .map(|owner| owner.path.clone())
-            .filter(|path| !template_owners.contains(path))
+            .map(|index| destination.owners[*index].path.clone())
             .collect(),
     }
 }
