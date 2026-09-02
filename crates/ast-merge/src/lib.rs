@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 
 pub mod portable_benchmark_contract;
 pub use portable_benchmark_contract::*;
+pub mod source_render;
+pub use source_render::*;
 
 pub const PACKAGE_NAME: &str = "ast-merge";
 pub const MERGE_ENGINE_ENVIRONMENT_VARIABLE: &str = "SMORG_MERGE_ENGINE";
