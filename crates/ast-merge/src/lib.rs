@@ -612,6 +612,28 @@ pub struct CommentAttachment {
 }
 
 impl CommentAttachment {
+    pub fn owned_start_line(
+        &self,
+        fallback: usize,
+        regions: &HashMap<String, CommentRegion>,
+        gaps: &HashMap<String, LayoutGap>,
+    ) -> usize {
+        let region_start = self
+            .leading_region_id
+            .as_ref()
+            .and_then(|id| regions.get(id))
+            .filter(|region| !region.floating)
+            .and_then(CommentRegion::start_line);
+        let gap_start = self
+            .leading_gap_id
+            .as_ref()
+            .and_then(|id| gaps.get(id))
+            .filter(|gap| gap.controls_output_for(&self.owner_id))
+            .map(|gap| gap.start_line);
+
+        [Some(fallback), region_start, gap_start].into_iter().flatten().min().unwrap_or(fallback)
+    }
+
     pub fn region_count(&self, regions: &HashMap<String, CommentRegion>) -> usize {
         [
             self.leading_region_id.as_ref(),

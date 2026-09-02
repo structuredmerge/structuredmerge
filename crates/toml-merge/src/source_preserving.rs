@@ -437,10 +437,13 @@ fn apply_owned_starts(scopes: &mut [TomlSyntaxScope], augmentation: &CommentAugm
     let regions = augmentation
         .regions
         .iter()
-        .map(|region| (region.id.as_str(), region))
+        .map(|region| (region.id.clone(), region.clone()))
         .collect::<HashMap<_, _>>();
-    let gaps =
-        augmentation.gaps.iter().map(|gap| (gap.id.as_str(), gap)).collect::<HashMap<_, _>>();
+    let gaps = augmentation
+        .gaps
+        .iter()
+        .map(|gap| (gap.id.clone(), gap.clone()))
+        .collect::<HashMap<_, _>>();
     let attachments = augmentation
         .attachments
         .iter()
@@ -449,46 +452,18 @@ fn apply_owned_starts(scopes: &mut [TomlSyntaxScope], augmentation: &CommentAugm
 
     for scope in scopes {
         if scope.kind != TomlSyntaxScopeKind::Root {
-            scope.owned_start_line = owned_start_line(
-                scope.start_line,
-                attachments.get(scope.node_id.as_str()).copied(),
-                &regions,
-                &gaps,
-            );
+            scope.owned_start_line =
+                attachments.get(scope.node_id.as_str()).map_or(scope.start_line, |attachment| {
+                    attachment.owned_start_line(scope.start_line, &regions, &gaps)
+                });
         }
         for entry in &mut scope.entries {
-            entry.owned_start_line = owned_start_line(
-                entry.start_line,
-                attachments.get(entry.node_id.as_str()).copied(),
-                &regions,
-                &gaps,
-            );
+            entry.owned_start_line =
+                attachments.get(entry.node_id.as_str()).map_or(entry.start_line, |attachment| {
+                    attachment.owned_start_line(entry.start_line, &regions, &gaps)
+                });
         }
     }
-}
-
-fn owned_start_line(
-    fallback: usize,
-    attachment: Option<&ast_merge::CommentAttachment>,
-    regions: &HashMap<&str, &ast_merge::CommentRegion>,
-    gaps: &HashMap<&str, &ast_merge::LayoutGap>,
-) -> usize {
-    let Some(attachment) = attachment else {
-        return fallback;
-    };
-    let region_start = attachment
-        .leading_region_id
-        .as_deref()
-        .and_then(|id| regions.get(id))
-        .filter(|region| !region.floating)
-        .and_then(|region| region.start_line());
-    let gap_start = attachment
-        .leading_gap_id
-        .as_deref()
-        .and_then(|id| gaps.get(id))
-        .filter(|gap| gap.controls_output_for(&attachment.owner_id))
-        .map(|gap| gap.start_line);
-    [Some(fallback), region_start, gap_start].into_iter().flatten().min().unwrap_or(fallback)
 }
 
 fn validate_scopes(scopes: &[TomlSyntaxScope]) -> Result<(), String> {
