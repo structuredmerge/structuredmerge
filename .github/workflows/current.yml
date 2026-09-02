@@ -75,6 +75,9 @@ jobs:
       - name: Test generated Ruby bindings
         run: bundle exec rake spec
         working-directory: packages/ruby
+      - name: Verify Ruby API and native ABI contract
+        run: bundle exec ruby ../../workspace-scripts/check_ruby_api.rb
+        working-directory: packages/ruby
 
   ruby-package:
     name: Ruby platform package
@@ -104,7 +107,9 @@ jobs:
         run: |
           gem_home="$(mktemp -d)"
           gem install dist/*.gem --install-dir "$gem_home" --no-document
-          GEM_HOME="$gem_home" GEM_PATH="$gem_home" ruby -rstructuredmerge_host_prototype -e 'abort unless StructuredmergeHostPrototype.respond_to?(:merge_json_three_way)'
+          GEM_HOME="$gem_home" GEM_PATH="$gem_home" \
+            STRUCTUREDMERGE_API_USE_INSTALLED=true \
+            ruby workspace-scripts/check_ruby_api.rb
       - name: Upload platform gem and provenance
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -127,5 +132,18 @@ jobs:
             --rev "$(cat workspace-scripts/alef-source-revision)" --locked
       - name: Verify generated bindings
         run: alef verify --exit-code
+      - name: Reproduce generated tree twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pass in 1 2; do
+            alef all --clean --skip-compile --skip-snippet-validation
+            changes="$(git status --porcelain --untracked-files=all -- \
+              .alef-generation.toml .alef-ownership.toml packages/ruby docs/reference)"
+            if [[ -n "$changes" ]]; then
+              printf 'Alef generation pass %s changed the committed tree:\n%s\n' "$pass" "$changes" >&2
+              exit 1
+            fi
+          done
       - name: Validate publish manifests
         run: alef publish validate

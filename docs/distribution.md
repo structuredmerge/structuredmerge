@@ -82,6 +82,14 @@ Generated code is release input. `alef verify --exit-code`, host binding tests,
 and an isolated install of each platform package must pass from a clean
 checkout before publication.
 
+`contracts/ruby-api-v1.json` is the compatibility baseline for the generated
+Ruby facade, native Magnus module, and Ruby provider adapter. The gate checks
+public constants, facade methods, native method arities, provider method
+arities, and the platform extension basename. An intentional API change must
+update the contract and changelog in the same commit. Alef generation is also
+run clean twice in CI; either tracked drift or a new untracked generated file
+fails the reproducibility gate.
+
 Until Alef's Ruby platform-metadata fix is released, CI installs the exact fork
 revision recorded in `workspace-scripts/alef-source-revision`. The same revision
 is included in artifact provenance. Return to the released installer after the

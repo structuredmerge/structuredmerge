@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add a checked-in Ruby API/native ABI contract and require both local and
+  isolated packaged bindings to match it; reproduce Alef's generated tree
+  twice from clean inputs to reject generated drift and untracked output.
 - Exercise every declared Ruby native platform in CI, build and install the
   Linux platform gem in isolation, and emit a content-addressed artifact
   provenance manifest, including the exact temporary Alef fork revision used
