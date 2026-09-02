@@ -10,6 +10,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use json_merge::{
     JsonDialect, json_semantically_equivalent, merge_json_source_preserving, merge_json_three_way,
 };
+use rbs_merge::{RbsDialect, merge_rbs};
 use ruby_merge::{RubyDialect, merge_ruby};
 use serde::Deserialize;
 use toml_merge::{TomlDialect, merge_toml};
@@ -36,6 +37,7 @@ struct Selector {
 #[derive(Clone, Copy)]
 enum BenchmarkDialect {
     Json(JsonDialect),
+    Rbs(RbsDialect),
     Ruby(RubyDialect),
     Toml(TomlDialect),
     Yaml(YamlDialect),
@@ -69,6 +71,7 @@ pub fn run_merge2_files(args: &[String], output: &mut dyn Write, error: &mut dyn
             BenchmarkDialect::Json(dialect) => {
                 merge_json_source_preserving(&incoming, &current, dialect)
             }
+            BenchmarkDialect::Rbs(dialect) => merge_rbs(&incoming, &current, dialect),
             BenchmarkDialect::Ruby(dialect) => merge_ruby(&incoming, &current, dialect),
             BenchmarkDialect::Toml(dialect) => merge_toml(&incoming, &current, dialect, None),
             BenchmarkDialect::Yaml(dialect) => merge_yaml(&incoming, &current, dialect),
@@ -191,6 +194,7 @@ fn selected_dialect(path: &str) -> Result<BenchmarkDialect, String> {
 fn benchmark_family(dialect: BenchmarkDialect) -> &'static str {
     match dialect {
         BenchmarkDialect::Json(_) => "json",
+        BenchmarkDialect::Rbs(_) => "rbs",
         BenchmarkDialect::Ruby(_) => "ruby",
         BenchmarkDialect::Toml(_) => "toml",
         BenchmarkDialect::Yaml(_) => "yaml",
@@ -248,11 +252,30 @@ fn execute(request: Request) -> Result<(i32, String, serde_json::Value), String>
     }
     match request.selector.family.as_str() {
         "json" => execute_json(request),
+        "rbs" => execute_rbs(request),
         "ruby" => execute_ruby(request),
         "toml" => execute_toml(request),
         "yaml" => execute_yaml(request),
         family => Err(format!("unsupported benchmark family: {family}")),
     }
+}
+
+fn execute_rbs(request: Request) -> Result<(i32, String, serde_json::Value), String> {
+    if request.selector.dialect != "rbs" {
+        return Err(format!("unsupported RBS dialect: {}", request.selector.dialect));
+    }
+    if request.operation != "merge2" {
+        return Err(format!("unsupported RBS benchmark operation: {}", request.operation));
+    }
+
+    let incoming = source(&request.sources, "incoming")?;
+    let current = source(&request.sources, "current")?;
+    let result = merge_rbs(&incoming, &current, RbsDialect::Rbs);
+    let status = if result.ok { 0 } else { 2 };
+    let output = result.output.clone().unwrap_or_default();
+    let result = serde_json::to_value(result)
+        .map_err(|error| format!("serialize merge2 result: {error}"))?;
+    Ok((status, output, result))
 }
 
 fn execute_json(request: Request) -> Result<(i32, String, serde_json::Value), String> {
@@ -382,6 +405,8 @@ pub fn parse_dialect(value: &str) -> Result<JsonDialect, String> {
 fn parse_benchmark_dialect(value: &str) -> Result<BenchmarkDialect, String> {
     if value.trim().eq_ignore_ascii_case("toml") {
         Ok(BenchmarkDialect::Toml(TomlDialect::Toml))
+    } else if value.trim().eq_ignore_ascii_case("rbs") {
+        Ok(BenchmarkDialect::Rbs(RbsDialect::Rbs))
     } else if value.trim().eq_ignore_ascii_case("ruby") || value.trim().eq_ignore_ascii_case("rb") {
         Ok(BenchmarkDialect::Ruby(RubyDialect::Ruby))
     } else if value.trim().eq_ignore_ascii_case("yaml") || value.trim().eq_ignore_ascii_case("yml")
@@ -604,6 +629,53 @@ mod tests {
         assert!(
             merge3["stderr"].as_str().unwrap().contains("unsupported Ruby benchmark operation")
         );
+    }
+
+    #[test]
+    fn serves_rbs_merge2_without_claiming_rbs_merge3() {
+        let incoming = concat!(
+            "# shared declaration\n",
+            "class Account\n",
+            "  def id: () -> String\n",
+            "end\n\n",
+            "class TemplateOnly\n",
+            "end\n",
+        );
+        let current = concat!(
+            "# destination declaration\n",
+            "class Account\n",
+            "  def id: () -> Integer\n",
+            "end\n",
+        );
+        let expected = concat!(
+            "# destination declaration\n",
+            "class Account\n",
+            "  def id: () -> Integer\n",
+            "end\n\n",
+            "class TemplateOnly\n",
+            "end\n",
+        );
+        let merge2 = execute_line(&request_for(
+            "merge2",
+            "rbs",
+            "rbs",
+            &[("incoming", incoming), ("current", current)],
+        ));
+        let merge3 = execute_line(&request_for(
+            "merge3",
+            "rbs",
+            "rbs",
+            &[("base", current), ("ours", current), ("theirs", incoming)],
+        ));
+
+        assert_eq!(merge2["status"], 0);
+        assert_eq!(
+            String::from_utf8(STANDARD.decode(merge2["output_base64"].as_str().unwrap()).unwrap())
+                .unwrap(),
+            expected
+        );
+        assert_eq!(merge3["status"], 2);
+        assert!(merge3["stderr"].as_str().unwrap().contains("unsupported RBS benchmark operation"));
     }
 
     #[test]

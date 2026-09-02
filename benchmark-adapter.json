@@ -22,6 +22,11 @@
         "package": "ruby-merge",
         "profile": "source_preserving"
       },
+      "rbs": {
+        "provider_id": "rust.rbs",
+        "package": "rbs-merge",
+        "profile": "source_preserving"
+      },
       "toml": {
         "provider_id": "rust.toml",
         "package": "toml-merge",
@@ -42,13 +47,18 @@
   },
   "supports": {
     "operations": ["merge2", "merge3", "metamorphic"],
-    "families": ["json", "ruby", "toml", "yaml"],
-    "dialects": ["json", "jsonc", "json5", "ruby", "toml", "yaml"],
+    "families": ["json", "rbs", "ruby", "toml", "yaml"],
+    "dialects": ["json", "jsonc", "json5", "rbs", "ruby", "toml", "yaml"],
     "combinations": [
       {
         "family": "json",
         "operations": ["merge2", "merge3", "metamorphic"],
         "dialects": ["json", "jsonc", "json5"]
+      },
+      {
+        "family": "rbs",
+        "operations": ["merge2"],
+        "dialects": ["rbs"]
       },
       {
         "family": "ruby",

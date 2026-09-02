@@ -58,3 +58,13 @@ fn exercises_rbs_through_the_shared_kernel() {
     let matched = match_rbs_owners(&analysis, &destination);
     assert!(!matched.matched.is_empty());
 }
+
+#[test]
+fn rejects_the_grammar_inline_mode_for_rbs_documents() {
+    let parsed = parse_rbs("class Broken\n", RbsDialect::Rbs);
+
+    assert!(!parsed.ok);
+    assert!(parsed.analysis.is_none());
+    assert_eq!(parsed.diagnostics.len(), 1);
+    assert!(parsed.diagnostics[0].message.contains("requires document syntax"));
+}

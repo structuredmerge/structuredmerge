@@ -152,6 +152,29 @@ pub fn parse_rbs(source: &str, dialect: RbsDialect) -> ParseResult<RbsAnalysis> 
         };
     }
 
+    let nodes_by_id =
+        parsed.nodes.iter().map(|node| (node.id.as_str(), node)).collect::<HashMap<_, _>>();
+    let unsupported_top_level = nodes_by_id.get(parsed.root_id.as_str()).and_then(|root| {
+        root.child_ids.iter().filter_map(|id| nodes_by_id.get(id.as_str())).find(|child| {
+            !matches!(child.kind.as_str(), "comment" | "decl" | "use_directive")
+                && !child.kind.ends_with("_decl")
+        })
+    });
+    if let Some(node) = unsupported_top_level {
+        return ParseResult {
+            ok: false,
+            diagnostics: vec![diagnostic(
+                DiagnosticCategory::ParseError,
+                format!(
+                    "RBS merge requires document syntax; unsupported top-level {} node",
+                    node.kind
+                ),
+            )],
+            analysis: None,
+            policies: vec![],
+        };
+    }
+
     let layout_owners =
         match normalized_layout_owners_for_kinds(source, &parsed.root_id, &parsed.nodes, &["decl"])
         {
