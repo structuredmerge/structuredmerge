@@ -51,6 +51,7 @@ functions = [
   "clear_workflow_hosts",
   "execute_identity",
   "execute_typed_identity",
+  "execute_detached_identity",
   "registered_workflow_hosts",
   "unregister_parser_host",
   "clear_parser_hosts",

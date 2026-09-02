@@ -6,12 +6,13 @@ require "json"
 
 module HostPrototypeFixtures
   class IdentityWorkflowHost
-    attr_reader :requests, :shutdown_count, :typed_requests
+    attr_reader :detached_requests, :requests, :shutdown_count, :typed_requests
 
     def initialize(id = "ruby.identity")
       @id = id
       @requests = []
       @typed_requests = []
+      @detached_requests = []
       @shutdown_count = 0
     end
 
@@ -31,6 +32,23 @@ module HostPrototypeFixtures
     def execute_typed_batch(request, source)
       @typed_requests << [request, source]
       source
+    end
+
+    def execute_detached_batch(request)
+      envelope = JSON.parse(request)
+      blob = envelope.fetch("blob")
+      source = File.binread(blob.fetch("path"))
+      raise "detached blob length mismatch" unless source.bytesize == blob.fetch("byte_length")
+      raise "detached blob digest mismatch" unless
+        Digest::SHA256.hexdigest(source) == blob.fetch("sha256")
+
+      envelope.fetch("items").each do |item|
+        bytes = source.byteslice(item.fetch("offset"), item.fetch("byte_length"))
+        raise "detached segment digest mismatch: #{item.fetch("source_id")}" unless
+          Digest::SHA256.hexdigest(bytes) == item.fetch("sha256")
+      end
+      @detached_requests << [request, envelope, source]
+      request
     end
 
     def shutdown
@@ -83,6 +101,10 @@ module HostPrototypeFixtures
 
     def execute_typed_batch(_request, source)
       source
+    end
+
+    def execute_detached_batch(request)
+      request
     end
 
     def shutdown
@@ -260,6 +282,56 @@ RSpec.describe StructuredmergeHostPrototype do
     end.to raise_error(RuntimeError, /typed identity host changed source bytes/)
   end
 
+  it "round trips the shared byte corpus through canonical JSON and detached blobs" do
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.detached-identity")
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.detached-identity")
+
+    identity_cases.each do |test_case|
+      payload = materialize_identity_payload(test_case.fetch("payload"))
+      result = described_class.execute_detached_identity(
+        "ruby.detached-identity",
+        [test_case.fetch("id")],
+        [test_case.fetch("byte_length")],
+        [test_case.fetch("sha256")],
+        payload.bytes
+      ).pack("C*")
+
+      request, envelope, callback_source = provider.detached_requests.last
+      expect(result).to eq(payload), test_case.fetch("id")
+      expect(callback_source).to eq(payload), test_case.fetch("id")
+      expect(request.encoding).to eq(Encoding::ASCII_8BIT)
+      expect(JSON.generate(JSON.parse(request))).to eq(request)
+      expect(envelope.fetch("schema")).to eq("structuredmerge.host-batch/v1")
+      expect(envelope.fetch("transport")).to eq("detached_local_file")
+      expect(envelope.fetch("items").fetch(0).fetch("source_id")).to eq(test_case.fetch("id"))
+      expect(File).not_to exist(envelope.fetch("blob").fetch("path"))
+    end
+  end
+
+  it "detects detached blob mutation and removes the scoped file" do
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.detached-mutation")
+    detached_path = nil
+    provider.define_singleton_method(:execute_detached_batch) do |request|
+      envelope = JSON.parse(request)
+      detached_path = envelope.fetch("blob").fetch("path")
+      File.binwrite(detached_path, "mutated")
+      request
+    end
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.detached-mutation")
+    payload = "original".b
+
+    expect do
+      described_class.execute_detached_identity(
+        "ruby.detached-mutation",
+        ["source:1"],
+        [payload.bytesize],
+        [Digest::SHA256.hexdigest(payload)],
+        payload.bytes
+      )
+    end.to raise_error(RuntimeError, /detached identity host changed source bytes/)
+    expect(File).not_to exist(detached_path)
+  end
+
   it "fails closed when a provider name is registered twice" do
     provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.identity")
     StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.identity")
@@ -432,6 +504,9 @@ RSpec.describe StructuredmergeHostPrototype do
     end
     def missing.execute_typed_batch(_request, source)
       source
+    end
+    def missing.execute_detached_batch(request)
+      request
     end
     malformed = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.malformed-version")
     def malformed.version

@@ -2,6 +2,7 @@ use std::{
     collections::BTreeMap,
     error::Error,
     fmt,
+    io::Write,
     sync::{Arc, OnceLock},
 };
 
@@ -53,6 +54,23 @@ pub struct HostBatchRequest {
     pub items: Vec<HostSourceSegment>,
 }
 
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct DetachedBlob {
+    path: String,
+    byte_length: u64,
+    sha256: String,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct DetachedBatchEnvelope {
+    schema: String,
+    transport: String,
+    items: Vec<HostSourceSegment>,
+    blob: DetachedBlob,
+}
+
 pub trait Plugin: Send + Sync {
     fn name(&self) -> &str;
 
@@ -73,6 +91,8 @@ pub trait WorkflowHost: Plugin {
         request: HostBatchRequest,
         source: Vec<u8>,
     ) -> Result<Vec<u8>, HostPrototypeError>;
+
+    fn execute_detached_batch(&self, request: Vec<u8>) -> Result<Vec<u8>, HostPrototypeError>;
 }
 
 pub trait ParserHost: Plugin {
@@ -386,13 +406,12 @@ pub fn execute_identity(
     provider.execute_batch(request)
 }
 
-pub fn execute_typed_identity(
-    provider_name: String,
+fn validated_batch_request(
     source_ids: Vec<String>,
     source_lengths: Vec<u64>,
     source_digests: Vec<String>,
-    source: Vec<u8>,
-) -> Result<Vec<u8>, HostPrototypeError> {
+    source: &[u8],
+) -> Result<HostBatchRequest, HostPrototypeError> {
     let item_count = source_ids.len();
     if item_count == 0 || item_count > MAX_BATCH_ITEMS {
         return Err(HostPrototypeError::new(format!(
@@ -441,13 +460,80 @@ pub fn execute_typed_identity(
         ));
     }
 
-    let request = HostBatchRequest { schema: "structuredmerge.host-batch/v1".to_owned(), items };
+    Ok(HostBatchRequest { schema: "structuredmerge.host-batch/v1".to_owned(), items })
+}
+
+pub fn execute_typed_identity(
+    provider_name: String,
+    source_ids: Vec<String>,
+    source_lengths: Vec<u64>,
+    source_digests: Vec<String>,
+    source: Vec<u8>,
+) -> Result<Vec<u8>, HostPrototypeError> {
+    let request = validated_batch_request(source_ids, source_lengths, source_digests, &source)?;
     let provider = registry::get_workflow_host_registry().read().get(&provider_name)?;
     let result = provider.execute_typed_batch(request, source.clone())?;
     if result != source {
         return Err(HostPrototypeError::new("typed identity host changed source bytes"));
     }
     Ok(result)
+}
+
+pub fn execute_detached_identity(
+    provider_name: String,
+    source_ids: Vec<String>,
+    source_lengths: Vec<u64>,
+    source_digests: Vec<String>,
+    source: Vec<u8>,
+) -> Result<Vec<u8>, HostPrototypeError> {
+    let request = validated_batch_request(source_ids, source_lengths, source_digests, &source)?;
+    let mut detached = tempfile::NamedTempFile::new().map_err(|error| {
+        HostPrototypeError::new(format!("failed to create detached blob: {error}"))
+    })?;
+    detached.write_all(&source).and_then(|()| detached.flush()).map_err(|error| {
+        HostPrototypeError::new(format!("failed to write detached blob: {error}"))
+    })?;
+    let detached_path = detached.path().to_string_lossy().into_owned();
+    let envelope = DetachedBatchEnvelope {
+        schema: "structuredmerge.host-batch/v1".to_owned(),
+        transport: "detached_local_file".to_owned(),
+        items: request.items,
+        blob: DetachedBlob {
+            path: detached_path.clone(),
+            byte_length: u64::try_from(source.len())
+                .map_err(|_| HostPrototypeError::new("detached blob length exceeds u64"))?,
+            sha256: format!("{:x}", Sha256::digest(&source)),
+        },
+    };
+    let envelope_bytes = serde_json::to_vec(&envelope).map_err(|error| {
+        HostPrototypeError::new(format!("failed to serialize detached envelope: {error}"))
+    })?;
+
+    let provider = registry::get_workflow_host_registry().read().get(&provider_name)?;
+    let result_bytes = provider.execute_detached_batch(envelope_bytes.clone())?;
+    let result: DetachedBatchEnvelope = serde_json::from_slice(&result_bytes).map_err(|error| {
+        HostPrototypeError::new(format!("invalid detached result envelope: {error}"))
+    })?;
+    if result_bytes != envelope_bytes
+        || result.schema != envelope.schema
+        || result.transport != envelope.transport
+        || result.blob.path != detached_path
+        || result.blob.byte_length != envelope.blob.byte_length
+        || result.blob.sha256 != envelope.blob.sha256
+    {
+        return Err(HostPrototypeError::new("detached identity host changed the envelope"));
+    }
+
+    let result_source = std::fs::read(detached.path()).map_err(|error| {
+        HostPrototypeError::new(format!("failed to read detached result blob: {error}"))
+    })?;
+    if result_source.len() != source.len()
+        || format!("{:x}", Sha256::digest(&result_source)) != envelope.blob.sha256
+        || result_source != source
+    {
+        return Err(HostPrototypeError::new("detached identity host changed source bytes"));
+    }
+    Ok(result_source)
 }
 
 pub fn registered_workflow_hosts() -> Vec<String> {
@@ -529,6 +615,10 @@ mod tests {
             source: Vec<u8>,
         ) -> Result<Vec<u8>, HostPrototypeError> {
             Ok(source)
+        }
+
+        fn execute_detached_batch(&self, request: Vec<u8>) -> Result<Vec<u8>, HostPrototypeError> {
+            Ok(request)
         }
     }
 
