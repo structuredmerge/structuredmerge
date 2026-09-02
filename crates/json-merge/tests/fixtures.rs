@@ -300,19 +300,7 @@ fn conforms_to_slice_14_fallback_fixture() {
         })
         .collect::<Vec<_>>();
     assert_eq!(Value::Array(diagnostics), fixture["expected"]["diagnostics"]);
-    assert_eq!(
-        result.policies,
-        vec![
-            ast_merge::PolicyReference {
-                surface: ast_merge::PolicySurface::Array,
-                name: "destination_wins_array".to_string()
-            },
-            ast_merge::PolicyReference {
-                surface: ast_merge::PolicySurface::Fallback,
-                name: "trailing_comma_destination_fallback".to_string()
-            }
-        ]
-    );
+    assert!(result.policies.is_empty());
     assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
 }
 
@@ -393,6 +381,7 @@ fn conforms_to_slice_21_family_feature_profile_fixture_via_the_conformance_manif
             "supported_dialects": profile.supported_dialects.iter().map(|dialect| match dialect {
                 JsonDialect::Json => "json",
                 JsonDialect::Jsonc => "jsonc",
+                JsonDialect::Json5 => "json5",
             }).collect::<Vec<_>>(),
             "supported_policies": profile.supported_policies.iter().map(|policy| {
                 serde_json::json!({
@@ -488,6 +477,7 @@ fn selects_backend_limited_tree_sitter_cases_through_the_slice_33_capability_con
             .map(|dialect| match dialect {
                 JsonDialect::Json => "json".to_string(),
                 JsonDialect::Jsonc => "jsonc".to_string(),
+                JsonDialect::Json5 => "json5".to_string(),
             })
             .collect(),
         supported_policies: json_feature_profile().supported_policies.clone(),
@@ -583,13 +573,11 @@ fn reports_strict_json_syntax_errors_through_language_pack() {
 }
 
 #[test]
-fn rejects_jsonc_through_language_pack_for_now() {
+fn parses_jsonc_through_the_json5_language_pack_grammar() {
     let result =
         parse_json_with_language_pack("{\n  // note\n  \"alpha\":1\n}", JsonDialect::Jsonc);
 
-    assert!(!result.ok);
-    assert_eq!(
-        result.diagnostics[0].message,
-        "tree-sitter-language-pack json parsing currently supports only the json dialect."
-    );
+    assert!(result.ok);
+    assert!(result.diagnostics.is_empty());
+    assert_eq!(result.analysis.unwrap().owners[0].path, "/alpha");
 }

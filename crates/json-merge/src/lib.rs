@@ -2,8 +2,10 @@ use ast_merge::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile, MergeResult,
     ParseResult, PolicyReference, PolicySurface,
 };
-use serde_json::Value;
-use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest, parse_with_language_pack};
+use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest};
+
+mod source_preserving;
+pub use source_preserving::{merge_json_source_preserving, merge_json_three_way};
 
 pub const PACKAGE_NAME: &str = "json-merge";
 
@@ -11,6 +13,7 @@ pub const PACKAGE_NAME: &str = "json-merge";
 pub enum JsonDialect {
     Json,
     Jsonc,
+    Json5,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -98,10 +101,11 @@ pub struct JsonFeatureProfile {
 pub fn json_parse_request(source: &str, dialect: JsonDialect) -> ParserRequest {
     ParserRequest {
         source: source.to_string(),
-        language: "json".to_string(),
+        language: source_preserving::parser_language(dialect).to_string(),
         dialect: Some(match dialect {
             JsonDialect::Json => "json".to_string(),
             JsonDialect::Jsonc => "jsonc".to_string(),
+            JsonDialect::Json5 => "json5".to_string(),
         }),
     }
 }
@@ -110,18 +114,11 @@ fn destination_wins_array_policy() -> PolicyReference {
     PolicyReference { surface: PolicySurface::Array, name: "destination_wins_array".to_string() }
 }
 
-fn trailing_comma_fallback_policy() -> PolicyReference {
-    PolicyReference {
-        surface: PolicySurface::Fallback,
-        name: "trailing_comma_destination_fallback".to_string(),
-    }
-}
-
 pub fn json_feature_profile() -> JsonFeatureProfile {
     let shared = FamilyFeatureProfile {
         family: "json".to_string(),
-        supported_dialects: vec!["json".to_string(), "jsonc".to_string()],
-        supported_policies: vec![destination_wins_array_policy(), trailing_comma_fallback_policy()],
+        supported_dialects: vec!["json".to_string(), "jsonc".to_string(), "json5".to_string()],
+        supported_policies: vec![destination_wins_array_policy()],
     };
 
     JsonFeatureProfile {
@@ -131,6 +128,7 @@ pub fn json_feature_profile() -> JsonFeatureProfile {
             .into_iter()
             .map(|dialect| match dialect.as_str() {
                 "jsonc" => JsonDialect::Jsonc,
+                "json5" => JsonDialect::Json5,
                 _ => JsonDialect::Json,
             })
             .collect(),
@@ -142,32 +140,6 @@ pub fn parse_json_with_language_pack(
     source: &str,
     dialect: JsonDialect,
 ) -> ParseResult<JsonAnalysis> {
-    if dialect != JsonDialect::Json {
-        return ParseResult {
-            ok: false,
-            diagnostics: vec![Diagnostic {
-                severity: DiagnosticSeverity::Error,
-                category: DiagnosticCategory::UnsupportedFeature,
-                message: "tree-sitter-language-pack json parsing currently supports only the json dialect."
-                    .to_string(),
-                path: None,
-                review: None,
-            }],
-            analysis: None,
-            policies: vec![],
-        };
-    }
-
-    let backend_result = parse_with_language_pack(&json_parse_request(source, dialect));
-    if !backend_result.ok {
-        return ParseResult {
-            ok: false,
-            diagnostics: backend_result.diagnostics.into_iter().map(Into::into).collect(),
-            analysis: None,
-            policies: vec![],
-        };
-    }
-
     parse_json(source, dialect)
 }
 
@@ -181,366 +153,20 @@ fn parse_error(message: &str) -> Diagnostic {
     }
 }
 
-fn destination_parse_error(message: &str) -> Diagnostic {
-    Diagnostic {
-        severity: DiagnosticSeverity::Error,
-        category: DiagnosticCategory::DestinationParseError,
-        message: message.to_string(),
-        path: None,
-        review: None,
-    }
-}
-
-fn fallback_applied(message: &str) -> Diagnostic {
-    Diagnostic {
-        severity: DiagnosticSeverity::Warning,
-        category: DiagnosticCategory::FallbackApplied,
-        message: message.to_string(),
-        path: None,
-        review: None,
-    }
-}
-
-fn detect_trailing_comma(source: &str) -> bool {
-    let chars: Vec<char> = source.chars().collect();
-    let mut in_string = false;
-    let mut in_line_comment = false;
-    let mut in_block_comment = false;
-    let mut escaped = false;
-    let mut index = 0usize;
-
-    while index < chars.len() {
-        let char = chars[index];
-        let next = chars.get(index + 1).copied();
-
-        if in_line_comment {
-            if char == '\n' {
-                in_line_comment = false;
-            }
-            index += 1;
-            continue;
-        }
-
-        if in_block_comment {
-            if char == '*' && next == Some('/') {
-                in_block_comment = false;
-                index += 2;
-                continue;
-            }
-            index += 1;
-            continue;
-        }
-
-        if in_string {
-            if escaped {
-                escaped = false;
-                index += 1;
-                continue;
-            }
-            if char == '\\' {
-                escaped = true;
-                index += 1;
-                continue;
-            }
-            if char == '"' {
-                in_string = false;
-            }
-            index += 1;
-            continue;
-        }
-
-        if char == '"' {
-            in_string = true;
-            index += 1;
-            continue;
-        }
-
-        if char == '/' && next == Some('/') {
-            in_line_comment = true;
-            index += 2;
-            continue;
-        }
-
-        if char == '/' && next == Some('*') {
-            in_block_comment = true;
-            index += 2;
-            continue;
-        }
-
-        if char == ',' {
-            let mut lookahead = index + 1;
-            while lookahead < chars.len() && chars[lookahead].is_whitespace() {
-                lookahead += 1;
-            }
-            if matches!(chars.get(lookahead), Some(']') | Some('}')) {
-                return true;
-            }
-        }
-
-        index += 1;
-    }
-
-    false
-}
-
-fn strip_json_comments(source: &str) -> String {
-    let chars: Vec<char> = source.chars().collect();
-    let mut result = String::new();
-    let mut in_string = false;
-    let mut in_line_comment = false;
-    let mut in_block_comment = false;
-    let mut escaped = false;
-    let mut index = 0usize;
-
-    while index < chars.len() {
-        let char = chars[index];
-        let next = chars.get(index + 1).copied();
-
-        if in_line_comment {
-            if char == '\n' {
-                in_line_comment = false;
-                result.push('\n');
-            }
-            index += 1;
-            continue;
-        }
-
-        if in_block_comment {
-            if char == '*' && next == Some('/') {
-                in_block_comment = false;
-                index += 2;
-                continue;
-            }
-            index += 1;
-            continue;
-        }
-
-        if in_string {
-            result.push(char);
-            if escaped {
-                escaped = false;
-                index += 1;
-                continue;
-            }
-            if char == '\\' {
-                escaped = true;
-                index += 1;
-                continue;
-            }
-            if char == '"' {
-                in_string = false;
-            }
-            index += 1;
-            continue;
-        }
-
-        if char == '"' {
-            in_string = true;
-            result.push(char);
-            index += 1;
-            continue;
-        }
-
-        if char == '/' && next == Some('/') {
-            in_line_comment = true;
-            index += 2;
-            continue;
-        }
-
-        if char == '/' && next == Some('*') {
-            in_block_comment = true;
-            index += 2;
-            continue;
-        }
-
-        result.push(char);
-        index += 1;
-    }
-
-    result
-}
-
-fn strip_trailing_commas(source: &str) -> String {
-    let chars: Vec<char> = source.chars().collect();
-    let mut result = String::new();
-    let mut in_string = false;
-    let mut in_line_comment = false;
-    let mut in_block_comment = false;
-    let mut escaped = false;
-    let mut index = 0usize;
-
-    while index < chars.len() {
-        let char = chars[index];
-        let next = chars.get(index + 1).copied();
-
-        if in_line_comment {
-            result.push(char);
-            if char == '\n' {
-                in_line_comment = false;
-            }
-            index += 1;
-            continue;
-        }
-
-        if in_block_comment {
-            result.push(char);
-            if char == '*' && next == Some('/') {
-                result.push('/');
-                in_block_comment = false;
-                index += 2;
-                continue;
-            }
-            index += 1;
-            continue;
-        }
-
-        if in_string {
-            result.push(char);
-            if escaped {
-                escaped = false;
-                index += 1;
-                continue;
-            }
-            if char == '\\' {
-                escaped = true;
-                index += 1;
-                continue;
-            }
-            if char == '"' {
-                in_string = false;
-            }
-            index += 1;
-            continue;
-        }
-
-        if char == '"' {
-            in_string = true;
-            result.push(char);
-            index += 1;
-            continue;
-        }
-
-        if char == '/' && next == Some('/') {
-            in_line_comment = true;
-            result.push('/');
-            result.push('/');
-            index += 2;
-            continue;
-        }
-
-        if char == '/' && next == Some('*') {
-            in_block_comment = true;
-            result.push('/');
-            result.push('*');
-            index += 2;
-            continue;
-        }
-
-        if char == ',' {
-            let mut lookahead = index + 1;
-            while lookahead < chars.len() && chars[lookahead].is_whitespace() {
-                lookahead += 1;
-            }
-            if matches!(chars.get(lookahead), Some(']') | Some('}')) {
-                index += 1;
-                continue;
-            }
-        }
-
-        result.push(char);
-        index += 1;
-    }
-
-    result
-}
-
-fn escape_pointer_segment(segment: &str) -> String {
-    segment.replace('~', "~0").replace('/', "~1")
-}
-
-fn analyze_value(value: &Value, path: &str) -> (JsonRootKind, Vec<JsonOwner>) {
-    match value {
-        Value::Object(map) => {
-            let mut owners = Vec::new();
-            for (key, child) in map {
-                let child_path = format!("{}/{}", path, escape_pointer_segment(key));
-                owners.push(JsonOwner {
-                    path: child_path.clone(),
-                    owner_kind: JsonOwnerKind::Member,
-                    match_key: Some(key.clone()),
-                });
-                owners.extend(analyze_value(child, &child_path).1);
-            }
-            (JsonRootKind::Object, owners)
-        }
-        Value::Array(items) => {
-            let mut owners = Vec::new();
-            for (index, child) in items.iter().enumerate() {
-                let child_path = format!("{}/{}", path, index);
-                owners.push(JsonOwner {
-                    path: child_path.clone(),
-                    owner_kind: JsonOwnerKind::Element,
-                    match_key: None,
-                });
-                owners.extend(analyze_value(child, &child_path).1);
-            }
-            (JsonRootKind::Array, owners)
-        }
-        _ => (JsonRootKind::Scalar, Vec::new()),
-    }
-}
-
 pub fn parse_json(source: &str, dialect: JsonDialect) -> ParseResult<JsonAnalysis> {
-    if detect_trailing_comma(source) {
-        return ParseResult {
+    match source_preserving::analyze_document(source, dialect) {
+        Ok(analysis) => ParseResult {
+            ok: true,
+            diagnostics: vec![],
+            analysis: Some(analysis),
+            policies: vec![],
+        },
+        Err(message) => ParseResult {
             ok: false,
-            diagnostics: vec![parse_error("Trailing commas are not supported.")],
+            diagnostics: vec![parse_error(&message)],
             analysis: None,
             policies: vec![],
-        };
-    }
-
-    let stripped = strip_json_comments(source);
-    let normalized_source = match dialect {
-        JsonDialect::Json => {
-            if stripped != source {
-                return ParseResult {
-                    ok: false,
-                    diagnostics: vec![parse_error("Comments are not supported in strict JSON.")],
-                    analysis: None,
-                    policies: vec![],
-                };
-            }
-            source.to_string()
-        }
-        JsonDialect::Jsonc => stripped,
-    };
-
-    let decoded = match serde_json::from_str::<Value>(&normalized_source) {
-        Ok(value) => value,
-        Err(_) => {
-            return ParseResult {
-                ok: false,
-                diagnostics: vec![parse_error("JSON parse failed.")],
-                analysis: None,
-                policies: vec![],
-            };
-        }
-    };
-    let (root_kind, mut owners) = analyze_value(&decoded, "");
-    owners.sort_by(|left, right| left.path.cmp(&right.path));
-
-    ParseResult {
-        ok: true,
-        diagnostics: vec![],
-        analysis: Some(JsonAnalysis {
-            dialect,
-            allows_comments: matches!(dialect, JsonDialect::Jsonc),
-            normalized_source,
-            root_kind,
-            owners,
-        }),
-        policies: vec![],
+        },
     }
 }
 
@@ -583,162 +209,16 @@ pub fn match_json_owners(
     JsonOwnerMatchResult { matched, unmatched_template, unmatched_destination }
 }
 
-fn parse_normalized_json(
-    source: &str,
-    dialect: JsonDialect,
-    diagnostic_factory: fn(&str) -> Diagnostic,
-) -> Result<Value, Box<Diagnostic>> {
-    let result = parse_json(source, dialect);
-    if !result.ok {
-        let diagnostic = result
-            .diagnostics
-            .into_iter()
-            .next()
-            .map(|diagnostic| Diagnostic {
-                severity: diagnostic.severity,
-                category: diagnostic_factory(&diagnostic.message).category,
-                message: diagnostic.message,
-                path: diagnostic.path,
-                review: None,
-            })
-            .unwrap_or_else(|| diagnostic_factory("JSON parse failed."));
-        return Err(Box::new(diagnostic));
-    }
-
-    let analysis = result.analysis.expect("successful parse should include analysis");
-    serde_json::from_str::<Value>(&analysis.normalized_source)
-        .map_err(|_| Box::new(diagnostic_factory("JSON parse failed.")))
-}
-
-fn merge_values(template: Value, destination: Value) -> Value {
-    match (template, destination) {
-        (Value::Object(template_map), Value::Object(destination_map)) => {
-            let mut merged = serde_json::Map::new();
-            for key in template_map.keys().chain(destination_map.keys()) {
-                if merged.contains_key(key) {
-                    continue;
-                }
-                match (template_map.get(key), destination_map.get(key)) {
-                    (Some(template_value), Some(destination_value)) => {
-                        merged.insert(
-                            key.clone(),
-                            merge_values(template_value.clone(), destination_value.clone()),
-                        );
-                    }
-                    (None, Some(destination_value)) => {
-                        merged.insert(key.clone(), destination_value.clone());
-                    }
-                    (Some(template_value), None) => {
-                        merged.insert(key.clone(), template_value.clone());
-                    }
-                    (None, None) => {}
-                }
-            }
-
-            Value::Object(merged)
-        }
-        (Value::Array(_), Value::Array(destination_array)) => Value::Array(destination_array),
-        (_, destination) => destination,
-    }
-}
-
-fn canonical_json(value: &Value) -> String {
-    match value {
-        Value::Null => "null".to_string(),
-        Value::Bool(boolean) => boolean.to_string(),
-        Value::Number(number) => number.to_string(),
-        Value::String(string) => {
-            serde_json::to_string(string).expect("string serialization should succeed")
-        }
-        Value::Array(items) => {
-            format!("[{}]", items.iter().map(canonical_json).collect::<Vec<_>>().join(","))
-        }
-        Value::Object(map) => {
-            let entries = map
-                .iter()
-                .map(|(key, value)| {
-                    format!(
-                        "{}:{}",
-                        serde_json::to_string(key).expect("key serialization should succeed"),
-                        canonical_json(value)
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(",");
-            format!("{{{entries}}}")
-        }
-    }
-}
-
 pub fn merge_json(
     template_source: &str,
     destination_source: &str,
     dialect: JsonDialect,
 ) -> MergeResult<String> {
-    let template = match parse_normalized_json(template_source, dialect, parse_error) {
-        Ok(value) => value,
-        Err(diagnostic) => {
-            return MergeResult {
-                ok: false,
-                diagnostics: vec![*diagnostic],
-                output: None,
-                policies: vec![],
-            };
-        }
-    };
-    let mut diagnostics = Vec::new();
-    let mut policies = vec![destination_wins_array_policy()];
-    let destination =
-        match parse_normalized_json(destination_source, dialect, destination_parse_error) {
-            Ok(value) => value,
-            Err(diagnostic) => {
-                if diagnostic.category == DiagnosticCategory::DestinationParseError
-                    && detect_trailing_comma(destination_source)
-                {
-                    let sanitized_destination = strip_trailing_commas(destination_source);
-                    if sanitized_destination == destination_source {
-                        return MergeResult {
-                            ok: false,
-                            diagnostics: vec![*diagnostic],
-                            output: None,
-                            policies: vec![],
-                        };
-                    }
-
-                    match parse_normalized_json(
-                        &sanitized_destination,
-                        dialect,
-                        destination_parse_error,
-                    ) {
-                        Ok(value) => {
-                            diagnostics.push(fallback_applied(
-                                "Applied destination trailing-comma fallback during merge.",
-                            ));
-                            policies.push(trailing_comma_fallback_policy());
-                            value
-                        }
-                        Err(retry_diagnostic) => {
-                            return MergeResult {
-                                ok: false,
-                                diagnostics: vec![*retry_diagnostic],
-                                output: None,
-                                policies: vec![],
-                            };
-                        }
-                    }
-                } else {
-                    return MergeResult {
-                        ok: false,
-                        diagnostics: vec![*diagnostic],
-                        output: None,
-                        policies: vec![],
-                    };
-                }
-            }
-        };
-
-    let merged = merge_values(template, destination);
-    MergeResult { ok: true, diagnostics, output: Some(canonical_json(&merged)), policies }
+    let mut result = merge_json_source_preserving(template_source, destination_source, dialect);
+    if result.ok {
+        result.policies.push(destination_wins_array_policy());
+    }
+    result
 }
 
 #[cfg(test)]
@@ -746,9 +226,8 @@ mod tests {
     use super::{
         JsonDialect, JsonOwner, JsonOwnerKind, JsonOwnerMatch, JsonRootKind,
         destination_wins_array_policy, match_json_owners, merge_json, parse_json,
-        trailing_comma_fallback_policy,
     };
-    use ast_merge::{DiagnosticCategory, DiagnosticSeverity};
+    use ast_merge::DiagnosticCategory;
 
     #[test]
     fn accepts_jsonc_comments() {
@@ -761,12 +240,12 @@ mod tests {
     }
 
     #[test]
-    fn rejects_trailing_commas() {
+    fn accepts_jsonc_trailing_commas_through_the_json5_grammar() {
         let source = "{\n  \"enabled\": true,\n  \"items\": [1, 2,],\n}\n";
         let result = parse_json(source, JsonDialect::Jsonc);
 
-        assert!(!result.ok);
-        assert_eq!(result.diagnostics[0].category, DiagnosticCategory::ParseError);
+        assert!(result.ok);
+        assert_eq!(result.analysis.unwrap().normalized_source, source);
     }
 
     #[test]
@@ -870,7 +349,7 @@ mod tests {
         assert!(result.ok);
         assert_eq!(
             result.output,
-            Some("{\"name\":\"structuredmerge\",\"meta\":{\"enabled\":true,\"mode\":\"template\"},\"tags\":[\"destination\"],\"template_only\":1,\"destination_only\":2}".to_string())
+            Some("{\n  \"name\": \"structuredmerge\",\n  \"meta\": {\n    \"enabled\": true,\n    \"mode\": \"template\"\n  },\n  \"tags\": [\"destination\"],\n  \"destination_only\": 2,\n  \"template_only\": 1\n}\n".to_string())
         );
     }
 
@@ -883,18 +362,13 @@ mod tests {
     }
 
     #[test]
-    fn applies_trailing_comma_fallback_during_merge() {
+    fn rejects_strict_json_trailing_commas_without_fallback() {
         let result = merge_json("{\"alpha\":1}", "{\"beta\":[1,2,],}", JsonDialect::Json);
 
-        assert!(result.ok);
-        assert_eq!(result.output.as_deref(), Some("{\"alpha\":1,\"beta\":[1,2]}"));
-        assert_eq!(result.diagnostics.len(), 1);
-        assert_eq!(result.diagnostics[0].severity, DiagnosticSeverity::Warning);
-        assert_eq!(result.diagnostics[0].category, DiagnosticCategory::FallbackApplied);
-        assert_eq!(
-            result.policies,
-            vec![destination_wins_array_policy(), trailing_comma_fallback_policy()]
-        );
+        assert!(!result.ok);
+        assert!(result.output.is_none());
+        assert_eq!(result.diagnostics[0].category, DiagnosticCategory::DestinationParseError);
+        assert!(result.policies.is_empty());
     }
 
     #[test]
