@@ -1,6 +1,9 @@
 [workspace]
-alef_version = "0.81.0"
+alef_version = "0.82.1"
 languages = ["ruby"]
+
+[workspace.ownership]
+user_owned = ["rustfmt.toml"]
 
 [workspace.scaffold]
 description = "Generated Ruby host-provider prototype for StructuredMerge"

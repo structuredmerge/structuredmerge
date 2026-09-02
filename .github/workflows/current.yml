@@ -35,3 +35,36 @@ jobs:
         uses: jdx/mise-action@v4
       - name: Run checks
         run: mise run check
+
+  ruby-bindings:
+    name: Ruby bindings (${{ matrix.ruby }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.2", "4.0"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+          working-directory: packages/ruby
+      - name: Test generated Ruby bindings
+        run: bundle exec rake spec
+        working-directory: packages/ruby
+
+  alef:
+    name: Alef generation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install Alef
+        uses: xberg-io/actions/install-alef@v1
+      - name: Verify generated bindings
+        run: alef verify --exit-code

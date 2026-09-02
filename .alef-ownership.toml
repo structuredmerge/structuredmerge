@@ -14,7 +14,13 @@
 
 owned_paths = [
   ".gitattributes",
+  "docs/reference/api-ruby.md",
+  "docs/reference/api-rust.md",
+  "docs/reference/configuration.md",
+  "docs/reference/errors.md",
+  "docs/reference/types.md",
   "packages/ruby/Gemfile",
+  "packages/ruby/README.md",
   "packages/ruby/Rakefile",
   "packages/ruby/Steepfile",
   "packages/ruby/structuredmerge_host_prototype.gemspec",

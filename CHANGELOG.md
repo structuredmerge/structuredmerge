@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Promote the Alef Ruby binding configuration to the canonical `alef.toml`,
+  complete its generated README and API-reference surface, and gate both Alef
+  freshness and Ruby 3.2/4.0 binding tests in CI.
 - Add a shared source-preserving top-level declaration merge kernel.
 - Add fail-closed, source-preserving TypeScript and TSX three-way merging through
   TreeHaver's normalized TSLP parser interface.

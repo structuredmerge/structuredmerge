@@ -9,3 +9,4 @@ packages/ruby/lib/*.dll
 packages/ruby/lib/*.dylib
 packages/ruby/lib/*.so
 packages/ruby/tmp/
+packages/ruby/pkg/

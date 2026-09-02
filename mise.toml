@@ -16,5 +16,12 @@ run = "cargo check --workspace"
 [tasks.test]
 run = "cargo test --workspace"
 
+[tasks.alef-verify]
+run = "alef verify --exit-code"
+
+[tasks.ruby-bindings]
+run = "bundle check || bundle install && bundle exec rake spec"
+dir = "packages/ruby"
+
 [tasks.check]
 run = "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
