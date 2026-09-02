@@ -104,6 +104,7 @@ fn conforms_to_shared_toml_parse_matching_and_merge_fixtures() {
                             serde_json::Value::String(
                                 match owner.owner_kind {
                                     toml_merge::TomlOwnerKind::Table => "table",
+                                    toml_merge::TomlOwnerKind::TableArray => "table_array",
                                     toml_merge::TomlOwnerKind::KeyValue => "key_value",
                                     toml_merge::TomlOwnerKind::ArrayItem => "array_item",
                                 }

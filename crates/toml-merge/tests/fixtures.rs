@@ -207,6 +207,7 @@ fn conforms_to_slice_92_toml_structure_fixture() {
                 "path": owner.path,
                 "owner_kind": match owner.owner_kind {
                     TomlOwnerKind::Table => "table",
+                    TomlOwnerKind::TableArray => "table_array",
                     TomlOwnerKind::KeyValue => "key_value",
                     TomlOwnerKind::ArrayItem => "array_item",
                 }
@@ -325,6 +326,61 @@ fn conforms_to_slice_94_toml_merge_fixtures() {
         Value::Array(invalid_destination_diagnostics),
         invalid_destination["expected"]["diagnostics"]
     );
+}
+
+#[test]
+fn conforms_to_slice_720_nested_toml_leaf_merge() {
+    let fixture =
+        read_fixture(&["toml", "slice-720-advanced-leaf-merge", "nested-table-leaf-merge.json"]);
+    let result = merge_toml(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        TomlDialect::Toml,
+        Some(TomlBackend::TreeSitter),
+    );
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+}
+
+#[test]
+fn conforms_to_slice_721_toml_source_preservation() {
+    let fixture = read_fixture(&[
+        "toml",
+        "slice-721-formatting-preservation",
+        "dotted-inline-comments-arrays.json",
+    ]);
+    let result = merge_toml(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        TomlDialect::Toml,
+        Some(TomlBackend::TreeSitter),
+    );
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+}
+
+#[test]
+fn preserves_exact_toml_source_on_replay() {
+    let source = "# retained\r\ntitle  =  'exact' # inline\r\n";
+    let result = merge_toml(source, source, TomlDialect::Toml, Some(TomlBackend::TreeSitter));
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(source));
+}
+
+#[test]
+fn fails_closed_for_duplicate_toml_keys() {
+    let result = parse_toml(
+        "name = \"first\"\nname = \"second\"\n",
+        TomlDialect::Toml,
+        Some(TomlBackend::TreeSitter),
+    );
+
+    assert!(!result.ok);
+    assert_eq!(result.diagnostics[0].category, ast_merge::DiagnosticCategory::ParseError);
+    assert!(result.diagnostics[0].message.contains("Duplicate TOML key"));
 }
 
 #[test]

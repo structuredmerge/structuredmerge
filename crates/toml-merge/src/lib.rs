@@ -1,13 +1,13 @@
 use ast_merge::{
     CommentAttachment, CommentRegion, ConformanceFamilyPlanContext, ConformanceFeatureProfileView,
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile, LayoutGap,
-    MergeResult, ParseResult, PolicyReference, PolicySurface, augment_normalized_tree_comments,
-    match_owner_paths,
+    MergeResult, ParseResult, PolicyReference, PolicySurface, match_owner_paths,
 };
-use toml::Value;
-use tree_haver::{
-    BackendReference, kreuzberg_language_pack_backend, parse_normalized_with_language_pack,
-};
+use tree_haver::{BackendReference, kreuzberg_language_pack_backend};
+
+mod source_preserving;
+
+use source_preserving::{TomlSyntaxDocument, analyze_toml_document, merge_toml_documents};
 
 pub const PACKAGE_NAME: &str = "structuredmerge-toml-merge";
 
@@ -24,6 +24,7 @@ pub enum TomlRootKind {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TomlOwnerKind {
     Table,
+    TableArray,
     KeyValue,
     ArrayItem,
 }
@@ -57,6 +58,7 @@ pub struct TomlAnalysis {
     pub comment_regions: Vec<CommentRegion>,
     pub layout_gaps: Vec<LayoutGap>,
     pub comment_attachments: Vec<CommentAttachment>,
+    pub(crate) document: TomlSyntaxDocument,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -93,16 +95,6 @@ fn parse_error(message: &str) -> Diagnostic {
     Diagnostic {
         severity: DiagnosticSeverity::Error,
         category: DiagnosticCategory::ParseError,
-        message: message.to_string(),
-        path: None,
-        review: None,
-    }
-}
-
-fn destination_parse_error(message: &str) -> Diagnostic {
-    Diagnostic {
-        severity: DiagnosticSeverity::Error,
-        category: DiagnosticCategory::DestinationParseError,
         message: message.to_string(),
         path: None,
         review: None,
@@ -167,191 +159,8 @@ pub fn toml_plan_context(backend: Option<TomlBackend>) -> ConformanceFamilyPlanC
     }
 }
 
-fn validate_scalar_array(items: &[Value], path: &str) -> Result<(), Diagnostic> {
-    if items.iter().all(|item| {
-        matches!(item, Value::String(_) | Value::Integer(_) | Value::Float(_) | Value::Boolean(_))
-    }) {
-        return Ok(());
-    }
-
-    Err(unsupported_feature(&format!(
-        "Unsupported TOML array value at {}. Only scalar arrays are supported.",
-        display_path(path)
-    )))
-}
-
-fn display_path(path: &str) -> &str {
-    if path.is_empty() { "/" } else { path }
-}
-
 fn resolve_backend(backend: Option<TomlBackend>) -> TomlBackend {
     backend.unwrap_or(TomlBackend::TreeSitter)
-}
-
-fn validate_toml_node(value: &Value, path: &str) -> Result<(), Diagnostic> {
-    match value {
-        Value::String(_) | Value::Integer(_) | Value::Float(_) | Value::Boolean(_) => Ok(()),
-        Value::Array(items) => validate_scalar_array(items, path),
-        Value::Table(table) => {
-            let mut keys = table.keys().cloned().collect::<Vec<_>>();
-            keys.sort();
-            for key in keys {
-                let next_path = format!("{path}/{key}");
-                if let Some(next_value) = table.get(&key) {
-                    validate_toml_node(next_value, &next_path)?;
-                }
-            }
-            Ok(())
-        }
-        _ => Err(unsupported_feature(&format!(
-            "Unsupported TOML value at {}. Only tables, scalar values, and scalar arrays are supported.",
-            display_path(path)
-        ))),
-    }
-}
-
-fn render_toml_scalar(value: &Value) -> String {
-    match value {
-        Value::String(text) => format!("{text:?}"),
-        Value::Boolean(boolean) => boolean.to_string(),
-        Value::Integer(integer) => integer.to_string(),
-        Value::Float(float) => {
-            let rendered = float.to_string();
-            if rendered.contains('.') { rendered } else { format!("{rendered}.0") }
-        }
-        _ => unreachable!("render_toml_scalar only supports TOML scalars"),
-    }
-}
-
-fn render_toml_value(value: &Value) -> String {
-    match value {
-        Value::Array(items) => {
-            let rendered = items.iter().map(render_toml_scalar).collect::<Vec<_>>().join(", ");
-            format!("[{rendered}]")
-        }
-        Value::String(_) | Value::Boolean(_) | Value::Integer(_) | Value::Float(_) => {
-            render_toml_scalar(value)
-        }
-        _ => unreachable!("render_toml_value does not render tables"),
-    }
-}
-
-fn render_toml_table(table: &toml::map::Map<String, Value>, path: &[String]) -> Vec<String> {
-    let mut lines = Vec::new();
-    let mut keys = table.keys().cloned().collect::<Vec<_>>();
-    keys.sort();
-
-    let value_keys = keys
-        .iter()
-        .filter(|key| !matches!(table.get(*key), Some(Value::Table(_))))
-        .cloned()
-        .collect::<Vec<_>>();
-    let table_keys = keys
-        .iter()
-        .filter(|key| matches!(table.get(*key), Some(Value::Table(_))))
-        .cloned()
-        .collect::<Vec<_>>();
-
-    if !path.is_empty() {
-        lines.push(format!("[{}]", path.join(".")));
-    }
-
-    for key in value_keys {
-        if let Some(value) = table.get(&key) {
-            lines.push(format!("{key} = {}", render_toml_value(value)));
-        }
-    }
-
-    for key in table_keys {
-        if !lines.is_empty() {
-            lines.push(String::new());
-        }
-
-        if let Some(Value::Table(nested)) = table.get(&key) {
-            let mut nested_path = path.to_vec();
-            nested_path.push(key);
-            lines.extend(render_toml_table(nested, &nested_path));
-        }
-    }
-
-    lines
-}
-
-fn canonical_toml(table: &toml::map::Map<String, Value>) -> String {
-    format!("{}\n", render_toml_table(table, &[]).join("\n"))
-}
-
-fn collect_toml_owners(table: &toml::map::Map<String, Value>, prefix: &str) -> Vec<TomlOwner> {
-    let mut owners = Vec::new();
-    let mut keys = table.keys().cloned().collect::<Vec<_>>();
-    keys.sort();
-
-    for key in keys {
-        let path = format!("{prefix}/{key}");
-        match table.get(&key) {
-            Some(Value::Array(items)) => {
-                owners.push(TomlOwner {
-                    path: path.clone(),
-                    owner_kind: TomlOwnerKind::KeyValue,
-                    match_key: Some(key.clone()),
-                });
-                owners.extend(items.iter().enumerate().map(|(index, _)| TomlOwner {
-                    path: format!("{path}/{index}"),
-                    owner_kind: TomlOwnerKind::ArrayItem,
-                    match_key: None,
-                }));
-            }
-            Some(Value::Table(nested)) => {
-                owners.push(TomlOwner {
-                    path: path.clone(),
-                    owner_kind: TomlOwnerKind::Table,
-                    match_key: Some(key.clone()),
-                });
-                owners.extend(collect_toml_owners(nested, &path));
-            }
-            Some(_) => owners.push(TomlOwner {
-                path,
-                owner_kind: TomlOwnerKind::KeyValue,
-                match_key: Some(key),
-            }),
-            None => {}
-        }
-    }
-
-    owners
-}
-
-fn merge_toml_tables(
-    template: &toml::map::Map<String, Value>,
-    destination: &toml::map::Map<String, Value>,
-) -> toml::map::Map<String, Value> {
-    let mut merged = toml::map::Map::new();
-    let mut keys = template.keys().chain(destination.keys()).cloned().collect::<Vec<_>>();
-    keys.sort();
-    keys.dedup();
-
-    for key in keys {
-        match (template.get(&key), destination.get(&key)) {
-            (None, Some(destination_value)) => {
-                merged.insert(key, destination_value.clone());
-            }
-            (Some(template_value), None) => {
-                merged.insert(key, template_value.clone());
-            }
-            (Some(Value::Table(template_table)), Some(Value::Table(destination_table))) => {
-                merged.insert(
-                    key,
-                    Value::Table(merge_toml_tables(template_table, destination_table)),
-                );
-            }
-            (_, Some(destination_value)) => {
-                merged.insert(key, destination_value.clone());
-            }
-            _ => {}
-        }
-    }
-
-    merged
 }
 
 pub fn analyze_toml_source(source: &str, dialect: TomlDialect) -> ParseResult<TomlAnalysis> {
@@ -364,35 +173,25 @@ pub fn analyze_toml_source(source: &str, dialect: TomlDialect) -> ParseResult<To
         };
     }
 
-    match toml::from_str::<toml::map::Map<String, Value>>(source) {
-        Ok(table) => {
-            if let Err(diagnostic) = validate_toml_node(&Value::Table(table.clone()), "") {
-                return ParseResult {
-                    ok: false,
-                    diagnostics: vec![diagnostic],
-                    analysis: None,
-                    policies: vec![],
-                };
-            }
-
-            ParseResult {
-                ok: true,
-                diagnostics: vec![],
-                analysis: Some(TomlAnalysis {
-                    dialect: TomlDialect::Toml,
-                    normalized_source: canonical_toml(&table),
-                    root_kind: TomlRootKind::Table,
-                    owners: collect_toml_owners(&table, ""),
-                    comment_regions: vec![],
-                    layout_gaps: vec![],
-                    comment_attachments: vec![],
-                }),
-                policies: vec![],
-            }
-        }
-        Err(error) => ParseResult {
+    match analyze_toml_document(source) {
+        Ok(document) => ParseResult {
+            ok: true,
+            diagnostics: vec![],
+            analysis: Some(TomlAnalysis {
+                dialect: TomlDialect::Toml,
+                normalized_source: source.to_string(),
+                root_kind: TomlRootKind::Table,
+                owners: document.owners.clone(),
+                comment_regions: document.comment_augmentation.regions.clone(),
+                layout_gaps: document.comment_augmentation.gaps.clone(),
+                comment_attachments: document.comment_augmentation.attachments.clone(),
+                document,
+            }),
+            policies: vec![],
+        },
+        Err(message) => ParseResult {
             ok: false,
-            diagnostics: vec![parse_error(&error.to_string())],
+            diagnostics: vec![parse_error(&message)],
             analysis: None,
             policies: vec![],
         },
@@ -416,48 +215,7 @@ pub fn parse_toml(
         };
     }
 
-    let syntax = parse_normalized_with_language_pack(&tree_haver::ParserRequest {
-        source: source.to_string(),
-        language: "toml".to_string(),
-        dialect: Some("toml".to_string()),
-    });
-    if !syntax.ok {
-        return ParseResult {
-            ok: false,
-            diagnostics: syntax.diagnostics.iter().map(|message| parse_error(message)).collect(),
-            analysis: None,
-            policies: vec![],
-        };
-    }
-
-    let augmentation = match augment_normalized_tree_comments(
-        source,
-        &syntax.root_id,
-        &syntax.nodes,
-        "hash_comment",
-        normalize_toml_comment,
-    ) {
-        Ok(augmentation) => augmentation,
-        Err(error) => {
-            return ParseResult {
-                ok: false,
-                diagnostics: vec![parse_error(&error)],
-                analysis: None,
-                policies: vec![],
-            };
-        }
-    };
-    let mut analyzed = analyze_toml_source(source, dialect);
-    if let Some(analysis) = analyzed.analysis.as_mut() {
-        analysis.comment_regions = augmentation.regions;
-        analysis.layout_gaps = augmentation.gaps;
-        analysis.comment_attachments = augmentation.attachments;
-    }
-    analyzed
-}
-
-fn normalize_toml_comment(text: &str) -> String {
-    text.trim().strip_prefix('#').unwrap_or(text.trim()).trim().to_string()
+    analyze_toml_source(source, dialect)
 }
 
 pub fn match_toml_owners(
@@ -529,41 +287,46 @@ pub fn merge_toml_with_parser(
         };
     }
 
-    let template_value = match template.analysis.as_ref().and_then(|analysis| {
-        toml::from_str::<toml::map::Map<String, Value>>(&analysis.normalized_source).ok()
-    }) {
-        Some(table) => table,
-        _ => {
-            return MergeResult {
-                ok: false,
-                diagnostics: vec![parse_error("TOML merge requires a table-root template.")],
-                output: None,
-                policies: vec![],
-            };
+    let template = template.analysis.expect("successful TOML parse should include analysis");
+    let destination = destination.analysis.expect("successful TOML parse should include analysis");
+    match merge_toml_documents(&template.document, &destination.document) {
+        Ok(output) => {
+            let verification = parser(&output, dialect);
+            match verification.analysis {
+                Some(analysis)
+                    if verification.ok
+                        && analysis.document.semantic
+                            == template.document.expected_merge_semantic(&destination.document) =>
+                {
+                    MergeResult {
+                        ok: true,
+                        diagnostics: vec![],
+                        output: Some(output),
+                        policies: vec![destination_wins_array_policy()],
+                    }
+                }
+                Some(_) => MergeResult {
+                    ok: false,
+                    diagnostics: vec![unsupported_feature(
+                        "Source-preserving TOML render changed the planned structure.",
+                    )],
+                    output: None,
+                    policies: vec![],
+                },
+                None => MergeResult {
+                    ok: false,
+                    diagnostics: verification.diagnostics,
+                    output: None,
+                    policies: vec![],
+                },
+            }
         }
-    };
-    let destination_value = match destination.analysis.as_ref().and_then(|analysis| {
-        toml::from_str::<toml::map::Map<String, Value>>(&analysis.normalized_source).ok()
-    }) {
-        Some(table) => table,
-        _ => {
-            return MergeResult {
-                ok: false,
-                diagnostics: vec![destination_parse_error(
-                    "TOML merge requires a table-root destination.",
-                )],
-                output: None,
-                policies: vec![],
-            };
-        }
-    };
-
-    let merged = merge_toml_tables(&template_value, &destination_value);
-    MergeResult {
-        ok: true,
-        diagnostics: vec![],
-        output: Some(canonical_toml(&merged)),
-        policies: vec![destination_wins_array_policy()],
+        Err(message) => MergeResult {
+            ok: false,
+            diagnostics: vec![unsupported_feature(&message)],
+            output: None,
+            policies: vec![],
+        },
     }
 }
 

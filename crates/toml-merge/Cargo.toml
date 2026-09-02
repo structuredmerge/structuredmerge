@@ -11,7 +11,6 @@ license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 [dependencies]
 ast-merge = { version = "0.2.0", path = "../ast-merge" }
 serde = { version = "1", features = ["derive"] }
-toml = "0.9"
 tree-haver = { version = "0.2.0", path = "../tree-haver" }
 
 [dev-dependencies]
