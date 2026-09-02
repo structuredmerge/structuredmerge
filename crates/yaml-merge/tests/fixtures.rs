@@ -478,6 +478,22 @@ fn conforms_to_slice_99_yaml_merge_fixtures() {
 }
 
 #[test]
+fn preserves_mapping_order_and_safe_plain_string_types() {
+    let result = merge_yaml_with_backend(
+        "label: \"true\"\nphrase: Structured Merge\n",
+        "enabled: true\n",
+        YamlDialect::Yaml,
+        YamlBackend::KreuzbergLanguagePack,
+    );
+
+    assert!(result.ok);
+    assert_eq!(
+        result.output.as_deref(),
+        Some("label: \"true\"\nphrase: Structured Merge\nenabled: true\n")
+    );
+}
+
+#[test]
 fn uses_kreuzberg_backend_by_default() {
     let valid = read_fixture(&["yaml", "slice-96-parse", "valid-document.json"]);
     let result = parse_yaml(valid["source"].as_str().unwrap(), YamlDialect::Yaml);

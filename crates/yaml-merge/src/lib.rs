@@ -180,10 +180,7 @@ fn display_path(path: &str) -> &str {
 fn render_yaml_scalar(value: &Value) -> String {
     match value {
         Value::String(text) => {
-            if text
-                .chars()
-                .all(|char| char.is_ascii_alphanumeric() || matches!(char, '_' | '.' | '-'))
-            {
+            if yaml_plain_string_safe(text) {
                 text.clone()
             } else {
                 format!("{text:?}")
@@ -193,6 +190,16 @@ fn render_yaml_scalar(value: &Value) -> String {
         Value::Number(number) => number.to_string(),
         _ => unreachable!("render_yaml_scalar only supports YAML scalars"),
     }
+}
+
+fn yaml_plain_string_safe(text: &str) -> bool {
+    if text.is_empty() || text.contains(['\n', '\r']) || text.trim() != text {
+        return false;
+    }
+    matches!(
+        serde_yaml::from_str::<serde_yaml::Value>(text),
+        Ok(serde_yaml::Value::String(parsed)) if parsed == text
+    )
 }
 
 fn validate_yaml_node(value: &Value, path: &str) -> Result<(), Diagnostic> {
