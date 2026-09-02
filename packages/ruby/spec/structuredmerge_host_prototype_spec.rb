@@ -540,6 +540,51 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(provider.callback_thread_ids.first).not_to eq(caller_thread_id)
   end
 
+  it "atomically replaces a provider while an old snapshot remains in flight" do
+    old_provider = HostPrototypeFixtures::BlockingWorkflowHost.new("ruby.replacement")
+    replacement = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.replacement")
+    def replacement.execute_batch(request)
+      super
+      request.reverse
+    end
+    StructuredmergeHostPrototypeCore.register_workflow_host(old_provider, "ruby.replacement")
+    old_payload = [0, 255, 13, 10]
+    task_id = described_class.start_identity_worker("ruby.replacement", old_payload)
+    old_provider.wait_until_entered
+
+    described_class.replace_workflow_host(replacement, "ruby.replacement")
+
+    expect(described_class.execute_identity("ruby.replacement", [1, 2, 3])).to eq([3, 2, 1])
+    expect(old_provider.shutdown_count).to eq(0)
+
+    old_provider.release
+    expect(wait_for_identity_worker(task_id)).to eq(old_payload)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+    sleep(0.001) while old_provider.shutdown_count.zero? &&
+      Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+
+    expect(old_provider.shutdown_count).to eq(1)
+    expect(replacement.shutdown_count).to eq(0)
+    expect(described_class.registered_workflow_hosts).to eq(["ruby.replacement"])
+  end
+
+  it "keeps the old provider when replacement initialization fails" do
+    old_provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.replacement-failure")
+    replacement = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.replacement-failure")
+    def replacement.initialize
+      raise "replacement initialization exploded"
+    end
+    StructuredmergeHostPrototypeCore.register_workflow_host(old_provider, "ruby.replacement-failure")
+
+    expect do
+      described_class.replace_workflow_host(replacement, "ruby.replacement-failure")
+    end.to raise_error(RuntimeError, /replacement initialization exploded/)
+
+    expect(described_class.execute_identity("ruby.replacement-failure", [0, 255])).to eq([0, 255])
+    expect(old_provider.shutdown_count).to eq(0)
+    expect(replacement.shutdown_count).to eq(1)
+  end
+
   it "dispatches concurrent native Rust workers onto a Ruby runtime thread" do
     provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.native-workers")
     StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.native-workers")

@@ -26,6 +26,7 @@ ruby = "packages/ruby/ext/structuredmerge_host_prototype_core_rb/src/"
 [[crates.trait_bridges]]
 trait_name = "WorkflowHost"
 super_trait = "Plugin"
+type_alias = "WorkflowHost"
 register_fn = "register_workflow_host"
 unregister_fn = "unregister_workflow_host"
 clear_fn = "clear_workflow_hosts"
@@ -33,6 +34,7 @@ clear_fn = "clear_workflow_hosts"
 [[crates.trait_bridges]]
 trait_name = "ParserHost"
 super_trait = "Plugin"
+type_alias = "ParserHost"
 register_fn = "register_parser_host"
 unregister_fn = "unregister_parser_host"
 clear_fn = "clear_parser_hosts"
@@ -51,6 +53,7 @@ functions = [
   "clear_workflow_hosts",
   "execute_identity",
   "execute_async_identity",
+  "replace_workflow_host",
   "start_identity_worker",
   "prepare_identity_worker",
   "dispatch_identity_worker",
@@ -61,6 +64,7 @@ functions = [
   "execute_typed_identity",
   "execute_detached_identity",
   "registered_workflow_hosts",
+  "replace_parser_host",
   "unregister_parser_host",
   "clear_parser_hosts",
   "probe_with_parser",

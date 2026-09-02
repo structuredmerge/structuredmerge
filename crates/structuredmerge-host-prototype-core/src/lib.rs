@@ -164,6 +164,25 @@ fn finalize_if_unleased<P: Plugin + ?Sized>(
     if Arc::strong_count(&entry) == 1 { entry.finalize() } else { Ok(()) }
 }
 
+fn replace_provider_if_same<P: Plugin + ?Sized>(
+    providers: &mut BTreeMap<String, Arc<ProviderEntry<P>>>,
+    expected: &Arc<ProviderEntry<P>>,
+    provider: Arc<P>,
+) -> Result<Arc<ProviderEntry<P>>, HostPrototypeError> {
+    let name = provider.name().to_owned();
+    let current = providers
+        .get(&name)
+        .ok_or_else(|| HostPrototypeError::new(format!("provider not registered: {name}")))?;
+    if !Arc::ptr_eq(current, expected) {
+        return Err(HostPrototypeError::new(format!(
+            "provider changed during replacement: {name}"
+        )));
+    }
+    Ok(providers
+        .insert(name, Arc::new(ProviderEntry::new(provider)))
+        .expect("existing provider checked above"))
+}
+
 #[derive(Default)]
 pub struct WorkflowHostRegistry {
     providers: BTreeMap<String, Arc<ProviderEntry<dyn WorkflowHost>>>,
@@ -192,6 +211,14 @@ impl ParserHostRegistry {
             .get(name)
             .cloned()
             .ok_or_else(|| HostPrototypeError::new(format!("provider not registered: {name}")))
+    }
+
+    fn replace_if_same(
+        &mut self,
+        expected: &Arc<ProviderEntry<dyn ParserHost>>,
+        provider: Arc<dyn ParserHost>,
+    ) -> Result<Arc<ProviderEntry<dyn ParserHost>>, HostPrototypeError> {
+        replace_provider_if_same(&mut self.providers, expected, provider)
     }
 
     fn remove(
@@ -234,6 +261,14 @@ impl WorkflowHostRegistry {
             .get(name)
             .cloned()
             .ok_or_else(|| HostPrototypeError::new(format!("provider not registered: {name}")))
+    }
+
+    fn replace_if_same(
+        &mut self,
+        expected: &Arc<ProviderEntry<dyn WorkflowHost>>,
+        provider: Arc<dyn WorkflowHost>,
+    ) -> Result<Arc<ProviderEntry<dyn WorkflowHost>>, HostPrototypeError> {
+        replace_provider_if_same(&mut self.providers, expected, provider)
     }
 
     fn remove(
@@ -440,6 +475,41 @@ pub fn register_workflow_host(provider: Arc<dyn WorkflowHost>) -> Result<(), Hos
     publication.map_err(|error| publication_failure(provider.as_ref(), error))
 }
 
+pub fn replace_workflow_host(
+    provider: Arc<dyn WorkflowHost>,
+    name: String,
+) -> Result<(), HostPrototypeError> {
+    validate_provider_name(&name)?;
+    if provider.name() != name {
+        return Err(HostPrototypeError::new(format!(
+            "replacement provider name {:?} does not match requested name {name:?}",
+            provider.name()
+        )));
+    }
+    let expected = registry::get_workflow_host_registry().read().get(&name)?;
+    let version = provider.version()?;
+    let descriptor = provider.descriptor()?;
+    validate_provider_metadata(&name, &version, &descriptor)?;
+    if let Err(error) = provider.initialize() {
+        return Err(initialization_failure(provider.as_ref(), error));
+    }
+
+    let replaced = {
+        let mut registry = registry::get_workflow_host_registry().write();
+        registry.replace_if_same(&expected, Arc::clone(&provider))
+    };
+    let replaced = match replaced {
+        Ok(replaced) => replaced,
+        Err(error) => return Err(publication_failure(provider.as_ref(), error)),
+    };
+    drop(expected);
+    finalize_if_unleased(replaced).map_err(|error| {
+        HostPrototypeError::new(format!(
+            "replacement published; prior provider shutdown failed: {error}"
+        ))
+    })
+}
+
 pub fn register_parser_host(provider: Arc<dyn ParserHost>) -> Result<(), HostPrototypeError> {
     let name = provider.name().to_owned();
     validate_provider_name(&name)?;
@@ -459,6 +529,41 @@ pub fn register_parser_host(provider: Arc<dyn ParserHost>) -> Result<(), HostPro
         registry.insert(Arc::clone(&provider))
     };
     publication.map_err(|error| publication_failure(provider.as_ref(), error))
+}
+
+pub fn replace_parser_host(
+    provider: Arc<dyn ParserHost>,
+    name: String,
+) -> Result<(), HostPrototypeError> {
+    validate_provider_name(&name)?;
+    if provider.name() != name {
+        return Err(HostPrototypeError::new(format!(
+            "replacement provider name {:?} does not match requested name {name:?}",
+            provider.name()
+        )));
+    }
+    let expected = registry::get_parser_host_registry().read().get(&name)?;
+    let version = provider.version()?;
+    let descriptor = provider.descriptor()?;
+    validate_provider_metadata(&name, &version, &descriptor)?;
+    if let Err(error) = provider.initialize() {
+        return Err(initialization_failure(provider.as_ref(), error));
+    }
+
+    let replaced = {
+        let mut registry = registry::get_parser_host_registry().write();
+        registry.replace_if_same(&expected, Arc::clone(&provider))
+    };
+    let replaced = match replaced {
+        Ok(replaced) => replaced,
+        Err(error) => return Err(publication_failure(provider.as_ref(), error)),
+    };
+    drop(expected);
+    finalize_if_unleased(replaced).map_err(|error| {
+        HostPrototypeError::new(format!(
+            "replacement published; prior provider shutdown failed: {error}"
+        ))
+    })
 }
 
 pub mod plugins {
