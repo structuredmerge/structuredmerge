@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    env, fs,
     io::{BufRead, Write},
     time::Instant,
 };
@@ -42,6 +43,126 @@ pub fn serve(input: &mut dyn BufRead, output: &mut dyn Write) -> Result<(), Stri
         output.flush().map_err(|error| format!("flush benchmark response: {error}"))?;
     }
     Ok(())
+}
+
+pub fn run_merge2_files(args: &[String], output: &mut dyn Write, error: &mut dyn Write) -> i32 {
+    if args.len() != 3 {
+        let _ = writeln!(error, "smorg-rs: configuration_error: expected incoming current path");
+        return 2;
+    }
+    let result = (|| {
+        let incoming = read_source(&args[0], "incoming")?;
+        let current = read_source(&args[1], "current")?;
+        let dialect = selected_dialect(&args[2])?;
+        Ok::<_, String>(merge_json_source_preserving(&incoming, &current, dialect))
+    })();
+    match result {
+        Ok(result) if result.ok => {
+            let payload = serde_json::json!({"output": result.output.unwrap_or_default()});
+            if let Err(cause) = serde_json::to_writer(output, &payload) {
+                let _ = writeln!(error, "smorg-rs: process: serialize merge2 response: {cause}");
+                return 3;
+            }
+            0
+        }
+        Ok(result) => {
+            write_diagnostics(error, &result.diagnostics);
+            2
+        }
+        Err(message) => {
+            let _ = writeln!(error, "smorg-rs: process: {message}");
+            2
+        }
+    }
+}
+
+pub fn run_diff_files(args: &[String], output: &mut dyn Write, error: &mut dyn Write) -> i32 {
+    if args.len() != 3 {
+        let _ = writeln!(error, "smorg-rs: configuration_error: expected before after path");
+        return 2;
+    }
+    let result = (|| {
+        let before = read_source(&args[0], "before")?;
+        let after = read_source(&args[1], "after")?;
+        let dialect = selected_dialect(&args[2])?;
+        json_semantically_equivalent(&before, &after, dialect)
+    })();
+    match result {
+        Ok(equivalent) => {
+            let changes = if equivalent {
+                Vec::new()
+            } else {
+                vec![serde_json::json!({"path": "", "kind": "modify"})]
+            };
+            if let Err(cause) =
+                serde_json::to_writer(output, &serde_json::json!({"changes": changes}))
+            {
+                let _ = writeln!(error, "smorg-rs: process: serialize diff response: {cause}");
+                return 3;
+            }
+            0
+        }
+        Err(message) => {
+            let _ = writeln!(error, "smorg-rs: parse_error: {message}");
+            2
+        }
+    }
+}
+
+pub fn run_merge3_files(args: &[String], error: &mut dyn Write) -> i32 {
+    if args.len() < 4 {
+        let _ = writeln!(error, "smorg-rs: configuration_error: expected base ours theirs path");
+        return 2;
+    }
+    let result = (|| {
+        let base = read_source(&args[0], "base")?;
+        let ours = read_source(&args[1], "ours")?;
+        let theirs = read_source(&args[2], "theirs")?;
+        let dialect = selected_dialect(&args[3])?;
+        Ok::<_, String>(merge_json_three_way(&base, &ours, &theirs, dialect))
+    })();
+    match result {
+        Ok(result) if result.outcome == ThreeWayMergeOutcome::Clean => {
+            match fs::write(&args[1], result.output.unwrap_or_default()) {
+                Ok(()) => 0,
+                Err(cause) => {
+                    let _ = writeln!(error, "smorg-rs: process: write ours output: {cause}");
+                    3
+                }
+            }
+        }
+        Ok(result) if result.outcome == ThreeWayMergeOutcome::Conflict => {
+            write_diagnostics(error, &result.diagnostics);
+            1
+        }
+        Ok(result) => {
+            write_diagnostics(error, &result.diagnostics);
+            2
+        }
+        Err(message) => {
+            let _ = writeln!(error, "smorg-rs: process: {message}");
+            2
+        }
+    }
+}
+
+fn read_source(path: &str, role: &str) -> Result<String, String> {
+    fs::read_to_string(path).map_err(|error| format!("read {role} source {path:?}: {error}"))
+}
+
+fn selected_dialect(path: &str) -> Result<JsonDialect, String> {
+    if let Ok(dialect) = env::var("AST_MERGE_DIALECT") {
+        return parse_dialect(&dialect);
+    }
+    let extension = path.rsplit_once('.').map(|(_, extension)| extension).unwrap_or("json");
+    parse_dialect(extension)
+}
+
+fn write_diagnostics(error: &mut dyn Write, diagnostics: &[ast_merge::Diagnostic]) {
+    for diagnostic in diagnostics {
+        let category = format!("{:?}", diagnostic.category).to_ascii_lowercase();
+        let _ = writeln!(error, "smorg-rs: {category}: {}", diagnostic.message);
+    }
 }
 
 fn execute_line(line: &str) -> serde_json::Value {
@@ -167,6 +288,12 @@ fn elapsed_nanoseconds(started: Instant) -> u64 {
 mod tests {
     use super::*;
 
+    fn write_fixture(directory: &std::path::Path, name: &str, source: &str) -> String {
+        let path = directory.join(name);
+        fs::write(&path, source).unwrap();
+        path.to_string_lossy().into_owned()
+    }
+
     fn request(operation: &str, dialect: &str, sources: &[(&str, &str)]) -> String {
         serde_json::json!({
             "schema_version": REQUEST_SCHEMA,
@@ -245,5 +372,67 @@ mod tests {
         assert_eq!(equivalent["result"]["changes"], serde_json::json!([]));
         assert_eq!(malformed["status"], 2);
         assert!(malformed["stderr"].as_str().unwrap().contains("syntax errors"));
+    }
+
+    #[test]
+    fn cold_merge2_and_diff_wrappers_use_the_benchmark_file_contract() {
+        let directory = tempfile::tempdir().unwrap();
+        let incoming =
+            write_fixture(directory.path(), "incoming.json", "{\n  \"template\": true\n}\n");
+        let current =
+            write_fixture(directory.path(), "current.json", "{\n  \"current\": true\n}\n");
+        let mut output = Vec::new();
+        let mut error = Vec::new();
+
+        let status = run_merge2_files(
+            &[incoming, current.clone(), "fixture.json".into()],
+            &mut output,
+            &mut error,
+        );
+
+        assert_eq!(status, 0, "{}", String::from_utf8_lossy(&error));
+        let response: serde_json::Value = serde_json::from_slice(&output).unwrap();
+        assert_eq!(response["output"], "{\n  \"current\": true,\n  \"template\": true\n}\n");
+
+        output.clear();
+        let status = run_diff_files(
+            &[current.clone(), current, "fixture.json".into()],
+            &mut output,
+            &mut error,
+        );
+        assert_eq!(status, 0, "{}", String::from_utf8_lossy(&error));
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&output).unwrap()["changes"],
+            serde_json::json!([])
+        );
+    }
+
+    #[test]
+    fn cold_merge3_wrapper_mutates_ours_only_for_clean_results() {
+        let directory = tempfile::tempdir().unwrap();
+        let base = write_fixture(directory.path(), "base.json", "{\"left\":1,\"right\":1}");
+        let ours = write_fixture(directory.path(), "ours.json", "{\"left\":2,\"right\":1}");
+        let theirs = write_fixture(directory.path(), "theirs.json", "{\"left\":1,\"right\":2}");
+        let mut error = Vec::new();
+
+        let status = run_merge3_files(
+            &[base.clone(), ours.clone(), theirs, "fixture.json".into(), "7".into()],
+            &mut error,
+        );
+
+        assert_eq!(status, 0, "{}", String::from_utf8_lossy(&error));
+        assert_eq!(fs::read_to_string(&ours).unwrap(), "{\"left\":2,\"right\":2}");
+
+        fs::write(&ours, "{\"left\":3,\"right\":1}").unwrap();
+        let theirs =
+            write_fixture(directory.path(), "conflicting.json", "{\"left\":4,\"right\":1}");
+        error.clear();
+        let status = run_merge3_files(
+            &[base, ours.clone(), theirs, "fixture.json".into(), "7".into()],
+            &mut error,
+        );
+
+        assert_eq!(status, 1);
+        assert_eq!(fs::read_to_string(ours).unwrap(), "{\"left\":3,\"right\":1}");
     }
 }

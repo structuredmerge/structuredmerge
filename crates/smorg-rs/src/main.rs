@@ -121,6 +121,10 @@ fn run(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
     };
 
     match command.as_str() {
+        "benchmark-provider-diff" => benchmark_adapter::run_diff_files(&args[1..], stdout, stderr),
+        "benchmark-provider-merge2" => {
+            benchmark_adapter::run_merge2_files(&args[1..], stdout, stderr)
+        }
         "benchmark-provider-session" => run_benchmark_provider_session(stdout, stderr),
         "merge-driver" => run_merge_driver(&args[1..], stdout, stderr),
         "diff-driver" => run_diff_driver(&args[1..], stdout, stderr),
@@ -131,6 +135,7 @@ fn run(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
             print_usage(stdout);
             EXIT_SUCCESS
         }
+        _ if args.len() >= 4 => benchmark_adapter::run_merge3_files(args, stderr),
         _ => {
             let _ = writeln!(stderr, "unknown command {command:?}");
             print_usage(stderr);
@@ -141,6 +146,8 @@ fn run(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
 
 fn print_usage(out: &mut dyn Write) {
     let _ = writeln!(out, "usage: smorg-rs benchmark-provider-session");
+    let _ = writeln!(out, "       smorg-rs benchmark-provider-merge2 INCOMING CURRENT PATH");
+    let _ = writeln!(out, "       smorg-rs benchmark-provider-diff BEFORE AFTER PATH");
     let _ = writeln!(
         out,
         "usage: smorg-rs merge-driver [--path-name PATH] [--output PATH] [--report PATH] [--strict] [--fallback=none|line|local|full-file] %O %A %B [%P]"
