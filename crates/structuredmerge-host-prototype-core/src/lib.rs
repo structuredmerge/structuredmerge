@@ -11,6 +11,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+use json_merge::{
+    JsonDialect, merge_json_source_preserving,
+    merge_json_three_way as merge_json_three_way_source_preserving,
+};
 use parking_lot::{Mutex, RwLock};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -1104,6 +1108,48 @@ pub fn registered_parser_hosts() -> Vec<String> {
     registry::get_parser_host_registry().read().names()
 }
 
+pub fn merge_json_two_way(
+    incoming_source: String,
+    current_source: String,
+    dialect: String,
+) -> Result<String, HostPrototypeError> {
+    let result =
+        merge_json_source_preserving(&incoming_source, &current_source, json_dialect(&dialect)?);
+    serialize_merge_result(&result)
+}
+
+pub fn merge_json_three_way(
+    base_source: String,
+    ours_source: String,
+    theirs_source: String,
+    dialect: String,
+) -> Result<String, HostPrototypeError> {
+    let result = merge_json_three_way_source_preserving(
+        &base_source,
+        &ours_source,
+        &theirs_source,
+        json_dialect(&dialect)?,
+    );
+    serialize_merge_result(&result)
+}
+
+fn json_dialect(dialect: &str) -> Result<JsonDialect, HostPrototypeError> {
+    match dialect.trim().to_ascii_lowercase().as_str() {
+        "json" => Ok(JsonDialect::Json),
+        "jsonc" => Ok(JsonDialect::Jsonc),
+        "json5" => Ok(JsonDialect::Json5),
+        _ => Err(HostPrototypeError::new(format!(
+            "unsupported JSON dialect {dialect:?}; expected json, jsonc, or json5"
+        ))),
+    }
+}
+
+fn serialize_merge_result<T: serde::Serialize>(result: &T) -> Result<String, HostPrototypeError> {
+    serde_json::to_string(result).map_err(|error| {
+        HostPrototypeError::new(format!("failed to serialize merge result: {error}"))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1237,6 +1283,46 @@ mod tests {
 
         assert_eq!(provider.provider.probe_batch(payload.clone()).unwrap(), payload);
         assert_eq!(provider.provider.parse_batch(payload.clone()).unwrap(), payload);
+    }
+
+    #[test]
+    fn json_two_way_boundary_preserves_current_layout() {
+        let response = merge_json_two_way(
+            "{\n  \"managed\": true\n}\n".to_owned(),
+            "{\r\n  \"managed\": true,\r\n\r\n  \"local\": true\r\n}\r\n".to_owned(),
+            "json".to_owned(),
+        )
+        .unwrap();
+        let result: serde_json::Value = serde_json::from_str(&response).unwrap();
+
+        assert_eq!(result["ok"], true);
+        assert_eq!(result["output"], "{\r\n  \"managed\": true,\r\n\r\n  \"local\": true\r\n}\r\n");
+    }
+
+    #[test]
+    fn json_three_way_boundary_combines_independent_edits() {
+        let response = merge_json_three_way(
+            r#"{"left":1,"right":1}"#.to_owned(),
+            r#"{"left":2,"right":1}"#.to_owned(),
+            r#"{"left":1,"right":2}"#.to_owned(),
+            "json".to_owned(),
+        )
+        .unwrap();
+        let result: serde_json::Value = serde_json::from_str(&response).unwrap();
+
+        assert_eq!(result["outcome"], "clean");
+        assert_eq!(result["output"], r#"{"left":2,"right":2}"#);
+    }
+
+    #[test]
+    fn json_boundary_rejects_unknown_dialects() {
+        let error =
+            merge_json_two_way(String::new(), String::new(), "yaml".to_owned()).unwrap_err();
+
+        assert_eq!(
+            error.message(),
+            "unsupported JSON dialect \"yaml\"; expected json, jsonc, or json5"
+        );
     }
 
     #[test]

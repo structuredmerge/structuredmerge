@@ -903,4 +903,31 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(provider.shutdown_count).to eq(1)
     expect(described_class.registered_workflow_hosts).to be_empty
   end
+
+  it "executes source-preserving JSON merge2 through the generated boundary" do
+    result = JSON.parse(
+      described_class.merge_json_two_way(
+        "{\n  \"managed\": true\n}\n".b,
+        "{\r\n  \"managed\": true,\r\n\r\n  \"local\": true\r\n}\r\n".b,
+        "json"
+      )
+    )
+
+    expect(result.fetch("ok")).to be(true)
+    expect(result.fetch("output")).to eq("{\r\n  \"managed\": true,\r\n\r\n  \"local\": true\r\n}\r\n")
+  end
+
+  it "executes source-preserving JSON merge3 through the generated boundary" do
+    result = JSON.parse(
+      described_class.merge_json_three_way(
+        '{"left":1,"right":1}'.b,
+        '{"left":2,"right":1}'.b,
+        '{"left":1,"right":2}'.b,
+        "json"
+      )
+    )
+
+    expect(result.fetch("outcome")).to eq("clean")
+    expect(result.fetch("output")).to eq('{"left":2,"right":2}')
+  end
 end
