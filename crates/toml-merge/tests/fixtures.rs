@@ -166,6 +166,23 @@ fn conforms_to_slice_91_toml_parse_fixtures() {
 }
 
 #[test]
+fn projects_toml_comments_and_blank_lines_through_shared_ownership() {
+    let result = parse_toml(
+        "# package\nname = \"structuredmerge\"\n\n# status\nenabled = true\n",
+        TomlDialect::Toml,
+        Some(TomlBackend::TreeSitter),
+    );
+    let analysis = result.analysis.expect("analysis should exist");
+
+    assert_eq!(analysis.comment_regions.len(), 2);
+    assert_eq!(analysis.comment_regions[0].normalized_content(), "package");
+    assert_eq!(analysis.comment_regions[1].normalized_content(), "status");
+    assert_eq!(analysis.layout_gaps.len(), 1);
+    assert_eq!(analysis.layout_gaps[0].lines, [""]);
+    assert_eq!(analysis.comment_attachments.len(), 2);
+}
+
+#[test]
 fn conforms_to_slice_92_toml_structure_fixture() {
     let fixture = read_fixture(&["toml", "slice-92-structure", "table-and-array.json"]);
 

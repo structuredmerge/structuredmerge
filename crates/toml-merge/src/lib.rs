@@ -1,10 +1,13 @@
 use ast_merge::{
-    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference,
-    PolicySurface, match_owner_paths,
+    CommentAttachment, CommentRegion, ConformanceFamilyPlanContext, ConformanceFeatureProfileView,
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile, LayoutGap,
+    MergeResult, ParseResult, PolicyReference, PolicySurface, augment_normalized_tree_comments,
+    match_owner_paths,
 };
 use toml::Value;
-use tree_haver::{BackendReference, kreuzberg_language_pack_backend, parse_with_language_pack};
+use tree_haver::{
+    BackendReference, kreuzberg_language_pack_backend, parse_normalized_with_language_pack,
+};
 
 pub const PACKAGE_NAME: &str = "structuredmerge-toml-merge";
 
@@ -51,6 +54,9 @@ pub struct TomlAnalysis {
     pub normalized_source: String,
     pub root_kind: TomlRootKind,
     pub owners: Vec<TomlOwner>,
+    pub comment_regions: Vec<CommentRegion>,
+    pub layout_gaps: Vec<LayoutGap>,
+    pub comment_attachments: Vec<CommentAttachment>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -377,6 +383,9 @@ pub fn analyze_toml_source(source: &str, dialect: TomlDialect) -> ParseResult<To
                     normalized_source: canonical_toml(&table),
                     root_kind: TomlRootKind::Table,
                     owners: collect_toml_owners(&table, ""),
+                    comment_regions: vec![],
+                    layout_gaps: vec![],
+                    comment_attachments: vec![],
                 }),
                 policies: vec![],
             }
@@ -407,7 +416,7 @@ pub fn parse_toml(
         };
     }
 
-    let syntax = parse_with_language_pack(&tree_haver::ParserRequest {
+    let syntax = parse_normalized_with_language_pack(&tree_haver::ParserRequest {
         source: source.to_string(),
         language: "toml".to_string(),
         dialect: Some("toml".to_string()),
@@ -415,13 +424,40 @@ pub fn parse_toml(
     if !syntax.ok {
         return ParseResult {
             ok: false,
-            diagnostics: syntax.diagnostics.into_iter().map(Into::into).collect(),
+            diagnostics: syntax.diagnostics.iter().map(|message| parse_error(message)).collect(),
             analysis: None,
             policies: vec![],
         };
     }
 
-    analyze_toml_source(source, dialect)
+    let augmentation = match augment_normalized_tree_comments(
+        source,
+        &syntax.root_id,
+        &syntax.nodes,
+        "hash_comment",
+        normalize_toml_comment,
+    ) {
+        Ok(augmentation) => augmentation,
+        Err(error) => {
+            return ParseResult {
+                ok: false,
+                diagnostics: vec![parse_error(&error)],
+                analysis: None,
+                policies: vec![],
+            };
+        }
+    };
+    let mut analyzed = analyze_toml_source(source, dialect);
+    if let Some(analysis) = analyzed.analysis.as_mut() {
+        analysis.comment_regions = augmentation.regions;
+        analysis.layout_gaps = augmentation.gaps;
+        analysis.comment_attachments = augmentation.attachments;
+    }
+    analyzed
+}
+
+fn normalize_toml_comment(text: &str) -> String {
+    text.trim().strip_prefix('#').unwrap_or(text.trim()).trim().to_string()
 }
 
 pub fn match_toml_owners(
