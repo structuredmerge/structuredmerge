@@ -1,0 +1,30 @@
+{
+  "schema_version": "structuredmerge.benchmark.adapter-descriptor/v1",
+  "adapter": {
+    "adapter_id": "rust-candidate.smorg-rs",
+    "implementation": "rust",
+    "package": "smorg-rs",
+    "package_version": "0.2.0",
+    "source": {
+      "repository": "structuredmerge/structuredmerge-rust"
+    }
+  },
+  "source_root": ".",
+  "provider": {
+    "merge_provider": {
+      "provider_id": "rust.json",
+      "package": "json-merge",
+      "profile": "source_preserving"
+    },
+    "parser_provider": {
+      "provider_id": "tree-sitter-language-pack",
+      "backend_family": "tree-sitter",
+      "selection_mode": "explicit",
+      "boundary": "tree-haver"
+    }
+  },
+  "environment": {
+    "runtime": "rust",
+    "edition": "2024"
+  }
+}
