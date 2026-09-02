@@ -3,8 +3,8 @@ use std::{fs, path::PathBuf};
 use serde_json::Value;
 use typescript_merge::{
     TypeScriptBackend, TypeScriptDialect, match_typescript_owners, merge_typescript,
-    parse_typescript, typescript_backend_feature_profile, typescript_backends,
-    typescript_feature_profile, typescript_plan_context,
+    merge_typescript_three_way, parse_typescript, typescript_backend_feature_profile,
+    typescript_backends, typescript_feature_profile, typescript_plan_context,
 };
 
 fn fixture_path(parts: &[&str]) -> PathBuf {
@@ -17,6 +17,55 @@ fn fixture_path(parts: &[&str]) -> PathBuf {
         path.push(part);
     }
     path
+}
+
+#[test]
+fn merges_independent_function_edits_with_exact_source_preservation() {
+    let base = "function left(): number { return 1; }\nfunction right(): number { return 1; }\n";
+    let ours = "function left(): number { return 2; }\nfunction right(): number { return 1; }\n";
+    let theirs = "function left(): number { return 1; }\nfunction right(): number { return 2; }\n";
+
+    let result = merge_typescript_three_way(base, ours, theirs, TypeScriptDialect::TypeScript);
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
+    assert_eq!(
+        result.output.as_deref(),
+        Some("function left(): number { return 2; }\nfunction right(): number { return 2; }\n")
+    );
+}
+
+#[test]
+fn reports_incompatible_function_edits_as_a_local_conflict() {
+    let base = "function value(): number { return 1; }\n";
+    let ours = "function value(): number { return 2; }\n";
+    let theirs = "function value(): number { return 3; }\n";
+
+    let result = merge_typescript_three_way(base, ours, theirs, TypeScriptDialect::TypeScript);
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Conflict);
+    assert_eq!(result.conflicts[0].path, "/function:value");
+    assert_eq!(result.conflicts[0].fallback_scope, "owner");
+}
+
+#[test]
+fn rejects_malformed_and_changed_layout_inputs_without_fallback() {
+    let valid = "function left(): number { return 1; }\nfunction right(): number { return 1; }\n";
+    let malformed = "function left(: number { return 1; }\n";
+    let malformed_result =
+        merge_typescript_three_way(valid, valid, malformed, TypeScriptDialect::TypeScript);
+    assert_eq!(malformed_result.outcome, ast_merge::ThreeWayMergeOutcome::Error);
+    assert_eq!(malformed_result.diagnostics[0].category, ast_merge::DiagnosticCategory::ParseError);
+
+    let ours = "function left(): number { return 2; }\nfunction right(): number { return 1; }\n";
+    let theirs =
+        "function left(): number { return 1; }\n\nfunction right(): number { return 2; }\n";
+    let layout_result =
+        merge_typescript_three_way(valid, ours, theirs, TypeScriptDialect::TypeScript);
+    assert_eq!(layout_result.outcome, ast_merge::ThreeWayMergeOutcome::Error);
+    assert_eq!(
+        layout_result.diagnostics[0].category,
+        ast_merge::DiagnosticCategory::UnsupportedFeature
+    );
 }
 
 fn read_fixture(parts: &[&str]) -> Value {

@@ -37,6 +37,11 @@
         "package": "toml-merge",
         "profile": "source_preserving"
       },
+      "typescript": {
+        "provider_id": "rust.typescript",
+        "package": "typescript-merge",
+        "profile": "source_preserving"
+      },
       "yaml": {
         "provider_id": "rust.yaml",
         "package": "yaml-merge",
@@ -52,8 +57,8 @@
   },
   "supports": {
     "operations": ["merge2", "merge3", "metamorphic"],
-    "families": ["json", "markdown", "rbs", "ruby", "toml", "yaml"],
-    "dialects": ["json", "jsonc", "json5", "markdown", "rbs", "ruby", "toml", "yaml"],
+    "families": ["json", "markdown", "rbs", "ruby", "toml", "typescript", "yaml"],
+    "dialects": ["json", "jsonc", "json5", "markdown", "rbs", "ruby", "toml", "typescript", "tsx", "yaml"],
     "combinations": [
       {
         "family": "json",
@@ -79,6 +84,11 @@
         "family": "toml",
         "operations": ["merge2"],
         "dialects": ["toml"]
+      },
+      {
+        "family": "typescript",
+        "operations": ["merge3"],
+        "dialects": ["typescript", "tsx"]
       },
       {
         "family": "yaml",

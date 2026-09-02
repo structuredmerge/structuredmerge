@@ -1,11 +1,14 @@
+use std::collections::HashMap;
+
 use ast_merge::{
-    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult,
-    ParseResult, PolicyReference, PolicySurface,
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference,
+    PolicySurface, SourcePreservingOwner, SourcePreservingOwnerDocument, ThreeWayMergeResult,
+    merge_source_preserving_owners,
 };
 use tree_haver::{
-    BackendReference, ParserRequest, ProcessRequest, kreuzberg_language_pack_backend,
-    language_pack_adapter_info, parse_with_language_pack, process_with_language_pack,
-    structured_import_source_diagnostics,
+    BackendReference, NormalizedTreeNode, ParserRequest, kreuzberg_language_pack_backend,
+    language_pack_adapter_info, parse_normalized_with_language_pack,
 };
 
 pub const PACKAGE_NAME: &str = "typescript-merge";
@@ -13,6 +16,7 @@ pub const PACKAGE_NAME: &str = "typescript-merge";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TypeScriptDialect {
     TypeScript,
+    Tsx,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -88,16 +92,16 @@ fn destination_wins_array_policy() -> PolicyReference {
     PolicyReference { surface: PolicySurface::Array, name: "destination_wins_array".to_string() }
 }
 
-fn parse_request(source: &str) -> ParserRequest {
+fn parse_request(source: &str, dialect: TypeScriptDialect) -> ParserRequest {
+    let language = match dialect {
+        TypeScriptDialect::TypeScript => "typescript",
+        TypeScriptDialect::Tsx => "tsx",
+    };
     ParserRequest {
         source: source.to_string(),
-        language: "typescript".to_string(),
-        dialect: Some("typescript".to_string()),
+        language: language.to_string(),
+        dialect: Some(language.to_string()),
     }
-}
-
-fn process_request(source: &str) -> ProcessRequest {
-    ProcessRequest { source: source.to_string(), language: "typescript".to_string() }
 }
 
 fn slice_span(source: &str, start: usize, end: usize) -> String {
@@ -112,17 +116,13 @@ fn line_anchored_span(source: &str, start: usize, end: usize) -> String {
 pub fn typescript_feature_profile() -> TypeScriptFeatureProfile {
     let shared = FamilyFeatureProfile {
         family: "typescript".to_string(),
-        supported_dialects: vec!["typescript".to_string()],
+        supported_dialects: vec!["typescript".to_string(), "tsx".to_string()],
         supported_policies: vec![destination_wins_array_policy()],
     };
 
     TypeScriptFeatureProfile {
         family: "typescript",
-        supported_dialects: shared
-            .supported_dialects
-            .iter()
-            .map(|_| TypeScriptDialect::TypeScript)
-            .collect(),
+        supported_dialects: vec![TypeScriptDialect::TypeScript, TypeScriptDialect::Tsx],
         supported_policies: shared.supported_policies,
     }
 }
@@ -143,7 +143,7 @@ pub fn typescript_plan_context(backend: TypeScriptBackend) -> ConformanceFamilyP
     ConformanceFamilyPlanContext {
         family_profile: FamilyFeatureProfile {
             family: typescript_feature_profile().family.to_string(),
-            supported_dialects: vec!["typescript".to_string()],
+            supported_dialects: vec!["typescript".to_string(), "tsx".to_string()],
             supported_policies: typescript_feature_profile().supported_policies,
         },
         feature_profile: Some(ConformanceFeatureProfileView {
@@ -161,70 +161,64 @@ pub fn typescript_backends() -> Vec<TypeScriptBackend> {
 
 pub fn parse_typescript(
     source: &str,
-    _dialect: TypeScriptDialect,
+    dialect: TypeScriptDialect,
 ) -> ParseResult<TypeScriptAnalysis> {
-    let parsed = parse_with_language_pack(&parse_request(source));
+    let parsed = parse_normalized_with_language_pack(&parse_request(source, dialect));
     if !parsed.ok {
         return ParseResult {
             ok: false,
-            diagnostics: parsed.diagnostics.into_iter().map(Into::into).collect(),
+            diagnostics: normalized_diagnostics(parsed.diagnostics),
             analysis: None,
             policies: vec![],
         };
     }
-
-    let processed = process_with_language_pack(&process_request(source));
-    if !processed.ok {
-        return ParseResult {
-            ok: false,
-            diagnostics: processed.diagnostics.into_iter().map(Into::into).collect(),
-            analysis: None,
-            policies: vec![],
-        };
-    }
-
-    let analysis = processed.analysis.expect("successful process should include analysis");
-    let import_diagnostics = structured_import_source_diagnostics("typescript", &analysis.imports);
-    if !import_diagnostics.is_empty() {
-        return ParseResult {
-            ok: false,
-            diagnostics: import_diagnostics.into_iter().map(Into::into).collect(),
-            analysis: None,
-            policies: vec![],
-        };
-    }
-
-    let imports = analysis
-        .imports
-        .iter()
-        .enumerate()
-        .map(|(index, item)| ModuleImport {
-            path: format!("/imports/{index}"),
-            match_key: item.source.clone(),
-            text: format!("{}\n", slice_span(source, item.span.start_byte, item.span.end_byte)),
-        })
-        .collect::<Vec<_>>();
-    let mut declarations = analysis
-        .structure
-        .iter()
-        .filter_map(|item| {
-            item.name.as_ref().map(|name| ModuleDeclaration {
-                path: format!("/declarations/{name}"),
-                match_key: name.clone(),
+    let nodes_by_id = nodes_by_id(&parsed.nodes);
+    let Some(root) = nodes_by_id.get(parsed.root_id.as_str()).copied() else {
+        return parse_error("normalized TypeScript parse has no root node");
+    };
+    let top_level = child_nodes(root, &nodes_by_id);
+    let mut imports = Vec::new();
+    let mut declarations = Vec::new();
+    for node in top_level {
+        if node.kind == "comment" {
+            continue;
+        }
+        if node.kind == "import_statement" {
+            let Some(module) = descendant(node, &nodes_by_id, |child| child.kind == "string")
+            else {
+                return parse_error("TypeScript import has no literal module source");
+            };
+            let match_key = unquote(module.source_fragment.trim());
+            imports.push(ModuleImport {
+                path: format!("/imports/{}", imports.len()),
+                match_key,
                 text: format!(
                     "{}\n",
-                    line_anchored_span(source, item.span.start_byte, item.span.end_byte)
+                    slice_span(source, node.span.range.start_byte, node.span.range.end_byte)
                 ),
-            })
-        })
-        .collect::<Vec<_>>();
+            });
+            continue;
+        }
+        let declaration = declaration_node(node, &nodes_by_id);
+        let Some(name) = declaration.and_then(|value| declaration_name(value, &nodes_by_id)) else {
+            return parse_error(format!("unsupported top-level TypeScript node {:?}", node.kind));
+        };
+        declarations.push(ModuleDeclaration {
+            path: format!("/declarations/{name}"),
+            match_key: name,
+            text: format!(
+                "{}\n",
+                line_anchored_span(source, node.span.range.start_byte, node.span.range.end_byte)
+            ),
+        });
+    }
     declarations.sort_by(|left, right| left.path.cmp(&right.path));
 
     ParseResult {
         ok: true,
         diagnostics: vec![],
         analysis: Some(TypeScriptAnalysis {
-            dialect: TypeScriptDialect::TypeScript,
+            dialect,
             source: source.to_string(),
             owners: [
                 imports
@@ -248,6 +242,196 @@ pub fn parse_typescript(
             imports,
             declarations,
         }),
+        policies: vec![],
+    }
+}
+
+pub fn merge_typescript_three_way(
+    base_source: &str,
+    ours_source: &str,
+    theirs_source: &str,
+    dialect: TypeScriptDialect,
+) -> ThreeWayMergeResult<String> {
+    let base = match parse_source_preserving_typescript(base_source, dialect) {
+        Ok(document) => document,
+        Err(message) => return three_way_parse_failure("base", message),
+    };
+    let ours = match parse_source_preserving_typescript(ours_source, dialect) {
+        Ok(document) => document,
+        Err(message) => return three_way_parse_failure("ours", message),
+    };
+    let theirs = match parse_source_preserving_typescript(theirs_source, dialect) {
+        Ok(document) => document,
+        Err(message) => return three_way_parse_failure("theirs", message),
+    };
+
+    merge_source_preserving_owners(base, ours, theirs, |output| {
+        parse_source_preserving_typescript(output, dialect)
+    })
+}
+
+fn parse_source_preserving_typescript(
+    source: &str,
+    dialect: TypeScriptDialect,
+) -> Result<SourcePreservingOwnerDocument, String> {
+    let parsed = parse_normalized_with_language_pack(&parse_request(source, dialect));
+    if !parsed.ok {
+        return Err(parsed.diagnostics.join("; "));
+    }
+    if !parsed.source_fragments_available {
+        return Err("TypeScript parser did not retain source fragments".to_string());
+    }
+    let nodes_by_id = nodes_by_id(&parsed.nodes);
+    let root = nodes_by_id
+        .get(parsed.root_id.as_str())
+        .copied()
+        .ok_or_else(|| "normalized TypeScript parse has no root node".to_string())?;
+    let mut owners = Vec::new();
+    for node in child_nodes(root, &nodes_by_id) {
+        if node.kind == "comment" {
+            continue;
+        }
+        let declaration = declaration_node(node, &nodes_by_id)
+            .ok_or_else(|| format!("unsupported top-level TypeScript node {:?}", node.kind))?;
+        let name = declaration_name(declaration, &nodes_by_id)
+            .ok_or_else(|| format!("TypeScript declaration {:?} has no stable name", node.kind))?;
+        let kind = declaration_kind(declaration);
+        let path = format!("/{kind}:{name}");
+        owners.push(SourcePreservingOwner {
+            id: path.clone(),
+            path,
+            fingerprint: node.source_fragment.clone(),
+            start_byte: node.span.range.start_byte,
+            end_byte: node.span.range.end_byte,
+            start_line: node.span.start_point.row + 1,
+            end_line: node.span.end_point.row + 1,
+        });
+    }
+    if owners.is_empty() {
+        return Err("TypeScript document has no supported top-level declarations".to_string());
+    }
+    Ok(SourcePreservingOwnerDocument { source: source.to_string(), owners })
+}
+
+fn nodes_by_id(nodes: &[NormalizedTreeNode]) -> HashMap<&str, &NormalizedTreeNode> {
+    nodes.iter().map(|node| (node.id.as_str(), node)).collect()
+}
+
+fn child_nodes<'a>(
+    node: &NormalizedTreeNode,
+    nodes: &HashMap<&str, &'a NormalizedTreeNode>,
+) -> Vec<&'a NormalizedTreeNode> {
+    node.child_ids.iter().filter_map(|id| nodes.get(id.as_str()).copied()).collect()
+}
+
+fn descendant<'a>(
+    node: &'a NormalizedTreeNode,
+    nodes: &HashMap<&str, &'a NormalizedTreeNode>,
+    predicate: impl Fn(&NormalizedTreeNode) -> bool + Copy,
+) -> Option<&'a NormalizedTreeNode> {
+    for child in child_nodes(node, nodes) {
+        if predicate(child) {
+            return Some(child);
+        }
+        if let Some(found) = descendant(child, nodes, predicate) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn declaration_node<'a>(
+    node: &'a NormalizedTreeNode,
+    nodes: &HashMap<&str, &'a NormalizedTreeNode>,
+) -> Option<&'a NormalizedTreeNode> {
+    if supported_declaration_kind(&node.kind) {
+        return Some(node);
+    }
+    if node.kind == "export_statement" || node.kind == "ambient_declaration" {
+        return child_nodes(node, nodes)
+            .into_iter()
+            .find(|child| supported_declaration_kind(&child.kind));
+    }
+    None
+}
+
+fn supported_declaration_kind(kind: &str) -> bool {
+    matches!(
+        kind,
+        "class_declaration"
+            | "enum_declaration"
+            | "function_declaration"
+            | "function_signature"
+            | "interface_declaration"
+            | "internal_module"
+            | "type_alias_declaration"
+    )
+}
+
+fn declaration_name(
+    node: &NormalizedTreeNode,
+    nodes: &HashMap<&str, &NormalizedTreeNode>,
+) -> Option<String> {
+    child_nodes(node, nodes)
+        .into_iter()
+        .find(|child| child.field_name.as_deref() == Some("name"))
+        .or_else(|| {
+            child_nodes(node, nodes)
+                .into_iter()
+                .find(|child| matches!(child.kind.as_str(), "identifier" | "type_identifier"))
+        })
+        .map(|child| child.source_fragment.clone())
+}
+
+fn declaration_kind(node: &NormalizedTreeNode) -> &str {
+    node.kind.strip_suffix("_declaration").unwrap_or(node.kind.as_str())
+}
+
+fn unquote(value: &str) -> String {
+    if value.len() >= 2 {
+        let bytes = value.as_bytes();
+        if matches!(bytes[0], b'\'' | b'"') && bytes[0] == bytes[value.len() - 1] {
+            return value[1..value.len() - 1].to_string();
+        }
+    }
+    value.to_string()
+}
+
+fn parse_error<T>(message: impl Into<String>) -> ParseResult<T> {
+    ParseResult {
+        ok: false,
+        diagnostics: vec![diagnostic(DiagnosticCategory::ParseError, message)],
+        analysis: None,
+        policies: vec![],
+    }
+}
+
+fn normalized_diagnostics(messages: Vec<String>) -> Vec<Diagnostic> {
+    messages
+        .into_iter()
+        .map(|message| diagnostic(DiagnosticCategory::ParseError, message))
+        .collect()
+}
+
+fn diagnostic(category: DiagnosticCategory, message: impl Into<String>) -> Diagnostic {
+    Diagnostic {
+        severity: DiagnosticSeverity::Error,
+        category,
+        message: message.into(),
+        path: None,
+        review: None,
+    }
+}
+
+fn three_way_parse_failure(role: &str, message: String) -> ThreeWayMergeResult<String> {
+    ThreeWayMergeResult {
+        outcome: ast_merge::ThreeWayMergeOutcome::Error,
+        diagnostics: vec![diagnostic(
+            DiagnosticCategory::ParseError,
+            format!("{role} parse error: {message}"),
+        )],
+        conflicts: vec![],
+        output: None,
         policies: vec![],
     }
 }

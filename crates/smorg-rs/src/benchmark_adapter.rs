@@ -15,6 +15,7 @@ use rbs_merge::{RbsDialect, merge_rbs};
 use ruby_merge::{RubyDialect, merge_ruby};
 use serde::Deserialize;
 use toml_merge::{TomlDialect, merge_toml};
+use typescript_merge::{TypeScriptDialect, merge_typescript_three_way};
 use yaml_merge::{YamlDialect, merge_yaml};
 
 const REQUEST_SCHEMA: &str = "structuredmerge.benchmark.adapter-request/v1";
@@ -42,6 +43,7 @@ enum BenchmarkDialect {
     Rbs(RbsDialect),
     Ruby(RubyDialect),
     Toml(TomlDialect),
+    TypeScript(TypeScriptDialect),
     Yaml(YamlDialect),
 }
 
@@ -79,6 +81,9 @@ pub fn run_merge2_files(args: &[String], output: &mut dyn Write, error: &mut dyn
             BenchmarkDialect::Rbs(dialect) => merge_rbs(&incoming, &current, dialect),
             BenchmarkDialect::Ruby(dialect) => merge_ruby(&incoming, &current, dialect),
             BenchmarkDialect::Toml(dialect) => merge_toml(&incoming, &current, dialect, None),
+            BenchmarkDialect::TypeScript(_) => {
+                return Err("TypeScript merge2 is not source-preserving yet".to_string());
+            }
             BenchmarkDialect::Yaml(dialect) => merge_yaml(&incoming, &current, dialect),
         })
     })();
@@ -151,13 +156,19 @@ pub fn run_merge3_files(args: &[String], error: &mut dyn Write) -> i32 {
         let ours = read_source(&args[1], "ours")?;
         let theirs = read_source(&args[2], "theirs")?;
         let dialect = selected_dialect(&args[3])?;
-        let BenchmarkDialect::Json(dialect) = dialect else {
-            return Err(format!(
-                "unsupported benchmark merge3 family: {}",
-                benchmark_family(dialect)
-            ));
+        let result = match dialect {
+            BenchmarkDialect::Json(dialect) => merge_json_three_way(&base, &ours, &theirs, dialect),
+            BenchmarkDialect::TypeScript(dialect) => {
+                merge_typescript_three_way(&base, &ours, &theirs, dialect)
+            }
+            _ => {
+                return Err(format!(
+                    "unsupported benchmark merge3 family: {}",
+                    benchmark_family(dialect)
+                ));
+            }
         };
-        Ok::<_, String>(merge_json_three_way(&base, &ours, &theirs, dialect))
+        Ok::<_, String>(result)
     })();
     match result {
         Ok(result) if result.outcome == ThreeWayMergeOutcome::Clean => {
@@ -203,6 +214,7 @@ fn benchmark_family(dialect: BenchmarkDialect) -> &'static str {
         BenchmarkDialect::Rbs(_) => "rbs",
         BenchmarkDialect::Ruby(_) => "ruby",
         BenchmarkDialect::Toml(_) => "toml",
+        BenchmarkDialect::TypeScript(_) => "typescript",
         BenchmarkDialect::Yaml(_) => "yaml",
     }
 }
@@ -262,9 +274,35 @@ fn execute(request: Request) -> Result<(i32, String, serde_json::Value), String>
         "rbs" => execute_rbs(request),
         "ruby" => execute_ruby(request),
         "toml" => execute_toml(request),
+        "typescript" => execute_typescript(request),
         "yaml" => execute_yaml(request),
         family => Err(format!("unsupported benchmark family: {family}")),
     }
+}
+
+fn execute_typescript(request: Request) -> Result<(i32, String, serde_json::Value), String> {
+    let dialect = match request.selector.dialect.as_str() {
+        "typescript" | "ts" => TypeScriptDialect::TypeScript,
+        "tsx" => TypeScriptDialect::Tsx,
+        dialect => return Err(format!("unsupported TypeScript dialect: {dialect}")),
+    };
+    if request.operation != "merge3" {
+        return Err(format!("unsupported TypeScript benchmark operation: {}", request.operation));
+    }
+
+    let base = source(&request.sources, "base")?;
+    let ours = source(&request.sources, "ours")?;
+    let theirs = source(&request.sources, "theirs")?;
+    let result = merge_typescript_three_way(&base, &ours, &theirs, dialect);
+    let status = match result.outcome {
+        ThreeWayMergeOutcome::Clean => 0,
+        ThreeWayMergeOutcome::Conflict => 1,
+        ThreeWayMergeOutcome::Error => 2,
+    };
+    let output = result.output.clone().unwrap_or_default();
+    let result = serde_json::to_value(result)
+        .map_err(|error| format!("serialize TypeScript merge3 result: {error}"))?;
+    Ok((status, output, result))
 }
 
 fn execute_markdown(request: Request) -> Result<(i32, String, serde_json::Value), String> {
@@ -441,6 +479,12 @@ fn parse_benchmark_dialect(value: &str) -> Result<BenchmarkDialect, String> {
     } else if value.trim().eq_ignore_ascii_case("yaml") || value.trim().eq_ignore_ascii_case("yml")
     {
         Ok(BenchmarkDialect::Yaml(YamlDialect::Yaml))
+    } else if value.trim().eq_ignore_ascii_case("typescript")
+        || value.trim().eq_ignore_ascii_case("ts")
+    {
+        Ok(BenchmarkDialect::TypeScript(TypeScriptDialect::TypeScript))
+    } else if value.trim().eq_ignore_ascii_case("tsx") {
+        Ok(BenchmarkDialect::TypeScript(TypeScriptDialect::Tsx))
     } else {
         parse_dialect(value).map(BenchmarkDialect::Json)
     }
@@ -605,6 +649,42 @@ mod tests {
         assert_eq!(merge3["status"], 2);
         assert!(
             merge3["stderr"].as_str().unwrap().contains("unsupported Markdown benchmark operation")
+        );
+    }
+
+    #[test]
+    fn serves_source_preserving_typescript_merge3_without_claiming_merge2() {
+        let base =
+            "function left(): number { return 1; }\nfunction right(): number { return 1; }\n";
+        let ours =
+            "function left(): number { return 2; }\nfunction right(): number { return 1; }\n";
+        let theirs =
+            "function left(): number { return 1; }\nfunction right(): number { return 2; }\n";
+        let merge3 = execute_line(&request_for(
+            "merge3",
+            "typescript",
+            "typescript",
+            &[("base", base), ("ours", ours), ("theirs", theirs)],
+        ));
+        let merge2 = execute_line(&request_for(
+            "merge2",
+            "typescript",
+            "typescript",
+            &[("incoming", theirs), ("current", ours)],
+        ));
+
+        assert_eq!(merge3["status"], 0);
+        assert_eq!(
+            String::from_utf8(STANDARD.decode(merge3["output_base64"].as_str().unwrap()).unwrap())
+                .unwrap(),
+            "function left(): number { return 2; }\nfunction right(): number { return 2; }\n"
+        );
+        assert_eq!(merge2["status"], 2);
+        assert!(
+            merge2["stderr"]
+                .as_str()
+                .unwrap()
+                .contains("unsupported TypeScript benchmark operation")
         );
     }
 
