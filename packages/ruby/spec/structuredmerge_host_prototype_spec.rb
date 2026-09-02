@@ -8,13 +8,14 @@ module HostPrototypeFixtures
   class IdentityWorkflowHost
     attr_reader :requests, :shutdown_count
 
-    def initialize
+    def initialize(id = "ruby.identity")
+      @id = id
       @requests = []
       @shutdown_count = 0
     end
 
     def descriptor
-      '{"id":"ruby.identity"}'
+      JSON.generate("id" => @id)
     end
 
     def version
@@ -40,6 +41,42 @@ module HostPrototypeFixtures
     def parse_batch(request)
       requests << request
       request
+    end
+  end
+
+  class LifecycleWorkflowHost
+    attr_reader :events, :shutdown_count
+
+    def initialize(id = nil)
+      if defined?(@id)
+        @events << :initialize
+      else
+        @id = id || raise(ArgumentError, "id is required")
+        @events = []
+        @shutdown_count = 0
+      end
+    end
+    public :initialize
+
+    def version
+      @events << :version
+      "test"
+    end
+
+    def descriptor
+      @events << :descriptor
+      raise "provider published before initialization" if
+        StructuredmergeHostPrototypeCore.registered_workflow_hosts.include?(@id)
+
+      JSON.generate("id" => @id, "capabilities" => ["identity"])
+    end
+
+    def execute_batch(request)
+      request
+    end
+
+    def shutdown
+      @shutdown_count += 1
     end
   end
 end
@@ -81,9 +118,8 @@ RSpec.describe StructuredmergeHostPrototype do
     StructuredmergeHostPrototypeCore.clear_parser_hosts
   end
 
-
   it "round trips the shared byte corpus through a Ruby parser host" do
-    provider = HostPrototypeFixtures::IdentityParserHost.new
+    provider = HostPrototypeFixtures::IdentityParserHost.new("ruby.parser.identity")
     StructuredmergeHostPrototypeCore.register_parser_host(provider, "ruby.parser.identity")
 
     identity_cases.each do |test_case|
@@ -108,7 +144,7 @@ RSpec.describe StructuredmergeHostPrototype do
   end
 
   it "round trips the shared byte corpus through a Ruby workflow host" do
-    provider = HostPrototypeFixtures::IdentityWorkflowHost.new
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.identity")
     StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.identity")
 
     identity_cases.each do |test_case|
@@ -125,7 +161,7 @@ RSpec.describe StructuredmergeHostPrototype do
   end
 
   it "fails closed when a provider name is registered twice" do
-    provider = HostPrototypeFixtures::IdentityWorkflowHost.new
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.identity")
     StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.identity")
 
     expect do
@@ -140,7 +176,7 @@ RSpec.describe StructuredmergeHostPrototype do
   end
 
   it "shuts down and removes an unregistered provider" do
-    provider = HostPrototypeFixtures::IdentityWorkflowHost.new
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.identity")
     StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.identity")
 
     described_class.unregister_workflow_host("ruby.identity")
@@ -153,7 +189,7 @@ RSpec.describe StructuredmergeHostPrototype do
   end
 
   it "contains Ruby callback exceptions" do
-    provider = HostPrototypeFixtures::IdentityWorkflowHost.new
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.failure")
     def provider.execute_batch(_request)
       raise "callback exploded"
     end
@@ -165,7 +201,7 @@ RSpec.describe StructuredmergeHostPrototype do
   end
 
   it "rejects malformed callback return values" do
-    provider = HostPrototypeFixtures::IdentityWorkflowHost.new
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.malformed")
     def provider.execute_batch(_request)
       Object.new
     end
@@ -177,7 +213,7 @@ RSpec.describe StructuredmergeHostPrototype do
   end
 
   it "does not retain the registry lock while invoking Ruby" do
-    provider = HostPrototypeFixtures::IdentityWorkflowHost.new
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.reentrant")
     def provider.execute_batch(request)
       raise "provider disappeared during callback" unless
         StructuredmergeHostPrototypeCore.registered_workflow_hosts.include?("ruby.reentrant")
@@ -190,7 +226,7 @@ RSpec.describe StructuredmergeHostPrototype do
   end
 
   it "removes a provider even when shutdown fails" do
-    provider = HostPrototypeFixtures::IdentityWorkflowHost.new
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.shutdown-failure")
     def provider.shutdown
       super
       raise "shutdown exploded"
@@ -209,8 +245,8 @@ RSpec.describe StructuredmergeHostPrototype do
   end
 
   it "clears every provider and aggregates shutdown failures" do
-    first = HostPrototypeFixtures::IdentityWorkflowHost.new
-    second = HostPrototypeFixtures::IdentityWorkflowHost.new
+    first = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.first")
+    second = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.second")
     def first.shutdown
       super
       raise "first exploded"
@@ -231,7 +267,7 @@ RSpec.describe StructuredmergeHostPrototype do
   end
 
   it "supports repeated calls entered from Ruby threads" do
-    provider = HostPrototypeFixtures::IdentityWorkflowHost.new
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.thread-entry")
     StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.thread-entry")
 
     threads = Array.new(4) do |thread_id|
@@ -247,5 +283,91 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(results.length).to eq(100)
     expect(results).to include([0, 0, 0, 255], [3, 24, 0, 255])
     expect(provider.requests.length).to eq(100)
+  end
+
+  it "validates and initializes a provider before publication" do
+    provider = HostPrototypeFixtures::LifecycleWorkflowHost.new("ruby.lifecycle")
+
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.lifecycle")
+
+    expect(provider.events).to eq(%i[version descriptor initialize])
+    expect(described_class.registered_workflow_hosts).to eq(["ruby.lifecycle"])
+  end
+
+  it "rejects descriptor IDs that differ from the registration identity" do
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.descriptor")
+
+    expect do
+      StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.registration")
+    end.to raise_error(RuntimeError, /descriptor id.*does not match registration name/)
+    expect(described_class.registered_workflow_hosts).to be_empty
+  end
+
+  it "rejects malformed descriptors and capability lists" do
+    malformed = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.malformed-descriptor")
+    def malformed.descriptor
+      "not JSON"
+    end
+    excessive = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.excessive-capabilities")
+    def excessive.descriptor
+      JSON.generate("id" => "ruby.excessive-capabilities", "capabilities" => Array.new(65, "x"))
+    end
+
+    expect do
+      StructuredmergeHostPrototypeCore.register_workflow_host(malformed, "ruby.malformed-descriptor")
+    end.to raise_error(RuntimeError, /invalid provider descriptor JSON/)
+    expect do
+      StructuredmergeHostPrototypeCore.register_workflow_host(excessive, "ruby.excessive-capabilities")
+    end.to raise_error(RuntimeError, /exceeds 64 capabilities/)
+    expect(described_class.registered_workflow_hosts).to be_empty
+  end
+
+  it "rejects a missing or malformed provider version" do
+    missing = Object.new
+    def missing.descriptor
+      '{"id":"ruby.missing-version"}'
+    end
+    def missing.execute_batch(request)
+      request
+    end
+    malformed = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.malformed-version")
+    def malformed.version
+      Object.new
+    end
+
+    expect do
+      StructuredmergeHostPrototypeCore.register_workflow_host(missing, "ruby.missing-version")
+    end.to raise_error(RuntimeError, /Ruby method 'version' failed/)
+    expect do
+      StructuredmergeHostPrototypeCore.register_workflow_host(malformed, "ruby.malformed-version")
+    end.to raise_error(RuntimeError, /Failed to convert Ruby 'version' return value/)
+    expect(described_class.registered_workflow_hosts).to be_empty
+  end
+
+  it "does not reinitialize on duplicate registration" do
+    first = HostPrototypeFixtures::LifecycleWorkflowHost.new("ruby.duplicate")
+    second = HostPrototypeFixtures::LifecycleWorkflowHost.new("ruby.duplicate")
+    StructuredmergeHostPrototypeCore.register_workflow_host(first, "ruby.duplicate")
+
+    expect do
+      StructuredmergeHostPrototypeCore.register_workflow_host(second, "ruby.duplicate")
+    end.to raise_error(RuntimeError, /provider already registered/)
+    expect(first.events).to eq(%i[version descriptor initialize])
+    expect(second.events).to be_empty
+  end
+
+  it "cleans up but does not publish after initialization failure" do
+    provider = HostPrototypeFixtures::LifecycleWorkflowHost.new("ruby.initialize-failure")
+    def provider.initialize
+      events << :initialize
+      raise "initialize exploded"
+    end
+
+    expect do
+      StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.initialize-failure")
+    end.to raise_error(RuntimeError, /Ruby method 'initialize' failed: initialize exploded/)
+    expect(provider.events).to eq(%i[version descriptor initialize])
+    expect(provider.shutdown_count).to eq(1)
+    expect(described_class.registered_workflow_hosts).to be_empty
   end
 end

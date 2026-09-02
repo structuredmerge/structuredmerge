@@ -6,8 +6,13 @@ use std::{
 };
 
 use parking_lot::RwLock;
+use serde_json::Value;
 
 pub const PACKAGE_NAME: &str = "structuredmerge-host-prototype-core";
+const MAX_DESCRIPTOR_BYTES: usize = 64 * 1024;
+const MAX_CAPABILITIES: usize = 64;
+const MAX_PROVIDER_NAME_BYTES: usize = 256;
+const MAX_PROVIDER_VERSION_BYTES: usize = 256;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HostPrototypeError {
@@ -67,7 +72,7 @@ pub struct ParserHostRegistry {
 }
 
 impl ParserHostRegistry {
-    pub fn register(&mut self, provider: Arc<dyn ParserHost>) -> Result<(), HostPrototypeError> {
+    fn insert(&mut self, provider: Arc<dyn ParserHost>) -> Result<(), HostPrototypeError> {
         let name = provider.name().to_owned();
         if name.is_empty() {
             return Err(HostPrototypeError::new("provider name cannot be empty"));
@@ -99,10 +104,14 @@ impl ParserHostRegistry {
     fn names(&self) -> Vec<String> {
         self.providers.keys().cloned().collect()
     }
+
+    fn contains(&self, name: &str) -> bool {
+        self.providers.contains_key(name)
+    }
 }
 
 impl WorkflowHostRegistry {
-    pub fn register(&mut self, provider: Arc<dyn WorkflowHost>) -> Result<(), HostPrototypeError> {
+    fn insert(&mut self, provider: Arc<dyn WorkflowHost>) -> Result<(), HostPrototypeError> {
         let name = provider.name().to_owned();
         if name.is_empty() {
             return Err(HostPrototypeError::new("provider name cannot be empty"));
@@ -133,6 +142,100 @@ impl WorkflowHostRegistry {
 
     fn names(&self) -> Vec<String> {
         self.providers.keys().cloned().collect()
+    }
+
+    fn contains(&self, name: &str) -> bool {
+        self.providers.contains_key(name)
+    }
+}
+
+fn validate_provider_name(name: &str) -> Result<(), HostPrototypeError> {
+    if name.is_empty() {
+        return Err(HostPrototypeError::new("provider name cannot be empty"));
+    }
+    if name.len() > MAX_PROVIDER_NAME_BYTES {
+        return Err(HostPrototypeError::new(format!(
+            "provider name exceeds {MAX_PROVIDER_NAME_BYTES} bytes"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_provider_metadata(
+    name: &str,
+    version: &str,
+    descriptor: &str,
+) -> Result<(), HostPrototypeError> {
+    if version.is_empty() {
+        return Err(HostPrototypeError::new("provider version cannot be empty"));
+    }
+    if version.len() > MAX_PROVIDER_VERSION_BYTES {
+        return Err(HostPrototypeError::new(format!(
+            "provider version exceeds {MAX_PROVIDER_VERSION_BYTES} bytes"
+        )));
+    }
+    if descriptor.len() > MAX_DESCRIPTOR_BYTES {
+        return Err(HostPrototypeError::new(format!(
+            "provider descriptor exceeds {MAX_DESCRIPTOR_BYTES} bytes"
+        )));
+    }
+
+    let parsed: Value = serde_json::from_str(descriptor).map_err(|error| {
+        HostPrototypeError::new(format!("invalid provider descriptor JSON: {error}"))
+    })?;
+    let object = parsed
+        .as_object()
+        .ok_or_else(|| HostPrototypeError::new("provider descriptor must be a JSON object"))?;
+    let descriptor_id = object
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| HostPrototypeError::new("provider descriptor requires a string id"))?;
+    if descriptor_id != name {
+        return Err(HostPrototypeError::new(format!(
+            "provider descriptor id {descriptor_id:?} does not match registration name {name:?}"
+        )));
+    }
+
+    if let Some(capabilities) = object.get("capabilities") {
+        let capabilities = capabilities.as_array().ok_or_else(|| {
+            HostPrototypeError::new("provider descriptor capabilities must be an array")
+        })?;
+        if capabilities.len() > MAX_CAPABILITIES {
+            return Err(HostPrototypeError::new(format!(
+                "provider descriptor exceeds {MAX_CAPABILITIES} capabilities"
+            )));
+        }
+        if capabilities.iter().any(|capability| capability.as_str().is_none()) {
+            return Err(HostPrototypeError::new(
+                "provider descriptor capabilities must contain only strings",
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn initialization_failure<P: Plugin + ?Sized>(
+    provider: &P,
+    initialize_error: HostPrototypeError,
+) -> HostPrototypeError {
+    match provider.shutdown() {
+        Ok(()) => initialize_error,
+        Err(shutdown_error) => HostPrototypeError::new(format!(
+            "{initialize_error}; cleanup shutdown failed: {shutdown_error}"
+        )),
+    }
+}
+
+fn publication_failure<P: Plugin + ?Sized>(
+    provider: &P,
+    publish_error: HostPrototypeError,
+) -> HostPrototypeError {
+    match provider.shutdown() {
+        Ok(()) => publish_error,
+        Err(shutdown_error) => HostPrototypeError::new(format!(
+            "{publish_error}; cleanup shutdown failed: {shutdown_error}"
+        )),
     }
 }
 
@@ -203,6 +306,54 @@ pub mod parser_host {
             )))
         }
     }
+}
+
+pub fn register_workflow_host(provider: Arc<dyn WorkflowHost>) -> Result<(), HostPrototypeError> {
+    let name = provider.name().to_owned();
+    validate_provider_name(&name)?;
+    if registry::get_workflow_host_registry().read().contains(&name) {
+        return Err(HostPrototypeError::new(format!("provider already registered: {name}")));
+    }
+
+    let version = provider.version()?;
+    let descriptor = provider.descriptor()?;
+    validate_provider_metadata(&name, &version, &descriptor)?;
+    if let Err(error) = provider.initialize() {
+        return Err(initialization_failure(provider.as_ref(), error));
+    }
+
+    let publication = {
+        let mut registry = registry::get_workflow_host_registry().write();
+        registry.insert(Arc::clone(&provider))
+    };
+    publication.map_err(|error| publication_failure(provider.as_ref(), error))
+}
+
+pub fn register_parser_host(provider: Arc<dyn ParserHost>) -> Result<(), HostPrototypeError> {
+    let name = provider.name().to_owned();
+    validate_provider_name(&name)?;
+    if registry::get_parser_host_registry().read().contains(&name) {
+        return Err(HostPrototypeError::new(format!("provider already registered: {name}")));
+    }
+
+    let version = provider.version()?;
+    let descriptor = provider.descriptor()?;
+    validate_provider_metadata(&name, &version, &descriptor)?;
+    if let Err(error) = provider.initialize() {
+        return Err(initialization_failure(provider.as_ref(), error));
+    }
+
+    let publication = {
+        let mut registry = registry::get_parser_host_registry().write();
+        registry.insert(Arc::clone(&provider))
+    };
+    publication.map_err(|error| publication_failure(provider.as_ref(), error))
+}
+
+pub mod plugins {
+    pub use crate::parser_host::{clear_parser_hosts, unregister_parser_host};
+    pub use crate::workflow_host::{clear_workflow_hosts, unregister_workflow_host};
+    pub use crate::{register_parser_host, register_workflow_host};
 }
 
 pub fn execute_identity(
@@ -298,7 +449,7 @@ mod tests {
     #[test]
     fn identity_provider_preserves_arbitrary_bytes() {
         let mut registry = WorkflowHostRegistry::default();
-        registry.register(identity("identity")).unwrap();
+        registry.insert(identity("identity")).unwrap();
 
         let input = vec![0, 0xff, b'\r', b'\n', b'a', 0];
         let output = registry.get("identity").unwrap().execute_batch(input.clone()).unwrap();
@@ -309,9 +460,9 @@ mod tests {
     #[test]
     fn duplicate_names_fail_closed() {
         let mut registry = WorkflowHostRegistry::default();
-        registry.register(identity("identity")).unwrap();
+        registry.insert(identity("identity")).unwrap();
 
-        let error = registry.register(identity("identity")).unwrap_err();
+        let error = registry.insert(identity("identity")).unwrap_err();
 
         assert_eq!(error.message(), "provider already registered: identity");
     }
@@ -319,7 +470,7 @@ mod tests {
     #[test]
     fn removing_a_provider_excludes_it_from_future_lookups() {
         let mut registry = WorkflowHostRegistry::default();
-        registry.register(identity("identity")).unwrap();
+        registry.insert(identity("identity")).unwrap();
 
         let provider = registry.remove("identity").unwrap();
 
@@ -334,12 +485,41 @@ mod tests {
     #[test]
     fn parser_provider_preserves_probe_and_parse_bytes() {
         let mut registry = ParserHostRegistry::default();
-        registry.register(identity_parser("identity.parser")).unwrap();
+        registry.insert(identity_parser("identity.parser")).unwrap();
         let payload = vec![0, 0xff, b'\r', b'\n', b'a', 0];
 
         let provider = registry.get("identity.parser").unwrap();
 
         assert_eq!(provider.probe_batch(payload.clone()).unwrap(), payload);
         assert_eq!(provider.parse_batch(payload.clone()).unwrap(), payload);
+    }
+
+    #[test]
+    fn provider_metadata_accepts_matching_bounded_descriptor() {
+        let descriptor = r#"{"id":"identity","capabilities":["parse","bytes"]}"#;
+
+        validate_provider_metadata("identity", "1.0.0", descriptor).unwrap();
+    }
+
+    #[test]
+    fn provider_metadata_rejects_identity_drift() {
+        let error = validate_provider_metadata("registered", "1.0.0", r#"{"id":"descriptor"}"#)
+            .unwrap_err();
+
+        assert_eq!(
+            error.message(),
+            "provider descriptor id \"descriptor\" does not match registration name \"registered\""
+        );
+    }
+
+    #[test]
+    fn provider_metadata_rejects_unbounded_capabilities() {
+        let capabilities = vec![Value::String("parse".to_owned()); MAX_CAPABILITIES + 1];
+        let descriptor =
+            serde_json::json!({"id": "identity", "capabilities": capabilities}).to_string();
+
+        let error = validate_provider_metadata("identity", "1.0.0", &descriptor).unwrap_err();
+
+        assert_eq!(error.message(), "provider descriptor exceeds 64 capabilities");
     }
 }
