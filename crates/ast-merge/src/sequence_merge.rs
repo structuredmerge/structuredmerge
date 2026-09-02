@@ -3,6 +3,96 @@ use std::collections::{HashMap, HashSet};
 use crate::{NodeIdentity, match_node_identities};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SequenceOrderError {
+    DuplicateIdentity { sequence_index: usize, node_id: String },
+    DuplicateSelection { node_id: String },
+    IncompatibleOrder { node_ids: Vec<String> },
+}
+
+pub fn merge_sequence_order_constraints(
+    sequences: &[Vec<String>],
+    selected: &[String],
+) -> Result<Vec<String>, SequenceOrderError> {
+    let mut selected_set = HashSet::new();
+    for node_id in selected {
+        if !selected_set.insert(node_id.clone()) {
+            return Err(SequenceOrderError::DuplicateSelection { node_id: node_id.clone() });
+        }
+    }
+
+    let mut rank = HashMap::new();
+    let mut next_rank = 0usize;
+    let mut edges = HashMap::<String, Vec<String>>::new();
+    let mut indegree =
+        selected.iter().map(|node_id| (node_id.clone(), 0usize)).collect::<HashMap<_, _>>();
+
+    for (sequence_index, sequence) in sequences.iter().enumerate() {
+        let mut seen = HashSet::new();
+        for node_id in sequence {
+            if !seen.insert(node_id) {
+                return Err(SequenceOrderError::DuplicateIdentity {
+                    sequence_index,
+                    node_id: node_id.clone(),
+                });
+            }
+            if selected_set.contains(node_id) && !rank.contains_key(node_id) {
+                rank.insert(node_id.clone(), next_rank);
+                next_rank += 1;
+            }
+        }
+
+        let constrained =
+            sequence.iter().filter(|node_id| selected_set.contains(*node_id)).collect::<Vec<_>>();
+        for pair in constrained.windows(2) {
+            let left = pair[0];
+            let right = pair[1];
+            let successors = edges.entry(left.clone()).or_default();
+            if !successors.contains(right) {
+                successors.push(right.clone());
+                *indegree.get_mut(right).expect("selected successor") += 1;
+            }
+        }
+    }
+
+    for node_id in selected {
+        if !rank.contains_key(node_id) {
+            rank.insert(node_id.clone(), next_rank);
+            next_rank += 1;
+        }
+    }
+
+    let mut ready = indegree
+        .iter()
+        .filter_map(|(node_id, count)| (*count == 0).then_some(node_id.clone()))
+        .collect::<Vec<_>>();
+    ready.sort_by_key(|node_id| rank[node_id]);
+    let mut output = Vec::with_capacity(selected.len());
+    while !ready.is_empty() {
+        let node_id = ready.remove(0);
+        output.push(node_id.clone());
+        for successor in edges.get(&node_id).into_iter().flatten() {
+            let count = indegree.get_mut(successor).expect("selected successor");
+            *count -= 1;
+            if *count == 0 {
+                ready.push(successor.clone());
+            }
+        }
+        ready.sort_by_key(|candidate| rank[candidate]);
+    }
+
+    if output.len() == selected.len() {
+        Ok(output)
+    } else {
+        let mut node_ids = indegree
+            .into_iter()
+            .filter_map(|(node_id, count)| (count > 0).then_some(node_id))
+            .collect::<Vec<_>>();
+        node_ids.sort_by_key(|node_id| rank[node_id]);
+        Err(SequenceOrderError::IncompatibleOrder { node_ids })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SequenceNode {
     pub node_id: String,
     pub identity: NodeIdentity,
@@ -473,5 +563,48 @@ mod tests {
         let theirs = [signature_node("theirs", "new", "theirs")];
         let result = analyze_three_way_sequence(&[], &ours, &theirs);
         assert_eq!(result.conflicts[0].category, SequenceConflictCategory::DuplicateInsertion);
+    }
+
+    #[test]
+    fn merges_sequence_constraints_with_stable_first_occurrence_order() {
+        let result = merge_sequence_order_constraints(
+            &[
+                vec!["title".to_string(), "last".to_string()],
+                vec!["title".to_string(), "added".to_string(), "last".to_string()],
+            ],
+            &["title".to_string(), "last".to_string(), "added".to_string()],
+        )
+        .unwrap();
+
+        assert_eq!(result, ["title", "added", "last"]);
+    }
+
+    #[test]
+    fn rejects_duplicate_and_cyclic_sequence_constraints() {
+        let duplicate = merge_sequence_order_constraints(
+            &[vec!["title".to_string(), "title".to_string()]],
+            &["title".to_string()],
+        );
+        assert_eq!(
+            duplicate,
+            Err(SequenceOrderError::DuplicateIdentity {
+                sequence_index: 0,
+                node_id: "title".to_string(),
+            })
+        );
+
+        let cycle = merge_sequence_order_constraints(
+            &[
+                vec!["title".to_string(), "last".to_string()],
+                vec!["last".to_string(), "title".to_string()],
+            ],
+            &["title".to_string(), "last".to_string()],
+        );
+        assert_eq!(
+            cycle,
+            Err(SequenceOrderError::IncompatibleOrder {
+                node_ids: vec!["title".to_string(), "last".to_string()],
+            })
+        );
     }
 }

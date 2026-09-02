@@ -1,15 +1,15 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use ast_merge::{
     AppliedDelegatedChildOutput, CommentAttachment, CommentRegion, ConformanceFamilyPlanContext,
     ConformanceFeatureProfileView, ConformanceManifestReviewState,
     ConformanceManifestReviewStateEnvelope, DelegatedChildGroupReviewState,
     DelegatedChildOperation, Diagnostic, DiagnosticCategory, DiagnosticSeverity, DiscoveredSurface,
-    FamilyFeatureProfile, LayoutGap, MergeResult, ParseResult, ReviewReplayBundle,
-    ReviewReplayBundleEnvelope, SurfaceOwnerKind, SurfaceOwnerRef,
-    augment_normalized_tree_comments, execute_reviewed_nested_merge,
+    FamilyFeatureProfile, LayoutGap, MergeResult, ParseResult, RenderFragment, ReviewReplayBundle,
+    ReviewReplayBundleEnvelope, SourceFragment, SourceRenderPlan, SourceRevision, SurfaceOwnerKind,
+    SurfaceOwnerRef, augment_normalized_tree_comments, execute_reviewed_nested_merge,
     import_conformance_manifest_review_state_envelope, import_review_replay_bundle_envelope,
-    match_owner_paths,
+    match_owner_paths, merge_sequence_order_constraints, render_source_plan,
 };
 use tree_haver::{NormalizedTreeNode, ParserRequest, parse_normalized_with_language_pack};
 
@@ -36,12 +36,20 @@ pub enum MarkdownOwnerKind {
     CodeFence,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MarkdownHeadingStyle {
+    Atx,
+    Setext,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MarkdownOwner {
     pub path: String,
     pub owner_kind: MarkdownOwnerKind,
     pub match_key: String,
     pub level: Option<usize>,
+    pub heading_text: Option<String>,
+    pub heading_style: Option<MarkdownHeadingStyle>,
     pub info_string: Option<String>,
     pub start_byte: usize,
     pub end_byte: usize,
@@ -62,12 +70,26 @@ impl MarkdownOwner {
             owner_kind: MarkdownOwnerKind::Heading,
             match_key: format!("h{level}:{}", slugify(title)),
             level: Some(level),
+            heading_text: Some(title.to_string()),
+            heading_style: Some(MarkdownHeadingStyle::Atx),
             info_string: None,
             start_byte,
             end_byte,
             content_start_byte: None,
             content_end_byte: None,
         }
+    }
+
+    pub fn setext_heading(
+        index: usize,
+        level: usize,
+        title: &str,
+        start_byte: usize,
+        end_byte: usize,
+    ) -> Self {
+        let mut owner = Self::heading(index, level, title, start_byte, end_byte);
+        owner.heading_style = Some(MarkdownHeadingStyle::Setext);
+        owner
     }
 
     pub fn code_fence(
@@ -83,6 +105,8 @@ impl MarkdownOwner {
             owner_kind: MarkdownOwnerKind::CodeFence,
             match_key: format!("fence:{}", info_string.as_deref().unwrap_or("plain")),
             level: None,
+            heading_text: None,
+            heading_style: None,
             info_string,
             start_byte,
             end_byte,
@@ -121,6 +145,20 @@ struct MarkdownSection {
     path: String,
     text: String,
     insertion_text: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SourcePreservingMarkdownSection {
+    id: String,
+    start_line: usize,
+    end_line: usize,
+    source: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SourcePreservingMarkdownDocument {
+    source: String,
+    sections: Vec<SourcePreservingMarkdownSection>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -249,6 +287,28 @@ fn collect_tree_sitter_markdown_owners(nodes: &[NormalizedTreeNode]) -> Vec<Mark
             continue;
         }
 
+        if setext_heading_level(&node.kind).is_some() && document_section_node(node, &nodes_by_id) {
+            let Some(level) = setext_heading_level(&node.kind) else {
+                continue;
+            };
+            let Some(inline) = child_of_kind(node, &nodes_by_id, |kind| kind == "inline") else {
+                continue;
+            };
+            let title = inline.source_fragment.trim();
+            if title.is_empty() {
+                continue;
+            }
+            owners.push(MarkdownOwner::setext_heading(
+                heading_index,
+                level,
+                title,
+                node.span.range.start_byte,
+                node.span.range.end_byte,
+            ));
+            heading_index += 1;
+            continue;
+        }
+
         if node.kind == "fenced_code_block" {
             let info_string = child_of_kind(node, &nodes_by_id, |kind| kind == "info_string")
                 .and_then(|child| child.source_fragment.split_whitespace().next())
@@ -283,6 +343,19 @@ fn child_of_kind<'a>(
 
 fn atx_heading_level(marker_kind: &str) -> Option<usize> {
     marker_kind.strip_prefix("atx_h")?.strip_suffix("_marker")?.parse().ok()
+}
+
+fn setext_heading_level(node_kind: &str) -> Option<usize> {
+    if !node_kind.starts_with("setext_") || !node_kind.ends_with("_heading") {
+        return None;
+    }
+    if node_kind.contains("h1") {
+        Some(1)
+    } else if node_kind.contains("h2") {
+        Some(2)
+    } else {
+        None
+    }
 }
 
 fn document_section_node(
@@ -1125,6 +1198,282 @@ pub fn merge_markdown_with_parser(
     parser: impl Fn(&str, MarkdownDialect) -> ParseResult<MarkdownAnalysis>,
 ) -> MergeResult<String> {
     merge_markdown_using_parser(template_source, destination_source, dialect, &parser)
+}
+
+pub fn merge_markdown_source_preserving(
+    current_source: &str,
+    incoming_source: &str,
+    dialect: MarkdownDialect,
+) -> MergeResult<String> {
+    merge_markdown_source_preserving_with_backend(
+        current_source,
+        incoming_source,
+        dialect,
+        MarkdownBackend::KreuzbergLanguagePack,
+    )
+}
+
+pub fn merge_markdown_source_preserving_with_backend(
+    current_source: &str,
+    incoming_source: &str,
+    dialect: MarkdownDialect,
+    backend: MarkdownBackend,
+) -> MergeResult<String> {
+    merge_markdown_source_preserving_with_parser(
+        current_source,
+        incoming_source,
+        dialect,
+        |source, parse_dialect| parse_markdown_with_backend(source, parse_dialect, backend),
+    )
+}
+
+pub fn merge_markdown_source_preserving_with_parser(
+    current_source: &str,
+    incoming_source: &str,
+    dialect: MarkdownDialect,
+    parser: impl Fn(&str, MarkdownDialect) -> ParseResult<MarkdownAnalysis>,
+) -> MergeResult<String> {
+    let current =
+        match parse_source_preserving_document(current_source, dialect, "current", &parser) {
+            Ok(document) => document,
+            Err(diagnostic) => return failed_markdown_merge(diagnostic),
+        };
+    let incoming =
+        match parse_source_preserving_document(incoming_source, dialect, "incoming", &parser) {
+            Ok(document) => document,
+            Err(diagnostic) => return failed_markdown_merge(diagnostic),
+        };
+
+    let current_ids = current.sections.iter().map(|section| section.id.clone()).collect::<Vec<_>>();
+    let incoming_ids =
+        incoming.sections.iter().map(|section| section.id.clone()).collect::<Vec<_>>();
+    let mut selected = current_ids.clone();
+    let mut selected_set = selected.iter().cloned().collect::<HashSet<_>>();
+    for node_id in &incoming_ids {
+        if selected_set.insert(node_id.clone()) {
+            selected.push(node_id.clone());
+        }
+    }
+    let ordered = match merge_sequence_order_constraints(
+        &[current_ids.clone(), incoming_ids.clone()],
+        &selected,
+    ) {
+        Ok(ordered) => ordered,
+        Err(error) => {
+            return failed_markdown_merge(Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::MergeConflict,
+                message: format!("Markdown section order cannot be proven: {error:?}"),
+                path: Some("<document>".to_string()),
+                review: None,
+            });
+        }
+    };
+
+    let current_by_id = current
+        .sections
+        .iter()
+        .map(|section| (section.id.as_str(), section))
+        .collect::<HashMap<_, _>>();
+    let incoming_by_id = incoming
+        .sections
+        .iter()
+        .map(|section| (section.id.as_str(), section))
+        .collect::<HashMap<_, _>>();
+    let fragments = ordered
+        .iter()
+        .map(|node_id| {
+            let (revision, section) = current_by_id
+                .get(node_id.as_str())
+                .map(|section| (SourceRevision::Ours, *section))
+                .or_else(|| {
+                    incoming_by_id
+                        .get(node_id.as_str())
+                        .map(|section| (SourceRevision::Theirs, *section))
+                })
+                .expect("selected Markdown section");
+            RenderFragment::Source(SourceFragment {
+                revision,
+                start_line: section.start_line,
+                end_line: section.end_line,
+                metadata: HashMap::from([
+                    ("section_id".to_string(), serde_json::json!(section.id)),
+                    ("source_preserved".to_string(), serde_json::json!(true)),
+                ]),
+            })
+        })
+        .collect::<Vec<_>>();
+    let plan = match SourceRenderPlan::new(
+        HashMap::from([
+            (SourceRevision::Ours, current.source.clone()),
+            (SourceRevision::Theirs, incoming.source.clone()),
+        ]),
+        fragments,
+    ) {
+        Ok(plan) => plan,
+        Err(error) => return failed_render_merge(error.to_string()),
+    };
+    let rendered = match render_source_plan(&plan) {
+        Ok(rendered) => rendered,
+        Err(error) => return failed_render_merge(error.to_string()),
+    };
+
+    let verified =
+        match parse_source_preserving_document(&rendered.content, dialect, "output", &parser) {
+            Ok(document) => document,
+            Err(diagnostic) => return failed_markdown_merge(diagnostic),
+        };
+    let expected_sections = ordered
+        .iter()
+        .map(|node_id| {
+            current_by_id
+                .get(node_id.as_str())
+                .copied()
+                .or_else(|| incoming_by_id.get(node_id.as_str()).copied())
+                .expect("selected Markdown section")
+        })
+        .collect::<Vec<_>>();
+    if verified.sections.len() != expected_sections.len()
+        || verified
+            .sections
+            .iter()
+            .zip(expected_sections)
+            .any(|(actual, expected)| actual.id != expected.id || actual.source != expected.source)
+    {
+        return failed_render_merge(
+            "rendered Markdown sections did not retain their selected source bytes".to_string(),
+        );
+    }
+
+    MergeResult { ok: true, diagnostics: vec![], output: Some(rendered.content), policies: vec![] }
+}
+
+fn parse_source_preserving_document(
+    source: &str,
+    dialect: MarkdownDialect,
+    role: &str,
+    parser: &impl Fn(&str, MarkdownDialect) -> ParseResult<MarkdownAnalysis>,
+) -> Result<SourcePreservingMarkdownDocument, Diagnostic> {
+    if source.contains('\0') {
+        return Err(unsupported_markdown_document(role, "source contains a NUL byte"));
+    }
+    let parsed = parser(source, dialect);
+    let Some(analysis) = parsed.analysis.filter(|_| parsed.ok) else {
+        return Err(parsed.diagnostics.into_iter().next().unwrap_or_else(|| Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            category: DiagnosticCategory::ParseError,
+            message: format!("Markdown {role} source could not be parsed"),
+            path: None,
+            review: None,
+        }));
+    };
+    if analysis.normalized_source != source {
+        return Err(unsupported_markdown_document(
+            role,
+            "parser did not retain the exact source bytes",
+        ));
+    }
+    let headings = analysis
+        .owners
+        .iter()
+        .filter(|owner| owner.owner_kind == MarkdownOwnerKind::Heading)
+        .collect::<Vec<_>>();
+    if headings.is_empty() {
+        return Err(unsupported_markdown_document(role, "document has no heading sections"));
+    }
+    if headings.iter().any(|owner| owner.heading_style != Some(MarkdownHeadingStyle::Atx)) {
+        return Err(unsupported_markdown_document(role, "document contains a setext heading"));
+    }
+    let levels = headings.iter().filter_map(|owner| owner.level).collect::<HashSet<_>>();
+    if levels.len() != 1 {
+        return Err(unsupported_markdown_document(
+            role,
+            "document contains a nested heading hierarchy",
+        ));
+    }
+    if headings.first().is_none_or(|owner| owner.start_byte != 0) {
+        return Err(unsupported_markdown_document(
+            role,
+            "source exists before the first heading section",
+        ));
+    }
+    if headings.windows(2).any(|pair| pair[0].start_byte >= pair[1].start_byte) {
+        return Err(unsupported_markdown_document(role, "heading ranges overlap"));
+    }
+
+    let line_count = source.split_inclusive('\n').count();
+    let mut seen = HashSet::new();
+    let mut sections = Vec::with_capacity(headings.len());
+    for (index, owner) in headings.iter().enumerate() {
+        let level = owner.level.expect("heading level");
+        let title = owner.heading_text.as_deref().unwrap_or_default();
+        let id = serde_json::json!([level, title]).to_string();
+        if !seen.insert(id.clone()) {
+            return Err(Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::Ambiguity,
+                message: format!("Markdown {role} source contains duplicate heading {title:?}"),
+                path: None,
+                review: None,
+            });
+        }
+        let end_byte = headings.get(index + 1).map_or(source.len(), |next| next.start_byte);
+        let Some(section_source) = source.get(owner.start_byte..end_byte) else {
+            return Err(unsupported_markdown_document(role, "heading byte range is invalid"));
+        };
+        let Some(start_line) = source_line_at_byte(source, owner.start_byte) else {
+            return Err(unsupported_markdown_document(
+                role,
+                "heading does not start at a source line boundary",
+            ));
+        };
+        let end_line = headings
+            .get(index + 1)
+            .and_then(|next| source_line_at_byte(source, next.start_byte))
+            .map_or(line_count, |next_line| next_line - 1);
+        sections.push(SourcePreservingMarkdownSection {
+            id,
+            start_line,
+            end_line,
+            source: section_source.to_string(),
+        });
+    }
+
+    Ok(SourcePreservingMarkdownDocument { source: source.to_string(), sections })
+}
+
+fn source_line_at_byte(source: &str, offset: usize) -> Option<usize> {
+    if offset > source.len() || !source.is_char_boundary(offset) {
+        return None;
+    }
+    if offset > 0 && source.as_bytes()[offset - 1] != b'\n' {
+        return None;
+    }
+    Some(source.as_bytes()[..offset].iter().filter(|byte| **byte == b'\n').count() + 1)
+}
+
+fn unsupported_markdown_document(role: &str, message: &str) -> Diagnostic {
+    Diagnostic {
+        severity: DiagnosticSeverity::Error,
+        category: DiagnosticCategory::UnsupportedFeature,
+        message: format!("Markdown {role} {message}"),
+        path: None,
+        review: None,
+    }
+}
+
+fn failed_render_merge(message: String) -> MergeResult<String> {
+    failed_markdown_merge(Diagnostic {
+        severity: DiagnosticSeverity::Error,
+        category: DiagnosticCategory::ConfigurationError,
+        message,
+        path: None,
+        review: None,
+    })
+}
+
+fn failed_markdown_merge(diagnostic: Diagnostic) -> MergeResult<String> {
+    MergeResult { ok: false, diagnostics: vec![diagnostic], output: None, policies: vec![] }
 }
 
 fn merge_markdown_using_parser(

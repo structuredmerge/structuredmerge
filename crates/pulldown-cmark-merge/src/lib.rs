@@ -7,9 +7,10 @@ use ast_merge::{
     ReviewReplayBundleEnvelope,
 };
 use markdown_merge::{
-    AppliedChildOutput, MarkdownAnalysis, MarkdownDialect, MarkdownOwner,
+    AppliedChildOutput, MarkdownAnalysis, MarkdownDialect, MarkdownHeadingStyle, MarkdownOwner,
     include_trailing_line_ending, markdown_feature_profile,
     match_markdown_owners as match_markdown_owners_with_substrate,
+    merge_markdown_source_preserving_with_parser as merge_markdown_source_preserving_with_substrate,
     merge_markdown_with_parser as merge_markdown_with_substrate,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope_with_parser as merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope_with_substrate,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_parser as merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_substrate,
@@ -138,6 +139,7 @@ pub fn parse_markdown(
 
 struct PendingHeading {
     level: usize,
+    style: MarkdownHeadingStyle,
     start_byte: usize,
     end_byte: usize,
     text: String,
@@ -176,6 +178,7 @@ fn collect_pulldown_owners(source: &str) -> Vec<MarkdownOwner> {
             Event::Start(Tag::Heading { level, .. }) if container_depth == 0 => {
                 heading = Some(PendingHeading {
                     level: heading_level(level),
+                    style: pulldown_heading_style(source, range.start),
                     start_byte: range.start,
                     end_byte: range.end,
                     text: String::new(),
@@ -227,13 +230,22 @@ fn collect_pulldown_owners(source: &str) -> Vec<MarkdownOwner> {
         .into_iter()
         .map(|owner| match owner {
             ProjectedOwner::Heading(owner) => {
-                let result = MarkdownOwner::heading(
-                    heading_index,
-                    owner.level,
-                    &owner.text,
-                    owner.start_byte,
-                    owner.end_byte,
-                );
+                let result = match owner.style {
+                    MarkdownHeadingStyle::Atx => MarkdownOwner::heading(
+                        heading_index,
+                        owner.level,
+                        &owner.text,
+                        owner.start_byte,
+                        owner.end_byte,
+                    ),
+                    MarkdownHeadingStyle::Setext => MarkdownOwner::setext_heading(
+                        heading_index,
+                        owner.level,
+                        &owner.text,
+                        owner.start_byte,
+                        owner.end_byte,
+                    ),
+                };
                 heading_index += 1;
                 result
             }
@@ -251,6 +263,18 @@ fn collect_pulldown_owners(source: &str) -> Vec<MarkdownOwner> {
             }
         })
         .collect()
+}
+
+fn pulldown_heading_style(source: &str, start_byte: usize) -> MarkdownHeadingStyle {
+    let line = source
+        .get(start_byte..)
+        .and_then(|remaining| remaining.split(['\r', '\n']).next())
+        .unwrap_or_default();
+    if line.trim_start().starts_with('#') {
+        MarkdownHeadingStyle::Atx
+    } else {
+        MarkdownHeadingStyle::Setext
+    }
 }
 
 fn heading_level(level: HeadingLevel) -> usize {
@@ -308,6 +332,33 @@ pub fn merge_markdown(
     merge_markdown_with_substrate(
         template_source,
         destination_source,
+        dialect,
+        parse_markdown_for_merge,
+    )
+}
+
+pub fn merge_markdown_source_preserving(
+    current_source: &str,
+    incoming_source: &str,
+    dialect: MarkdownDialect,
+    backend: Option<&str>,
+) -> MergeResult<String> {
+    ensure_backend_registered();
+    let requested = backend.unwrap_or(BACKEND_ID);
+    if requested != BACKEND_ID {
+        return MergeResult {
+            ok: false,
+            diagnostics: vec![unsupported_feature(&format!(
+                "Unsupported Markdown backend {requested}."
+            ))],
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    merge_markdown_source_preserving_with_substrate(
+        current_source,
+        incoming_source,
         dialect,
         parse_markdown_for_merge,
     )

@@ -14,8 +14,8 @@ use markdown_merge::{
     available_markdown_backends, markdown_backend_feature_profile,
     markdown_delegated_child_operations, markdown_discovered_surfaces, markdown_embedded_families,
     markdown_feature_profile, markdown_plan_context_with_backend, match_markdown_owners,
-    merge_markdown, merge_markdown_with_nested_outputs, merge_markdown_with_parser,
-    merge_markdown_with_reviewed_nested_outputs,
+    merge_markdown, merge_markdown_source_preserving, merge_markdown_with_nested_outputs,
+    merge_markdown_with_parser, merge_markdown_with_reviewed_nested_outputs,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope,
     merge_markdown_with_reviewed_nested_outputs_from_review_state,
@@ -247,6 +247,50 @@ fn conforms_to_slice_286_markdown_merge() {
     );
     assert!(result.ok);
     assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
+}
+
+#[test]
+fn source_preserving_merge_keeps_current_sections_and_inserts_incoming_sections_in_order() {
+    let current = "# Title\r\n\r\ncurrent body\r\n\r\n# Last\r\n\r\ncurrent ending";
+    let incoming =
+        "# Title\n\ntemplate body\n\n# Added\n\nnew section\n\n# Last\n\ntemplate ending\n";
+    let expected =
+        "# Title\r\n\r\ncurrent body\r\n\r\n# Added\n\nnew section\n\n# Last\r\n\r\ncurrent ending";
+
+    let result = merge_markdown_source_preserving(current, incoming, MarkdownDialect::Markdown);
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(expected));
+}
+
+#[test]
+fn source_preserving_merge_fails_closed_for_unsafe_heading_ownership() {
+    for source in [
+        "preamble\n\n# Title\n\nbody\n",
+        "# Title\n\nbody\n\n## Nested\n\nbody\n",
+        "# Title\n\nbody\n\n# Title\n\nagain\n",
+        "Title\n=====\n\nbody\n",
+    ] {
+        let result = merge_markdown_source_preserving(
+            source,
+            "# Title\n\ntemplate\n",
+            MarkdownDialect::Markdown,
+        );
+        assert!(!result.ok, "source unexpectedly merged: {source:?}");
+        assert!(result.output.is_none());
+    }
+}
+
+#[test]
+fn source_preserving_merge_fails_closed_for_incompatible_order() {
+    let result = merge_markdown_source_preserving(
+        "# First\n\none\n\n# Last\n\nlast\n",
+        "# Last\n\nlast\n\n# First\n\none\n",
+        MarkdownDialect::Markdown,
+    );
+
+    assert!(!result.ok);
+    assert_eq!(result.diagnostics[0].category, ast_merge::DiagnosticCategory::MergeConflict);
 }
 
 #[test]

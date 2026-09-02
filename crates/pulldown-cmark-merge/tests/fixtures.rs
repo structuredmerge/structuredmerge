@@ -8,7 +8,7 @@ use ast_merge::{
 use markdown_merge::MarkdownDialect;
 use pulldown_cmark_merge::{
     available_markdown_backends, markdown_backend_feature_profile, markdown_embedded_families,
-    markdown_plan_context, match_markdown_owners, merge_markdown,
+    markdown_plan_context, match_markdown_owners, merge_markdown, merge_markdown_source_preserving,
     merge_markdown_with_reviewed_nested_outputs,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope,
@@ -207,6 +207,29 @@ fn native_projection_preserves_exact_destination_bytes_and_ignores_nested_headin
     let result = merge_markdown(template, destination, MarkdownDialect::Markdown, None);
     assert!(result.ok, "{:?}", result.diagnostics);
     assert_eq!(result.output.as_deref(), Some(destination));
+}
+
+#[test]
+fn native_source_preserving_merge_uses_shared_heading_section_semantics() {
+    let current = "# Title\r\n\r\ncurrent body\r\n\r\n# Last\r\n\r\ncurrent ending";
+    let incoming =
+        "# Title\n\ntemplate body\n\n# Added\n\nnew section\n\n# Last\n\ntemplate ending\n";
+    let expected =
+        "# Title\r\n\r\ncurrent body\r\n\r\n# Added\n\nnew section\n\n# Last\r\n\r\ncurrent ending";
+
+    let result =
+        merge_markdown_source_preserving(current, incoming, MarkdownDialect::Markdown, None);
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(expected));
+
+    let setext = merge_markdown_source_preserving(
+        "Title\n=====\n\nbody\n",
+        incoming,
+        MarkdownDialect::Markdown,
+        None,
+    );
+    assert!(!setext.ok);
 }
 
 #[test]
