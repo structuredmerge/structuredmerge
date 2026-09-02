@@ -47,10 +47,12 @@ artifact while the ABI is still experimental. Its production successor will be
 named `structuredmerge-rust` and expose the Rust application facade, not a
 second Ruby implementation of merge behavior.
 
-The gem ships in two forms:
-
-- a source gem that compiles the extension through `rb_sys`; and
-- platform gems for the reviewed target matrix.
+The prototype is distributed only as precompiled platform gems. Its private
+host core and workspace path dependencies make the development source gem
+non-installable outside this repository. A source gem may be added only after
+the production facade is independently publishable and an isolated source-gem
+install proves the complete Cargo graph is available. Development `rake build`
+output is not a release artifact.
 
 The generated Magnus layer and hand-maintained Ruby host adapter live in the
 same gem. The adapter accepts providers from the existing Ruby package family;
@@ -77,7 +79,14 @@ extensions may evolve without forcing unrelated providers to adopt a lossy
 common AST.
 
 Generated code is release input. `alef verify --exit-code`, host binding tests,
-and a package build must pass from a clean checkout before publication.
+and an isolated install of each platform package must pass from a clean
+checkout before publication.
+
+Until Alef's Ruby platform-metadata fix is released, CI installs the exact fork
+revision recorded in `workspace-scripts/alef-source-revision`. The same revision
+is included in artifact provenance. Return to the released installer after the
+upstream fix ships; do not leave an unrecorded branch or floating Git reference
+in the build chain.
 
 ## Capability Discovery
 

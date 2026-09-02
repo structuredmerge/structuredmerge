@@ -26,6 +26,10 @@ scaffold_output = "packages/ruby"
 [crates.output]
 ruby = "packages/ruby/ext/structuredmerge_host_prototype_core_rb/src/"
 
+[crates.publish.languages.ruby]
+vendor_mode = "none"
+build_command = "cargo build --release --package structuredmerge-host-prototype-core-rb"
+
 [[crates.trait_bridges]]
 trait_name = "WorkflowHost"
 super_trait = "Plugin"

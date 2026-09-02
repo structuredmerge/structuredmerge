@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Exercise every declared Ruby native platform in CI, build and install the
+  Linux platform gem in isolation, and emit a content-addressed artifact
+  provenance manifest, including the exact temporary Alef fork revision used
+  for packaging until its platform-metadata fix is released.
 - Define the production package boundaries for the Rust kernel, compile-time
   provider bundles, generated Ruby artifact, and host-native provider adapters.
 - Promote the Alef Ruby binding configuration to the canonical `alef.toml`,

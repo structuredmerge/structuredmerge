@@ -37,12 +37,30 @@ jobs:
         run: mise run check
 
   ruby-bindings:
-    name: Ruby bindings (${{ matrix.ruby }})
-    runs-on: ubuntu-latest
+    name: Ruby bindings (${{ matrix.platform }}, Ruby ${{ matrix.ruby }})
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        ruby: ["3.2", "4.0"]
+        include:
+          - platform: x86_64-linux
+            runner: ubuntu-latest
+            ruby: "3.2"
+          - platform: x86_64-linux
+            runner: ubuntu-latest
+            ruby: "4.0"
+          - platform: aarch64-linux
+            runner: ubuntu-24.04-arm
+            ruby: "4.0"
+          - platform: arm64-darwin
+            runner: macos-14
+            ruby: "4.0"
+          - platform: x86_64-darwin
+            runner: macos-15-intel
+            ruby: "4.0"
+          - platform: x64-mingw-ucrt
+            runner: windows-2025
+            ruby: "4.0"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -58,6 +76,44 @@ jobs:
         run: bundle exec rake spec
         working-directory: packages/ruby
 
+  ruby-package:
+    name: Ruby platform package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Setup mise
+        uses: jdx/mise-action@v4
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+          working-directory: packages/ruby
+      - name: Install Alef
+        shell: bash
+        run: |
+          cargo install --git https://github.com/structuredmerge/alef.git \
+            --rev "$(cat workspace-scripts/alef-source-revision)" --locked
+      - name: Build platform gem and provenance
+        run: mise run ruby-package
+      - name: Install packaged gem in isolation
+        shell: bash
+        run: |
+          gem_home="$(mktemp -d)"
+          gem install dist/*.gem --install-dir "$gem_home" --no-document
+          GEM_HOME="$gem_home" GEM_PATH="$gem_home" ruby -rstructuredmerge_host_prototype -e 'abort unless StructuredmergeHostPrototype.respond_to?(:merge_json_three_way)'
+      - name: Upload platform gem and provenance
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: structuredmerge-host-prototype-x86_64-linux
+          path: |
+            dist/*.gem
+            dist/*.provenance.json
+          if-no-files-found: error
+
   alef:
     name: Alef generation
     runs-on: ubuntu-latest
@@ -65,6 +121,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Install Alef
-        uses: xberg-io/actions/install-alef@v1
+        shell: bash
+        run: |
+          cargo install --git https://github.com/structuredmerge/alef.git \
+            --rev "$(cat workspace-scripts/alef-source-revision)" --locked
       - name: Verify generated bindings
         run: alef verify --exit-code
+      - name: Validate publish manifests
+        run: alef publish validate
