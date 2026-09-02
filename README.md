@@ -15,6 +15,18 @@ Project links:
 - Specification: <https://github.com/structuredmerge/structuredmerge-spec>
 - Shared fixtures: <https://github.com/structuredmerge/structuredmerge-fixtures>
 
+## Behavioral Authority
+
+The mature Ruby implementation is the StructuredMerge behavioral golden
+master. This Rust implementation is a conformance consumer and currently lags
+Ruby in behavior and defect fixes. Shared specifications and fixtures are
+portable evidence admitted from reviewed Ruby behavior; historical Rust
+behavior does not override Ruby when they disagree.
+
+Names containing `parity` describe only the dimensions asserted by their cited
+fixtures. They do not claim complete behavioral equivalence with Ruby unless a
+versioned conformance profile explicitly says so.
+
 ## Package Family
 
 StructuredMerge Rust is a layered crate family. The lower layers provide parser,
@@ -161,9 +173,9 @@ Provider and recipe crates:
 
 ## Portability
 
-The Rust crates are developed against the shared StructuredMerge fixtures. Those
-fixtures define the cross-language behavior expected from the Go, TypeScript,
-Rust, and Ruby implementations. Conformance checks live in crate tests and in
+The Rust crates are developed against the shared StructuredMerge fixtures.
+Those fixtures encode portable behavior derived from the Ruby golden master and
+reviewed for cross-runtime use. Conformance checks live in crate tests and in
 the shared spec/fixture tooling rather than in a static status document.
 
 ## Development
