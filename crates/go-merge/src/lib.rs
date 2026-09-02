@@ -1,8 +1,9 @@
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult,
-    ParseResult, PolicyReference, PolicySurface, SourcePreservingOwner,
+    NamedOwnerKind, NamedOwnerProjectionPolicy, ParseResult, PolicyReference, PolicySurface,
     SourcePreservingOwnerDocument, ThreeWayMergeResult, merge_source_preserving_owners,
-    normalized_parse_error_result, parse_error_result, three_way_parse_error,
+    normalized_parse_error_result, parse_error_result, project_named_top_level_owners,
+    three_way_parse_error,
 };
 use tree_haver::{
     BackendReference, NormalizedTreeIndex, NormalizedTreeNode, ParserRequest,
@@ -11,6 +12,9 @@ use tree_haver::{
 };
 
 pub const PACKAGE_NAME: &str = "go-merge";
+
+const GO_FUNCTION_OWNER_KINDS: &[NamedOwnerKind<'static>] =
+    &[NamedOwnerKind { node_kind: "function_declaration", path_kind: "function" }];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GoDialect {
@@ -269,33 +273,20 @@ fn parse_source_preserving_go(source: &str) -> Result<SourcePreservingOwnerDocum
     if !parsed.source_fragments_available {
         return Err("Go parser did not retain source fragments".to_string());
     }
-    let index = NormalizedTreeIndex::new(&parsed.nodes)?;
-    let root = index.root(&parsed.root_id)?;
-    let mut owners = Vec::new();
-    for node in index.children(root) {
-        match node.kind.as_str() {
-            "comment" | "package_clause" | "import_declaration" => {}
-            "function_declaration" => {
-                let name = declaration_name(node, &index)
-                    .ok_or_else(|| "Go function declaration has no stable name".to_string())?;
-                let path = format!("/function:{name}");
-                owners.push(SourcePreservingOwner {
-                    id: path.clone(),
-                    path,
-                    fingerprint: node.source_fragment.clone(),
-                    start_byte: node.span.range.start_byte,
-                    end_byte: node.span.range.end_byte,
-                    start_line: node.span.start_point.row + 1,
-                    end_line: node.span.end_point.row + 1,
-                });
-            }
-            kind => return Err(format!("unsupported top-level Go node {kind:?}")),
-        }
-    }
-    if owners.is_empty() {
-        return Err("Go document has no supported top-level functions".to_string());
-    }
-    Ok(SourcePreservingOwnerDocument { source: source.to_string(), owners })
+    project_named_top_level_owners(
+        source,
+        &parsed.root_id,
+        &parsed.nodes,
+        NamedOwnerProjectionPolicy {
+            family: "Go",
+            owner_kinds: GO_FUNCTION_OWNER_KINDS,
+            ignored_kinds: &["package_clause", "import_declaration"],
+            wrapper_kinds: &[],
+            name_fields: &["name"],
+            fallback_name_kinds: &["identifier"],
+            accept_any_named_kind: false,
+        },
+    )
 }
 
 fn go_import_paths(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> Vec<String> {

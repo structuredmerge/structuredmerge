@@ -28,3 +28,5 @@
   the Rust benchmark adapter without claiming generic two-way support.
 - Route the Bash provider through the shared normalized named-owner projection
   without broadening its top-level-function-only merge contract.
+- Route Go's three-way function ownership through the same shared projection
+  while retaining Go-specific import and declaration behavior in its substrate.
