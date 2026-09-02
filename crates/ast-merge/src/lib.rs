@@ -22,6 +22,8 @@ pub mod source_render;
 pub use source_render::*;
 pub mod declaration_merge;
 pub use declaration_merge::*;
+pub mod owner_projection;
+pub use owner_projection::*;
 pub mod diagnostics;
 pub use diagnostics::*;
 

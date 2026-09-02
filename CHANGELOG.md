@@ -19,3 +19,5 @@
 - Add a thin Bash provider that projects top-level function ownership from
   TreeHaver's normalized TSLP AST and reuses the shared source-preserving
   declaration kernel for fail-closed three-way merges.
+- Add a shared normalized-tree projection for strict, uniquely named top-level
+  owners so language providers can reuse one source-range and identity contract.
