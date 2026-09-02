@@ -199,6 +199,23 @@ pub struct MergeResult<TOutput> {
     pub policies: Vec<PolicyReference>,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThreeWayMergeOutcome {
+    Clean,
+    Conflict,
+    Error,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ThreeWayMergeResult<TOutput> {
+    pub outcome: ThreeWayMergeOutcome,
+    pub diagnostics: Vec<Diagnostic>,
+    pub conflicts: Vec<MergeConflict>,
+    pub output: Option<TOutput>,
+    pub policies: Vec<PolicyReference>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct MergeDecisionRecord {
     pub id: String,
