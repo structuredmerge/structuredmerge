@@ -1,9 +1,9 @@
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult,
-    ParseResult, PolicyReference, PolicySurface, SourcePreservingOwner,
+    NamedOwnerKind, NamedOwnerProjectionPolicy, ParseResult, PolicyReference, PolicySurface,
     SourcePreservingOwnerDocument, ThreeWayMergeOutcome, ThreeWayMergeResult, error_diagnostic,
     merge_source_preserving_owners, normalized_parse_error_result, parse_error_result,
-    three_way_parse_error,
+    project_named_top_level_owners, three_way_parse_error,
 };
 use syn::File;
 use tree_haver::{
@@ -13,6 +13,9 @@ use tree_haver::{
 };
 
 pub const PACKAGE_NAME: &str = "rust-merge";
+
+const RUST_FUNCTION_OWNER_KINDS: &[NamedOwnerKind<'static>] =
+    &[NamedOwnerKind { node_kind: "function_item", path_kind: "function" }];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RustDialect {
@@ -315,33 +318,20 @@ fn parse_source_preserving_rust(source: &str) -> Result<SourcePreservingOwnerDoc
     if !parsed.source_fragments_available {
         return Err("Rust parser did not retain source fragments".to_string());
     }
-    let index = NormalizedTreeIndex::new(&parsed.nodes)?;
-    let root = index.root(&parsed.root_id)?;
-    let mut owners = Vec::new();
-    for node in index.children(root) {
-        match node.kind.as_str() {
-            "line_comment" | "block_comment" | "use_declaration" => {}
-            "function_item" => {
-                let name = declaration_name(node, &index)
-                    .ok_or_else(|| "Rust function item has no stable name".to_string())?;
-                let path = format!("/function:{name}");
-                owners.push(SourcePreservingOwner {
-                    id: path.clone(),
-                    path,
-                    fingerprint: node.source_fragment.clone(),
-                    start_byte: node.span.range.start_byte,
-                    end_byte: node.span.range.end_byte,
-                    start_line: node.span.start_point.row + 1,
-                    end_line: node.span.end_point.row + 1,
-                });
-            }
-            kind => return Err(format!("unsupported top-level Rust node {kind:?}")),
-        }
-    }
-    if owners.is_empty() {
-        return Err("Rust document has no supported top-level functions".to_string());
-    }
-    Ok(SourcePreservingOwnerDocument { source: source.to_string(), owners })
+    project_named_top_level_owners(
+        source,
+        &parsed.root_id,
+        &parsed.nodes,
+        NamedOwnerProjectionPolicy {
+            family: "Rust",
+            owner_kinds: RUST_FUNCTION_OWNER_KINDS,
+            ignored_kinds: &["use_declaration"],
+            wrapper_kinds: &[],
+            name_fields: &["name"],
+            fallback_name_kinds: &["identifier", "type_identifier"],
+            accept_any_named_kind: false,
+        },
+    )
 }
 
 fn supported_analysis_declaration(kind: &str) -> bool {

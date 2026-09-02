@@ -30,3 +30,5 @@
   without broadening its top-level-function-only merge contract.
 - Route Go's three-way function ownership through the same shared projection
   while retaining Go-specific import and declaration behavior in its substrate.
+- Route Rust-language three-way function ownership through the shared
+  projection while preserving its separate TSLP and native analysis contracts.
