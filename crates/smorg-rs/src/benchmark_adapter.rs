@@ -10,6 +10,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use json_merge::{
     JsonDialect, json_semantically_equivalent, merge_json_source_preserving, merge_json_three_way,
 };
+use markdown_merge::{MarkdownDialect, merge_markdown_source_preserving};
 use rbs_merge::{RbsDialect, merge_rbs};
 use ruby_merge::{RubyDialect, merge_ruby};
 use serde::Deserialize;
@@ -37,6 +38,7 @@ struct Selector {
 #[derive(Clone, Copy)]
 enum BenchmarkDialect {
     Json(JsonDialect),
+    Markdown(MarkdownDialect),
     Rbs(RbsDialect),
     Ruby(RubyDialect),
     Toml(TomlDialect),
@@ -70,6 +72,9 @@ pub fn run_merge2_files(args: &[String], output: &mut dyn Write, error: &mut dyn
         Ok::<_, String>(match dialect {
             BenchmarkDialect::Json(dialect) => {
                 merge_json_source_preserving(&incoming, &current, dialect)
+            }
+            BenchmarkDialect::Markdown(dialect) => {
+                merge_markdown_source_preserving(&current, &incoming, dialect)
             }
             BenchmarkDialect::Rbs(dialect) => merge_rbs(&incoming, &current, dialect),
             BenchmarkDialect::Ruby(dialect) => merge_ruby(&incoming, &current, dialect),
@@ -194,6 +199,7 @@ fn selected_dialect(path: &str) -> Result<BenchmarkDialect, String> {
 fn benchmark_family(dialect: BenchmarkDialect) -> &'static str {
     match dialect {
         BenchmarkDialect::Json(_) => "json",
+        BenchmarkDialect::Markdown(_) => "markdown",
         BenchmarkDialect::Rbs(_) => "rbs",
         BenchmarkDialect::Ruby(_) => "ruby",
         BenchmarkDialect::Toml(_) => "toml",
@@ -252,12 +258,31 @@ fn execute(request: Request) -> Result<(i32, String, serde_json::Value), String>
     }
     match request.selector.family.as_str() {
         "json" => execute_json(request),
+        "markdown" => execute_markdown(request),
         "rbs" => execute_rbs(request),
         "ruby" => execute_ruby(request),
         "toml" => execute_toml(request),
         "yaml" => execute_yaml(request),
         family => Err(format!("unsupported benchmark family: {family}")),
     }
+}
+
+fn execute_markdown(request: Request) -> Result<(i32, String, serde_json::Value), String> {
+    if request.selector.dialect != "markdown" {
+        return Err(format!("unsupported Markdown dialect: {}", request.selector.dialect));
+    }
+    if request.operation != "merge2" {
+        return Err(format!("unsupported Markdown benchmark operation: {}", request.operation));
+    }
+
+    let incoming = source(&request.sources, "incoming")?;
+    let current = source(&request.sources, "current")?;
+    let result = merge_markdown_source_preserving(&current, &incoming, MarkdownDialect::Markdown);
+    let status = if result.ok { 0 } else { 2 };
+    let output = result.output.clone().unwrap_or_default();
+    let result = serde_json::to_value(result)
+        .map_err(|error| format!("serialize merge2 result: {error}"))?;
+    Ok((status, output, result))
 }
 
 fn execute_rbs(request: Request) -> Result<(i32, String, serde_json::Value), String> {
@@ -405,6 +430,10 @@ pub fn parse_dialect(value: &str) -> Result<JsonDialect, String> {
 fn parse_benchmark_dialect(value: &str) -> Result<BenchmarkDialect, String> {
     if value.trim().eq_ignore_ascii_case("toml") {
         Ok(BenchmarkDialect::Toml(TomlDialect::Toml))
+    } else if value.trim().eq_ignore_ascii_case("markdown")
+        || value.trim().eq_ignore_ascii_case("md")
+    {
+        Ok(BenchmarkDialect::Markdown(MarkdownDialect::Markdown))
     } else if value.trim().eq_ignore_ascii_case("rbs") {
         Ok(BenchmarkDialect::Rbs(RbsDialect::Rbs))
     } else if value.trim().eq_ignore_ascii_case("ruby") || value.trim().eq_ignore_ascii_case("rb") {
@@ -545,6 +574,37 @@ mod tests {
         assert_eq!(merge3["status"], 2);
         assert!(
             merge3["stderr"].as_str().unwrap().contains("unsupported YAML benchmark operation")
+        );
+    }
+
+    #[test]
+    fn serves_markdown_merge2_without_claiming_markdown_merge3() {
+        let incoming =
+            "# Title\n\ntemplate body\n\n# Added\n\nnew section\n\n# Last\n\ntemplate ending\n";
+        let current = "# Title\r\n\r\ncurrent body\r\n\r\n# Last\r\n\r\ncurrent ending";
+        let expected = "# Title\r\n\r\ncurrent body\r\n\r\n# Added\n\nnew section\n\n# Last\r\n\r\ncurrent ending";
+        let merge2 = execute_line(&request_for(
+            "merge2",
+            "markdown",
+            "markdown",
+            &[("incoming", incoming), ("current", current)],
+        ));
+        let merge3 = execute_line(&request_for(
+            "merge3",
+            "markdown",
+            "markdown",
+            &[("base", current), ("ours", current), ("theirs", incoming)],
+        ));
+
+        assert_eq!(merge2["status"], 0);
+        assert_eq!(
+            String::from_utf8(STANDARD.decode(merge2["output_base64"].as_str().unwrap()).unwrap())
+                .unwrap(),
+            expected
+        );
+        assert_eq!(merge3["status"], 2);
+        assert!(
+            merge3["stderr"].as_str().unwrap().contains("unsupported Markdown benchmark operation")
         );
     }
 

@@ -14,6 +14,7 @@ ast-merge-git = { version = "0.2.0", path = "../ast-merge-git" }
 base64 = "0.22"
 go-merge = { version = "0.2.0", path = "../go-merge" }
 json-merge = { version = "0.2.0", path = "../json-merge" }
+markdown-merge = { version = "0.2.0", path = "../markdown-merge" }
 plain-merge = { version = "0.2.0", path = "../plain-merge" }
 rbs-merge = { version = "0.2.0", path = "../rbs-merge" }
 ruby-merge = { version = "0.2.0", path = "../ruby-merge" }
