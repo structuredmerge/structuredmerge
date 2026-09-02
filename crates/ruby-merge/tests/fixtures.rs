@@ -612,3 +612,23 @@ fn conforms_to_ruby_fixtures() {
             .unwrap()
     );
 }
+
+#[test]
+fn projects_ruby_comments_and_blank_lines_through_shared_ownership() {
+    let result = parse_ruby(
+        "# frozen_string_literal: true\n\n# Loads support.\nrequire \"support\"\n\n# Public API.\nclass Api\nend\n",
+        RubyDialect::Ruby,
+    );
+    let analysis = result.analysis.expect("analysis should exist");
+
+    assert_eq!(analysis.comment_regions.len(), 3);
+    let mut contents = analysis
+        .comment_regions
+        .iter()
+        .map(|region| region.normalized_content())
+        .collect::<Vec<_>>();
+    contents.sort();
+    assert_eq!(contents, ["Loads support.", "Public API.", "frozen_string_literal: true"]);
+    assert_eq!(analysis.layout_gaps.len(), 1);
+    assert_eq!(analysis.comment_attachments.len(), 2);
+}

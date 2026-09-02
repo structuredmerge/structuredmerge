@@ -1,16 +1,17 @@
 use std::collections::{HashMap, HashSet};
 
 use ast_merge::{
-    AppliedDelegatedChildOutput, ConformanceFamilyPlanContext, ConformanceFeatureProfileView,
-    ConformanceManifestReviewState, ConformanceManifestReviewStateEnvelope,
-    DelegatedChildGroupReviewState, DelegatedChildOperation, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, MergeResult, ParseResult,
-    PolicyReference, PolicySurface, ReviewReplayBundle, ReviewReplayBundleEnvelope,
-    SurfaceOwnerKind, SurfaceOwnerRef, SurfaceSpan, execute_reviewed_nested_merge,
+    AppliedDelegatedChildOutput, CommentAttachment, CommentRegion, ConformanceFamilyPlanContext,
+    ConformanceFeatureProfileView, ConformanceManifestReviewState,
+    ConformanceManifestReviewStateEnvelope, DelegatedChildGroupReviewState,
+    DelegatedChildOperation, Diagnostic, DiagnosticCategory, DiagnosticSeverity, DiscoveredSurface,
+    FamilyFeatureProfile, LayoutGap, MergeResult, ParseResult, PolicyReference, PolicySurface,
+    ReviewReplayBundle, ReviewReplayBundleEnvelope, SurfaceOwnerKind, SurfaceOwnerRef, SurfaceSpan,
+    augment_normalized_tree_comments, execute_reviewed_nested_merge,
     import_conformance_manifest_review_state_envelope, import_review_replay_bundle_envelope,
     match_owner_paths,
 };
-use tree_haver::{ParserRequest, parse_with_language_pack};
+use tree_haver::{ParserRequest, parse_normalized_with_language_pack};
 
 pub const PACKAGE_NAME: &str = "ruby-merge";
 
@@ -51,6 +52,9 @@ pub struct RubyAnalysis {
     pub source: String,
     pub owners: Vec<RubyOwner>,
     pub discovered_surfaces: Vec<DiscoveredSurface>,
+    pub comment_regions: Vec<CommentRegion>,
+    pub layout_gaps: Vec<LayoutGap>,
+    pub comment_attachments: Vec<CommentAttachment>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -371,6 +375,9 @@ fn analyze_ruby_document(source: &str) -> RubyAnalysis {
         source: normalized,
         owners,
         discovered_surfaces: surfaces,
+        comment_regions: vec![],
+        layout_gaps: vec![],
+        comment_attachments: vec![],
     }
 }
 
@@ -419,22 +426,49 @@ pub fn ruby_plan_context() -> ConformanceFamilyPlanContext {
 }
 
 pub fn parse_ruby(source: &str, _dialect: RubyDialect) -> ParseResult<RubyAnalysis> {
-    let parsed = parse_with_language_pack(&parse_request(source));
+    let parsed = parse_normalized_with_language_pack(&parse_request(source));
     if !parsed.ok {
         return ParseResult {
             ok: false,
-            diagnostics: parsed.diagnostics.into_iter().map(Into::into).collect(),
+            diagnostics: parsed
+                .diagnostics
+                .iter()
+                .map(|message| Diagnostic {
+                    severity: DiagnosticSeverity::Error,
+                    category: DiagnosticCategory::ParseError,
+                    message: message.clone(),
+                    path: None,
+                    review: None,
+                })
+                .collect(),
             analysis: None,
             policies: vec![],
         };
     }
 
-    ParseResult {
-        ok: true,
-        diagnostics: vec![],
-        analysis: Some(analyze_ruby_document(source)),
-        policies: vec![],
-    }
+    let augmentation = match augment_normalized_tree_comments(
+        source,
+        &parsed.root_id,
+        &parsed.nodes,
+        "hash_comment",
+        normalize_comment_content,
+    ) {
+        Ok(augmentation) => augmentation,
+        Err(error) => {
+            return ParseResult {
+                ok: false,
+                diagnostics: vec![configuration_error(&error)],
+                analysis: None,
+                policies: vec![],
+            };
+        }
+    };
+    let mut analysis = analyze_ruby_document(source);
+    analysis.comment_regions = augmentation.regions;
+    analysis.layout_gaps = augmentation.gaps;
+    analysis.comment_attachments = augmentation.attachments;
+
+    ParseResult { ok: true, diagnostics: vec![], analysis: Some(analysis), policies: vec![] }
 }
 
 pub fn match_ruby_owners(
