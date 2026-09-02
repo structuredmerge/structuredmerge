@@ -10,6 +10,8 @@ pub mod portable_benchmark_contract;
 pub use portable_benchmark_contract::*;
 pub mod matching;
 pub use matching::*;
+pub mod sequence_merge;
+pub use sequence_merge::*;
 pub mod layout;
 pub use layout::*;
 pub mod comment;
