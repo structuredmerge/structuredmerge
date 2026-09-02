@@ -1076,6 +1076,183 @@ pub fn language_pack_adapter_info() -> AdapterInfo {
     }
 }
 
+fn language_pack_backend_capability(request: &ParserRequest) -> BackendCapability {
+    BackendCapability {
+        backend_ref: kreuzberg_language_pack_backend(),
+        language: request.language.clone(),
+        parser_identity: ParserIdentity {
+            name: "tree-sitter-language-pack".to_string(),
+            version: "runtime".to_string(),
+            implementation: "rust".to_string(),
+        },
+        language_version: LanguageVersion {
+            version: request.dialect.clone().unwrap_or_else(|| request.language.clone()),
+            dialect: request.dialect.clone(),
+        },
+        parse_error_behavior: "diagnostic_and_partial_tree".to_string(),
+        source_span_support: "byte_range_and_points".to_string(),
+        source_fragment_support: "exact_source_slice".to_string(),
+        render_strategies: vec!["source_fragment_reuse".to_string()],
+        semantic_role_support: "tree_sitter_syntax_roles".to_string(),
+        normalized_tree_support: true,
+        native_node_access: false,
+        known_node_kinds: vec![],
+        known_fields: vec![],
+        grammar_inventory: "tree-sitter-language-pack".to_string(),
+        diagnostics: vec![],
+    }
+}
+
+fn tree_sitter_node_role(node: &tree_sitter_language_pack::Node) -> NodeRole {
+    if node.is_error() || node.is_missing() {
+        return NodeRole::Error;
+    }
+    let kind = node.kind();
+    if node.is_named() {
+        return if kind == "comment" { NodeRole::Comment } else { NodeRole::Structural };
+    }
+    match kind.as_str() {
+        "," | ";" => NodeRole::Separator,
+        "(" | ")" | "[" | "]" | "{" | "}" => NodeRole::Delimiter,
+        _ => NodeRole::Token,
+    }
+}
+
+fn push_language_pack_node(
+    node: tree_sitter_language_pack::Node,
+    source: &str,
+    language: &str,
+    parent_id: Option<String>,
+    field_name: Option<String>,
+    nodes: &mut Vec<NormalizedTreeNode>,
+) -> String {
+    let id = format!("tslp:{language}:{}", nodes.len());
+    let start = node.start_position();
+    let end = node.end_position();
+    let source_fragment = source.get(node.start_byte()..node.end_byte()).unwrap_or_default();
+    let kind = node.kind();
+    let node_index = nodes.len();
+    nodes.push(NormalizedTreeNode {
+        id: id.clone(),
+        kind: kind.clone(),
+        role: tree_sitter_node_role(&node),
+        parent_id,
+        child_ids: vec![],
+        span: SourceSpan {
+            range: ByteRange { start_byte: node.start_byte(), end_byte: node.end_byte() },
+            start_point: SourcePoint { row: start.row, column: start.column },
+            end_point: SourcePoint { row: end.row, column: end.column },
+        },
+        field_name,
+        named: node.is_named(),
+        anonymous: !node.is_named(),
+        has_source_text: true,
+        source_fragment: source_fragment.to_string(),
+        backend_kind: Some(kind),
+        semantic_roles: vec![],
+        backend_roles: vec!["tree-sitter".to_string()],
+        unsupported_features: vec![],
+        metadata: BTreeMap::new(),
+    });
+
+    let mut child_ids = Vec::with_capacity(node.child_count());
+    let mut cursor = node.walk();
+    if cursor.goto_first_child() {
+        loop {
+            child_ids.push(push_language_pack_node(
+                cursor.node(),
+                source,
+                language,
+                Some(id.clone()),
+                cursor.field_name(),
+                nodes,
+            ));
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+    nodes[node_index].child_ids = child_ids;
+    id
+}
+
+pub fn parse_normalized_with_language_pack(request: &ParserRequest) -> NormalizedParseResult {
+    let backend_capability = language_pack_backend_capability(request);
+    let backend_ref = backend_capability.backend_ref.clone();
+    let failure = |message: String| NormalizedParseResult {
+        ok: false,
+        backend_capability: backend_capability.clone(),
+        root_id: String::new(),
+        nodes: vec![],
+        parse_error_tolerance: ParseErrorTolerance {
+            backend_ref: backend_ref.clone(),
+            language: request.language.clone(),
+            behavior: "fail_closed".to_string(),
+            tolerates_errors: false,
+            error_nodes: vec![],
+            diagnostics: vec![message.clone()],
+        },
+        source_fragments_available: false,
+        diagnostics: vec![message],
+        metadata: BTreeMap::new(),
+    };
+
+    if let Err(error) = ensure_language_pack_language(&request.language) {
+        return failure(error);
+    }
+    let tree = match get_parser(&request.language).and_then(|mut parser| {
+        parser.parse(&request.source).ok_or_else(|| {
+            tree_sitter_language_pack::Error::ParserSetup("parser returned no tree".to_string())
+        })
+    }) {
+        Ok(tree) => tree,
+        Err(error) => return failure(error.to_string()),
+    };
+
+    let mut nodes = Vec::new();
+    let root_id = push_language_pack_node(
+        tree.root_node(),
+        &request.source,
+        &request.language,
+        None,
+        None,
+        &mut nodes,
+    );
+    let error_nodes = nodes
+        .iter()
+        .filter(|node| node.role == NodeRole::Error)
+        .map(|node| ParseErrorNode {
+            kind: node.kind.clone(),
+            span: node.span.clone(),
+            message: format!("tree-sitter reported a {} node", node.kind),
+        })
+        .collect::<Vec<_>>();
+    let has_error = tree.root_node().has_error();
+    let diagnostics = if has_error {
+        vec![format!("tree-sitter-language-pack reported syntax errors for {}.", request.language)]
+    } else {
+        vec![]
+    };
+
+    NormalizedParseResult {
+        ok: !has_error,
+        backend_capability,
+        root_id,
+        nodes,
+        parse_error_tolerance: ParseErrorTolerance {
+            backend_ref,
+            language: request.language.clone(),
+            behavior: "diagnostic_and_partial_tree".to_string(),
+            tolerates_errors: false,
+            error_nodes,
+            diagnostics: diagnostics.clone(),
+        },
+        source_fragments_available: true,
+        diagnostics,
+        metadata: BTreeMap::new(),
+    }
+}
+
 fn ensure_language_pack_language(language: &str) -> Result<(), String> {
     static INITIALIZED_LANGUAGES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
     let initialized_languages = INITIALIZED_LANGUAGES.get_or_init(|| Mutex::new(HashSet::new()));
@@ -1412,6 +1589,50 @@ mod tests {
             result.diagnostics[0].message,
             "tree-sitter-language-pack reported syntax errors for json."
         );
+    }
+
+    #[test]
+    fn normalizes_language_pack_nodes_with_exact_source_spans() {
+        let source = "{\r\n  \"name\" : \"structuredmerge\",\r\n  \"enabled\": true\r\n}\r\n";
+        let result = parse_normalized_with_language_pack(&ParserRequest {
+            source: source.to_string(),
+            language: "json".to_string(),
+            dialect: Some("json".to_string()),
+        });
+
+        assert!(result.ok);
+        assert!(result.source_fragments_available);
+        assert_eq!(result.root_id, "tslp:json:0");
+        assert_eq!(result.nodes[0].source_fragment, source);
+        let pair = result
+            .nodes
+            .iter()
+            .find(|node| node.kind == "pair" && node.source_fragment.contains("name"))
+            .expect("name pair should be normalized");
+        assert_eq!(pair.source_fragment, "\"name\" : \"structuredmerge\"");
+        assert!(result.nodes.iter().any(|node| {
+            node.field_name.as_deref() == Some("key") && node.source_fragment == "\"name\""
+        }));
+        assert!(
+            result.nodes.iter().any(|node| node.kind == "{" && node.role == NodeRole::Delimiter)
+        );
+        assert!(
+            result.nodes.iter().any(|node| node.kind == "," && node.role == NodeRole::Separator)
+        );
+    }
+
+    #[test]
+    fn retains_partial_normalized_tree_for_language_pack_parse_errors() {
+        let result = parse_normalized_with_language_pack(&ParserRequest {
+            source: "{\"trailing\":true,}".to_string(),
+            language: "json".to_string(),
+            dialect: Some("json".to_string()),
+        });
+
+        assert!(!result.ok);
+        assert!(!result.nodes.is_empty());
+        assert!(!result.parse_error_tolerance.error_nodes.is_empty());
+        assert_eq!(result.diagnostics.len(), 1);
     }
 
     #[test]
