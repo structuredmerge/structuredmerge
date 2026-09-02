@@ -21,3 +21,6 @@
   declaration kernel for fail-closed three-way merges.
 - Add a shared normalized-tree projection for strict, uniquely named top-level
   owners so language providers can reuse one source-range and identity contract.
+- Add an experimental generic TreeHaver/TSLP provider for languages without a
+  dedicated substrate, limited to exact-layout three-way merges of uniquely
+  named top-level owners and explicit fail-closed behavior everywhere else.
