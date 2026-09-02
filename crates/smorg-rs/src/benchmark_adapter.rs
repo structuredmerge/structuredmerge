@@ -46,6 +46,7 @@ enum BenchmarkDialect {
     Go(GoDialect),
     Json(JsonDialect),
     Markdown(MarkdownDialect),
+    Python,
     Rbs(RbsDialect),
     Ruby(RubyDialect),
     Rust(RustDialect),
@@ -90,6 +91,9 @@ pub fn run_merge2_files(args: &[String], output: &mut dyn Write, error: &mut dyn
             }
             BenchmarkDialect::Markdown(dialect) => {
                 merge_markdown_source_preserving(&current, &incoming, dialect)
+            }
+            BenchmarkDialect::Python => {
+                return Err("generic Python merge2 is not supported".to_string());
             }
             BenchmarkDialect::Rbs(dialect) => merge_rbs(&incoming, &current, dialect),
             BenchmarkDialect::Ruby(dialect) => merge_ruby(&incoming, &current, dialect),
@@ -176,6 +180,9 @@ pub fn run_merge3_files(args: &[String], error: &mut dyn Write) -> i32 {
             BenchmarkDialect::Bash(dialect) => merge_bash_three_way(&base, &ours, &theirs, dialect),
             BenchmarkDialect::Go(dialect) => merge_go_three_way(&base, &ours, &theirs, dialect),
             BenchmarkDialect::Json(dialect) => merge_json_three_way(&base, &ours, &theirs, dialect),
+            BenchmarkDialect::Python => {
+                merge_generic_tslp_three_way(&base, &ours, &theirs, "python", Some("python"))
+            }
             BenchmarkDialect::Rust(dialect) => merge_rust_three_way(&base, &ours, &theirs, dialect),
             BenchmarkDialect::TypeScript(dialect) => {
                 merge_typescript_three_way(&base, &ours, &theirs, dialect)
@@ -232,6 +239,7 @@ fn benchmark_family(dialect: BenchmarkDialect) -> &'static str {
         BenchmarkDialect::Go(_) => "go",
         BenchmarkDialect::Json(_) => "json",
         BenchmarkDialect::Markdown(_) => "markdown",
+        BenchmarkDialect::Python => "python",
         BenchmarkDialect::Rbs(_) => "rbs",
         BenchmarkDialect::Ruby(_) => "ruby",
         BenchmarkDialect::Rust(_) => "rust",
@@ -599,6 +607,9 @@ fn parse_benchmark_dialect(value: &str) -> Result<BenchmarkDialect, String> {
         || value.trim().eq_ignore_ascii_case("md")
     {
         Ok(BenchmarkDialect::Markdown(MarkdownDialect::Markdown))
+    } else if value.trim().eq_ignore_ascii_case("python") || value.trim().eq_ignore_ascii_case("py")
+    {
+        Ok(BenchmarkDialect::Python)
     } else if value.trim().eq_ignore_ascii_case("rbs") {
         Ok(BenchmarkDialect::Rbs(RbsDialect::Rbs))
     } else if value.trim().eq_ignore_ascii_case("ruby") || value.trim().eq_ignore_ascii_case("rb") {
@@ -840,6 +851,36 @@ mod tests {
         assert_eq!(merge2["status"], 2);
         assert!(
             merge2["stderr"].as_str().unwrap().contains("unsupported generic benchmark operation")
+        );
+    }
+
+    #[test]
+    fn cold_merge3_wrapper_supports_the_advertised_generic_python_dialect() {
+        let directory = tempfile::tempdir().unwrap();
+        let base = write_fixture(
+            directory.path(),
+            "base.py",
+            "def left():\n    return 1\n\ndef right():\n    return 1\n",
+        );
+        let ours = write_fixture(
+            directory.path(),
+            "ours.py",
+            "def left():\n    return 2\n\ndef right():\n    return 1\n",
+        );
+        let theirs = write_fixture(
+            directory.path(),
+            "theirs.py",
+            "def left():\n    return 1\n\ndef right():\n    return 2\n",
+        );
+        let mut error = Vec::new();
+
+        let status =
+            run_merge3_files(&[base, ours.clone(), theirs, "fixture.py".to_string()], &mut error);
+
+        assert_eq!(status, 0, "stderr: {}", String::from_utf8_lossy(&error));
+        assert_eq!(
+            fs::read_to_string(ours).unwrap(),
+            "def left():\n    return 2\n\ndef right():\n    return 2\n"
         );
     }
 
