@@ -20,6 +20,8 @@ pub mod ruleset_runtime;
 pub use ruleset_runtime::*;
 pub mod source_render;
 pub use source_render::*;
+pub mod declaration_merge;
+pub use declaration_merge::*;
 
 pub const PACKAGE_NAME: &str = "ast-merge";
 pub const MERGE_ENGINE_ENVIRONMENT_VARIABLE: &str = "SMORG_MERGE_ENGINE";
