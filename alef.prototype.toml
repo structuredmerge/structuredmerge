@@ -50,6 +50,7 @@ functions = [
   "unregister_workflow_host",
   "clear_workflow_hosts",
   "execute_identity",
+  "execute_async_identity",
   "start_identity_worker",
   "prepare_identity_worker",
   "dispatch_identity_worker",

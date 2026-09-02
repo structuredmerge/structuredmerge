@@ -36,6 +36,10 @@ module HostPrototypeFixtures
       execute_batch(request)
     end
 
+    def execute_async_batch(request)
+      execute_batch(request)
+    end
+
     def execute_typed_batch(request, source)
       @typed_requests << [request, source]
       source
@@ -146,6 +150,10 @@ module HostPrototypeFixtures
     end
 
     def execute_cancellable_batch(_task_id, request)
+      execute_batch(request)
+    end
+
+    def execute_async_batch(request)
       execute_batch(request)
     end
 
@@ -519,6 +527,19 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(provider.requests.length).to eq(100)
   end
 
+  it "re-enters a Ruby host from an async Rust function without retaining the GVL" do
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.async-entry")
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.async-entry")
+    caller_thread_id = Thread.current.object_id
+    payload = [0, 255, 13, 10]
+
+    result = described_class.execute_async_identity("ruby.async-entry", payload)
+
+    expect(result).to eq(payload)
+    expect(provider.callback_thread_ids.length).to eq(1)
+    expect(provider.callback_thread_ids.first).not_to eq(caller_thread_id)
+  end
+
   it "dispatches concurrent native Rust workers onto a Ruby runtime thread" do
     provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.native-workers")
     StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.native-workers")
@@ -647,6 +668,9 @@ RSpec.describe StructuredmergeHostPrototype do
       request
     end
     def missing.execute_cancellable_batch(_task_id, request)
+      execute_batch(request)
+    end
+    def missing.execute_async_batch(request)
       execute_batch(request)
     end
     def missing.execute_typed_batch(_request, source)

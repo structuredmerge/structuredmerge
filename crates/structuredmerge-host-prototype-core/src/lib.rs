@@ -103,6 +103,7 @@ pub trait Plugin: Send + Sync {
     fn shutdown(&self) -> Result<(), HostPrototypeError>;
 }
 
+#[async_trait::async_trait]
 pub trait WorkflowHost: Plugin {
     fn descriptor(&self) -> Result<String, HostPrototypeError>;
 
@@ -113,6 +114,8 @@ pub trait WorkflowHost: Plugin {
         task_id: u64,
         request: Vec<u8>,
     ) -> Result<Vec<u8>, HostPrototypeError>;
+
+    async fn execute_async_batch(&self, request: Vec<u8>) -> Result<Vec<u8>, HostPrototypeError>;
 
     fn execute_typed_batch(
         &self,
@@ -472,6 +475,14 @@ pub fn execute_identity(
     provider.provider.execute_batch(request)
 }
 
+pub async fn execute_async_identity(
+    provider_name: String,
+    request: Vec<u8>,
+) -> Result<Vec<u8>, HostPrototypeError> {
+    let provider = registry::get_workflow_host_registry().read().get(&provider_name)?;
+    provider.provider.execute_async_batch(request).await
+}
+
 pub fn start_identity_worker(
     provider_name: String,
     request: Vec<u8>,
@@ -812,6 +823,7 @@ mod tests {
         }
     }
 
+    #[async_trait::async_trait]
     impl WorkflowHost for IdentityHost {
         fn descriptor(&self) -> Result<String, HostPrototypeError> {
             Ok(format!(r#"{{"id":"{}"}}"#, self.name))
@@ -824,6 +836,13 @@ mod tests {
         fn execute_cancellable_batch(
             &self,
             _task_id: u64,
+            request: Vec<u8>,
+        ) -> Result<Vec<u8>, HostPrototypeError> {
+            Ok(request)
+        }
+
+        async fn execute_async_batch(
+            &self,
             request: Vec<u8>,
         ) -> Result<Vec<u8>, HostPrototypeError> {
             Ok(request)
