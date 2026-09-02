@@ -1,0 +1,16 @@
+[package]
+name = "bash-merge"
+version = "0.2.0"
+repository = "https://github.com/structuredmerge/structuredmerge-rust"
+homepage = "https://structuredmerge.org"
+authors = ["Peter H. Boling"]
+edition = "2024"
+description = "Bash syntax merge helpers for Structured Merge"
+license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
+
+[dependencies]
+ast-merge = { version = "0.2.0", path = "../ast-merge" }
+tree-haver = { version = "0.2.0", path = "../tree-haver" }
+
+[lib]
+path = "src/lib.rs"

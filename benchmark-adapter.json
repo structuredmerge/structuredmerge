@@ -12,6 +12,11 @@
   "source_root": ".",
   "provider": {
     "merge_providers": {
+      "bash": {
+        "provider_id": "rust.bash",
+        "package": "bash-merge",
+        "profile": "source_preserving"
+      },
       "go": {
         "provider_id": "rust.go",
         "package": "go-merge",
@@ -67,9 +72,14 @@
   },
   "supports": {
     "operations": ["merge2", "merge3", "metamorphic"],
-    "families": ["go", "json", "markdown", "rbs", "ruby", "rust", "toml", "typescript", "yaml"],
-    "dialects": ["go", "json", "jsonc", "json5", "markdown", "rbs", "ruby", "rust", "toml", "typescript", "tsx", "yaml"],
+    "families": ["bash", "go", "json", "markdown", "rbs", "ruby", "rust", "toml", "typescript", "yaml"],
+    "dialects": ["bash", "go", "json", "jsonc", "json5", "markdown", "rbs", "ruby", "rust", "toml", "typescript", "tsx", "yaml"],
     "combinations": [
+      {
+        "family": "bash",
+        "operations": ["merge3"],
+        "dialects": ["bash"]
+      },
       {
         "family": "go",
         "operations": ["merge3"],

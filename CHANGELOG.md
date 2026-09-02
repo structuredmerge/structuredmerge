@@ -16,3 +16,6 @@
 - Route Rust analysis through TreeHaver's normalized TSLP parser and add a
   fail-closed, source-preserving top-level function three-way merge provider;
   keep the spanless native `syn` backend explicitly unsupported for merging.
+- Add a thin Bash provider that projects top-level function ownership from
+  TreeHaver's normalized TSLP AST and reuses the shared source-preserving
+  declaration kernel for fail-closed three-way merges.
