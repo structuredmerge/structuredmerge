@@ -15,6 +15,10 @@ RSpec.describe StructuredmergeHostPrototype do
       '{"id":"ruby.identity"}'
     end
 
+    def version
+      "test"
+    end
+
     def execute_batch(request)
       @requests << request
       request
@@ -25,12 +29,41 @@ RSpec.describe StructuredmergeHostPrototype do
     end
   end
 
+  class IdentityParserHost < IdentityWorkflowHost
+    def probe_batch(request)
+      requests << request
+      request
+    end
+
+    def parse_batch(request)
+      requests << request
+      request
+    end
+  end
+
   before do
     StructuredmergeHostPrototypeCore.clear_workflow_hosts
+    StructuredmergeHostPrototypeCore.clear_parser_hosts
   end
 
   after do
     StructuredmergeHostPrototypeCore.clear_workflow_hosts
+    StructuredmergeHostPrototypeCore.clear_parser_hosts
+  end
+
+
+  it "round trips arbitrary bytes through a Ruby parser host" do
+    provider = IdentityParserHost.new
+    payload = "\x00\xff\r\nA\x00".b
+    StructuredmergeHostPrototypeCore.register_parser_host(provider, "ruby.parser.identity")
+
+    probe = described_class.probe_with_parser("ruby.parser.identity", payload.bytes)
+    parse = described_class.parse_with_parser("ruby.parser.identity", payload.bytes)
+
+    expect(probe.pack("C*")).to eq(payload)
+    expect(parse.pack("C*")).to eq(payload)
+    expect(provider.requests).to eq([payload, payload])
+    expect(described_class.registered_parser_hosts).to eq(["ruby.parser.identity"])
   end
 
   it "loads the native extension and exposes a version" do

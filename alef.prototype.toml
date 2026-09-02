@@ -31,11 +31,24 @@ register_fn = "register_workflow_host"
 unregister_fn = "unregister_workflow_host"
 clear_fn = "clear_workflow_hosts"
 
+[[crates.trait_bridges]]
+trait_name = "ParserHost"
+super_trait = "Plugin"
+registry_getter = "structuredmerge_host_prototype_core::registry::get_parser_host_registry"
+register_fn = "register_parser_host"
+unregister_fn = "unregister_parser_host"
+clear_fn = "clear_parser_hosts"
+
 [crates.include]
-types = ["HostPrototypeError", "Plugin", "WorkflowHost"]
+types = ["HostPrototypeError", "Plugin", "WorkflowHost", "ParserHost"]
 functions = [
   "unregister_workflow_host",
   "clear_workflow_hosts",
   "execute_identity",
   "registered_workflow_hosts",
+  "unregister_parser_host",
+  "clear_parser_hosts",
+  "probe_with_parser",
+  "parse_with_parser",
+  "registered_parser_hosts",
 ]
