@@ -1,6 +1,7 @@
 use ast_merge::{
-    Diagnostic, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile, MergeResult,
-    ParseResult, PolicyReference, PolicySurface, match_owner_paths,
+    CommentAttachment, CommentRegion, Diagnostic, DiagnosticCategory, DiagnosticSeverity,
+    FamilyFeatureProfile, LayoutGap, MergeResult, ParseResult, PolicyReference, PolicySurface,
+    match_owner_paths,
 };
 use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest};
 
@@ -58,6 +59,9 @@ pub struct JsonAnalysis {
     pub normalized_source: String,
     pub root_kind: JsonRootKind,
     pub owners: Vec<JsonOwner>,
+    pub comment_regions: Vec<CommentRegion>,
+    pub layout_gaps: Vec<LayoutGap>,
+    pub comment_attachments: Vec<CommentAttachment>,
 }
 
 impl AnalysisHandle for JsonAnalysis {
@@ -230,8 +234,25 @@ mod tests {
         let result = parse_json(source, JsonDialect::Jsonc);
 
         assert!(result.ok);
-        assert!(result.analysis.is_some());
-        assert!(result.analysis.unwrap().allows_comments);
+        let analysis = result.analysis.unwrap();
+        assert!(analysis.allows_comments);
+        assert_eq!(analysis.comment_regions.len(), 2);
+        assert_eq!(analysis.comment_attachments.len(), 2);
+        assert_eq!(analysis.comment_regions[0].normalized_content(), "package status");
+        assert_eq!(analysis.comment_regions[1].normalized_content(), "package name");
+    }
+
+    #[test]
+    fn exposes_shared_layout_gap_ownership_without_changing_source() {
+        let source = "{\n  \"first\": true,\n\n  \"second\": false\n}\n";
+        let analysis = parse_json(source, JsonDialect::Json).analysis.unwrap();
+
+        assert_eq!(analysis.normalized_source, source);
+        assert_eq!(analysis.layout_gaps.len(), 1);
+        assert_eq!(analysis.layout_gaps[0].kind, "interstitial");
+        assert_eq!(analysis.layout_gaps[0].lines, [""]);
+        let controller = analysis.layout_gaps[0].controller_owner_id().unwrap();
+        assert_eq!(controller, analysis.comment_attachments[1].owner_id);
     }
 
     #[test]

@@ -1,10 +1,11 @@
 use std::collections::{BTreeMap, HashMap};
 
 use ast_merge::{
-    ConflictAlternative, ConflictAlternativeState, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, MergeConflict, MergeResult, NodeIdentity, NodeSignature, OwnedSourceRegion,
-    SequenceConflictCategory, SequenceMergeAnalysis, SequenceNode, SourceEdit, SourceRevision,
-    ThreeWayMergeOutcome, ThreeWayMergeResult, analyze_three_way_sequence, apply_source_edits,
+    CommentAugmentation, ConflictAlternative, ConflictAlternativeState, Diagnostic,
+    DiagnosticCategory, DiagnosticSeverity, LayoutOwner, MergeConflict, MergeResult, NodeIdentity,
+    NodeSignature, OwnedSourceRegion, SequenceConflictCategory, SequenceMergeAnalysis,
+    SequenceNode, SourceEdit, SourceRevision, ThreeWayMergeOutcome, ThreeWayMergeResult,
+    TrackedComment, analyze_three_way_sequence, apply_source_edits, augment_comments,
 };
 use tree_haver::{
     ByteRange, NormalizedTreeNode, ParserRequest, parse_normalized_with_language_pack,
@@ -44,6 +45,7 @@ pub(crate) struct JsonSyntaxValue {
 pub(crate) struct JsonSyntaxDocument {
     pub source: String,
     pub root: JsonSyntaxValue,
+    pub comment_augmentation: CommentAugmentation,
 }
 
 pub(crate) fn parser_language(dialect: JsonDialect) -> &'static str {
@@ -93,7 +95,8 @@ pub(crate) fn parse_document(
         "TreeHaver normalized parse did not contain a JSON root value.".to_string()
     })?;
     let root = build_value(value_node, &nodes)?;
-    Ok(JsonSyntaxDocument { source: source.to_string(), root })
+    let comment_augmentation = json_comment_augmentation(source, &root, &parsed.nodes)?;
+    Ok(JsonSyntaxDocument { source: source.to_string(), root, comment_augmentation })
 }
 
 fn validate_jsonc_nodes(nodes: &[NormalizedTreeNode]) -> Result<(), String> {
@@ -138,7 +141,84 @@ pub(crate) fn analyze_document(source: &str, dialect: JsonDialect) -> Result<Jso
         normalized_source: document.source,
         root_kind,
         owners,
+        comment_regions: document.comment_augmentation.regions,
+        layout_gaps: document.comment_augmentation.gaps,
+        comment_attachments: document.comment_augmentation.attachments,
     })
+}
+
+fn json_comment_augmentation(
+    source: &str,
+    root: &JsonSyntaxValue,
+    nodes: &[NormalizedTreeNode],
+) -> Result<CommentAugmentation, String> {
+    let mut lines = source.split('\n').map(str::to_string).collect::<Vec<_>>();
+    if source.ends_with('\n') && lines.last().is_some_and(String::is_empty) {
+        lines.pop();
+    }
+    let owners = if root.members.is_empty() {
+        root.elements
+            .iter()
+            .map(|element| layout_owner(&element.node_id, &element.owned_region))
+            .collect::<Vec<_>>()
+    } else {
+        root.members
+            .iter()
+            .map(|member| layout_owner(&member.value.node_id, &member.owned_region))
+            .collect::<Vec<_>>()
+    };
+    let owners = if owners.windows(2).any(|pair| pair[1].start_line <= pair[0].end_line) {
+        vec![layout_owner(&root.node_id, &root.owned_region)]
+    } else {
+        owners
+    };
+    let comments = nodes
+        .iter()
+        .filter(|node| node.kind == "comment")
+        .flat_map(|node| tracked_json_comments(source, node))
+        .collect::<Vec<_>>();
+    augment_comments(&lines, &owners, &comments, "slash_comment")
+}
+
+fn layout_owner(node_id: &str, region: &OwnedSourceRegion) -> LayoutOwner {
+    LayoutOwner {
+        owner_id: node_id.to_string(),
+        start_line: region.start_line,
+        end_line: region.end_line,
+    }
+}
+
+fn tracked_json_comments(source: &str, node: &NormalizedTreeNode) -> Vec<TrackedComment> {
+    let source_lines = source.split('\n').collect::<Vec<_>>();
+    let start_line = node.span.start_point.row + 1;
+    let full_line = source_lines
+        .get(start_line - 1)
+        .and_then(|line| line.get(..node.span.start_point.column))
+        .is_none_or(|prefix| prefix.trim().is_empty());
+    node.source_fragment
+        .split('\n')
+        .enumerate()
+        .map(|(offset, text)| {
+            let text = text.trim_end_matches('\r').to_string();
+            TrackedComment {
+                line: start_line + offset,
+                normalized_content: normalize_json_comment(&text),
+                text,
+                full_line,
+                indent: Some(if offset == 0 { node.span.start_point.column } else { 0 }),
+            }
+        })
+        .collect()
+}
+
+fn normalize_json_comment(text: &str) -> String {
+    text.trim()
+        .strip_prefix("//")
+        .or_else(|| text.trim().strip_prefix("/*"))
+        .unwrap_or_else(|| text.trim().trim_start_matches('*'))
+        .trim_end_matches("*/")
+        .trim()
+        .to_string()
 }
 
 pub fn json_semantically_equivalent(
@@ -1199,6 +1279,21 @@ mod tests {
 
         assert!(result.ok);
         assert_eq!(result.output.as_deref(), Some(current));
+    }
+
+    #[test]
+    fn preserves_owned_comments_and_blank_lines_while_adding_a_member() {
+        let incoming = "{\n  \"managed\": 1,\n  \"added\": true\n}\n";
+        let current = "{\n  // retained owner note\n  \"managed\": 1,\n\n  \"local\": true\n}\n";
+        let result = merge_json_source_preserving(incoming, current, JsonDialect::Jsonc);
+
+        assert!(result.ok);
+        assert_eq!(
+            result.output.as_deref(),
+            Some(
+                "{\n  // retained owner note\n  \"managed\": 1,\n\n  \"local\": true,\n  \"added\": true\n}\n"
+            )
+        );
     }
 
     #[test]
