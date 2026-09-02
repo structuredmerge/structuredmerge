@@ -1,4 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+
+mod source_preserving;
 
 use ast_merge::{
     AppliedDelegatedChildOutput, CommentAttachment, CommentRegion, ConformanceFamilyPlanContext,
@@ -89,17 +91,6 @@ pub struct RubyBackendFeatureProfile {
 struct CommentEntry {
     line: usize,
     raw: String,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct RubyRequireEntry {
-    text: String,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct RubyDeclarationEntry {
-    path: String,
-    text: String,
 }
 
 fn destination_wins_array_policy() -> PolicyReference {
@@ -503,93 +494,6 @@ pub fn match_ruby_owners(
     }
 }
 
-fn collect_ruby_require_entries(source: &str) -> Vec<RubyRequireEntry> {
-    let require_regex = regex_lite::Regex::new(r#"^\s*require(?:_relative)?\s+["']([^"']+)["']"#)
-        .expect("require regex");
-    normalize_source(source)
-        .split('\n')
-        .filter(|line| require_regex.is_match(line))
-        .map(|line| RubyRequireEntry { text: line.trim_end().to_string() })
-        .collect()
-}
-
-fn collect_ruby_declaration_entries(source: &str) -> Vec<RubyDeclarationEntry> {
-    let normalized = normalize_source(source);
-    let lines = normalized.split('\n').collect::<Vec<_>>();
-    let require_regex = regex_lite::Regex::new(r#"^\s*require(?:_relative)?\s+["']([^"']+)["']"#)
-        .expect("require regex");
-    let class_regex =
-        regex_lite::Regex::new(r"^\s*class\s+([A-Z]\w*(?:::\w+)*)").expect("class regex");
-    let module_regex =
-        regex_lite::Regex::new(r"^\s*module\s+([A-Z]\w*(?:::\w+)*)").expect("module regex");
-    let def_regex =
-        regex_lite::Regex::new(r"^\s*def\s+(?:self\.)?([a-zA-Z_]\w*[!?=]?)").expect("def regex");
-    let mut entries = Vec::new();
-    let mut pending_comments = Vec::new();
-    let mut index = 0usize;
-
-    while index < lines.len() {
-        let line = lines[index];
-        let stripped = line.trim();
-        if comment_line(line) {
-            pending_comments.push(index);
-            index += 1;
-            continue;
-        }
-        if stripped.is_empty() {
-            pending_comments.clear();
-            index += 1;
-            continue;
-        }
-        if require_regex.is_match(line) {
-            pending_comments.clear();
-            index += 1;
-            continue;
-        }
-
-        let declaration = class_regex
-            .captures(line)
-            .or_else(|| module_regex.captures(line))
-            .or_else(|| def_regex.captures(line));
-        let Some(declaration) = declaration else {
-            pending_comments.clear();
-            index += 1;
-            continue;
-        };
-
-        let name = declaration.get(1).expect("name capture").as_str().to_string();
-        let start = pending_comments.first().copied().unwrap_or(index);
-        let mut depth = 1usize;
-        let mut cursor = index + 1;
-        while cursor < lines.len() {
-            let candidate = lines[cursor].trim();
-            if class_regex.is_match(candidate)
-                || module_regex.is_match(candidate)
-                || def_regex.is_match(candidate)
-            {
-                depth += 1;
-            }
-            if candidate == "end" {
-                depth -= 1;
-                if depth == 0 {
-                    cursor += 1;
-                    break;
-                }
-            }
-            cursor += 1;
-        }
-
-        entries.push(RubyDeclarationEntry {
-            path: format!("/declarations/{name}"),
-            text: lines[start..cursor].join("\n").trim().to_string(),
-        });
-        pending_comments.clear();
-        index = cursor;
-    }
-
-    entries
-}
-
 pub fn merge_ruby(
     template_source: &str,
     destination_source: &str,
@@ -620,38 +524,19 @@ pub fn merge_ruby(
         return MergeResult { ok: false, diagnostics, output: None, policies: vec![] };
     }
 
-    let template_analysis = template.analysis.expect("template analysis");
-    let destination_analysis = destination.analysis.expect("destination analysis");
-    let requires = collect_ruby_require_entries(&destination_analysis.source);
-    let destination_declarations = collect_ruby_declaration_entries(&destination_analysis.source);
-    let template_declarations = collect_ruby_declaration_entries(&template_analysis.source);
-    let destination_paths =
-        destination_declarations.iter().map(|entry| entry.path.clone()).collect::<HashSet<_>>();
-    let mut sections = Vec::new();
-    if !requires.is_empty() {
-        sections.push(
-            requires
-                .iter()
-                .map(|entry| entry.text.clone())
-                .collect::<Vec<_>>()
-                .join("\n")
-                .trim()
-                .to_string(),
-        );
-    }
-    sections.extend(destination_declarations.iter().map(|entry| entry.text.clone()));
-    sections.extend(
-        template_declarations
-            .iter()
-            .filter(|entry| !destination_paths.contains(&entry.path))
-            .map(|entry| entry.text.clone()),
-    );
-
-    MergeResult {
-        ok: true,
-        diagnostics: vec![],
-        output: Some(format!("{}\n", sections.join("\n\n").trim())),
-        policies: vec![destination_wins_array_policy()],
+    match source_preserving::merge_ruby_source_preserving(template_source, destination_source) {
+        Ok(output) => MergeResult {
+            ok: true,
+            diagnostics: vec![],
+            output: Some(output),
+            policies: vec![destination_wins_array_policy()],
+        },
+        Err(error) => MergeResult {
+            ok: false,
+            diagnostics: vec![configuration_error(&error)],
+            output: None,
+            policies: vec![],
+        },
     }
 }
 

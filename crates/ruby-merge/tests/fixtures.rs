@@ -38,6 +38,17 @@ fn read_fixture(parts: &[&str]) -> Value {
     serde_json::from_str(&source).expect("fixture should be valid json")
 }
 
+fn assert_merge_fixture(parts: &[&str]) {
+    let fixture = read_fixture(parts);
+    let result = merge_ruby(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        RubyDialect::Ruby,
+    );
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+}
+
 #[test]
 fn conforms_to_ruby_fixtures() {
     let profile_fixture = read_fixture(&[
@@ -611,6 +622,25 @@ fn conforms_to_ruby_fixtures() {
             .as_str()
             .unwrap()
     );
+}
+
+#[test]
+fn merges_nested_ruby_owners_from_normalized_tree_ranges() {
+    assert_merge_fixture(&[
+        "ruby",
+        "slice-941-template-only-class-method-merge",
+        "class-method-merge.json",
+    ]);
+    assert_merge_fixture(&[
+        "ruby",
+        "slice-943-nested-class-method-merge",
+        "nested-class-method-merge.json",
+    ]);
+    assert_merge_fixture(&[
+        "ruby",
+        "slice-944-template-only-nested-declaration-merge",
+        "template-only-nested-class-merge.json",
+    ]);
 }
 
 #[test]
