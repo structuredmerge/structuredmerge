@@ -211,6 +211,7 @@ RSpec.describe StructuredmergeHostPrototype do
   end
 
   before do
+    StructuredmergeHostPrototypeCore.start_host_runtime
     StructuredmergeHostPrototypeCore.clear_workflow_hosts
     StructuredmergeHostPrototypeCore.clear_parser_hosts
   end
@@ -583,6 +584,45 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(described_class.execute_identity("ruby.replacement-failure", [0, 255])).to eq([0, 255])
     expect(old_provider.shutdown_count).to eq(0)
     expect(replacement.shutdown_count).to eq(1)
+  end
+
+  it "gracefully shuts down an idle host runtime" do
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.graceful-shutdown")
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.graceful-shutdown")
+
+    expect(described_class.shutdown_host_runtime(100, false)).to eq([])
+
+    expect(provider.shutdown_count).to eq(1)
+    expect(described_class.registered_workflow_hosts).to be_empty
+    expect do
+      StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.graceful-shutdown")
+    end.to raise_error(RuntimeError, /host runtime is shutting down/)
+    expect(described_class.start_host_runtime).to be_nil
+  end
+
+  it "bounds forced shutdown without finalizing an executing provider" do
+    provider = HostPrototypeFixtures::BlockingWorkflowHost.new("ruby.forced-shutdown")
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.forced-shutdown")
+    task_id = described_class.start_identity_worker("ruby.forced-shutdown", [0, 255])
+    provider.wait_until_entered
+    started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+    expect(described_class.shutdown_host_runtime(5, true)).to eq([task_id])
+
+    expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at).to be < 1
+    expect(provider.shutdown_count).to eq(0)
+    expect(described_class.registered_workflow_hosts).to be_empty
+    expect do
+      StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.forced-shutdown")
+    end.to raise_error(RuntimeError, /host runtime is shutting down/)
+
+    provider.release
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+    sleep(0.001) while provider.shutdown_count.zero? &&
+      Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+    expect(provider.shutdown_count).to eq(1)
+
+    expect(described_class.start_host_runtime).to be_nil
   end
 
   it "dispatches concurrent native Rust workers onto a Ruby runtime thread" do

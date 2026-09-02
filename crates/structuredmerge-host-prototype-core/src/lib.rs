@@ -8,6 +8,7 @@ use std::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc::{self, Receiver, TryRecvError},
     },
+    time::{Duration, Instant},
 };
 
 use parking_lot::{Mutex, RwLock};
@@ -37,7 +38,10 @@ struct PreparedIdentityWorker {
 static IDENTITY_WORKERS: OnceLock<Mutex<BTreeMap<u64, IdentityWorkerTask>>> = OnceLock::new();
 static PREPARED_IDENTITY_WORKERS: OnceLock<Mutex<BTreeMap<u64, PreparedIdentityWorker>>> =
     OnceLock::new();
+static DETACHED_IDENTITY_WORKERS: OnceLock<Mutex<BTreeMap<u64, Arc<AtomicBool>>>> = OnceLock::new();
 static NEXT_IDENTITY_WORKER_ID: AtomicU64 = AtomicU64::new(1);
+static RUNTIME_ACCEPTING_PROVIDERS: AtomicBool = AtomicBool::new(true);
+const MAX_SHUTDOWN_TIMEOUT_MILLIS: u64 = 30_000;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HostPrototypeError {
@@ -305,6 +309,14 @@ fn validate_provider_name(name: &str) -> Result<(), HostPrototypeError> {
     Ok(())
 }
 
+fn ensure_runtime_accepting_providers() -> Result<(), HostPrototypeError> {
+    if RUNTIME_ACCEPTING_PROVIDERS.load(Ordering::Acquire) {
+        Ok(())
+    } else {
+        Err(HostPrototypeError::new("host runtime is shutting down"))
+    }
+}
+
 fn validate_provider_metadata(
     name: &str,
     version: &str,
@@ -455,6 +467,7 @@ pub mod parser_host {
 }
 
 pub fn register_workflow_host(provider: Arc<dyn WorkflowHost>) -> Result<(), HostPrototypeError> {
+    ensure_runtime_accepting_providers()?;
     let name = provider.name().to_owned();
     validate_provider_name(&name)?;
     if registry::get_workflow_host_registry().read().contains(&name) {
@@ -470,7 +483,7 @@ pub fn register_workflow_host(provider: Arc<dyn WorkflowHost>) -> Result<(), Hos
 
     let publication = {
         let mut registry = registry::get_workflow_host_registry().write();
-        registry.insert(Arc::clone(&provider))
+        ensure_runtime_accepting_providers().and_then(|()| registry.insert(Arc::clone(&provider)))
     };
     publication.map_err(|error| publication_failure(provider.as_ref(), error))
 }
@@ -479,6 +492,7 @@ pub fn replace_workflow_host(
     provider: Arc<dyn WorkflowHost>,
     name: String,
 ) -> Result<(), HostPrototypeError> {
+    ensure_runtime_accepting_providers()?;
     validate_provider_name(&name)?;
     if provider.name() != name {
         return Err(HostPrototypeError::new(format!(
@@ -496,7 +510,8 @@ pub fn replace_workflow_host(
 
     let replaced = {
         let mut registry = registry::get_workflow_host_registry().write();
-        registry.replace_if_same(&expected, Arc::clone(&provider))
+        ensure_runtime_accepting_providers()
+            .and_then(|()| registry.replace_if_same(&expected, Arc::clone(&provider)))
     };
     let replaced = match replaced {
         Ok(replaced) => replaced,
@@ -511,6 +526,7 @@ pub fn replace_workflow_host(
 }
 
 pub fn register_parser_host(provider: Arc<dyn ParserHost>) -> Result<(), HostPrototypeError> {
+    ensure_runtime_accepting_providers()?;
     let name = provider.name().to_owned();
     validate_provider_name(&name)?;
     if registry::get_parser_host_registry().read().contains(&name) {
@@ -526,7 +542,7 @@ pub fn register_parser_host(provider: Arc<dyn ParserHost>) -> Result<(), HostPro
 
     let publication = {
         let mut registry = registry::get_parser_host_registry().write();
-        registry.insert(Arc::clone(&provider))
+        ensure_runtime_accepting_providers().and_then(|()| registry.insert(Arc::clone(&provider)))
     };
     publication.map_err(|error| publication_failure(provider.as_ref(), error))
 }
@@ -535,6 +551,7 @@ pub fn replace_parser_host(
     provider: Arc<dyn ParserHost>,
     name: String,
 ) -> Result<(), HostPrototypeError> {
+    ensure_runtime_accepting_providers()?;
     validate_provider_name(&name)?;
     if provider.name() != name {
         return Err(HostPrototypeError::new(format!(
@@ -552,7 +569,8 @@ pub fn replace_parser_host(
 
     let replaced = {
         let mut registry = registry::get_parser_host_registry().write();
-        registry.replace_if_same(&expected, Arc::clone(&provider))
+        ensure_runtime_accepting_providers()
+            .and_then(|()| registry.replace_if_same(&expected, Arc::clone(&provider)))
     };
     let replaced = match replaced {
         Ok(replaced) => replaced,
@@ -669,6 +687,7 @@ pub fn dispatch_identity_worker(task_id: u64) -> Result<(), HostPrototypeError> 
                 worker_cancelled.as_ref(),
             );
             let _ = sender.send(result);
+            DETACHED_IDENTITY_WORKERS.get_or_init(Default::default).lock().remove(&task_id);
         });
     if let Err(error) = spawn_result {
         IDENTITY_WORKERS.get_or_init(Default::default).lock().remove(&task_id);
@@ -698,6 +717,11 @@ pub fn identity_worker_cancelled(task_id: u64) -> Result<bool, HostPrototypeErro
     if let Some(task) = IDENTITY_WORKERS.get_or_init(Default::default).lock().get(&task_id) {
         return Ok(task.cancelled.load(Ordering::Acquire));
     }
+    if let Some(cancelled) =
+        DETACHED_IDENTITY_WORKERS.get_or_init(Default::default).lock().get(&task_id)
+    {
+        return Ok(cancelled.load(Ordering::Acquire));
+    }
     Err(HostPrototypeError::new(format!("identity worker not found: {task_id}")))
 }
 
@@ -721,6 +745,108 @@ pub fn poll_identity_worker(task_id: u64) -> Result<Option<Vec<u8>>, HostPrototy
                 "identity worker disconnected without a result: {task_id}"
             )))
         }
+    }
+}
+
+fn cancel_prepared_identity_workers() {
+    let prepared =
+        std::mem::take(&mut *PREPARED_IDENTITY_WORKERS.get_or_init(Default::default).lock());
+    for task in prepared.values() {
+        task.cancelled.store(true, Ordering::Release);
+    }
+    drop(prepared);
+}
+
+fn cancel_active_identity_workers() {
+    for task in IDENTITY_WORKERS.get_or_init(Default::default).lock().values() {
+        task.cancelled.store(true, Ordering::Release);
+    }
+}
+
+fn reap_finished_identity_workers() -> bool {
+    let mut workers = IDENTITY_WORKERS.get_or_init(Default::default).lock();
+    let finished: Vec<u64> = workers
+        .iter()
+        .filter_map(|(task_id, task)| match task.receiver.try_recv() {
+            Ok(_) | Err(TryRecvError::Disconnected) => Some(*task_id),
+            Err(TryRecvError::Empty) => None,
+        })
+        .collect();
+    for task_id in finished {
+        workers.remove(&task_id);
+    }
+    workers.is_empty()
+}
+
+fn force_detach_identity_workers() -> Vec<u64> {
+    let mut workers = IDENTITY_WORKERS.get_or_init(Default::default).lock();
+    let mut detached = DETACHED_IDENTITY_WORKERS.get_or_init(Default::default).lock();
+    let task_ids: Vec<u64> = workers.keys().copied().collect();
+    for (task_id, task) in workers.iter() {
+        task.cancelled.store(true, Ordering::Release);
+        detached.insert(*task_id, Arc::clone(&task.cancelled));
+    }
+    workers.clear();
+    task_ids
+}
+
+pub fn start_host_runtime() -> Result<(), HostPrototypeError> {
+    let has_workflow_hosts = !registry::get_workflow_host_registry().read().names().is_empty();
+    let has_parser_hosts = !registry::get_parser_host_registry().read().names().is_empty();
+    let has_prepared = !PREPARED_IDENTITY_WORKERS.get_or_init(Default::default).lock().is_empty();
+    let has_active = !IDENTITY_WORKERS.get_or_init(Default::default).lock().is_empty();
+    let has_detached = !DETACHED_IDENTITY_WORKERS.get_or_init(Default::default).lock().is_empty();
+    if has_workflow_hosts || has_parser_hosts || has_prepared || has_active || has_detached {
+        return Err(HostPrototypeError::new(
+            "host runtime cannot start while providers or tasks remain",
+        ));
+    }
+    RUNTIME_ACCEPTING_PROVIDERS.store(true, Ordering::Release);
+    Ok(())
+}
+
+pub async fn shutdown_host_runtime(
+    timeout_millis: u64,
+    force: bool,
+) -> Result<Vec<u64>, HostPrototypeError> {
+    if timeout_millis > MAX_SHUTDOWN_TIMEOUT_MILLIS {
+        return Err(HostPrototypeError::new(format!(
+            "shutdown timeout exceeds {MAX_SHUTDOWN_TIMEOUT_MILLIS} milliseconds"
+        )));
+    }
+    RUNTIME_ACCEPTING_PROVIDERS.store(false, Ordering::Release);
+
+    let mut failures = Vec::new();
+    if let Err(error) = workflow_host::clear_workflow_hosts() {
+        failures.push(error.to_string());
+    }
+    if let Err(error) = parser_host::clear_parser_hosts() {
+        failures.push(error.to_string());
+    }
+    cancel_prepared_identity_workers();
+    cancel_active_identity_workers();
+
+    let deadline = Instant::now() + Duration::from_millis(timeout_millis);
+    let detached = loop {
+        if reap_finished_identity_workers() {
+            break Vec::new();
+        }
+        if Instant::now() >= deadline {
+            if force {
+                break force_detach_identity_workers();
+            }
+            let task_ids: Vec<u64> =
+                IDENTITY_WORKERS.get_or_init(Default::default).lock().keys().copied().collect();
+            failures.push(format!("shutdown timed out with active tasks: {task_ids:?}"));
+            break Vec::new();
+        }
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    };
+
+    if failures.is_empty() {
+        Ok(detached)
+    } else {
+        Err(HostPrototypeError::new(failures.join("; ")))
     }
 }
 

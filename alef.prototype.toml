@@ -60,6 +60,8 @@ functions = [
   "poll_identity_worker",
   "cancel_identity_worker",
   "identity_worker_cancelled",
+  "start_host_runtime",
+  "shutdown_host_runtime",
   "execute_in_process_identity",
   "execute_typed_identity",
   "execute_detached_identity",
