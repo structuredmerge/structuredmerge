@@ -3,14 +3,16 @@
 require_relative "../lib/structuredmerge_host_prototype"
 require "digest"
 require "json"
+require "weakref"
 
 module HostPrototypeFixtures
   class IdentityWorkflowHost
-    attr_reader :detached_requests, :requests, :shutdown_count, :typed_requests
+    attr_reader :callback_thread_ids, :detached_requests, :requests, :shutdown_count, :typed_requests
 
     def initialize(id = "ruby.identity")
       @id = id
       @requests = []
+      @callback_thread_ids = []
       @typed_requests = []
       @detached_requests = []
       @shutdown_count = 0
@@ -25,6 +27,7 @@ module HostPrototypeFixtures
     end
 
     def execute_batch(request)
+      @callback_thread_ids << Thread.current.object_id
       @requests << request
       request
     end
@@ -455,6 +458,63 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(results.length).to eq(100)
     expect(results).to include([0, 0, 0, 255], [3, 24, 0, 255])
     expect(provider.requests.length).to eq(100)
+  end
+
+  it "dispatches concurrent native Rust workers onto a Ruby runtime thread" do
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.native-workers")
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.native-workers")
+    provider_ref = WeakRef.new(provider)
+    provider = nil # rubocop:disable Lint/UselessAssignment -- deliberately release the strong GC root
+    GC.start
+    expect(provider_ref.weakref_alive?).to be(true)
+
+    caller_thread_id = Thread.current.object_id
+    payloads = Array.new(8) { |index| [index, 0, 255, 13, 10] }
+
+    tasks = payloads.map do |payload|
+      described_class.start_identity_worker("ruby.native-workers", payload)
+    end
+    results = {}
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+    until results.length == tasks.length
+      tasks.each do |task_id|
+        next if results.key?(task_id)
+
+        result = described_class.poll_identity_worker(task_id)
+        results[task_id] = result unless result.nil?
+      end
+      raise "native workers timed out" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+      sleep(0.001)
+    end
+
+    expect(tasks.map { |task_id| results.fetch(task_id) }).to match_array(payloads)
+    expect(provider_ref.callback_thread_ids.length).to eq(payloads.length)
+    expect(provider_ref.callback_thread_ids).to all(eq(provider_ref.callback_thread_ids.first))
+    expect(provider_ref.callback_thread_ids).not_to include(caller_thread_id)
+  end
+
+  it "contains Ruby exceptions raised for native Rust workers" do
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.native-failure")
+    def provider.execute_batch(_request)
+      raise "native callback exploded"
+    end
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.native-failure")
+    task_id = described_class.start_identity_worker("ruby.native-failure", [0, 255])
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+
+    loop do
+      begin
+        result = described_class.poll_identity_worker(task_id)
+      rescue RuntimeError => e
+        expect(e.message).to include("Ruby method 'execute_batch' failed: native callback exploded")
+        break
+      end
+      raise "native worker returned without its Ruby exception" unless result.nil?
+      raise "native worker timed out" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+      sleep(0.001)
+    end
   end
 
   it "validates and initializes a provider before publication" do

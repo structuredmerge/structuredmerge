@@ -3,10 +3,14 @@ use std::{
     error::Error,
     fmt,
     io::Write,
-    sync::{Arc, OnceLock},
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicU64, Ordering},
+        mpsc::{self, Receiver, TryRecvError},
+    },
 };
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
@@ -16,6 +20,12 @@ const MAX_CAPABILITIES: usize = 64;
 const MAX_PROVIDER_NAME_BYTES: usize = 256;
 const MAX_PROVIDER_VERSION_BYTES: usize = 256;
 const MAX_BATCH_ITEMS: usize = 32;
+
+type IdentityWorkerResult = Result<Vec<u8>, HostPrototypeError>;
+
+static IDENTITY_WORKERS: OnceLock<Mutex<BTreeMap<u64, Receiver<IdentityWorkerResult>>>> =
+    OnceLock::new();
+static NEXT_IDENTITY_WORKER_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HostPrototypeError {
@@ -406,6 +416,51 @@ pub fn execute_identity(
     provider.execute_batch(request)
 }
 
+pub fn start_identity_worker(
+    provider_name: String,
+    request: Vec<u8>,
+) -> Result<u64, HostPrototypeError> {
+    let provider = registry::get_workflow_host_registry().read().get(&provider_name)?;
+    let task_id = NEXT_IDENTITY_WORKER_ID.fetch_add(1, Ordering::Relaxed);
+    if task_id == 0 {
+        return Err(HostPrototypeError::new("identity worker task ID space exhausted"));
+    }
+
+    let (sender, receiver) = mpsc::sync_channel(1);
+    std::thread::Builder::new()
+        .name(format!("structuredmerge-host-{task_id}"))
+        .spawn(move || {
+            let _ = sender.send(provider.execute_batch(request));
+        })
+        .map_err(|error| {
+            HostPrototypeError::new(format!("failed to start identity worker: {error}"))
+        })?;
+    IDENTITY_WORKERS.get_or_init(Default::default).lock().insert(task_id, receiver);
+    Ok(task_id)
+}
+
+pub fn poll_identity_worker(task_id: u64) -> Result<Option<Vec<u8>>, HostPrototypeError> {
+    let mut workers = IDENTITY_WORKERS.get_or_init(Default::default).lock();
+    let outcome = workers
+        .get(&task_id)
+        .ok_or_else(|| HostPrototypeError::new(format!("identity worker not found: {task_id}")))?
+        .try_recv();
+
+    match outcome {
+        Ok(result) => {
+            workers.remove(&task_id);
+            result.map(Some)
+        }
+        Err(TryRecvError::Empty) => Ok(None),
+        Err(TryRecvError::Disconnected) => {
+            workers.remove(&task_id);
+            Err(HostPrototypeError::new(format!(
+                "identity worker disconnected without a result: {task_id}"
+            )))
+        }
+    }
+}
+
 fn validated_batch_request(
     source_ids: Vec<String>,
     source_lengths: Vec<u64>,
@@ -686,6 +741,27 @@ mod tests {
 
         assert_eq!(provider.probe_batch(payload.clone()).unwrap(), payload);
         assert_eq!(provider.parse_batch(payload.clone()).unwrap(), payload);
+    }
+
+    #[test]
+    fn native_identity_worker_returns_arbitrary_bytes() {
+        let provider_name = "identity.native-worker";
+        let _ = workflow_host::unregister_workflow_host(provider_name);
+        register_workflow_host(identity(provider_name)).unwrap();
+        let payload = vec![0, 0xff, b'\r', b'\n', b'a', 0];
+
+        let task_id = start_identity_worker(provider_name.to_owned(), payload.clone()).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let result = loop {
+            if let Some(result) = poll_identity_worker(task_id).unwrap() {
+                break result;
+            }
+            assert!(std::time::Instant::now() < deadline, "worker should return");
+            std::thread::yield_now();
+        };
+
+        assert_eq!(result, payload);
+        workflow_host::unregister_workflow_host(provider_name).unwrap();
     }
 
     #[test]
