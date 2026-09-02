@@ -50,6 +50,7 @@ functions = [
   "unregister_workflow_host",
   "clear_workflow_hosts",
   "execute_identity",
+  "execute_in_process_identity",
   "execute_typed_identity",
   "execute_detached_identity",
   "registered_workflow_hosts",

@@ -479,6 +479,16 @@ pub fn execute_typed_identity(
     Ok(result)
 }
 
+pub fn execute_in_process_identity(
+    source_ids: Vec<String>,
+    source_lengths: Vec<u64>,
+    source_digests: Vec<String>,
+    source: Vec<u8>,
+) -> Result<Vec<u8>, HostPrototypeError> {
+    validated_batch_request(source_ids, source_lengths, source_digests, &source)?;
+    Ok(source)
+}
+
 pub fn execute_detached_identity(
     provider_name: String,
     source_ids: Vec<String>,
