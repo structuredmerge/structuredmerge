@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use ast_merge::ThreeWayMergeOutcome;
+use ast_merge::{DiagnosticCategory, ThreeWayMergeOutcome};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use json_merge::{
     JsonDialect, json_semantically_equivalent, merge_json_source_preserving, merge_json_three_way,
@@ -160,8 +160,23 @@ fn selected_dialect(path: &str) -> Result<JsonDialect, String> {
 
 fn write_diagnostics(error: &mut dyn Write, diagnostics: &[ast_merge::Diagnostic]) {
     for diagnostic in diagnostics {
-        let category = format!("{:?}", diagnostic.category).to_ascii_lowercase();
+        let category = diagnostic_category_name(diagnostic.category);
         let _ = writeln!(error, "smorg-rs: {category}: {}", diagnostic.message);
+    }
+}
+
+fn diagnostic_category_name(category: DiagnosticCategory) -> &'static str {
+    match category {
+        DiagnosticCategory::ParseError => "parse_error",
+        DiagnosticCategory::DestinationParseError => "destination_parse_error",
+        DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
+        DiagnosticCategory::FallbackApplied => "fallback_applied",
+        DiagnosticCategory::Ambiguity => "ambiguity",
+        DiagnosticCategory::KindMismatch => "kind_mismatch",
+        DiagnosticCategory::UnsupportedVersion => "unsupported_version",
+        DiagnosticCategory::AssumedDefault => "assumed_default",
+        DiagnosticCategory::ConfigurationError => "configuration_error",
+        DiagnosticCategory::ReplayRejected => "replay_rejected",
     }
 }
 
@@ -434,5 +449,19 @@ mod tests {
 
         assert_eq!(status, 1);
         assert_eq!(fs::read_to_string(ours).unwrap(), "{\"left\":3,\"right\":1}");
+    }
+
+    #[test]
+    fn cold_wrapper_diagnostics_use_shared_snake_case_categories() {
+        let directory = tempfile::tempdir().unwrap();
+        let base = write_fixture(directory.path(), "base.json", "{\"ok\":true}\n");
+        let ours = write_fixture(directory.path(), "ours.json", "{\"ok\": tru\n");
+        let theirs = write_fixture(directory.path(), "theirs.json", "{\"ok\":false}\n");
+        let mut error = Vec::new();
+
+        let status = run_merge3_files(&[base, ours, theirs, "fixture.json".into()], &mut error);
+
+        assert_eq!(status, 2);
+        assert!(String::from_utf8(error).unwrap().starts_with("smorg-rs: parse_error:"));
     }
 }
