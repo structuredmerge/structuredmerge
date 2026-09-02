@@ -61,36 +61,72 @@ pub fn match_node_identities(
     template: &[NodeIdentity],
     destination: &[NodeIdentity],
 ) -> NodeIdentityMatchResult {
+    let mut matched_destination = HashSet::new();
+    let mut matched_template = HashSet::new();
+    let mut matched = match_identity_pass(
+        template,
+        destination,
+        &mut matched_template,
+        &mut matched_destination,
+        |identity| identity.primary.iter(),
+    );
+    matched.extend(match_identity_pass(
+        template,
+        destination,
+        &mut matched_template,
+        &mut matched_destination,
+        NodeIdentity::signatures,
+    ));
+    matched.sort_by_key(|entry| entry.template_index);
+
+    let unmatched_template =
+        (0..template.len()).filter(|index| !matched_template.contains(index)).collect();
+    let unmatched_destination =
+        (0..destination.len()).filter(|index| !matched_destination.contains(index)).collect();
+    NodeIdentityMatchResult { matched, unmatched_template, unmatched_destination }
+}
+
+fn match_identity_pass<'a, I>(
+    template: &'a [NodeIdentity],
+    destination: &'a [NodeIdentity],
+    matched_template: &mut HashSet<usize>,
+    matched_destination: &mut HashSet<usize>,
+    signatures: impl Fn(&'a NodeIdentity) -> I,
+) -> Vec<NodeIdentityMatch>
+where
+    I: Iterator<Item = &'a NodeSignature>,
+{
     let mut destination_by_signature: HashMap<NodeSignature, VecDeque<usize>> = HashMap::new();
     for (index, identity) in destination.iter().enumerate() {
-        for signature in identity.signatures() {
+        if matched_destination.contains(&index) {
+            continue;
+        }
+        for signature in signatures(identity) {
             destination_by_signature.entry(signature.clone()).or_default().push_back(index);
         }
     }
 
-    let mut matched_destination = HashSet::new();
     let mut matched = Vec::new();
-    let mut unmatched_template = Vec::new();
     for (template_index, identity) in template.iter().enumerate() {
-        let selected = identity.signatures().find_map(|signature| {
+        if matched_template.contains(&template_index) {
+            continue;
+        }
+        let selected = signatures(identity).find_map(|signature| {
             let candidates = destination_by_signature.get_mut(signature)?;
             while let Some(destination_index) = candidates.pop_front() {
-                if matched_destination.insert(destination_index) {
+                if !matched_destination.contains(&destination_index) {
                     return Some((destination_index, signature.clone()));
                 }
             }
             None
         });
         if let Some((destination_index, signature)) = selected {
+            matched_template.insert(template_index);
+            matched_destination.insert(destination_index);
             matched.push(NodeIdentityMatch { template_index, destination_index, signature });
-        } else {
-            unmatched_template.push(template_index);
         }
     }
-
-    let unmatched_destination =
-        (0..destination.len()).filter(|index| !matched_destination.contains(index)).collect();
-    NodeIdentityMatchResult { matched, unmatched_template, unmatched_destination }
+    matched
 }
 
 pub fn match_owner_paths<T, D>(
@@ -145,5 +181,28 @@ mod tests {
 
         assert_eq!(result.matched.len(), 1);
         assert_eq!(result.matched[0].signature.0[0], "content_identity");
+    }
+
+    #[test]
+    fn fallback_aliases_cannot_steal_a_later_primary_match() {
+        let template = [
+            NodeIdentity::new(Some(NodeSignature::owner_path("/deleted")))
+                .with_alias(Some(NodeSignature::owner_path("/position/0"))),
+            NodeIdentity::new(Some(NodeSignature::owner_path("/retained")))
+                .with_alias(Some(NodeSignature::owner_path("/position/1"))),
+        ];
+        let destination = [NodeIdentity::new(Some(NodeSignature::owner_path("/retained")))
+            .with_alias(Some(NodeSignature::owner_path("/position/0")))];
+        let result = match_node_identities(&template, &destination);
+
+        assert_eq!(
+            result
+                .matched
+                .iter()
+                .map(|entry| (entry.template_index, entry.destination_index))
+                .collect::<Vec<_>>(),
+            [(1, 0)]
+        );
+        assert_eq!(result.unmatched_template, [0]);
     }
 }

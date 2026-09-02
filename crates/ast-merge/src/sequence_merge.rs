@@ -53,6 +53,21 @@ pub struct SequenceConflict {
 pub struct SequenceMergeAnalysis {
     pub changes: Vec<SequenceChange>,
     pub conflicts: Vec<SequenceConflict>,
+    pub base_alignments: Vec<SequenceBaseAlignment>,
+    pub insertion_alignments: Vec<SequenceInsertionAlignment>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SequenceBaseAlignment {
+    pub base_index: usize,
+    pub ours_index: Option<usize>,
+    pub theirs_index: Option<usize>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SequenceInsertionAlignment {
+    pub ours_index: Option<usize>,
+    pub theirs_index: Option<usize>,
 }
 
 pub fn analyze_three_way_sequence(
@@ -67,7 +82,9 @@ pub fn analyze_three_way_sequence(
     changes.extend(sequence_changes(SequenceSide::Theirs, base, theirs, &theirs_alignment));
 
     let mut conflicts = content_conflicts(base, ours, theirs, &ours_alignment, &theirs_alignment);
-    conflicts.extend(insertion_conflicts(ours, theirs, &ours_alignment, &theirs_alignment));
+    let insertion_alignments =
+        insertion_alignments(&ours_alignment, &theirs_alignment, ours, theirs);
+    conflicts.extend(insertion_conflicts(ours, theirs, &insertion_alignments));
     if matched_base_indices(ours, &ours_alignment)
         != matched_base_indices(theirs, &theirs_alignment)
         && base_order_changed(base, ours, &ours_alignment)
@@ -88,7 +105,15 @@ pub fn analyze_three_way_sequence(
         });
     }
 
-    SequenceMergeAnalysis { changes, conflicts }
+    let base_alignments = (0..base.len())
+        .map(|base_index| SequenceBaseAlignment {
+            base_index,
+            ours_index: ours_alignment.base_to_side.get(&base_index).copied(),
+            theirs_index: theirs_alignment.base_to_side.get(&base_index).copied(),
+        })
+        .collect();
+
+    SequenceMergeAnalysis { changes, conflicts, base_alignments, insertion_alignments }
 }
 
 #[derive(Clone, Debug)]
@@ -231,9 +256,34 @@ fn delete_modify_conflict(
 fn insertion_conflicts(
     ours: &[SequenceNode],
     theirs: &[SequenceNode],
+    alignments: &[SequenceInsertionAlignment],
+) -> Vec<SequenceConflict> {
+    alignments
+        .iter()
+        .filter_map(|entry| match (entry.ours_index, entry.theirs_index) {
+            (Some(ours_index), Some(theirs_index))
+                if ours[ours_index].content_hash != theirs[theirs_index].content_hash =>
+            {
+                Some(SequenceConflict {
+                    category: SequenceConflictCategory::DuplicateInsertion,
+                    base_index: None,
+                    ours_node_ids: vec![ours[ours_index].node_id.clone()],
+                    theirs_node_ids: vec![theirs[theirs_index].node_id.clone()],
+                    message: "both sides insert the same identity with different content"
+                        .to_string(),
+                })
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+fn insertion_alignments(
     ours_alignment: &BaseAlignment,
     theirs_alignment: &BaseAlignment,
-) -> Vec<SequenceConflict> {
+    ours: &[SequenceNode],
+    theirs: &[SequenceNode],
+) -> Vec<SequenceInsertionAlignment> {
     let ours_insertions = ours_alignment
         .inserted_side_indices
         .iter()
@@ -245,24 +295,28 @@ fn insertion_conflicts(
         .map(|index| theirs[*index].identity.clone())
         .collect::<Vec<_>>();
     let matched = match_node_identities(&ours_insertions, &theirs_insertions);
-    matched
+    let mut alignments = matched
         .matched
         .iter()
-        .filter_map(|entry| {
-            let ours_index = ours_alignment.inserted_side_indices[entry.template_index];
-            let theirs_index = theirs_alignment.inserted_side_indices[entry.destination_index];
-            (ours[ours_index].content_hash != theirs[theirs_index].content_hash).then(|| {
-                SequenceConflict {
-                    category: SequenceConflictCategory::DuplicateInsertion,
-                    base_index: None,
-                    ours_node_ids: vec![ours[ours_index].node_id.clone()],
-                    theirs_node_ids: vec![theirs[theirs_index].node_id.clone()],
-                    message: "both sides insert the same identity with different content"
-                        .to_string(),
-                }
-            })
+        .map(|entry| SequenceInsertionAlignment {
+            ours_index: Some(ours_alignment.inserted_side_indices[entry.template_index]),
+            theirs_index: Some(theirs_alignment.inserted_side_indices[entry.destination_index]),
         })
-        .collect()
+        .collect::<Vec<_>>();
+    alignments.extend(matched.unmatched_template.iter().map(|index| SequenceInsertionAlignment {
+        ours_index: Some(ours_alignment.inserted_side_indices[*index]),
+        theirs_index: None,
+    }));
+    alignments.extend(matched.unmatched_destination.iter().map(|index| {
+        SequenceInsertionAlignment {
+            ours_index: None,
+            theirs_index: Some(theirs_alignment.inserted_side_indices[*index]),
+        }
+    }));
+    alignments.sort_by_key(|entry| {
+        (entry.ours_index.unwrap_or(usize::MAX), entry.theirs_index.unwrap_or(usize::MAX))
+    });
+    alignments
 }
 
 fn matched_base_order(side: &[SequenceNode], alignment: &BaseAlignment) -> Vec<(usize, usize)> {

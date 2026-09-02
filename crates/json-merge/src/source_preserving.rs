@@ -1,9 +1,10 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 use ast_merge::{
     ConflictAlternative, ConflictAlternativeState, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, MergeConflict, MergeResult, OwnedSourceRegion, SourceEdit, SourceRevision,
-    ThreeWayMergeOutcome, ThreeWayMergeResult, apply_source_edits,
+    DiagnosticSeverity, MergeConflict, MergeResult, NodeIdentity, NodeSignature, OwnedSourceRegion,
+    SequenceConflictCategory, SequenceMergeAnalysis, SequenceNode, SourceEdit, SourceRevision,
+    ThreeWayMergeOutcome, ThreeWayMergeResult, analyze_three_way_sequence, apply_source_edits,
 };
 use tree_haver::{
     ByteRange, NormalizedTreeNode, ParserRequest, parse_normalized_with_language_pack,
@@ -43,7 +44,6 @@ pub(crate) struct JsonSyntaxValue {
 pub(crate) struct JsonSyntaxDocument {
     pub source: String,
     pub root: JsonSyntaxValue,
-    pub ambiguous_identity: bool,
 }
 
 pub(crate) fn parser_language(dialect: JsonDialect) -> &'static str {
@@ -93,9 +93,7 @@ pub(crate) fn parse_document(
         "TreeHaver normalized parse did not contain a JSON root value.".to_string()
     })?;
     let root = build_value(value_node, &nodes)?;
-    let ambiguous_identity = contains_ambiguous_identity(&root);
-
-    Ok(JsonSyntaxDocument { source: source.to_string(), root, ambiguous_identity })
+    Ok(JsonSyntaxDocument { source: source.to_string(), root })
 }
 
 fn validate_jsonc_nodes(nodes: &[NormalizedTreeNode]) -> Result<(), String> {
@@ -351,23 +349,6 @@ fn normalized_scalar(node: &NormalizedTreeNode) -> String {
     source.to_string()
 }
 
-fn contains_ambiguous_identity(value: &JsonSyntaxValue) -> bool {
-    if let JsonSemanticValue::Array(_) = &value.semantic {
-        let mut identities = HashSet::new();
-        for element in &value.elements {
-            if let Some(identity) = object_identity(element)
-                && !identities.insert(identity)
-            {
-                return true;
-            }
-            if contains_ambiguous_identity(element) {
-                return true;
-            }
-        }
-    }
-    value.members.iter().any(|member| contains_ambiguous_identity(&member.value))
-}
-
 fn object_identity(value: &JsonSyntaxValue) -> Option<String> {
     value.members.iter().find(|member| member.key == "id").and_then(|member| {
         match &member.value.semantic {
@@ -555,23 +536,6 @@ pub fn merge_json_three_way(
     if ours.root.semantic == theirs.root.semantic {
         return clean_three_way(ours.source);
     }
-    if (base.ambiguous_identity || ours.ambiguous_identity || theirs.ambiguous_identity)
-        && ours.root.semantic != theirs.root.semantic
-    {
-        let conflict = MergeConflict {
-            conflict_id: "json:ambiguous_identity:1".to_string(),
-            category: "ambiguous_identity".to_string(),
-            path: "".to_string(),
-            fallback_scope: "".to_string(),
-            message: "duplicate JSON array identities prevent deterministic matching".to_string(),
-            alternatives: vec![
-                present_alternative(SourceRevision::Base, &base.root.owned_region),
-                present_alternative(SourceRevision::Ours, &ours.root.owned_region),
-                present_alternative(SourceRevision::Theirs, &theirs.root.owned_region),
-            ],
-        };
-        return conflicted_three_way(vec![conflict]);
-    }
     if ours.root.semantic == base.root.semantic {
         return clean_three_way(theirs.source);
     }
@@ -664,6 +628,14 @@ fn merge_three_values(
         return theirs.semantic.clone();
     }
     if theirs.semantic == base.semantic {
+        return ours.semantic.clone();
+    }
+
+    if matches!(base.semantic, JsonSemanticValue::Array(_))
+        && matches!(ours.semantic, JsonSemanticValue::Array(_))
+        && matches!(theirs.semantic, JsonSemanticValue::Array(_))
+    {
+        merge_three_arrays(base, ours, theirs, path, owned_regions, plan);
         return ours.semantic.clone();
     }
 
@@ -768,6 +740,168 @@ fn merge_three_values(
         }
     }
     JsonSemanticValue::Object(merged)
+}
+
+fn merge_three_arrays(
+    base: &JsonSyntaxValue,
+    ours: &JsonSyntaxValue,
+    theirs: &JsonSyntaxValue,
+    path: &str,
+    owned_regions: [&OwnedSourceRegion; 3],
+    plan: &mut MergePlan,
+) {
+    let base_nodes = json_sequence_nodes(&base.elements);
+    let ours_nodes = json_sequence_nodes(&ours.elements);
+    let theirs_nodes = json_sequence_nodes(&theirs.elements);
+    let analysis = analyze_three_way_sequence(&base_nodes, &ours_nodes, &theirs_nodes);
+
+    for conflict in &analysis.conflicts {
+        let conflict_path =
+            conflict.base_index.map_or_else(|| path.to_string(), |index| format!("{path}/{index}"));
+        plan.conflict_with_alternatives(
+            &conflict_path,
+            sequence_conflict_category(conflict.category),
+            &conflict.message,
+            sequence_conflict_alternatives(
+                conflict.category,
+                conflict.base_index,
+                &analysis,
+                base,
+                ours,
+                theirs,
+                &conflict.ours_node_ids,
+                &conflict.theirs_node_ids,
+            ),
+        );
+    }
+
+    if analysis.conflicts.is_empty() {
+        plan.conflict_with_regions(
+            path,
+            "atomic_array_edit",
+            "both sides changed an array governed by the atomic JSON array policy",
+            owned_regions,
+        );
+    }
+}
+
+fn json_sequence_nodes(elements: &[JsonSyntaxValue]) -> Vec<SequenceNode> {
+    elements
+        .iter()
+        .enumerate()
+        .map(|(index, element)| {
+            let content = semantic_identity(&element.semantic);
+            let primary = object_identity(element).map_or_else(
+                || NodeSignature::content_identity(&content),
+                |identity| Some(NodeSignature(vec!["json_object_id".to_string(), identity])),
+            );
+            SequenceNode {
+                node_id: element.node_id.clone(),
+                identity: NodeIdentity::new(primary)
+                    .with_alias(NodeSignature::content_identity(&content))
+                    .with_alias(Some(NodeSignature(vec![
+                        "json_array_position".to_string(),
+                        index.to_string(),
+                    ]))),
+                content_hash: content,
+            }
+        })
+        .collect()
+}
+
+fn semantic_identity(value: &JsonSemanticValue) -> String {
+    match value {
+        JsonSemanticValue::Object(members) => {
+            let body = members
+                .iter()
+                .map(|(key, value)| format!("{}:{key}:{}", key.len(), semantic_identity(value)))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("object{{{body}}}")
+        }
+        JsonSemanticValue::Array(elements) => {
+            let body = elements.iter().map(semantic_identity).collect::<Vec<_>>().join(",");
+            format!("array[{body}]")
+        }
+        JsonSemanticValue::Scalar { kind, value } => {
+            format!("scalar:{}:{kind}:{value}", value.len())
+        }
+    }
+}
+
+fn sequence_conflict_category(category: SequenceConflictCategory) -> &'static str {
+    match category {
+        SequenceConflictCategory::DeleteModify => "delete_modify",
+        SequenceConflictCategory::ModifyModify => "modify_modify",
+        SequenceConflictCategory::DuplicateInsertion => "duplicate_insertion",
+        SequenceConflictCategory::Order => "order",
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn sequence_conflict_alternatives(
+    category: SequenceConflictCategory,
+    base_index: Option<usize>,
+    analysis: &SequenceMergeAnalysis,
+    base: &JsonSyntaxValue,
+    ours: &JsonSyntaxValue,
+    theirs: &JsonSyntaxValue,
+    ours_node_ids: &[String],
+    theirs_node_ids: &[String],
+) -> Vec<ConflictAlternative> {
+    if category == SequenceConflictCategory::Order {
+        return vec![
+            present_alternative(SourceRevision::Base, &base.owned_region),
+            present_alternative(SourceRevision::Ours, &ours.owned_region),
+            present_alternative(SourceRevision::Theirs, &theirs.owned_region),
+        ];
+    }
+
+    if let Some(base_index) = base_index {
+        let alignment = &analysis.base_alignments[base_index];
+        return vec![
+            present_alternative(
+                SourceRevision::Base,
+                &base.elements[alignment.base_index].owned_region,
+            ),
+            alternative_for_element(SourceRevision::Ours, &ours.elements, alignment.ours_index),
+            alternative_for_element(
+                SourceRevision::Theirs,
+                &theirs.elements,
+                alignment.theirs_index,
+            ),
+        ];
+    }
+
+    vec![
+        absent_alternative(SourceRevision::Base),
+        alternative_for_node_id(SourceRevision::Ours, &ours.elements, ours_node_ids.first()),
+        alternative_for_node_id(SourceRevision::Theirs, &theirs.elements, theirs_node_ids.first()),
+    ]
+}
+
+fn alternative_for_element(
+    revision: SourceRevision,
+    elements: &[JsonSyntaxValue],
+    index: Option<usize>,
+) -> ConflictAlternative {
+    index.map_or_else(
+        || absent_alternative(revision),
+        |index| present_alternative(revision, &elements[index].owned_region),
+    )
+}
+
+fn alternative_for_node_id(
+    revision: SourceRevision,
+    elements: &[JsonSyntaxValue],
+    node_id: Option<&String>,
+) -> ConflictAlternative {
+    node_id
+        .and_then(|node_id| elements.iter().find(|element| element.node_id == *node_id))
+        .map_or_else(
+            || absent_alternative(revision),
+            |element| present_alternative(revision, &element.owned_region),
+        )
 }
 
 fn alternative_for_member(
@@ -1035,7 +1169,6 @@ mod tests {
         assert_eq!(document.root.members[0].key, "name");
         assert_eq!(document.root.members[0].pair_source, "\"name\" : \"structuredmerge\"");
         assert_eq!(document.root.members[0].value.source, "\"structuredmerge\"");
-        assert!(!document.ambiguous_identity);
     }
 
     #[test]
@@ -1114,7 +1247,7 @@ mod tests {
     }
 
     #[test]
-    fn conflicts_on_same_owner_changes_and_duplicate_array_identity() {
+    fn conflicts_on_same_owner_changes_and_preserves_duplicate_array_occurrences() {
         let same_owner = merge_json_three_way(
             "{\"region\":\"east\"}\n",
             "{\"region\":\"west\"}\n",
@@ -1139,8 +1272,41 @@ mod tests {
             JsonDialect::Json,
         );
         assert_eq!(duplicate.outcome, ThreeWayMergeOutcome::Conflict);
-        assert_eq!(duplicate.conflicts[0].category, "ambiguous_identity");
+        assert_eq!(duplicate.conflicts[0].category, "atomic_array_edit");
         assert_eq!(duplicate.conflicts[0].alternatives.len(), 3);
+    }
+
+    #[test]
+    fn classifies_array_delete_modify_and_order_conflicts_with_owned_regions() {
+        let delete_modify = merge_json_three_way(
+            "{\"items\":[{\"id\":\"a\",\"v\":1},{\"id\":\"b\",\"v\":1}]}\n",
+            "{\"items\":[{\"id\":\"b\",\"v\":1}]}\n",
+            "{\"items\":[{\"id\":\"a\",\"v\":2},{\"id\":\"b\",\"v\":1}]}\n",
+            JsonDialect::Json,
+        );
+        assert_eq!(delete_modify.outcome, ThreeWayMergeOutcome::Conflict);
+        assert_eq!(delete_modify.conflicts[0].category, "delete_modify");
+        assert_eq!(delete_modify.conflicts[0].path, "/items/0");
+        assert_eq!(
+            delete_modify.conflicts[0].alternatives[1].state,
+            ConflictAlternativeState::Absent
+        );
+
+        let reorder = merge_json_three_way(
+            "{\"items\":[{\"id\":\"a\"},{\"id\":\"b\"},{\"id\":\"c\"}]}\n",
+            "{\"items\":[{\"id\":\"b\"},{\"id\":\"a\"},{\"id\":\"c\"}]}\n",
+            "{\"items\":[{\"id\":\"a\"},{\"id\":\"c\"},{\"id\":\"b\"}]}\n",
+            JsonDialect::Json,
+        );
+        assert_eq!(reorder.outcome, ThreeWayMergeOutcome::Conflict);
+        assert_eq!(reorder.conflicts[0].category, "order");
+        assert_eq!(reorder.conflicts[0].path, "/items");
+        assert!(
+            reorder.conflicts[0]
+                .alternatives
+                .iter()
+                .all(|alternative| alternative.regions[0].region_kind == "node")
+        );
     }
 
     #[test]
@@ -1173,5 +1339,19 @@ mod tests {
 
         assert_eq!(result.outcome, ThreeWayMergeOutcome::Error);
         assert!(result.diagnostics[0].message.starts_with("ours parse error:"));
+    }
+
+    #[test]
+    fn semantic_array_identity_includes_object_keys() {
+        let left = JsonSemanticValue::Object(BTreeMap::from([(
+            "left".to_string(),
+            JsonSemanticValue::Scalar { kind: "number".to_string(), value: "1".to_string() },
+        )]));
+        let right = JsonSemanticValue::Object(BTreeMap::from([(
+            "right".to_string(),
+            JsonSemanticValue::Scalar { kind: "number".to_string(), value: "1".to_string() },
+        )]));
+
+        assert_ne!(semantic_identity(&left), semantic_identity(&right));
     }
 }
