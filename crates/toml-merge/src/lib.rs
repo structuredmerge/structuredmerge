@@ -7,7 +7,11 @@ use tree_haver::{BackendReference, kreuzberg_language_pack_backend};
 
 mod source_preserving;
 
-use source_preserving::{TomlSyntaxDocument, analyze_toml_document, merge_toml_documents};
+pub use source_preserving::{TomlProjectionEntry, TomlProjectionScope, TomlProjectionScopeKind};
+use source_preserving::{
+    TomlSyntaxDocument, analyze_toml_document, analyze_toml_projection_document,
+    merge_toml_documents,
+};
 
 pub const PACKAGE_NAME: &str = "structuredmerge-toml-merge";
 
@@ -179,6 +183,45 @@ pub fn analyze_toml_source(source: &str, dialect: TomlDialect) -> ParseResult<To
             diagnostics: vec![],
             analysis: Some(TomlAnalysis {
                 dialect: TomlDialect::Toml,
+                normalized_source: source.to_string(),
+                root_kind: TomlRootKind::Table,
+                owners: document.owners.clone(),
+                comment_regions: document.comment_augmentation.regions.clone(),
+                layout_gaps: document.comment_augmentation.gaps.clone(),
+                comment_attachments: document.comment_augmentation.attachments.clone(),
+                document,
+            }),
+            policies: vec![],
+        },
+        Err(message) => ParseResult {
+            ok: false,
+            diagnostics: vec![parse_error(&message)],
+            analysis: None,
+            policies: vec![],
+        },
+    }
+}
+
+pub fn analyze_toml_projection(
+    source: &str,
+    dialect: TomlDialect,
+    scopes: Vec<TomlProjectionScope>,
+    comments: Vec<ast_merge::TrackedComment>,
+) -> ParseResult<TomlAnalysis> {
+    if dialect != TomlDialect::Toml {
+        return ParseResult {
+            ok: false,
+            diagnostics: vec![unsupported_feature("Unsupported TOML dialect.")],
+            analysis: None,
+            policies: vec![],
+        };
+    }
+    match analyze_toml_projection_document(source, scopes, comments) {
+        Ok(document) => ParseResult {
+            ok: true,
+            diagnostics: vec![],
+            analysis: Some(TomlAnalysis {
+                dialect,
                 normalized_source: source.to_string(),
                 root_kind: TomlRootKind::Table,
                 owners: document.owners.clone(),

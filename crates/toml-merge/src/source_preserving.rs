@@ -9,6 +9,38 @@ use tree_haver::{NormalizedTreeNode, ParserRequest, parse_normalized_with_langua
 use crate::{TomlOwner, TomlOwnerKind};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TomlProjectionScopeKind {
+    Root,
+    Table,
+    TableArray,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TomlProjectionEntry {
+    pub key_components: Vec<String>,
+    pub node_id: String,
+    pub start_byte: usize,
+    pub end_byte: usize,
+    pub start_line: usize,
+    pub end_line: usize,
+    pub value_signature: String,
+    pub array_item_count: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TomlProjectionScope {
+    pub kind: TomlProjectionScopeKind,
+    pub path_components: Vec<String>,
+    pub instance: usize,
+    pub node_id: String,
+    pub start_byte: usize,
+    pub end_byte: usize,
+    pub start_line: usize,
+    pub end_line: usize,
+    pub entries: Vec<TomlProjectionEntry>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TomlSyntaxScopeKind {
     Root,
     Table,
@@ -167,6 +199,78 @@ pub(crate) fn analyze_toml_document(source: &str) -> Result<TomlSyntaxDocument, 
     let owners = collect_owners(&scopes);
     let semantic = collect_semantic(&scopes);
 
+    Ok(TomlSyntaxDocument {
+        source: source.to_string(),
+        scopes,
+        owners,
+        comment_augmentation,
+        semantic,
+    })
+}
+
+pub(crate) fn analyze_toml_projection_document(
+    source: &str,
+    projection: Vec<TomlProjectionScope>,
+    comments: Vec<ast_merge::TrackedComment>,
+) -> Result<TomlSyntaxDocument, String> {
+    let mut scopes = projection
+        .into_iter()
+        .map(|scope| {
+            let kind = match scope.kind {
+                TomlProjectionScopeKind::Root => TomlSyntaxScopeKind::Root,
+                TomlProjectionScopeKind::Table => TomlSyntaxScopeKind::Table,
+                TomlProjectionScopeKind::TableArray => TomlSyntaxScopeKind::TableArray,
+            };
+            let path = if kind == TomlSyntaxScopeKind::Root {
+                String::new()
+            } else {
+                path_string(&scope.path_components)
+            };
+            TomlSyntaxScope {
+                kind,
+                path: path.clone(),
+                instance: scope.instance,
+                node_id: scope.node_id,
+                start_byte: scope.start_byte,
+                end_byte: scope.end_byte,
+                start_line: scope.start_line,
+                end_line: scope.end_line,
+                owned_start_line: scope.start_line,
+                entries: scope
+                    .entries
+                    .into_iter()
+                    .map(|entry| {
+                        let key = path_string(&entry.key_components);
+                        TomlSyntaxEntry {
+                            path: if path.is_empty() {
+                                key.clone()
+                            } else {
+                                format!("{path}{key}")
+                            },
+                            key,
+                            node_id: entry.node_id,
+                            start_byte: entry.start_byte,
+                            end_byte: entry.end_byte,
+                            start_line: entry.start_line,
+                            end_line: entry.end_line,
+                            owned_start_line: entry.start_line,
+                            value_signature: entry.value_signature,
+                            array_item_count: entry.array_item_count,
+                        }
+                    })
+                    .collect(),
+            }
+        })
+        .collect::<Vec<_>>();
+    validate_projection(source, &scopes)?;
+    validate_scopes(&scopes)?;
+    let layout_owners = syntax_layout_owners(&scopes);
+    let lines = source_lines(source);
+    let comment_augmentation =
+        ast_merge::augment_comments(&lines, &layout_owners, &comments, "hash_comment")?;
+    apply_owned_starts(&mut scopes, &comment_augmentation);
+    let owners = collect_owners(&scopes);
+    let semantic = collect_semantic(&scopes);
     Ok(TomlSyntaxDocument {
         source: source.to_string(),
         scopes,
@@ -420,6 +524,77 @@ fn validate_scopes(scopes: &[TomlSyntaxScope]) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_projection(source: &str, scopes: &[TomlSyntaxScope]) -> Result<(), String> {
+    if scopes.len()
+        != 1 + scopes.iter().filter(|scope| scope.kind != TomlSyntaxScopeKind::Root).count()
+        || scopes.first().is_none_or(|scope| scope.kind != TomlSyntaxScopeKind::Root)
+        || scopes.iter().filter(|scope| scope.kind == TomlSyntaxScopeKind::Root).count() != 1
+    {
+        return Err(
+            "TOML parser projection must contain exactly one leading root scope.".to_string()
+        );
+    }
+    let line_count = source_lines(source).len();
+    for scope in scopes {
+        validate_projected_range(
+            source,
+            &scope.node_id,
+            scope.start_byte,
+            scope.end_byte,
+            scope.start_line,
+            scope.end_line,
+            line_count,
+        )?;
+        if scope.kind != TomlSyntaxScopeKind::Root && scope.path.is_empty() {
+            return Err(format!("TOML scope {} has an empty path.", scope.node_id));
+        }
+        for entry in &scope.entries {
+            validate_projected_range(
+                source,
+                &entry.node_id,
+                entry.start_byte,
+                entry.end_byte,
+                entry.start_line,
+                entry.end_line,
+                line_count,
+            )?;
+            if entry.key == "/" || entry.value_signature.is_empty() {
+                return Err(format!("TOML entry {} has an incomplete projection.", entry.node_id));
+            }
+            if entry.start_byte < scope.start_byte || entry.end_byte > scope.end_byte {
+                return Err(format!(
+                    "TOML entry {} falls outside projected scope {}.",
+                    entry.node_id, scope.node_id
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_projected_range(
+    source: &str,
+    node_id: &str,
+    start_byte: usize,
+    end_byte: usize,
+    start_line: usize,
+    end_line: usize,
+    line_count: usize,
+) -> Result<(), String> {
+    if node_id.is_empty()
+        || start_byte > end_byte
+        || end_byte > source.len()
+        || !source.is_char_boundary(start_byte)
+        || !source.is_char_boundary(end_byte)
+        || start_line == 0
+        || end_line < start_line
+        || end_line > line_count
+    {
+        return Err(format!("TOML parser projection has an invalid range for {node_id:?}."));
+    }
+    Ok(())
+}
+
 fn collect_owners(scopes: &[TomlSyntaxScope]) -> Vec<TomlOwner> {
     let mut owners = BTreeMap::<String, TomlOwner>::new();
     for scope in scopes {
@@ -648,6 +823,17 @@ fn line_start_byte(source: &str, line: usize) -> usize {
         return 0;
     }
     source.match_indices('\n').nth(line - 2).map_or(source.len(), |(byte, _)| byte + 1)
+}
+
+fn source_lines(source: &str) -> Vec<String> {
+    let mut lines = source.split('\n').map(str::to_string).collect::<Vec<_>>();
+    if source.ends_with('\n') && lines.last().is_some_and(String::is_empty) {
+        lines.pop();
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
 }
 
 fn line_after_byte(source: &str, line: usize) -> usize {

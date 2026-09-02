@@ -188,6 +188,49 @@ fn conforms_to_shared_toml_parse_matching_and_merge_fixtures() {
 }
 
 #[test]
+fn merges_nested_toml_through_the_pest_projection() {
+    let fixture =
+        read_fixture(&["toml", "slice-720-advanced-leaf-merge", "nested-table-leaf-merge.json"]);
+    let result = merge_toml(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        TomlDialect::Toml,
+        None,
+    );
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+}
+
+#[test]
+fn preserves_pest_owned_comments_and_hashes_inside_strings() {
+    let template = "# package\nname = \"template # value\"\nenabled = true\n";
+    let destination = "# package\nname = \"destination # value\"\n";
+    let result = merge_toml(template, destination, TomlDialect::Toml, None);
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(
+        result.output.as_deref(),
+        Some("# package\nname = \"destination # value\"\nenabled = true\n")
+    );
+}
+
+#[test]
+fn records_pest_provider_limits_as_parse_failures() {
+    let quoted = parse_toml("\"quoted\" = true\n", TomlDialect::Toml, None);
+    assert!(!quoted.ok);
+    assert!(quoted.diagnostics[0].message.contains("quoted key identity"));
+
+    let repeated_table_array = parse_toml(
+        "[[items]]\nname = \"one\"\n\n[[items]]\nname = \"two\"\n",
+        TomlDialect::Toml,
+        None,
+    );
+    assert!(!repeated_table_array.ok);
+    assert!(repeated_table_array.diagnostics[0].message.contains("identity matching"));
+}
+
+#[test]
 fn conforms_to_provider_named_suite_plan_fixture() {
     let fixture = read_fixture(&[
         "diagnostics",
