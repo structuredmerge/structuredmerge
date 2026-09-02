@@ -23,6 +23,11 @@
       "boundary": "tree-haver"
     }
   },
+  "supports": {
+    "operations": ["merge2", "merge3", "metamorphic"],
+    "families": ["json"],
+    "dialects": ["json", "jsonc", "json5"]
+  },
   "environment": {
     "runtime": "rust",
     "edition": "2024"
