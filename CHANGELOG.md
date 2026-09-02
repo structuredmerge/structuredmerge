@@ -9,3 +9,5 @@
   claiming source-preserving two-way support.
 - Add a validated TreeHaver normalized-tree index so format providers share
   fail-closed node lookup, root validation, child traversal, and descendant search.
+- Share parser diagnostic conversion and role-attributed three-way parse failure
+  construction from `ast-merge` instead of redefining them in format providers.

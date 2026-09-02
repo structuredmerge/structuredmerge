@@ -1,8 +1,8 @@
 use ast_merge::{
-    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, FamilyFeatureProfile, MergeResult, ParseResult, PolicyReference,
-    PolicySurface, SourcePreservingOwner, SourcePreservingOwnerDocument, ThreeWayMergeResult,
-    merge_source_preserving_owners,
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult,
+    ParseResult, PolicyReference, PolicySurface, SourcePreservingOwner,
+    SourcePreservingOwnerDocument, ThreeWayMergeResult, merge_source_preserving_owners,
+    normalized_parse_error_result, parse_error_result, three_way_parse_error,
 };
 use tree_haver::{
     BackendReference, NormalizedTreeIndex, NormalizedTreeNode, ParserRequest,
@@ -164,12 +164,7 @@ pub fn parse_typescript(
 ) -> ParseResult<TypeScriptAnalysis> {
     let parsed = parse_normalized_with_language_pack(&parse_request(source, dialect));
     if !parsed.ok {
-        return ParseResult {
-            ok: false,
-            diagnostics: normalized_diagnostics(parsed.diagnostics),
-            analysis: None,
-            policies: vec![],
-        };
+        return normalized_parse_error_result(parsed.diagnostics);
     }
     let index = match NormalizedTreeIndex::new(&parsed.nodes) {
         Ok(index) => index,
@@ -255,15 +250,15 @@ pub fn merge_typescript_three_way(
 ) -> ThreeWayMergeResult<String> {
     let base = match parse_source_preserving_typescript(base_source, dialect) {
         Ok(document) => document,
-        Err(message) => return three_way_parse_failure("base", message),
+        Err(message) => return three_way_parse_error("base", message),
     };
     let ours = match parse_source_preserving_typescript(ours_source, dialect) {
         Ok(document) => document,
-        Err(message) => return three_way_parse_failure("ours", message),
+        Err(message) => return three_way_parse_error("ours", message),
     };
     let theirs = match parse_source_preserving_typescript(theirs_source, dialect) {
         Ok(document) => document,
-        Err(message) => return three_way_parse_failure("theirs", message),
+        Err(message) => return three_way_parse_error("theirs", message),
     };
 
     merge_source_preserving_owners(base, ours, theirs, |output| {
@@ -369,42 +364,7 @@ fn unquote(value: &str) -> String {
 }
 
 fn parse_error<T>(message: impl Into<String>) -> ParseResult<T> {
-    ParseResult {
-        ok: false,
-        diagnostics: vec![diagnostic(DiagnosticCategory::ParseError, message)],
-        analysis: None,
-        policies: vec![],
-    }
-}
-
-fn normalized_diagnostics(messages: Vec<String>) -> Vec<Diagnostic> {
-    messages
-        .into_iter()
-        .map(|message| diagnostic(DiagnosticCategory::ParseError, message))
-        .collect()
-}
-
-fn diagnostic(category: DiagnosticCategory, message: impl Into<String>) -> Diagnostic {
-    Diagnostic {
-        severity: DiagnosticSeverity::Error,
-        category,
-        message: message.into(),
-        path: None,
-        review: None,
-    }
-}
-
-fn three_way_parse_failure(role: &str, message: String) -> ThreeWayMergeResult<String> {
-    ThreeWayMergeResult {
-        outcome: ast_merge::ThreeWayMergeOutcome::Error,
-        diagnostics: vec![diagnostic(
-            DiagnosticCategory::ParseError,
-            format!("{role} parse error: {message}"),
-        )],
-        conflicts: vec![],
-        output: None,
-        policies: vec![],
-    }
+    parse_error_result(message)
 }
 
 pub fn match_typescript_owners(
