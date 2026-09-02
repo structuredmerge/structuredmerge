@@ -233,6 +233,19 @@ fn native_source_preserving_merge_uses_shared_heading_section_semantics() {
 }
 
 #[test]
+fn native_source_preserving_merge_matches_the_reviewed_markdown_sentinel() {
+    let incoming = "# Title\n\ntemplate body\n\n# Added\n\n<!-- retained incoming comment -->\nnew section\n\n# Last\n\ntemplate ending\n";
+    let current = "# Title\n\ncurrent body\n\n\n# Last\n\ncurrent ending";
+    let expected = "# Title\n\ncurrent body\n\n\n# Added\n\n<!-- retained incoming comment -->\nnew section\n\n# Last\n\ncurrent ending";
+
+    let result =
+        merge_markdown_source_preserving(current, incoming, MarkdownDialect::Markdown, None);
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(expected));
+}
+
+#[test]
 fn conforms_to_slice_298_reviewed_nested_merge_fixture() {
     let fixture = read_fixture(&[
         "markdown",
