@@ -7,12 +7,14 @@ use std::{
 
 use parking_lot::RwLock;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 pub const PACKAGE_NAME: &str = "structuredmerge-host-prototype-core";
 const MAX_DESCRIPTOR_BYTES: usize = 64 * 1024;
 const MAX_CAPABILITIES: usize = 64;
 const MAX_PROVIDER_NAME_BYTES: usize = 256;
 const MAX_PROVIDER_VERSION_BYTES: usize = 256;
+const MAX_BATCH_ITEMS: usize = 32;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HostPrototypeError {
@@ -37,6 +39,20 @@ impl fmt::Display for HostPrototypeError {
 
 impl Error for HostPrototypeError {}
 
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct HostSourceSegment {
+    pub source_id: String,
+    pub offset: u64,
+    pub byte_length: u64,
+    pub sha256: String,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct HostBatchRequest {
+    pub schema: String,
+    pub items: Vec<HostSourceSegment>,
+}
+
 pub trait Plugin: Send + Sync {
     fn name(&self) -> &str;
 
@@ -51,6 +67,12 @@ pub trait WorkflowHost: Plugin {
     fn descriptor(&self) -> Result<String, HostPrototypeError>;
 
     fn execute_batch(&self, request: Vec<u8>) -> Result<Vec<u8>, HostPrototypeError>;
+
+    fn execute_typed_batch(
+        &self,
+        request: HostBatchRequest,
+        source: Vec<u8>,
+    ) -> Result<Vec<u8>, HostPrototypeError>;
 }
 
 pub trait ParserHost: Plugin {
@@ -364,6 +386,70 @@ pub fn execute_identity(
     provider.execute_batch(request)
 }
 
+pub fn execute_typed_identity(
+    provider_name: String,
+    source_ids: Vec<String>,
+    source_lengths: Vec<u64>,
+    source_digests: Vec<String>,
+    source: Vec<u8>,
+) -> Result<Vec<u8>, HostPrototypeError> {
+    let item_count = source_ids.len();
+    if item_count == 0 || item_count > MAX_BATCH_ITEMS {
+        return Err(HostPrototypeError::new(format!(
+            "typed batch item count must be between 1 and {MAX_BATCH_ITEMS}"
+        )));
+    }
+    if source_lengths.len() != item_count || source_digests.len() != item_count {
+        return Err(HostPrototypeError::new(
+            "typed batch source ids, lengths, and digests must have equal lengths",
+        ));
+    }
+
+    let mut offset = 0usize;
+    let mut items = Vec::with_capacity(item_count);
+    for ((source_id, byte_length), expected_digest) in
+        source_ids.into_iter().zip(source_lengths).zip(source_digests)
+    {
+        let byte_length = usize::try_from(byte_length).map_err(|_| {
+            HostPrototypeError::new("typed batch source length exceeds this platform")
+        })?;
+        let end = offset
+            .checked_add(byte_length)
+            .ok_or_else(|| HostPrototypeError::new("typed batch source range overflow"))?;
+        let bytes = source.get(offset..end).ok_or_else(|| {
+            HostPrototypeError::new("typed batch source range exceeds source bytes")
+        })?;
+        let actual_digest = format!("{:x}", Sha256::digest(bytes));
+        if actual_digest != expected_digest {
+            return Err(HostPrototypeError::new(format!(
+                "typed batch digest mismatch for source {source_id:?}"
+            )));
+        }
+        items.push(HostSourceSegment {
+            source_id,
+            offset: u64::try_from(offset)
+                .map_err(|_| HostPrototypeError::new("typed batch source offset exceeds u64"))?,
+            byte_length: u64::try_from(byte_length)
+                .map_err(|_| HostPrototypeError::new("typed batch source length exceeds u64"))?,
+            sha256: expected_digest,
+        });
+        offset = end;
+    }
+    if offset != source.len() {
+        return Err(HostPrototypeError::new(
+            "typed batch source lengths do not consume all source bytes",
+        ));
+    }
+
+    let request = HostBatchRequest { schema: "structuredmerge.host-batch/v1".to_owned(), items };
+    let provider = registry::get_workflow_host_registry().read().get(&provider_name)?;
+    let result = provider.execute_typed_batch(request, source.clone())?;
+    if result != source {
+        return Err(HostPrototypeError::new("typed identity host changed source bytes"));
+    }
+    Ok(result)
+}
+
 pub fn registered_workflow_hosts() -> Vec<String> {
     registry::get_workflow_host_registry().read().names()
 }
@@ -435,6 +521,14 @@ mod tests {
 
         fn execute_batch(&self, request: Vec<u8>) -> Result<Vec<u8>, HostPrototypeError> {
             Ok(request)
+        }
+
+        fn execute_typed_batch(
+            &self,
+            _request: HostBatchRequest,
+            source: Vec<u8>,
+        ) -> Result<Vec<u8>, HostPrototypeError> {
+            Ok(source)
         }
     }
 

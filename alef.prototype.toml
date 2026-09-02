@@ -38,11 +38,19 @@ unregister_fn = "unregister_parser_host"
 clear_fn = "clear_parser_hosts"
 
 [crates.include]
-types = ["HostPrototypeError", "Plugin", "WorkflowHost", "ParserHost"]
+types = [
+  "HostPrototypeError",
+  "HostSourceSegment",
+  "HostBatchRequest",
+  "Plugin",
+  "WorkflowHost",
+  "ParserHost",
+]
 functions = [
   "unregister_workflow_host",
   "clear_workflow_hosts",
   "execute_identity",
+  "execute_typed_identity",
   "registered_workflow_hosts",
   "unregister_parser_host",
   "clear_parser_hosts",

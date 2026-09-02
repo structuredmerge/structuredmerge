@@ -6,11 +6,12 @@ require "json"
 
 module HostPrototypeFixtures
   class IdentityWorkflowHost
-    attr_reader :requests, :shutdown_count
+    attr_reader :requests, :shutdown_count, :typed_requests
 
     def initialize(id = "ruby.identity")
       @id = id
       @requests = []
+      @typed_requests = []
       @shutdown_count = 0
     end
 
@@ -25,6 +26,11 @@ module HostPrototypeFixtures
     def execute_batch(request)
       @requests << request
       request
+    end
+
+    def execute_typed_batch(request, source)
+      @typed_requests << [request, source]
+      source
     end
 
     def shutdown
@@ -73,6 +79,10 @@ module HostPrototypeFixtures
 
     def execute_batch(request)
       request
+    end
+
+    def execute_typed_batch(_request, source)
+      source
     end
 
     def shutdown
@@ -158,6 +168,96 @@ RSpec.describe StructuredmergeHostPrototype do
 
     expect(provider.requests).to all(have_attributes(encoding: Encoding::ASCII_8BIT))
     expect(described_class.registered_workflow_hosts).to eq(["ruby.identity"])
+  end
+
+  it "round trips the shared byte corpus with generated typed batch headers" do
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.typed-identity")
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.typed-identity")
+
+    identity_cases.each do |test_case|
+      payload = materialize_identity_payload(test_case.fetch("payload"))
+      result = described_class.execute_typed_identity(
+        "ruby.typed-identity",
+        [test_case.fetch("id")],
+        [test_case.fetch("byte_length")],
+        [test_case.fetch("sha256")],
+        payload.bytes
+      ).pack("C*")
+
+      verify_identity_bytes(result, test_case)
+      expect(result).to eq(payload), test_case.fetch("id")
+    end
+
+    provider.typed_requests.zip(identity_cases).each do |(request, source), test_case|
+      item = request.items.fetch(0)
+      expect(request.schema).to eq("structuredmerge.host-batch/v1")
+      expect(item.source_id).to eq(test_case.fetch("id"))
+      expect(item.offset).to eq(0)
+      expect(item.byte_length).to eq(test_case.fetch("byte_length"))
+      expect(item.sha256).to eq(test_case.fetch("sha256"))
+      expect(source.encoding).to eq(Encoding::ASCII_8BIT)
+      verify_identity_bytes(source, test_case)
+    end
+  end
+
+  it "preserves distinct IDs and byte ranges in a multi-item typed batch" do
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.typed-batch")
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.typed-batch")
+    payloads = ["alpha\r\n".b, "\x00\xffbeta".b]
+    source = payloads.join.b
+    digests = payloads.map { |payload| Digest::SHA256.hexdigest(payload) }
+
+    result = described_class.execute_typed_identity(
+      "ruby.typed-batch",
+      %w[source:1 source:2],
+      payloads.map(&:bytesize),
+      digests,
+      source.bytes
+    ).pack("C*")
+
+    request, callback_source = provider.typed_requests.fetch(0)
+    expect(result).to eq(source)
+    expect(callback_source).to eq(source)
+    expect(request.items.map(&:source_id)).to eq(%w[source:1 source:2])
+    expect(request.items.map(&:offset)).to eq([0, payloads.fetch(0).bytesize])
+    expect(request.items.map(&:byte_length)).to eq(payloads.map(&:bytesize))
+    expect(request.items.map(&:sha256)).to eq(digests)
+  end
+
+  it "rejects invalid typed batch metadata before invoking Ruby" do
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.typed-invalid")
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.typed-invalid")
+
+    expect do
+      described_class.execute_typed_identity(
+        "ruby.typed-invalid",
+        ["source:1"],
+        [1],
+        ["not-the-digest"],
+        [97]
+      )
+    end.to raise_error(RuntimeError, /digest mismatch for source "source:1"/)
+    expect(provider.typed_requests).to be_empty
+  end
+
+  it "fails closed when a typed identity callback changes source bytes" do
+    provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.typed-changed")
+    def provider.execute_typed_batch(request, source)
+      super
+      source.dup << "changed"
+    end
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.typed-changed")
+    payload = "original".b
+
+    expect do
+      described_class.execute_typed_identity(
+        "ruby.typed-changed",
+        ["source:1"],
+        [payload.bytesize],
+        [Digest::SHA256.hexdigest(payload)],
+        payload.bytes
+      )
+    end.to raise_error(RuntimeError, /typed identity host changed source bytes/)
   end
 
   it "fails closed when a provider name is registered twice" do
@@ -329,6 +429,9 @@ RSpec.describe StructuredmergeHostPrototype do
     end
     def missing.execute_batch(request)
       request
+    end
+    def missing.execute_typed_batch(_request, source)
+      source
     end
     malformed = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.malformed-version")
     def malformed.version
