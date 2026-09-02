@@ -9,12 +9,12 @@ use ast_merge::{
 use markdown_merge::{
     AppliedChildOutput, MarkdownAnalysis, MarkdownDialect, collect_markdown_owners,
     markdown_feature_profile, match_markdown_owners as match_markdown_owners_with_substrate,
-    merge_markdown as merge_markdown_with_substrate,
-    merge_markdown_with_reviewed_nested_outputs as merge_markdown_with_reviewed_nested_outputs_with_substrate,
-    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle as merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_substrate,
-    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope as merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope_with_substrate,
-    merge_markdown_with_reviewed_nested_outputs_from_review_state as merge_markdown_with_reviewed_nested_outputs_from_review_state_with_substrate,
-    merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope as merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope_with_substrate,
+    merge_markdown_with_parser as merge_markdown_with_substrate,
+    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope_with_parser as merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope_with_substrate,
+    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_parser as merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_substrate,
+    merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope_with_parser as merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope_with_substrate,
+    merge_markdown_with_reviewed_nested_outputs_from_review_state_with_parser as merge_markdown_with_reviewed_nested_outputs_from_review_state_with_substrate,
+    merge_markdown_with_reviewed_nested_outputs_with_parser as merge_markdown_with_reviewed_nested_outputs_with_substrate,
     normalize_markdown_source,
 };
 use pulldown_cmark::Parser;
@@ -143,6 +143,13 @@ pub fn match_markdown_owners(
     match_markdown_owners_with_substrate(template, destination)
 }
 
+fn parse_markdown_for_merge(
+    source: &str,
+    dialect: MarkdownDialect,
+) -> ParseResult<MarkdownAnalysis> {
+    parse_markdown(source, dialect, None)
+}
+
 pub fn merge_markdown(
     template_source: &str,
     destination_source: &str,
@@ -162,7 +169,12 @@ pub fn merge_markdown(
         };
     }
 
-    merge_markdown_with_substrate(template_source, destination_source, dialect)
+    merge_markdown_with_substrate(
+        template_source,
+        destination_source,
+        dialect,
+        parse_markdown_for_merge,
+    )
 }
 
 pub fn merge_markdown_with_reviewed_nested_outputs(
@@ -192,6 +204,7 @@ pub fn merge_markdown_with_reviewed_nested_outputs(
         dialect,
         review_state,
         applied_children,
+        parse_markdown_for_merge,
     )
 }
 
@@ -220,6 +233,7 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle(
         destination_source,
         dialect,
         replay_bundle,
+        parse_markdown_for_merge,
     )
 }
 
@@ -248,6 +262,7 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope(
         destination_source,
         dialect,
         envelope,
+        parse_markdown_for_merge,
     )
 }
 
@@ -276,6 +291,7 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state(
         destination_source,
         dialect,
         review_state,
+        parse_markdown_for_merge,
     )
 }
 
@@ -304,6 +320,7 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope(
         destination_source,
         dialect,
         envelope,
+        parse_markdown_for_merge,
     )
 }
 

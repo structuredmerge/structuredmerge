@@ -1,7 +1,7 @@
-use std::{fs, path::PathBuf};
+use std::{cell::Cell, fs, path::PathBuf};
 
 use ast_merge::{
-    ConformanceManifest, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    ConformanceManifest, ParseResult, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, conformance_family_feature_profile_path,
     conformance_fixture_path, delegated_child_apply_plan, group_projected_child_review_cases,
     projected_child_group_review_request, review_projected_child_groups,
@@ -10,17 +10,18 @@ use ast_merge::{
     summarize_projected_child_review_group_progress,
 };
 use markdown_merge::{
-    MarkdownBackend, MarkdownDialect, MarkdownOwnerKind, apply_markdown_delegated_child_outputs,
-    available_markdown_backends, markdown_backend_feature_profile,
-    markdown_delegated_child_operations, markdown_discovered_surfaces, markdown_embedded_families,
-    markdown_feature_profile, markdown_plan_context_with_backend, match_markdown_owners,
-    merge_markdown, merge_markdown_with_nested_outputs,
+    MarkdownAnalysis, MarkdownBackend, MarkdownDialect, MarkdownOwnerKind, MarkdownRootKind,
+    apply_markdown_delegated_child_outputs, available_markdown_backends, collect_markdown_owners,
+    markdown_backend_feature_profile, markdown_delegated_child_operations,
+    markdown_discovered_surfaces, markdown_embedded_families, markdown_feature_profile,
+    markdown_plan_context_with_backend, match_markdown_owners, merge_markdown,
+    merge_markdown_with_nested_outputs, merge_markdown_with_parser,
     merge_markdown_with_reviewed_nested_outputs,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope,
     merge_markdown_with_reviewed_nested_outputs_from_review_state,
     merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope,
-    parse_markdown_with_backend,
+    normalize_markdown_source, parse_markdown_with_backend,
 };
 use serde_json::Value;
 use tree_haver::registered_backends;
@@ -247,6 +248,37 @@ fn conforms_to_slice_286_markdown_merge() {
     );
     assert!(result.ok);
     assert_eq!(result.output, fixture["expected"]["output"].as_str().map(str::to_string));
+}
+
+#[test]
+fn merge_uses_the_supplied_parser_for_both_inputs() {
+    let calls = Cell::new(0);
+    let parser = |source: &str, dialect: MarkdownDialect| {
+        calls.set(calls.get() + 1);
+        let normalized_source = normalize_markdown_source(source);
+        ParseResult {
+            ok: true,
+            diagnostics: vec![],
+            analysis: Some(MarkdownAnalysis {
+                dialect,
+                normalized_source: normalized_source.clone(),
+                root_kind: MarkdownRootKind::Document,
+                owners: collect_markdown_owners(&normalized_source),
+            }),
+            policies: vec![],
+        }
+    };
+
+    let result = merge_markdown_with_parser(
+        "# Template\n\nrequired\n",
+        "# Destination\n\nretained\n",
+        MarkdownDialect::Markdown,
+        parser,
+    );
+
+    assert!(result.ok);
+    assert_eq!(calls.get(), 2);
+    assert_eq!(result.output.as_deref(), Some("# Destination\n\nretained\n"));
 }
 
 #[test]

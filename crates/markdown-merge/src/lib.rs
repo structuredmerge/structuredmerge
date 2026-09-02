@@ -560,6 +560,22 @@ pub fn merge_markdown_with_nested_outputs_with_backend(
     nested_outputs: &[NestedChildOutput],
     backend: MarkdownBackend,
 ) -> MergeResult<String> {
+    merge_markdown_with_nested_outputs_with_parser(
+        template_source,
+        destination_source,
+        dialect,
+        nested_outputs,
+        |source, parse_dialect| parse_markdown_with_backend(source, parse_dialect, backend),
+    )
+}
+
+pub fn merge_markdown_with_nested_outputs_with_parser(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    nested_outputs: &[NestedChildOutput],
+    parser: impl Fn(&str, MarkdownDialect) -> ParseResult<MarkdownAnalysis>,
+) -> MergeResult<String> {
     ast_merge::execute_nested_merge(
         &nested_outputs
             .iter()
@@ -574,10 +590,10 @@ pub fn merge_markdown_with_nested_outputs_with_backend(
         },
         ast_merge::NestedMergeExecutionCallbacks {
             merge_parent: || {
-                merge_markdown_with_backend(template_source, destination_source, dialect, backend)
+                merge_markdown_using_parser(template_source, destination_source, dialect, &parser)
             },
             discover_operations: |merged_output| {
-                let analysis = parse_markdown_with_backend(merged_output, dialect, backend);
+                let analysis = parser(merged_output, dialect);
                 if !analysis.ok || analysis.analysis.is_none() {
                     return ast_merge::NestedMergeDiscoveryResult {
                         ok: false,
@@ -640,6 +656,24 @@ pub fn merge_markdown_with_reviewed_nested_outputs_with_backend(
     applied_children: &[AppliedChildOutput],
     backend: MarkdownBackend,
 ) -> MergeResult<String> {
+    merge_markdown_with_reviewed_nested_outputs_with_parser(
+        template_source,
+        destination_source,
+        dialect,
+        review_state,
+        applied_children,
+        |source, parse_dialect| parse_markdown_with_backend(source, parse_dialect, backend),
+    )
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_with_parser(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    review_state: &DelegatedChildGroupReviewState,
+    applied_children: &[AppliedChildOutput],
+    parser: impl Fn(&str, MarkdownDialect) -> ParseResult<MarkdownAnalysis>,
+) -> MergeResult<String> {
     let resolved_children = applied_children
         .iter()
         .map(|child| AppliedDelegatedChildOutput {
@@ -654,10 +688,10 @@ pub fn merge_markdown_with_reviewed_nested_outputs_with_backend(
         &resolved_children,
         ast_merge::NestedMergeExecutionCallbacks {
             merge_parent: || {
-                merge_markdown_with_backend(template_source, destination_source, dialect, backend)
+                merge_markdown_using_parser(template_source, destination_source, dialect, &parser)
             },
             discover_operations: |merged_output| {
-                let analysis = parse_markdown_with_backend(merged_output, dialect, backend);
+                let analysis = parser(merged_output, dialect);
                 if !analysis.ok || analysis.analysis.is_none() {
                     return ast_merge::NestedMergeDiscoveryResult {
                         ok: false,
@@ -717,6 +751,22 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_backe
     replay_bundle: &ReviewReplayBundle,
     backend: MarkdownBackend,
 ) -> MergeResult<String> {
+    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_parser(
+        template_source,
+        destination_source,
+        dialect,
+        replay_bundle,
+        |source, parse_dialect| parse_markdown_with_backend(source, parse_dialect, backend),
+    )
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_parser(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    replay_bundle: &ReviewReplayBundle,
+    parser: impl Fn(&str, MarkdownDialect) -> ParseResult<MarkdownAnalysis>,
+) -> MergeResult<String> {
     if let Some(execution) = replay_bundle
         .reviewed_nested_executions
         .iter()
@@ -730,13 +780,13 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_backe
                 output: child.output.clone(),
             })
             .collect::<Vec<_>>();
-        return merge_markdown_with_reviewed_nested_outputs_with_backend(
+        return merge_markdown_with_reviewed_nested_outputs_with_parser(
             template_source,
             destination_source,
             dialect,
             &execution.review_state,
             &applied_children,
-            backend,
+            parser,
         );
     }
 
@@ -778,6 +828,22 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state_with_backen
     review_state: &ConformanceManifestReviewState,
     backend: MarkdownBackend,
 ) -> MergeResult<String> {
+    merge_markdown_with_reviewed_nested_outputs_from_review_state_with_parser(
+        template_source,
+        destination_source,
+        dialect,
+        review_state,
+        |source, parse_dialect| parse_markdown_with_backend(source, parse_dialect, backend),
+    )
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state_with_parser(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    review_state: &ConformanceManifestReviewState,
+    parser: impl Fn(&str, MarkdownDialect) -> ParseResult<MarkdownAnalysis>,
+) -> MergeResult<String> {
     if let Some(execution) = review_state
         .reviewed_nested_executions
         .iter()
@@ -791,13 +857,13 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state_with_backen
                 output: child.output.clone(),
             })
             .collect::<Vec<_>>();
-        return merge_markdown_with_reviewed_nested_outputs_with_backend(
+        return merge_markdown_with_reviewed_nested_outputs_with_parser(
             template_source,
             destination_source,
             dialect,
             &execution.review_state,
             &applied_children,
-            backend,
+            parser,
         );
     }
 
@@ -838,13 +904,29 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope_w
     envelope: &ReviewReplayBundleEnvelope,
     backend: MarkdownBackend,
 ) -> MergeResult<String> {
+    merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope_with_parser(
+        template_source,
+        destination_source,
+        dialect,
+        envelope,
+        |source, parse_dialect| parse_markdown_with_backend(source, parse_dialect, backend),
+    )
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope_with_parser(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    envelope: &ReviewReplayBundleEnvelope,
+    parser: impl Fn(&str, MarkdownDialect) -> ParseResult<MarkdownAnalysis>,
+) -> MergeResult<String> {
     match import_review_replay_bundle_envelope(envelope) {
-        Ok(bundle) => merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_backend(
+        Ok(bundle) => merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_parser(
             template_source,
             destination_source,
             dialect,
             &bundle,
-            backend,
+            parser,
         ),
         Err(error) => MergeResult {
             ok: false,
@@ -890,13 +972,29 @@ pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope_wi
     envelope: &ConformanceManifestReviewStateEnvelope,
     backend: MarkdownBackend,
 ) -> MergeResult<String> {
+    merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope_with_parser(
+        template_source,
+        destination_source,
+        dialect,
+        envelope,
+        |source, parse_dialect| parse_markdown_with_backend(source, parse_dialect, backend),
+    )
+}
+
+pub fn merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope_with_parser(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    envelope: &ConformanceManifestReviewStateEnvelope,
+    parser: impl Fn(&str, MarkdownDialect) -> ParseResult<MarkdownAnalysis>,
+) -> MergeResult<String> {
     match import_conformance_manifest_review_state_envelope(envelope) {
-        Ok(state) => merge_markdown_with_reviewed_nested_outputs_from_review_state_with_backend(
+        Ok(state) => merge_markdown_with_reviewed_nested_outputs_from_review_state_with_parser(
             template_source,
             destination_source,
             dialect,
             &state,
-            backend,
+            parser,
         ),
         Err(error) => MergeResult {
             ok: false,
@@ -939,7 +1037,30 @@ pub fn merge_markdown_with_backend(
     dialect: MarkdownDialect,
     backend: MarkdownBackend,
 ) -> MergeResult<String> {
-    let template = parse_markdown_with_backend(template_source, dialect, backend);
+    merge_markdown_with_parser(
+        template_source,
+        destination_source,
+        dialect,
+        |source, parse_dialect| parse_markdown_with_backend(source, parse_dialect, backend),
+    )
+}
+
+pub fn merge_markdown_with_parser(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    parser: impl Fn(&str, MarkdownDialect) -> ParseResult<MarkdownAnalysis>,
+) -> MergeResult<String> {
+    merge_markdown_using_parser(template_source, destination_source, dialect, &parser)
+}
+
+fn merge_markdown_using_parser(
+    template_source: &str,
+    destination_source: &str,
+    dialect: MarkdownDialect,
+    parser: &impl Fn(&str, MarkdownDialect) -> ParseResult<MarkdownAnalysis>,
+) -> MergeResult<String> {
+    let template = parser(template_source, dialect);
     if !template.ok || template.analysis.is_none() {
         return MergeResult {
             ok: false,
@@ -949,7 +1070,7 @@ pub fn merge_markdown_with_backend(
         };
     }
 
-    let destination = parse_markdown_with_backend(destination_source, dialect, backend);
+    let destination = parser(destination_source, dialect);
     if !destination.ok || destination.analysis.is_none() {
         return MergeResult {
             ok: false,
