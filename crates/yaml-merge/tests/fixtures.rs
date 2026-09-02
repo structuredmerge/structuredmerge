@@ -494,6 +494,40 @@ fn preserves_mapping_order_and_safe_plain_string_types() {
 }
 
 #[test]
+fn conforms_to_the_ruby_gm_advanced_leaf_merge_fixture() {
+    let fixture =
+        read_fixture(&["yaml", "slice-720-advanced-leaf-merge", "nested-mapping-leaf-merge.json"]);
+    let result = merge_yaml_with_backend(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        YamlDialect::Yaml,
+        YamlBackend::KreuzbergLanguagePack,
+    );
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+}
+
+#[test]
+fn fails_closed_for_the_unsupported_multi_document_anchor_fixture() {
+    let fixture = read_fixture(&[
+        "yaml",
+        "slice-721-formatting-preservation",
+        "comments-anchors-documents-sequences.json",
+    ]);
+    let result = merge_yaml_with_backend(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        YamlDialect::Yaml,
+        YamlBackend::KreuzbergLanguagePack,
+    );
+
+    assert!(!result.ok);
+    assert!(result.output.is_none());
+    assert!(!result.diagnostics.is_empty());
+}
+
+#[test]
 fn uses_kreuzberg_backend_by_default() {
     let valid = read_fixture(&["yaml", "slice-96-parse", "valid-document.json"]);
     let result = parse_yaml(valid["source"].as_str().unwrap(), YamlDialect::Yaml);
