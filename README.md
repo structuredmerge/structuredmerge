@@ -15,6 +15,10 @@ Project links:
 - Specification: <https://github.com/structuredmerge/structuredmerge-spec>
 - Shared fixtures: <https://github.com/structuredmerge/structuredmerge-fixtures>
 
+The [distribution architecture](docs/distribution.md) defines how the Rust
+kernel, parser providers, application bundles, and Alef-generated host adapters
+fit together.
+
 ## Behavioral Authority
 
 The mature Ruby implementation is the StructuredMerge behavioral golden

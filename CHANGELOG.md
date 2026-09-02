@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Define the production package boundaries for the Rust kernel, compile-time
+  provider bundles, generated Ruby artifact, and host-native provider adapters.
 - Promote the Alef Ruby binding configuration to the canonical `alef.toml`,
   complete its generated README and API-reference surface, and gate both Alef
   freshness and Ruby 3.2/4.0 binding tests in CI.
