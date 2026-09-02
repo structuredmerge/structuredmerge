@@ -1,12 +1,15 @@
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult,
-    ParseResult, PolicyReference, PolicySurface,
+    ParseResult, PolicyReference, PolicySurface, SourcePreservingOwner,
+    SourcePreservingOwnerDocument, ThreeWayMergeOutcome, ThreeWayMergeResult, error_diagnostic,
+    merge_source_preserving_owners, normalized_parse_error_result, parse_error_result,
+    three_way_parse_error,
 };
 use syn::File;
 use tree_haver::{
-    BackendReference, ParserRequest, ProcessRequest, kreuzberg_language_pack_backend,
-    language_pack_adapter_info, parse_with_language_pack, process_with_language_pack,
-    structured_import_source_diagnostics,
+    BackendReference, NormalizedTreeIndex, NormalizedTreeNode, ParserRequest,
+    kreuzberg_language_pack_backend, language_pack_adapter_info,
+    parse_normalized_with_language_pack,
 };
 
 pub const PACKAGE_NAME: &str = "rust-merge";
@@ -98,10 +101,6 @@ fn parse_request(source: &str) -> ParserRequest {
     }
 }
 
-fn process_request(source: &str) -> ProcessRequest {
-    ProcessRequest { source: source.to_string(), language: "rust".to_string() }
-}
-
 fn slice_span(source: &str, start: usize, end: usize) -> String {
     source[start..end].trim().to_string()
 }
@@ -176,61 +175,53 @@ pub fn parse_rust_with_backend(
         return parse_rust_native(source);
     }
 
-    let parsed = parse_with_language_pack(&parse_request(source));
+    let parsed = parse_normalized_with_language_pack(&parse_request(source));
     if !parsed.ok {
-        return ParseResult {
-            ok: false,
-            diagnostics: parsed.diagnostics.into_iter().map(Into::into).collect(),
-            analysis: None,
-            policies: vec![],
-        };
+        return normalized_parse_error_result(parsed.diagnostics);
     }
-
-    let processed = process_with_language_pack(&process_request(source));
-    if !processed.ok {
-        return ParseResult {
-            ok: false,
-            diagnostics: processed.diagnostics.into_iter().map(Into::into).collect(),
-            analysis: None,
-            policies: vec![],
-        };
-    }
-
-    let analysis = processed.analysis.expect("successful process should include analysis");
-    let import_diagnostics = structured_import_source_diagnostics("rust", &analysis.imports);
-    if !import_diagnostics.is_empty() {
-        return ParseResult {
-            ok: false,
-            diagnostics: import_diagnostics.into_iter().map(Into::into).collect(),
-            analysis: None,
-            policies: vec![],
-        };
-    }
-
-    let imports = analysis
-        .imports
-        .iter()
-        .enumerate()
-        .map(|(index, item)| ModuleImport {
-            path: format!("/imports/{index}"),
-            match_key: item.source.clone(),
-            text: format!("{}\n", slice_span(source, item.span.start_byte, item.span.end_byte)),
-        })
-        .collect::<Vec<_>>();
-    let mut declarations = analysis
-        .structure
-        .iter()
-        .filter_map(|item| {
-            item.name.as_ref().map(|name| ModuleDeclaration {
-                path: format!("/declarations/{name}"),
-                match_key: name.clone(),
+    let index = match NormalizedTreeIndex::new(&parsed.nodes) {
+        Ok(index) => index,
+        Err(message) => return parse_error_result(message),
+    };
+    let root = match index.root(&parsed.root_id) {
+        Ok(root) => root,
+        Err(message) => return parse_error_result(message),
+    };
+    let mut imports = Vec::new();
+    let mut declarations = Vec::new();
+    for node in index.children(root) {
+        match node.kind.as_str() {
+            "line_comment" | "block_comment" => {}
+            "use_declaration" => imports.push(ModuleImport {
+                path: format!("/imports/{}", imports.len()),
+                match_key: rust_use_key(&node.source_fragment),
                 text: format!(
                     "{}\n",
-                    line_anchored_span(source, item.span.start_byte, item.span.end_byte)
+                    slice_span(source, node.span.range.start_byte, node.span.range.end_byte)
                 ),
-            })
-        })
-        .collect::<Vec<_>>();
+            }),
+            kind if supported_analysis_declaration(kind) => {
+                let Some(name) = declaration_name(node, &index) else {
+                    return parse_error_result(format!(
+                        "Rust declaration {kind:?} has no stable name"
+                    ));
+                };
+                declarations.push(ModuleDeclaration {
+                    path: format!("/declarations/{name}"),
+                    match_key: name,
+                    text: format!(
+                        "{}\n",
+                        line_anchored_span(
+                            source,
+                            node.span.range.start_byte,
+                            node.span.range.end_byte
+                        )
+                    ),
+                });
+            }
+            kind => return parse_error_result(format!("unsupported top-level Rust node {kind:?}")),
+        }
+    }
     declarations.sort_by(|left, right| left.path.cmp(&right.path));
 
     ParseResult {
@@ -263,6 +254,136 @@ pub fn parse_rust_with_backend(
         }),
         policies: vec![],
     }
+}
+
+pub fn merge_rust_three_way(
+    base_source: &str,
+    ours_source: &str,
+    theirs_source: &str,
+    dialect: RustDialect,
+) -> ThreeWayMergeResult<String> {
+    merge_rust_three_way_with_backend(
+        base_source,
+        ours_source,
+        theirs_source,
+        dialect,
+        RustBackend::TreeSitter,
+    )
+}
+
+pub fn merge_rust_three_way_with_backend(
+    base_source: &str,
+    ours_source: &str,
+    theirs_source: &str,
+    _dialect: RustDialect,
+    backend: RustBackend,
+) -> ThreeWayMergeResult<String> {
+    if backend == RustBackend::Native {
+        return ThreeWayMergeResult {
+            outcome: ThreeWayMergeOutcome::Error,
+            diagnostics: vec![error_diagnostic(
+                ast_merge::DiagnosticCategory::UnsupportedFeature,
+                "syn does not expose source spans required for source-preserving Rust merge3",
+            )],
+            conflicts: vec![],
+            output: None,
+            policies: vec![],
+        };
+    }
+
+    let base = match parse_source_preserving_rust(base_source) {
+        Ok(document) => document,
+        Err(message) => return three_way_parse_error("base", message),
+    };
+    let ours = match parse_source_preserving_rust(ours_source) {
+        Ok(document) => document,
+        Err(message) => return three_way_parse_error("ours", message),
+    };
+    let theirs = match parse_source_preserving_rust(theirs_source) {
+        Ok(document) => document,
+        Err(message) => return three_way_parse_error("theirs", message),
+    };
+
+    merge_source_preserving_owners(base, ours, theirs, parse_source_preserving_rust)
+}
+
+fn parse_source_preserving_rust(source: &str) -> Result<SourcePreservingOwnerDocument, String> {
+    let parsed = parse_normalized_with_language_pack(&parse_request(source));
+    if !parsed.ok {
+        return Err(parsed.diagnostics.join("; "));
+    }
+    if !parsed.source_fragments_available {
+        return Err("Rust parser did not retain source fragments".to_string());
+    }
+    let index = NormalizedTreeIndex::new(&parsed.nodes)?;
+    let root = index.root(&parsed.root_id)?;
+    let mut owners = Vec::new();
+    for node in index.children(root) {
+        match node.kind.as_str() {
+            "line_comment" | "block_comment" | "use_declaration" => {}
+            "function_item" => {
+                let name = declaration_name(node, &index)
+                    .ok_or_else(|| "Rust function item has no stable name".to_string())?;
+                let path = format!("/function:{name}");
+                owners.push(SourcePreservingOwner {
+                    id: path.clone(),
+                    path,
+                    fingerprint: node.source_fragment.clone(),
+                    start_byte: node.span.range.start_byte,
+                    end_byte: node.span.range.end_byte,
+                    start_line: node.span.start_point.row + 1,
+                    end_line: node.span.end_point.row + 1,
+                });
+            }
+            kind => return Err(format!("unsupported top-level Rust node {kind:?}")),
+        }
+    }
+    if owners.is_empty() {
+        return Err("Rust document has no supported top-level functions".to_string());
+    }
+    Ok(SourcePreservingOwnerDocument { source: source.to_string(), owners })
+}
+
+fn supported_analysis_declaration(kind: &str) -> bool {
+    matches!(
+        kind,
+        "const_item"
+            | "enum_item"
+            | "function_item"
+            | "mod_item"
+            | "static_item"
+            | "struct_item"
+            | "trait_item"
+            | "type_item"
+            | "union_item"
+    )
+}
+
+fn declaration_name(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> Option<String> {
+    index
+        .children(node)
+        .into_iter()
+        .find(|child| child.field_name.as_deref() == Some("name"))
+        .or_else(|| {
+            index
+                .children(node)
+                .into_iter()
+                .find(|child| matches!(child.kind.as_str(), "identifier" | "type_identifier"))
+        })
+        .map(|child| child.source_fragment.clone())
+}
+
+fn rust_use_key(source: &str) -> String {
+    source
+        .trim()
+        .strip_prefix("pub ")
+        .unwrap_or(source.trim())
+        .strip_prefix("use ")
+        .unwrap_or(source.trim())
+        .strip_suffix(';')
+        .unwrap_or(source.trim())
+        .trim()
+        .to_string()
 }
 
 pub fn match_rust_owners(

@@ -14,6 +14,7 @@ use json_merge::{
 use markdown_merge::{MarkdownDialect, merge_markdown_source_preserving};
 use rbs_merge::{RbsDialect, merge_rbs};
 use ruby_merge::{RubyDialect, merge_ruby};
+use rust_merge::{RustDialect, merge_rust_three_way};
 use serde::Deserialize;
 use toml_merge::{TomlDialect, merge_toml};
 use typescript_merge::{TypeScriptDialect, merge_typescript_three_way};
@@ -44,6 +45,7 @@ enum BenchmarkDialect {
     Markdown(MarkdownDialect),
     Rbs(RbsDialect),
     Ruby(RubyDialect),
+    Rust(RustDialect),
     Toml(TomlDialect),
     TypeScript(TypeScriptDialect),
     Yaml(YamlDialect),
@@ -85,6 +87,9 @@ pub fn run_merge2_files(args: &[String], output: &mut dyn Write, error: &mut dyn
             }
             BenchmarkDialect::Rbs(dialect) => merge_rbs(&incoming, &current, dialect),
             BenchmarkDialect::Ruby(dialect) => merge_ruby(&incoming, &current, dialect),
+            BenchmarkDialect::Rust(_) => {
+                return Err("Rust merge2 is not source-preserving yet".to_string());
+            }
             BenchmarkDialect::Toml(dialect) => merge_toml(&incoming, &current, dialect, None),
             BenchmarkDialect::TypeScript(_) => {
                 return Err("TypeScript merge2 is not source-preserving yet".to_string());
@@ -164,6 +169,7 @@ pub fn run_merge3_files(args: &[String], error: &mut dyn Write) -> i32 {
         let result = match dialect {
             BenchmarkDialect::Go(dialect) => merge_go_three_way(&base, &ours, &theirs, dialect),
             BenchmarkDialect::Json(dialect) => merge_json_three_way(&base, &ours, &theirs, dialect),
+            BenchmarkDialect::Rust(dialect) => merge_rust_three_way(&base, &ours, &theirs, dialect),
             BenchmarkDialect::TypeScript(dialect) => {
                 merge_typescript_three_way(&base, &ours, &theirs, dialect)
             }
@@ -220,6 +226,7 @@ fn benchmark_family(dialect: BenchmarkDialect) -> &'static str {
         BenchmarkDialect::Markdown(_) => "markdown",
         BenchmarkDialect::Rbs(_) => "rbs",
         BenchmarkDialect::Ruby(_) => "ruby",
+        BenchmarkDialect::Rust(_) => "rust",
         BenchmarkDialect::Toml(_) => "toml",
         BenchmarkDialect::TypeScript(_) => "typescript",
         BenchmarkDialect::Yaml(_) => "yaml",
@@ -281,11 +288,35 @@ fn execute(request: Request) -> Result<(i32, String, serde_json::Value), String>
         "markdown" => execute_markdown(request),
         "rbs" => execute_rbs(request),
         "ruby" => execute_ruby(request),
+        "rust" => execute_rust(request),
         "toml" => execute_toml(request),
         "typescript" => execute_typescript(request),
         "yaml" => execute_yaml(request),
         family => Err(format!("unsupported benchmark family: {family}")),
     }
+}
+
+fn execute_rust(request: Request) -> Result<(i32, String, serde_json::Value), String> {
+    if request.selector.dialect != "rust" {
+        return Err(format!("unsupported Rust dialect: {}", request.selector.dialect));
+    }
+    if request.operation != "merge3" {
+        return Err(format!("unsupported Rust benchmark operation: {}", request.operation));
+    }
+
+    let base = source(&request.sources, "base")?;
+    let ours = source(&request.sources, "ours")?;
+    let theirs = source(&request.sources, "theirs")?;
+    let result = merge_rust_three_way(&base, &ours, &theirs, RustDialect::Rust);
+    let status = match result.outcome {
+        ThreeWayMergeOutcome::Clean => 0,
+        ThreeWayMergeOutcome::Conflict => 1,
+        ThreeWayMergeOutcome::Error => 2,
+    };
+    let output = result.output.clone().unwrap_or_default();
+    let result = serde_json::to_value(result)
+        .map_err(|error| format!("serialize Rust merge3 result: {error}"))?;
+    Ok((status, output, result))
 }
 
 fn execute_go(request: Request) -> Result<(i32, String, serde_json::Value), String> {
@@ -509,6 +540,8 @@ fn parse_benchmark_dialect(value: &str) -> Result<BenchmarkDialect, String> {
         Ok(BenchmarkDialect::Rbs(RbsDialect::Rbs))
     } else if value.trim().eq_ignore_ascii_case("ruby") || value.trim().eq_ignore_ascii_case("rb") {
         Ok(BenchmarkDialect::Ruby(RubyDialect::Ruby))
+    } else if value.trim().eq_ignore_ascii_case("rust") || value.trim().eq_ignore_ascii_case("rs") {
+        Ok(BenchmarkDialect::Rust(RustDialect::Rust))
     } else if value.trim().eq_ignore_ascii_case("yaml") || value.trim().eq_ignore_ascii_case("yml")
     {
         Ok(BenchmarkDialect::Yaml(YamlDialect::Yaml))
@@ -682,6 +715,37 @@ mod tests {
         assert_eq!(merge3["status"], 2);
         assert!(
             merge3["stderr"].as_str().unwrap().contains("unsupported Markdown benchmark operation")
+        );
+    }
+
+    #[test]
+    fn serves_source_preserving_rust_merge3_without_claiming_merge2() {
+        let base = "fn left() -> i32 { 1 }\n\nfn right() -> i32 { 1 }\n";
+        let ours = "fn left() -> i32 { 2 }\n\nfn right() -> i32 { 1 }\n";
+        let theirs = "fn left() -> i32 { 1 }\n\nfn right() -> i32 { 2 }\n";
+        let expected = "fn left() -> i32 { 2 }\n\nfn right() -> i32 { 2 }\n";
+        let merge3 = execute_line(&request_for(
+            "merge3",
+            "rust",
+            "rust",
+            &[("base", base), ("ours", ours), ("theirs", theirs)],
+        ));
+        let merge2 = execute_line(&request_for(
+            "merge2",
+            "rust",
+            "rust",
+            &[("incoming", theirs), ("current", ours)],
+        ));
+
+        assert_eq!(merge3["status"], 0);
+        assert_eq!(
+            String::from_utf8(STANDARD.decode(merge3["output_base64"].as_str().unwrap()).unwrap())
+                .unwrap(),
+            expected
+        );
+        assert_eq!(merge2["status"], 2);
+        assert!(
+            merge2["stderr"].as_str().unwrap().contains("unsupported Rust benchmark operation")
         );
     }
 

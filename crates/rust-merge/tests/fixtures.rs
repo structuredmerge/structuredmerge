@@ -4,7 +4,8 @@ use ast_merge::{
     ConformanceManifest, conformance_family_feature_profile_path, conformance_fixture_path,
 };
 use rust_merge::{
-    RustBackend, RustDialect, match_rust_owners, merge_rust, merge_rust_with_backend, parse_rust,
+    RustBackend, RustDialect, match_rust_owners, merge_rust, merge_rust_three_way,
+    merge_rust_three_way_with_backend, merge_rust_with_backend, parse_rust,
     parse_rust_with_backend, rust_backend_feature_profile, rust_backends, rust_feature_profile,
     rust_plan_context,
 };
@@ -20,6 +21,45 @@ fn fixture_path(parts: &[&str]) -> PathBuf {
         path.push(part);
     }
     path
+}
+
+#[test]
+fn merges_independent_function_edits_with_exact_source_preservation() {
+    let base = "use std::fmt;\n\nfn left() -> i32 { 1 }\n\nfn right() -> i32 { 1 }\n";
+    let ours = "use std::fmt;\n\nfn left() -> i32 { 2 }\n\nfn right() -> i32 { 1 }\n";
+    let theirs = "use std::fmt;\n\nfn left() -> i32 { 1 }\n\nfn right() -> i32 { 2 }\n";
+
+    let result = merge_rust_three_way(base, ours, theirs, RustDialect::Rust);
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
+    assert_eq!(
+        result.output.as_deref(),
+        Some("use std::fmt;\n\nfn left() -> i32 { 2 }\n\nfn right() -> i32 { 2 }\n")
+    );
+}
+
+#[test]
+fn rejects_ambiguous_or_spanless_rust_three_way_inputs_without_fallback() {
+    let base = "fn value() -> i32 { 1 }\n";
+    let ours = "fn value() -> i32 { 2 }\n";
+    let theirs = "fn value() -> i32 { 3 }\n";
+    let conflict = merge_rust_three_way(base, ours, theirs, RustDialect::Rust);
+    assert_eq!(conflict.outcome, ast_merge::ThreeWayMergeOutcome::Conflict);
+    assert_eq!(conflict.conflicts[0].path, "/function:value");
+
+    let malformed = merge_rust_three_way(base, ours, "fn value( {\n", RustDialect::Rust);
+    assert_eq!(malformed.outcome, ast_merge::ThreeWayMergeOutcome::Error);
+    assert_eq!(malformed.diagnostics[0].category, ast_merge::DiagnosticCategory::ParseError);
+
+    let native = merge_rust_three_way_with_backend(
+        base,
+        ours,
+        theirs,
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+    assert_eq!(native.outcome, ast_merge::ThreeWayMergeOutcome::Error);
+    assert_eq!(native.diagnostics[0].category, ast_merge::DiagnosticCategory::UnsupportedFeature);
 }
 
 fn read_fixture(parts: &[&str]) -> Value {

@@ -13,3 +13,6 @@
   construction from `ast-merge` instead of redefining them in format providers.
 - Route Go analysis through TreeHaver's normalized TSLP parser and add a
   fail-closed, source-preserving top-level function three-way merge provider.
+- Route Rust analysis through TreeHaver's normalized TSLP parser and add a
+  fail-closed, source-preserving top-level function three-way merge provider;
+  keep the spanless native `syn` backend explicitly unsupported for merging.
