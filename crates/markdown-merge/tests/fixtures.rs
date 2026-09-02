@@ -1,7 +1,7 @@
 use std::{cell::Cell, fs, path::PathBuf};
 
 use ast_merge::{
-    ConformanceManifest, ParseResult, ProjectedChildReviewCase, ProjectedChildReviewGroup,
+    ConformanceManifest, ProjectedChildReviewCase, ProjectedChildReviewGroup,
     ProjectedChildReviewGroupProgress, conformance_family_feature_profile_path,
     conformance_fixture_path, delegated_child_apply_plan, group_projected_child_review_cases,
     projected_child_group_review_request, review_projected_child_groups,
@@ -10,18 +10,17 @@ use ast_merge::{
     summarize_projected_child_review_group_progress,
 };
 use markdown_merge::{
-    MarkdownAnalysis, MarkdownBackend, MarkdownDialect, MarkdownOwnerKind, MarkdownRootKind,
-    apply_markdown_delegated_child_outputs, available_markdown_backends, collect_markdown_owners,
-    markdown_backend_feature_profile, markdown_delegated_child_operations,
-    markdown_discovered_surfaces, markdown_embedded_families, markdown_feature_profile,
-    markdown_plan_context_with_backend, match_markdown_owners, merge_markdown,
-    merge_markdown_with_nested_outputs, merge_markdown_with_parser,
+    MarkdownBackend, MarkdownDialect, MarkdownOwnerKind, apply_markdown_delegated_child_outputs,
+    available_markdown_backends, markdown_backend_feature_profile,
+    markdown_delegated_child_operations, markdown_discovered_surfaces, markdown_embedded_families,
+    markdown_feature_profile, markdown_plan_context_with_backend, match_markdown_owners,
+    merge_markdown, merge_markdown_with_nested_outputs, merge_markdown_with_parser,
     merge_markdown_with_reviewed_nested_outputs,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope,
     merge_markdown_with_reviewed_nested_outputs_from_review_state,
     merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope,
-    normalize_markdown_source, parse_markdown_with_backend,
+    parse_markdown_with_backend,
 };
 use serde_json::Value;
 use tree_haver::registered_backends;
@@ -255,21 +254,7 @@ fn merge_uses_the_supplied_parser_for_both_inputs() {
     let calls = Cell::new(0);
     let parser = |source: &str, dialect: MarkdownDialect| {
         calls.set(calls.get() + 1);
-        let normalized_source = normalize_markdown_source(source);
-        ParseResult {
-            ok: true,
-            diagnostics: vec![],
-            analysis: Some(MarkdownAnalysis {
-                dialect,
-                normalized_source: normalized_source.clone(),
-                root_kind: MarkdownRootKind::Document,
-                owners: collect_markdown_owners(&normalized_source),
-                comment_regions: vec![],
-                layout_gaps: vec![],
-                comment_attachments: vec![],
-            }),
-            policies: vec![],
-        }
+        parse_markdown_with_backend(source, dialect, MarkdownBackend::KreuzbergLanguagePack)
     };
 
     let result = merge_markdown_with_parser(
@@ -298,6 +283,40 @@ fn projects_markdown_comments_and_blank_lines_through_shared_ownership() {
     assert_eq!(analysis.comment_regions[0].normalized_content(), "package");
     assert!(!analysis.layout_gaps.is_empty());
     assert!(!analysis.comment_attachments.is_empty());
+}
+
+#[test]
+fn derives_owner_and_fenced_body_ranges_from_the_tree_haver_ast() {
+    let source = "# Title\n\n```ruby\nputs :ok\n```\n";
+    let analysis = parse_markdown_with_backend(
+        source,
+        MarkdownDialect::Markdown,
+        MarkdownBackend::KreuzbergLanguagePack,
+    )
+    .analysis
+    .expect("analysis should exist");
+    let fence = analysis
+        .owners
+        .iter()
+        .find(|owner| owner.owner_kind == MarkdownOwnerKind::CodeFence)
+        .expect("fence owner should exist");
+
+    assert_eq!(&source[fence.start_byte..fence.end_byte], "```ruby\nputs :ok\n```\n");
+    assert_eq!(
+        &source[fence.content_start_byte.unwrap()..fence.content_end_byte.unwrap()],
+        "puts :ok\n"
+    );
+}
+
+#[test]
+fn preserves_destination_line_endings_gaps_and_missing_final_newline() {
+    let destination = "# Title\r\n\r\n```ruby\r\ncustom\r\n```\r\n\r\n## End\r\nkept";
+    let template = "# Title\n\n```ruby\ndefault\n```\n\n## End\ndefault";
+
+    let result = merge_markdown(template, destination, MarkdownDialect::Markdown);
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(destination));
 }
 
 #[test]

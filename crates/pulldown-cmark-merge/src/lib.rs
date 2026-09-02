@@ -7,17 +7,17 @@ use ast_merge::{
     ReviewReplayBundleEnvelope,
 };
 use markdown_merge::{
-    AppliedChildOutput, MarkdownAnalysis, MarkdownDialect, collect_markdown_owners,
-    markdown_feature_profile, match_markdown_owners as match_markdown_owners_with_substrate,
+    AppliedChildOutput, MarkdownAnalysis, MarkdownDialect, MarkdownOwner,
+    include_trailing_line_ending, markdown_feature_profile,
+    match_markdown_owners as match_markdown_owners_with_substrate,
     merge_markdown_with_parser as merge_markdown_with_substrate,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope_with_parser as merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope_with_substrate,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_parser as merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_with_substrate,
     merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope_with_parser as merge_markdown_with_reviewed_nested_outputs_from_review_state_envelope_with_substrate,
     merge_markdown_with_reviewed_nested_outputs_from_review_state_with_parser as merge_markdown_with_reviewed_nested_outputs_from_review_state_with_substrate,
     merge_markdown_with_reviewed_nested_outputs_with_parser as merge_markdown_with_reviewed_nested_outputs_with_substrate,
-    normalize_markdown_source,
 };
-use pulldown_cmark::Parser;
+use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Parser, Tag, TagEnd};
 use tree_haver::{BackendReference, register_backend};
 
 pub const PACKAGE_NAME: &str = "pulldown-cmark-merge";
@@ -119,24 +119,157 @@ pub fn parse_markdown(
         };
     }
 
-    let parser = Parser::new(source);
-    for _ in parser {}
-
-    let normalized_source = normalize_markdown_source(source);
+    let owners = collect_pulldown_owners(source);
     ParseResult {
         ok: true,
         diagnostics: vec![],
         analysis: Some(MarkdownAnalysis {
             dialect,
-            normalized_source: normalized_source.clone(),
+            normalized_source: source.to_string(),
             root_kind: markdown_merge::MarkdownRootKind::Document,
-            owners: collect_markdown_owners(&normalized_source),
+            owners,
             comment_regions: vec![],
             layout_gaps: vec![],
             comment_attachments: vec![],
         }),
         policies: vec![],
     }
+}
+
+struct PendingHeading {
+    level: usize,
+    start_byte: usize,
+    end_byte: usize,
+    text: String,
+}
+
+struct PendingFence {
+    info_string: Option<String>,
+    start_byte: usize,
+    end_byte: usize,
+    content_start_byte: Option<usize>,
+    content_end_byte: Option<usize>,
+}
+
+enum ProjectedOwner {
+    Heading(PendingHeading),
+    Fence(PendingFence),
+}
+
+impl ProjectedOwner {
+    fn start_byte(&self) -> usize {
+        match self {
+            Self::Heading(owner) => owner.start_byte,
+            Self::Fence(owner) => owner.start_byte,
+        }
+    }
+}
+
+fn collect_pulldown_owners(source: &str) -> Vec<MarkdownOwner> {
+    let mut projected = Vec::new();
+    let mut heading = None;
+    let mut fence = None;
+    let mut container_depth = 0usize;
+
+    for (event, range) in Parser::new(source).into_offset_iter() {
+        match event {
+            Event::Start(Tag::Heading { level, .. }) if container_depth == 0 => {
+                heading = Some(PendingHeading {
+                    level: heading_level(level),
+                    start_byte: range.start,
+                    end_byte: range.end,
+                    text: String::new(),
+                });
+            }
+            Event::End(TagEnd::Heading(_)) => {
+                if let Some(owner) = heading.take() {
+                    projected.push(ProjectedOwner::Heading(owner));
+                }
+            }
+            Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(info))) => {
+                let info = info.split_whitespace().next().filter(|value| !value.is_empty());
+                fence = Some(PendingFence {
+                    info_string: info.map(str::to_string),
+                    start_byte: range.start,
+                    end_byte: include_trailing_line_ending(source, range.end),
+                    content_start_byte: None,
+                    content_end_byte: None,
+                });
+            }
+            Event::End(TagEnd::CodeBlock) => {
+                if let Some(owner) = fence.take() {
+                    projected.push(ProjectedOwner::Fence(owner));
+                }
+            }
+            Event::Text(text) | Event::Code(text) => {
+                if let Some(owner) = heading.as_mut() {
+                    owner.text.push_str(&text);
+                }
+                if let Some(owner) = fence.as_mut() {
+                    owner.content_start_byte.get_or_insert(range.start);
+                    owner.content_end_byte = Some(range.end);
+                }
+            }
+            Event::Start(tag) if owner_container_start(&tag) => {
+                container_depth += 1;
+            }
+            Event::End(tag) if owner_container_end(tag) => {
+                container_depth = container_depth.saturating_sub(1);
+            }
+            _ => {}
+        }
+    }
+
+    projected.sort_by_key(ProjectedOwner::start_byte);
+    let mut heading_index = 0usize;
+    let mut fence_index = 0usize;
+    projected
+        .into_iter()
+        .map(|owner| match owner {
+            ProjectedOwner::Heading(owner) => {
+                let result = MarkdownOwner::heading(
+                    heading_index,
+                    owner.level,
+                    &owner.text,
+                    owner.start_byte,
+                    owner.end_byte,
+                );
+                heading_index += 1;
+                result
+            }
+            ProjectedOwner::Fence(owner) => {
+                let content_range = owner.content_start_byte.zip(owner.content_end_byte);
+                let result = MarkdownOwner::code_fence(
+                    fence_index,
+                    owner.info_string.as_deref(),
+                    owner.start_byte,
+                    owner.end_byte,
+                    content_range,
+                );
+                fence_index += 1;
+                result
+            }
+        })
+        .collect()
+}
+
+fn heading_level(level: HeadingLevel) -> usize {
+    match level {
+        HeadingLevel::H1 => 1,
+        HeadingLevel::H2 => 2,
+        HeadingLevel::H3 => 3,
+        HeadingLevel::H4 => 4,
+        HeadingLevel::H5 => 5,
+        HeadingLevel::H6 => 6,
+    }
+}
+
+fn owner_container_start(tag: &Tag<'_>) -> bool {
+    matches!(tag, Tag::BlockQuote(_) | Tag::List(_) | Tag::Item)
+}
+
+fn owner_container_end(tag: TagEnd) -> bool {
+    matches!(tag, TagEnd::BlockQuote(_) | TagEnd::List(_) | TagEnd::Item)
 }
 
 pub fn match_markdown_owners(

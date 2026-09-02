@@ -11,7 +11,7 @@ use ast_merge::{
     import_conformance_manifest_review_state_envelope, import_review_replay_bundle_envelope,
     match_owner_paths,
 };
-use tree_haver::{ParserRequest, parse_normalized_with_language_pack};
+use tree_haver::{NormalizedTreeNode, ParserRequest, parse_normalized_with_language_pack};
 
 pub const PACKAGE_NAME: &str = "markdown-merge";
 
@@ -43,6 +43,53 @@ pub struct MarkdownOwner {
     pub match_key: String,
     pub level: Option<usize>,
     pub info_string: Option<String>,
+    pub start_byte: usize,
+    pub end_byte: usize,
+    pub content_start_byte: Option<usize>,
+    pub content_end_byte: Option<usize>,
+}
+
+impl MarkdownOwner {
+    pub fn heading(
+        index: usize,
+        level: usize,
+        title: &str,
+        start_byte: usize,
+        end_byte: usize,
+    ) -> Self {
+        Self {
+            path: format!("/heading/{index}"),
+            owner_kind: MarkdownOwnerKind::Heading,
+            match_key: format!("h{level}:{}", slugify(title)),
+            level: Some(level),
+            info_string: None,
+            start_byte,
+            end_byte,
+            content_start_byte: None,
+            content_end_byte: None,
+        }
+    }
+
+    pub fn code_fence(
+        index: usize,
+        info_string: Option<&str>,
+        start_byte: usize,
+        end_byte: usize,
+        content_range: Option<(usize, usize)>,
+    ) -> Self {
+        let info_string = info_string.filter(|value| !value.is_empty()).map(str::to_string);
+        Self {
+            path: format!("/code_fence/{index}"),
+            owner_kind: MarkdownOwnerKind::CodeFence,
+            match_key: format!("fence:{}", info_string.as_deref().unwrap_or("plain")),
+            level: None,
+            info_string,
+            start_byte,
+            end_byte,
+            content_start_byte: content_range.map(|range| range.0),
+            content_end_byte: content_range.map(|range| range.1),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -73,6 +120,7 @@ pub struct MarkdownAnalysis {
 struct MarkdownSection {
     path: String,
     text: String,
+    insertion_text: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -139,6 +187,14 @@ pub fn normalize_markdown_source(source: &str) -> String {
     source.replace("\r\n", "\n").replace('\r', "\n")
 }
 
+pub fn include_trailing_line_ending(source: &str, end_byte: usize) -> usize {
+    match source.as_bytes().get(end_byte..) {
+        Some([b'\r', b'\n', ..]) => end_byte + 2,
+        Some([b'\n' | b'\r', ..]) => end_byte + 1,
+        _ => end_byte,
+    }
+}
+
 fn slugify(value: &str) -> String {
     let mut slug = String::new();
     let mut previous_dash = false;
@@ -159,104 +215,94 @@ fn slugify(value: &str) -> String {
     if slug.is_empty() { "section".to_string() } else { slug }
 }
 
-pub fn collect_markdown_owners(source: &str) -> Vec<MarkdownOwner> {
-    let normalized = normalize_markdown_source(source);
-    let lines = normalized.split('\n').collect::<Vec<_>>();
+fn collect_tree_sitter_markdown_owners(nodes: &[NormalizedTreeNode]) -> Vec<MarkdownOwner> {
+    let nodes_by_id = nodes.iter().map(|node| (node.id.as_str(), node)).collect::<HashMap<_, _>>();
     let mut owners = Vec::new();
     let mut heading_index = 0usize;
     let mut code_fence_index = 0usize;
-    let mut index = 0usize;
 
-    while index < lines.len() {
-        let line = lines[index];
-
-        if let Some((hashes, title)) = parse_heading(line) {
-            let level = hashes.len();
-            owners.push(MarkdownOwner {
-                path: format!("/heading/{heading_index}"),
-                owner_kind: MarkdownOwnerKind::Heading,
-                match_key: format!("h{level}:{}", slugify(title)),
-                level: Some(level),
-                info_string: None,
-            });
-            heading_index += 1;
-            index += 1;
-            continue;
-        }
-
-        if let Some((marker_char, marker_length, info_string)) = parse_code_fence(line) {
-            let info_string = info_string.unwrap_or_default();
-            owners.push(MarkdownOwner {
-                path: format!("/code_fence/{code_fence_index}"),
-                owner_kind: MarkdownOwnerKind::CodeFence,
-                match_key: format!(
-                    "fence:{}",
-                    if info_string.is_empty() { "plain" } else { info_string.as_str() }
-                ),
-                level: None,
-                info_string: if info_string.is_empty() { None } else { Some(info_string) },
-            });
-            code_fence_index += 1;
-
-            index += 1;
-            while index < lines.len() {
-                if is_code_fence_close(lines[index], marker_char, marker_length) {
-                    break;
-                }
-                index += 1;
+    for node in nodes {
+        if node.kind == "atx_heading" && document_section_node(node, &nodes_by_id) {
+            let Some(marker) = child_of_kind(node, &nodes_by_id, |kind| {
+                kind.starts_with("atx_h") && kind.ends_with("_marker")
+            }) else {
+                continue;
+            };
+            let Some(level) = atx_heading_level(&marker.kind) else {
+                continue;
+            };
+            let Some(inline) = child_of_kind(node, &nodes_by_id, |kind| kind == "inline") else {
+                continue;
+            };
+            let title = inline.source_fragment.trim();
+            if title.is_empty() {
+                continue;
             }
-            index += 1;
+            owners.push(MarkdownOwner::heading(
+                heading_index,
+                level,
+                title,
+                node.span.range.start_byte,
+                node.span.range.end_byte,
+            ));
+            heading_index += 1;
             continue;
         }
 
-        index += 1;
+        if node.kind == "fenced_code_block" {
+            let info_string = child_of_kind(node, &nodes_by_id, |kind| kind == "info_string")
+                .and_then(|child| child.source_fragment.split_whitespace().next())
+                .unwrap_or_default()
+                .to_string();
+            let content = child_of_kind(node, &nodes_by_id, |kind| kind == "code_fence_content");
+            owners.push(MarkdownOwner::code_fence(
+                code_fence_index,
+                Some(&info_string),
+                node.span.range.start_byte,
+                node.span.range.end_byte,
+                content.map(|child| (child.span.range.start_byte, child.span.range.end_byte)),
+            ));
+            code_fence_index += 1;
+        }
     }
 
+    owners.sort_by_key(|owner| owner.start_byte);
     owners
 }
 
-fn parse_heading(line: &str) -> Option<(&str, &str)> {
-    let trimmed = line.trim_end();
-    let hashes_len = trimmed.chars().take_while(|character| *character == '#').count();
-    if !(1..=6).contains(&hashes_len) {
-        return None;
-    }
-
-    let remainder = trimmed.get(hashes_len..)?.trim_start();
-    if remainder.is_empty() {
-        return None;
-    }
-
-    let title = remainder.trim_end_matches('#').trim();
-    if title.is_empty() {
-        return None;
-    }
-
-    Some((&trimmed[..hashes_len], title))
+fn child_of_kind<'a>(
+    node: &NormalizedTreeNode,
+    nodes: &HashMap<&str, &'a NormalizedTreeNode>,
+    predicate: impl Fn(&str) -> bool,
+) -> Option<&'a NormalizedTreeNode> {
+    node.child_ids
+        .iter()
+        .filter_map(|id| nodes.get(id.as_str()).copied())
+        .find(|child| predicate(&child.kind))
 }
 
-fn parse_code_fence(line: &str) -> Option<(char, usize, Option<String>)> {
-    let trimmed = line.trim();
-    let marker_char = if trimmed.starts_with("```") {
-        '`'
-    } else if trimmed.starts_with("~~~") {
-        '~'
-    } else {
-        return None;
-    };
-
-    let marker_length = trimmed.chars().take_while(|character| *character == marker_char).count();
-    let info = trimmed[marker_length..].trim();
-    let info =
-        info.split_whitespace().next().filter(|item| !item.is_empty()).map(|item| item.to_string());
-
-    Some((marker_char, marker_length, info))
+fn atx_heading_level(marker_kind: &str) -> Option<usize> {
+    marker_kind.strip_prefix("atx_h")?.strip_suffix("_marker")?.parse().ok()
 }
 
-fn is_code_fence_close(line: &str, marker_char: char, marker_length: usize) -> bool {
-    let trimmed = line.trim();
-    let count = trimmed.chars().take_while(|character| *character == marker_char).count();
-    count >= marker_length && trimmed.chars().all(|character| character == marker_char)
+fn document_section_node(
+    node: &NormalizedTreeNode,
+    nodes: &HashMap<&str, &NormalizedTreeNode>,
+) -> bool {
+    let mut parent_id = node.parent_id.as_deref();
+    while let Some(id) = parent_id {
+        let Some(parent) = nodes.get(id).copied() else {
+            return false;
+        };
+        if parent.kind == "document" {
+            return true;
+        }
+        if parent.kind != "section" {
+            return false;
+        }
+        parent_id = parent.parent_id.as_deref();
+    }
+    false
 }
 
 pub fn markdown_feature_profile() -> MarkdownFeatureProfile {
@@ -369,15 +415,15 @@ pub fn parse_markdown_with_backend(
                     };
                 }
             };
-            let normalized_source = normalize_markdown_source(source);
+            let owners = collect_tree_sitter_markdown_owners(&syntax.nodes);
             ParseResult {
                 ok: true,
                 diagnostics: vec![],
                 analysis: Some(MarkdownAnalysis {
                     dialect,
-                    normalized_source: normalized_source.clone(),
+                    normalized_source: source.to_string(),
                     root_kind: MarkdownRootKind::Document,
-                    owners: collect_markdown_owners(&normalized_source),
+                    owners,
                     comment_regions: augmentation.regions,
                     layout_gaps: augmentation.gaps,
                     comment_attachments: augmentation.attachments,
@@ -429,98 +475,28 @@ pub fn match_markdown_owners(
     }
 }
 
-fn markdown_owner_start_indices(source: &str) -> std::collections::HashMap<String, usize> {
-    let normalized = normalize_markdown_source(source);
-    let lines = normalized.split('\n').collect::<Vec<_>>();
-    let mut starts = std::collections::HashMap::new();
-    let mut heading_index = 0usize;
-    let mut code_fence_index = 0usize;
-    let mut index = 0usize;
-
-    while index < lines.len() {
-        let line = lines[index];
-        if parse_heading(line).is_some() {
-            starts.insert(format!("/heading/{heading_index}"), index);
-            heading_index += 1;
-            index += 1;
-            continue;
-        }
-
-        if let Some((marker_char, marker_length, _)) = parse_code_fence(line) {
-            starts.insert(format!("/code_fence/{code_fence_index}"), index);
-            code_fence_index += 1;
-            index += 1;
-            while index < lines.len() {
-                if is_code_fence_close(lines[index], marker_char, marker_length) {
-                    break;
-                }
-                index += 1;
-            }
-            index += 1;
-            continue;
-        }
-
-        index += 1;
-    }
-
-    starts
-}
-
 fn collect_markdown_sections(source: &str, owners: &[MarkdownOwner]) -> Vec<MarkdownSection> {
-    let normalized = normalize_markdown_source(source);
-    let lines = normalized.split('\n').collect::<Vec<_>>();
-    let starts = markdown_owner_start_indices(&normalized);
-    let mut ordered = owners
-        .iter()
-        .filter_map(|owner| starts.get(&owner.path).map(|start| (owner, *start)))
-        .collect::<Vec<_>>();
-    ordered.sort_by_key(|(_, start)| *start);
+    let mut ordered = owners.iter().collect::<Vec<_>>();
+    ordered.sort_by_key(|owner| owner.start_byte);
 
     ordered
         .iter()
         .enumerate()
-        .map(|(index, (owner, start))| {
-            let end_exclusive =
-                ordered.get(index + 1).map(|(_, start)| *start).unwrap_or(lines.len());
-            MarkdownSection {
+        .filter_map(|(index, owner)| {
+            let reconstruction_end =
+                ordered.get(index + 1).map(|next| next.start_byte).unwrap_or(source.len());
+            let insertion_end = if owner.owner_kind == MarkdownOwnerKind::CodeFence {
+                owner.end_byte
+            } else {
+                reconstruction_end
+            };
+            Some(MarkdownSection {
                 path: owner.path.clone(),
-                text: lines[*start..end_exclusive].join("\n").trim().to_string(),
-            }
+                text: source.get(owner.start_byte..reconstruction_end)?.to_string(),
+                insertion_text: source.get(owner.start_byte..insertion_end)?.to_string(),
+            })
         })
         .collect()
-}
-
-fn markdown_fence_ranges(source: &str) -> HashMap<String, (usize, usize)> {
-    let lines =
-        normalize_markdown_source(source).split('\n').map(str::to_string).collect::<Vec<_>>();
-    let mut ranges = HashMap::new();
-    let mut code_fence_index = 0usize;
-    let mut index = 0usize;
-
-    while index < lines.len() {
-        let line = &lines[index];
-        if let Some((marker_char, marker_length, _)) = parse_code_fence(line) {
-            let mut end = index;
-            let mut cursor = index + 1;
-            while cursor < lines.len() {
-                if is_code_fence_close(&lines[cursor], marker_char, marker_length) {
-                    end = cursor;
-                    break;
-                }
-                if cursor == lines.len() - 1 {
-                    end = cursor;
-                }
-                cursor += 1;
-            }
-            ranges.insert(format!("/code_fence/{code_fence_index}"), (index, end));
-            code_fence_index += 1;
-            index = end + 1;
-            continue;
-        }
-        index += 1;
-    }
-
-    ranges
 }
 
 pub fn apply_markdown_delegated_child_outputs(
@@ -529,9 +505,39 @@ pub fn apply_markdown_delegated_child_outputs(
     apply_plan: &ast_merge::DelegatedChildApplyPlan,
     applied_children: &[AppliedChildOutput],
 ) -> MergeResult<String> {
-    let mut lines =
-        normalize_markdown_source(source).split('\n').map(str::to_string).collect::<Vec<_>>();
-    let ranges = markdown_fence_ranges(source);
+    let parsed = parse_markdown(source, MarkdownDialect::Markdown);
+    let Some(analysis) = parsed.analysis else {
+        return MergeResult {
+            ok: false,
+            diagnostics: parsed.diagnostics,
+            output: None,
+            policies: vec![],
+        };
+    };
+    apply_markdown_delegated_child_outputs_with_analysis(
+        source,
+        &analysis,
+        operations,
+        apply_plan,
+        applied_children,
+    )
+}
+
+fn apply_markdown_delegated_child_outputs_with_analysis(
+    source: &str,
+    analysis: &MarkdownAnalysis,
+    operations: &[DelegatedChildOperation],
+    apply_plan: &ast_merge::DelegatedChildApplyPlan,
+    applied_children: &[AppliedChildOutput],
+) -> MergeResult<String> {
+    let ranges = analysis
+        .owners
+        .iter()
+        .filter(|owner| owner.owner_kind == MarkdownOwnerKind::CodeFence)
+        .filter_map(|owner| {
+            Some((owner.path.as_str(), (owner.content_start_byte?, owner.content_end_byte?)))
+        })
+        .collect::<HashMap<_, _>>();
     let operations_by_id = operations
         .iter()
         .map(|operation| (operation.operation_id.clone(), operation))
@@ -550,7 +556,8 @@ pub fn apply_markdown_delegated_child_outputs(
         let Some(output) = outputs_by_id.get(&entry.delegated_group.child_operation_id) else {
             continue;
         };
-        let Some((start, end)) = ranges.get(&operation.surface.owner.address).copied() else {
+        let Some((start, end)) = ranges.get(operation.surface.owner.address.as_str()).copied()
+        else {
             return MergeResult {
                 ok: false,
                 diagnostics: vec![configuration_error(&format!(
@@ -565,21 +572,23 @@ pub fn apply_markdown_delegated_child_outputs(
     }
 
     replacements.sort_by_key(|replacement| std::cmp::Reverse(replacement.0));
+    let mut output_source = source.to_string();
     for (start, end, output) in replacements {
-        let replacement_lines = if output.is_empty() {
-            Vec::new()
-        } else {
-            output.trim_end_matches('\n').split('\n').map(str::to_string).collect::<Vec<_>>()
-        };
-        lines.splice(start + 1..end, replacement_lines);
+        let replacement = fenced_body_replacement(source, start, end, &output);
+        output_source.replace_range(start..end, &replacement);
     }
 
-    MergeResult {
-        ok: true,
-        diagnostics: vec![],
-        output: Some(format!("{}\n", lines.join("\n").trim_end_matches('\n'))),
-        policies: vec![],
+    MergeResult { ok: true, diagnostics: vec![], output: Some(output_source), policies: vec![] }
+}
+
+fn fenced_body_replacement(source: &str, start: usize, end: usize, output: &str) -> String {
+    if output.is_empty() || output.ends_with('\n') || output.ends_with('\r') {
+        return output.to_string();
     }
+
+    let line_ending =
+        source.get(start..end).filter(|body| body.contains("\r\n")).map_or("\n", |_| "\r\n");
+    format!("{output}{line_ending}")
 }
 
 pub fn merge_markdown_with_nested_outputs(
@@ -664,8 +673,18 @@ pub fn merge_markdown_with_nested_outputs_with_parser(
                     })
                     .collect::<Vec<_>>();
 
-                apply_markdown_delegated_child_outputs(
+                let parsed = parser(merged_output, dialect);
+                let Some(analysis) = parsed.analysis else {
+                    return MergeResult {
+                        ok: false,
+                        diagnostics: parsed.diagnostics,
+                        output: None,
+                        policies: vec![],
+                    };
+                };
+                apply_markdown_delegated_child_outputs_with_analysis(
                     merged_output,
+                    &analysis,
                     operations,
                     apply_plan,
                     &translated,
@@ -762,8 +781,18 @@ pub fn merge_markdown_with_reviewed_nested_outputs_with_parser(
                     })
                     .collect::<Vec<_>>();
 
-                apply_markdown_delegated_child_outputs(
+                let parsed = parser(merged_output, dialect);
+                let Some(analysis) = parsed.analysis else {
+                    return MergeResult {
+                        ok: false,
+                        diagnostics: parsed.diagnostics,
+                        output: None,
+                        policies: vec![],
+                    };
+                };
+                apply_markdown_delegated_child_outputs_with_analysis(
                     merged_output,
+                    &analysis,
                     operations,
                     apply_plan,
                     &translated,
@@ -1147,14 +1176,48 @@ fn merge_markdown_using_parser(
             .filter(|section| {
                 !destination_paths.contains(&section.path) && !section.text.is_empty()
             })
-            .map(|section| section.text.clone()),
+            .map(|section| section.insertion_text.clone()),
     );
 
-    MergeResult {
-        ok: true,
-        diagnostics: vec![],
-        output: Some(format!("{}\n", merged_sections.join("\n\n").trim())),
-        policies: vec![],
+    let output = join_markdown_sections(&merged_sections);
+    MergeResult { ok: true, diagnostics: vec![], output: Some(output), policies: vec![] }
+}
+
+fn join_markdown_sections(sections: &[String]) -> String {
+    let mut output = String::new();
+    for section in sections {
+        if !output.is_empty() && !ends_with_blank_line(&output) && !starts_with_line_ending(section)
+        {
+            let line_ending = preferred_line_ending(&output);
+            if !ends_with_line_ending(&output) {
+                output.push_str(line_ending);
+            }
+            output.push_str(line_ending);
+        }
+        output.push_str(section);
+    }
+    output
+}
+
+fn starts_with_line_ending(value: &str) -> bool {
+    value.starts_with(['\n', '\r'])
+}
+
+fn ends_with_line_ending(value: &str) -> bool {
+    value.ends_with(['\n', '\r'])
+}
+
+fn ends_with_blank_line(value: &str) -> bool {
+    value.ends_with("\n\n") || value.ends_with("\r\n\r\n") || value.ends_with("\r\r")
+}
+
+fn preferred_line_ending(value: &str) -> &'static str {
+    if value.contains("\r\n") {
+        "\r\n"
+    } else if value.contains('\r') {
+        "\r"
+    } else {
+        "\n"
     }
 }
 

@@ -189,6 +189,27 @@ fn conforms_to_slice_208_embedded_family_fixture() {
 }
 
 #[test]
+fn native_projection_preserves_exact_destination_bytes_and_ignores_nested_headings() {
+    let destination = "# Title\r\n\r\n> # Quoted\r\n> body\r\n\r\n```ruby\r\ncustom\r\n```";
+    let template = "# Title\n\n> # Quoted\n> changed\n\n```ruby\ndefault\n```\n";
+    let analysis = parse_markdown(destination, MarkdownDialect::Markdown, None)
+        .analysis
+        .expect("analysis should exist");
+
+    assert_eq!(
+        analysis
+            .owners
+            .iter()
+            .filter(|owner| owner.owner_kind == markdown_merge::MarkdownOwnerKind::Heading)
+            .count(),
+        1
+    );
+    let result = merge_markdown(template, destination, MarkdownDialect::Markdown, None);
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(destination));
+}
+
+#[test]
 fn conforms_to_slice_298_reviewed_nested_merge_fixture() {
     let fixture = read_fixture(&[
         "markdown",
