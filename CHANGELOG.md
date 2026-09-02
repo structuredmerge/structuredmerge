@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Measure packaged Ruby cold install, cold start, native TSLP parser load, and
+  first merge paths in CI, retaining correctness-checked structured evidence
+  without imposing noisy runner-dependent timing thresholds.
 - Classify `.json5` template targets as the JSON family with the JSON5 dialect,
   follow fixture-owned synthetic action pins in YAML synchronization tests, and
   recognize the portable benchmark contract's new merge2 gold case.

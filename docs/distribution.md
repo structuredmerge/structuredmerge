@@ -90,6 +90,13 @@ update the contract and changelog in the same commit. Alef generation is also
 run clean twice in CI; either tracked drift or a new untracked generated file
 fails the reproducibility gate.
 
+The platform-package job also records artifact-level cold paths. It installs
+the gem into a fresh `GEM_HOME`, then uses a fresh Ruby process for each require,
+native TSLP JSON parser load, and first JSON merge sample. The report gates
+successful installation, exact parser byte preservation, and the expected
+clean merge result. Timings are evidence, not pass/fail thresholds, because
+runner, filesystem, network, and package caches are not controlled.
+
 Until Alef's Ruby platform-metadata fix is released, CI installs the exact fork
 revision recorded in `workspace-scripts/alef-source-revision`. The same revision
 is included in artifact provenance. Return to the released installer after the

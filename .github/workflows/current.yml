@@ -102,6 +102,8 @@ jobs:
             --rev "$(cat workspace-scripts/alef-source-revision)" --locked
       - name: Build platform gem and provenance
         run: mise run ruby-package
+      - name: Measure packaged cold paths
+        run: mise run ruby-cold-paths
       - name: Install packaged gem in isolation
         shell: bash
         run: |
@@ -117,6 +119,7 @@ jobs:
           path: |
             dist/*.gem
             dist/*.provenance.json
+            dist/*.cold-path.json
           if-no-files-found: error
 
   alef:
