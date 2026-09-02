@@ -14,6 +14,7 @@ use std::{
 use parking_lot::{Mutex, RwLock};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use tree_haver::{ParserRequest, parse_with_language_pack};
 
 pub const PACKAGE_NAME: &str = "structuredmerge-host-prototype-core";
 const MAX_DESCRIPTOR_BYTES: usize = 64 * 1024;
@@ -136,6 +137,82 @@ pub trait ParserHost: Plugin {
     fn probe_batch(&self, request: Vec<u8>) -> Result<Vec<u8>, HostPrototypeError>;
 
     fn parse_batch(&self, request: Vec<u8>) -> Result<Vec<u8>, HostPrototypeError>;
+}
+
+struct TreeHaverLanguagePackParserHost {
+    name: String,
+    language: String,
+}
+
+impl TreeHaverLanguagePackParserHost {
+    fn parse(&self, request: Vec<u8>) -> Result<Vec<u8>, HostPrototypeError> {
+        let source = String::from_utf8(request.clone()).map_err(|error| {
+            HostPrototypeError::new(format!(
+                "tree-haver TSLP provider {} requires UTF-8 source: {error}",
+                self.name
+            ))
+        })?;
+        let result = parse_with_language_pack(&ParserRequest {
+            source,
+            language: self.language.clone(),
+            dialect: None,
+        });
+        if result.ok {
+            return Ok(request);
+        }
+
+        let diagnostics = result
+            .diagnostics
+            .into_iter()
+            .map(|diagnostic| diagnostic.message)
+            .collect::<Vec<_>>()
+            .join("; ");
+        Err(HostPrototypeError::new(format!(
+            "tree-haver TSLP parse failed for {}: {diagnostics}",
+            self.language
+        )))
+    }
+}
+
+impl Plugin for TreeHaverLanguagePackParserHost {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn version(&self) -> Result<String, HostPrototypeError> {
+        Ok(env!("CARGO_PKG_VERSION").to_owned())
+    }
+
+    fn initialize(&self) -> Result<(), HostPrototypeError> {
+        Ok(())
+    }
+
+    fn shutdown(&self) -> Result<(), HostPrototypeError> {
+        Ok(())
+    }
+}
+
+impl ParserHost for TreeHaverLanguagePackParserHost {
+    fn descriptor(&self) -> Result<String, HostPrototypeError> {
+        serde_json::to_string(&serde_json::json!({
+            "id": self.name,
+            "implementation": "tree-haver",
+            "backend": "kreuzberg-language-pack",
+            "language": self.language,
+            "capabilities": ["probe", "parse", "source-bytes"],
+        }))
+        .map_err(|error| {
+            HostPrototypeError::new(format!("failed to serialize descriptor: {error}"))
+        })
+    }
+
+    fn probe_batch(&self, request: Vec<u8>) -> Result<Vec<u8>, HostPrototypeError> {
+        self.parse(request)
+    }
+
+    fn parse_batch(&self, request: Vec<u8>) -> Result<Vec<u8>, HostPrototypeError> {
+        self.parse(request)
+    }
 }
 
 struct ProviderEntry<P: Plugin + ?Sized> {
@@ -545,6 +622,19 @@ pub fn register_parser_host(provider: Arc<dyn ParserHost>) -> Result<(), HostPro
         ensure_runtime_accepting_providers().and_then(|()| registry.insert(Arc::clone(&provider)))
     };
     publication.map_err(|error| publication_failure(provider.as_ref(), error))
+}
+
+pub fn register_tslp_parser_host(
+    provider_name: String,
+    language: String,
+) -> Result<(), HostPrototypeError> {
+    if language.trim().is_empty() {
+        return Err(HostPrototypeError::new("parser language cannot be empty"));
+    }
+    register_parser_host(Arc::new(TreeHaverLanguagePackParserHost {
+        name: provider_name,
+        language,
+    }))
 }
 
 pub fn replace_parser_host(

@@ -300,6 +300,28 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(described_class.registered_parser_hosts).to eq(["ruby.parser.identity"])
   end
 
+  it "round trips exact source through Rust TSLP and Ruby parser providers" do
+    rust_provider = "rust.tslp.json"
+    ruby_provider = HostPrototypeFixtures::IdentityParserHost.new("ruby.parser.identity")
+    described_class.register_tslp_parser_host(rust_provider, "json")
+    StructuredmergeHostPrototypeCore.register_parser_host(ruby_provider, "ruby.parser.identity")
+    source = "{\r\n  \"name\" : \"structuredmerge\",\r\n  \"enabled\": true\r\n}\r\n".b
+
+    rust_result = described_class.parse_with_parser(rust_provider, source.bytes).pack("C*")
+    ruby_result = described_class.parse_with_parser("ruby.parser.identity", source.bytes).pack("C*")
+
+    expect(rust_result).to eq(source)
+    expect(ruby_result).to eq(source)
+    expect(described_class.registered_parser_hosts).to contain_exactly(
+      "ruby.parser.identity",
+      rust_provider
+    )
+    expect do
+      described_class.parse_with_parser(rust_provider, "{\"trailing\":true,}".bytes)
+    end.to raise_error(RuntimeError, /tree-haver TSLP parse failed for json/)
+    expect(ruby_provider.requests).to contain_exactly(source)
+  end
+
   it "loads the native extension and exposes a version" do
     expect(described_class::VERSION).to match(/\A\d+\.\d+\.\d+/)
   end

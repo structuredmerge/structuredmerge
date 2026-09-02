@@ -67,6 +67,7 @@ functions = [
   "execute_detached_identity",
   "registered_workflow_hosts",
   "replace_parser_host",
+  "register_tslp_parser_host",
   "unregister_parser_host",
   "clear_parser_hosts",
   "probe_with_parser",
