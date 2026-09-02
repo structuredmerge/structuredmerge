@@ -1302,6 +1302,8 @@ pub struct MergeConflict {
     pub path: String,
     pub fallback_scope: String,
     pub message: String,
+    #[serde(default)]
+    pub alternatives: Vec<ConflictAlternative>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

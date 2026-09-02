@@ -11,6 +11,41 @@ pub enum SourceRevision {
     Theirs,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConflictAlternativeState {
+    Present,
+    Absent,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct OwnedSourceRegion {
+    pub start_byte: usize,
+    pub end_byte: usize,
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
+impl OwnedSourceRegion {
+    pub fn validate(&self) -> Result<(), SourceRenderError> {
+        if self.start_byte > self.end_byte {
+            return Err(SourceRenderError::new("owned source byte range is reversed"));
+        }
+        if self.start_line == 0 || self.end_line < self.start_line {
+            return Err(SourceRenderError::new("owned source line range is invalid"));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConflictAlternative {
+    pub revision: SourceRevision,
+    pub state: ConflictAlternativeState,
+    #[serde(default)]
+    pub regions: Vec<OwnedSourceRegion>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SourceFragment {
     pub revision: SourceRevision,
@@ -258,6 +293,133 @@ pub fn render_source_plan(
         renderer.render_fragment(fragment)?;
     }
     Ok(renderer.finish())
+}
+
+pub fn localized_conflict_render_plan(
+    sources: HashMap<SourceRevision, String>,
+    conflicts: &[crate::MergeConflict],
+    marker_size: usize,
+) -> Result<SourceRenderPlan, SourceRenderError> {
+    if conflicts.is_empty() {
+        return Err(SourceRenderError::new(
+            "localized conflict rendering requires at least one conflict",
+        ));
+    }
+    if marker_size == 0 {
+        return Err(SourceRenderError::new("marker_size must be at least one"));
+    }
+
+    let ours_line_count = source_lines(source_for_revision(&sources, SourceRevision::Ours)?).len();
+    let mut localized = conflicts
+        .iter()
+        .map(|conflict| {
+            Ok((
+                conflict,
+                required_conflict_region(conflict, SourceRevision::Base)?,
+                required_conflict_region(conflict, SourceRevision::Ours)?,
+                required_conflict_region(conflict, SourceRevision::Theirs)?,
+            ))
+        })
+        .collect::<Result<Vec<_>, SourceRenderError>>()?;
+    localized.sort_by_key(|(_, _, ours, _)| (ours.start_line, ours.end_line));
+
+    let mut fragments = Vec::new();
+    let mut next_ours_line = 1;
+    for (conflict, base, ours, theirs) in localized {
+        if ours.start_line < next_ours_line {
+            return Err(SourceRenderError::new(format!(
+                "conflict {} overlaps a prior ours-owned line region",
+                conflict.conflict_id
+            )));
+        }
+        if ours.end_line > ours_line_count {
+            return Err(SourceRenderError::new(format!(
+                "conflict {} exceeds the ours source line count",
+                conflict.conflict_id
+            )));
+        }
+        if next_ours_line < ours.start_line {
+            fragments.push(RenderFragment::Source(SourceFragment {
+                revision: SourceRevision::Ours,
+                start_line: next_ours_line,
+                end_line: ours.start_line - 1,
+                metadata: HashMap::new(),
+            }));
+        }
+        fragments.push(RenderFragment::Conflict(ConflictFragment {
+            conflict_id: conflict.conflict_id.clone(),
+            base: vec![source_conflict_side(SourceRevision::Base, base)],
+            ours: vec![source_conflict_side(SourceRevision::Ours, ours)],
+            theirs: vec![source_conflict_side(SourceRevision::Theirs, theirs)],
+            labels: ConflictLabels::default(),
+            marker_size,
+            metadata: HashMap::from([
+                ("category".to_string(), serde_json::json!(conflict.category)),
+                ("path".to_string(), serde_json::json!(conflict.path)),
+            ]),
+        }));
+        next_ours_line = ours.end_line + 1;
+    }
+    if next_ours_line <= ours_line_count {
+        fragments.push(RenderFragment::Source(SourceFragment {
+            revision: SourceRevision::Ours,
+            start_line: next_ours_line,
+            end_line: ours_line_count,
+            metadata: HashMap::new(),
+        }));
+    }
+    SourceRenderPlan::new(sources, fragments)
+}
+
+fn source_for_revision(
+    sources: &HashMap<SourceRevision, String>,
+    revision: SourceRevision,
+) -> Result<&str, SourceRenderError> {
+    sources.get(&revision).map(String::as_str).ok_or_else(|| {
+        SourceRenderError::new(format!("source revision {revision:?} is not available"))
+    })
+}
+
+fn required_conflict_region(
+    conflict: &crate::MergeConflict,
+    revision: SourceRevision,
+) -> Result<&OwnedSourceRegion, SourceRenderError> {
+    let alternatives = conflict
+        .alternatives
+        .iter()
+        .filter(|alternative| alternative.revision == revision)
+        .collect::<Vec<_>>();
+    if alternatives.len() != 1 {
+        return Err(SourceRenderError::new(format!(
+            "conflict {} requires exactly one {revision:?} alternative",
+            conflict.conflict_id
+        )));
+    }
+    let alternative = alternatives[0];
+    if alternative.state != ConflictAlternativeState::Present || alternative.regions.len() != 1 {
+        return Err(SourceRenderError::new(format!(
+            "conflict {} does not have one present {revision:?} source region",
+            conflict.conflict_id
+        )));
+    }
+    let region = &alternative.regions[0];
+    region.validate()?;
+    Ok(region)
+}
+
+fn source_conflict_side(
+    revision: SourceRevision,
+    region: &OwnedSourceRegion,
+) -> ConflictSideFragment {
+    ConflictSideFragment::Source(SourceFragment {
+        revision,
+        start_line: region.start_line,
+        end_line: region.end_line,
+        metadata: HashMap::from([
+            ("start_byte".to_string(), serde_json::json!(region.start_byte)),
+            ("end_byte".to_string(), serde_json::json!(region.end_byte)),
+        ]),
+    })
 }
 
 struct SourcePlanRenderer<'a> {
@@ -559,6 +721,20 @@ mod tests {
         SourceFragment { revision, start_line, end_line, metadata: HashMap::new() }
     }
 
+    fn alternative(
+        revision: SourceRevision,
+        start_byte: usize,
+        end_byte: usize,
+        start_line: usize,
+        end_line: usize,
+    ) -> ConflictAlternative {
+        ConflictAlternative {
+            revision,
+            state: ConflictAlternativeState::Present,
+            regions: vec![OwnedSourceRegion { start_byte, end_byte, start_line, end_line }],
+        }
+    }
+
     #[test]
     fn renders_exact_source_lines_with_provenance() {
         let plan = SourceRenderPlan::new(
@@ -637,6 +813,63 @@ mod tests {
             4
         );
         assert_eq!(result.verification_input.conflict_count, 1);
+    }
+
+    #[test]
+    fn builds_localized_conflict_plans_from_exact_owned_regions() {
+        let conflict = crate::MergeConflict {
+            conflict_id: "owner-shared".to_string(),
+            category: "content".to_string(),
+            path: "/shared".to_string(),
+            fallback_scope: "/shared".to_string(),
+            message: "both sides changed shared".to_string(),
+            alternatives: vec![
+                alternative(SourceRevision::Base, 6, 13, 2, 2),
+                alternative(SourceRevision::Ours, 11, 18, 2, 2),
+                alternative(SourceRevision::Theirs, 6, 13, 2, 2),
+            ],
+        };
+        let plan = localized_conflict_render_plan(sources(), &[conflict], 7).unwrap();
+        let result = render_source_plan(&plan).unwrap();
+
+        assert!(result.content.starts_with("alpha ours\n<<<<<<< ours\nshared\n"));
+        assert!(result.content.ends_with(">>>>>>> theirs\nomega\n"));
+        assert_eq!(result.conflicts[0].output_start_line, 2);
+        assert_eq!(result.conflicts[0].metadata["path"], "/shared");
+    }
+
+    #[test]
+    fn rejects_incomplete_or_overlapping_conflict_ownership() {
+        let incomplete = crate::MergeConflict {
+            conflict_id: "incomplete".to_string(),
+            category: "content".to_string(),
+            path: "/shared".to_string(),
+            fallback_scope: "/shared".to_string(),
+            message: "missing theirs".to_string(),
+            alternatives: vec![
+                alternative(SourceRevision::Base, 6, 13, 2, 2),
+                alternative(SourceRevision::Ours, 11, 18, 2, 2),
+            ],
+        };
+        let error = localized_conflict_render_plan(sources(), &[incomplete], 7).unwrap_err();
+        assert!(error.message().contains("exactly one Theirs alternative"));
+
+        let complete = |conflict_id: &str| crate::MergeConflict {
+            conflict_id: conflict_id.to_string(),
+            category: "content".to_string(),
+            path: "/shared".to_string(),
+            fallback_scope: "/shared".to_string(),
+            message: "overlap".to_string(),
+            alternatives: vec![
+                alternative(SourceRevision::Base, 6, 13, 2, 2),
+                alternative(SourceRevision::Ours, 11, 18, 2, 2),
+                alternative(SourceRevision::Theirs, 6, 13, 2, 2),
+            ],
+        };
+        let error =
+            localized_conflict_render_plan(sources(), &[complete("first"), complete("second")], 7)
+                .unwrap_err();
+        assert!(error.message().contains("overlaps"));
     }
 
     #[test]

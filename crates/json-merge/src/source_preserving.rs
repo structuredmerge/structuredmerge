@@ -391,6 +391,7 @@ impl MergePlan {
             path: path.to_string(),
             fallback_scope: path.to_string(),
             message,
+            alternatives: vec![],
         });
     }
 
@@ -500,6 +501,7 @@ pub fn merge_json_three_way(
             path: "".to_string(),
             fallback_scope: "".to_string(),
             message: "duplicate JSON array identities prevent deterministic matching".to_string(),
+            alternatives: vec![],
         };
         return conflicted_three_way(vec![conflict]);
     }
