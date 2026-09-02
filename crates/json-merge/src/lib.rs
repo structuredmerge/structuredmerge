@@ -5,7 +5,9 @@ use ast_merge::{
 use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest};
 
 mod source_preserving;
-pub use source_preserving::{merge_json_source_preserving, merge_json_three_way};
+pub use source_preserving::{
+    json_semantically_equivalent, merge_json_source_preserving, merge_json_three_way,
+};
 
 pub const PACKAGE_NAME: &str = "json-merge";
 

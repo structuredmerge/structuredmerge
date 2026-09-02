@@ -140,6 +140,16 @@ pub(crate) fn analyze_document(source: &str, dialect: JsonDialect) -> Result<Jso
     })
 }
 
+pub fn json_semantically_equivalent(
+    left_source: &str,
+    right_source: &str,
+    dialect: JsonDialect,
+) -> Result<bool, String> {
+    let left = parse_document(left_source, dialect)?;
+    let right = parse_document(right_source, dialect)?;
+    Ok(left.root.semantic == right.root.semantic)
+}
+
 fn collect_owners(value: &JsonSyntaxValue, path: &str, owners: &mut Vec<JsonOwner>) {
     for member in &value.members {
         let child_path = join_path(path, &member.key);

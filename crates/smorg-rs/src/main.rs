@@ -16,6 +16,8 @@ use json_merge::{JsonDialect, merge_json};
 use plain_merge::merge_text;
 use serde_json::json;
 
+mod benchmark_adapter;
+
 const EXIT_SUCCESS: i32 = 0;
 const EXIT_UNRESOLVED_CONFLICT: i32 = 1;
 const EXIT_USER_ERROR: i32 = 2;
@@ -119,6 +121,7 @@ fn run(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
     };
 
     match command.as_str() {
+        "benchmark-provider-session" => run_benchmark_provider_session(stdout, stderr),
         "merge-driver" => run_merge_driver(&args[1..], stdout, stderr),
         "diff-driver" => run_diff_driver(&args[1..], stdout, stderr),
         "conflicts" => run_conflicts(&args[1..], stdout, stderr),
@@ -137,6 +140,7 @@ fn run(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
 }
 
 fn print_usage(out: &mut dyn Write) {
+    let _ = writeln!(out, "usage: smorg-rs benchmark-provider-session");
     let _ = writeln!(
         out,
         "usage: smorg-rs merge-driver [--path-name PATH] [--output PATH] [--report PATH] [--strict] [--fallback=none|line|local|full-file] %O %A %B [%P]"
@@ -156,6 +160,18 @@ fn print_usage(out: &mut dyn Write) {
         out,
         "       smorg-rs git install [--scope local|global|include-file] [--profile semantic-diff|builtin-diff] [--check] [--undo] [--dry-run] [--json]"
     );
+}
+
+fn run_benchmark_provider_session(stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
+    let stdin = io::stdin();
+    let mut input = io::BufReader::new(stdin.lock());
+    match benchmark_adapter::serve(&mut input, stdout) {
+        Ok(()) => EXIT_SUCCESS,
+        Err(message) => {
+            let _ = writeln!(stderr, "smorg-rs: benchmark_adapter: {message}");
+            EXIT_INTERNAL_ERROR
+        }
+    }
 }
 
 fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
