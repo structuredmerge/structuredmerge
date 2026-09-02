@@ -203,6 +203,26 @@ fn merges_nested_toml_through_the_pest_projection() {
 }
 
 #[test]
+fn records_advanced_dotted_key_fixture_as_unsupported_by_pest() {
+    let fixture = read_fixture(&[
+        "toml",
+        "slice-721-formatting-preservation",
+        "dotted-inline-comments-arrays.json",
+    ]);
+    let result = merge_toml(
+        fixture["template"].as_str().unwrap(),
+        fixture["destination"].as_str().unwrap(),
+        TomlDialect::Toml,
+        None,
+    );
+
+    assert!(!result.ok);
+    assert!(result.output.is_none());
+    assert_eq!(result.diagnostics[0].category, ast_merge::DiagnosticCategory::ParseError);
+    assert!(result.diagnostics[0].message.contains("_.file"));
+}
+
+#[test]
 fn preserves_pest_owned_comments_and_hashes_inside_strings() {
     let template = "# package\nname = \"template # value\"\nenabled = true\n";
     let destination = "# package\nname = \"destination # value\"\n";
