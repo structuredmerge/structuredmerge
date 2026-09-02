@@ -26,3 +26,5 @@
   named top-level owners and explicit fail-closed behavior everywhere else.
 - Advertise Python as the first reviewed generic-provider combination through
   the Rust benchmark adapter without claiming generic two-way support.
+- Route the Bash provider through the shared normalized named-owner projection
+  without broadening its top-level-function-only merge contract.

@@ -1,16 +1,19 @@
 use ast_merge::{
-    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile, ParseResult,
-    PolicyReference, SourcePreservingOwner, SourcePreservingOwnerDocument, ThreeWayMergeResult,
-    merge_source_preserving_owners, normalized_parse_error_result, parse_error_result,
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile,
+    NamedOwnerKind, NamedOwnerProjectionPolicy, ParseResult, PolicyReference,
+    SourcePreservingOwnerDocument, ThreeWayMergeResult, merge_source_preserving_owners,
+    normalized_parse_error_result, parse_error_result, project_named_top_level_owners,
     three_way_parse_error,
 };
 use tree_haver::{
-    BackendReference, NormalizedTreeIndex, NormalizedTreeNode, ParserRequest,
-    kreuzberg_language_pack_backend, language_pack_adapter_info,
-    parse_normalized_with_language_pack,
+    BackendReference, NormalizedTreeNode, ParserRequest, kreuzberg_language_pack_backend,
+    language_pack_adapter_info, parse_normalized_with_language_pack,
 };
 
 pub const PACKAGE_NAME: &str = "bash-merge";
+
+const BASH_OWNER_KINDS: &[NamedOwnerKind<'static>] =
+    &[NamedOwnerKind { node_kind: "function_definition", path_kind: "function" }];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BashDialect {
@@ -161,42 +164,20 @@ fn project_bash_functions(
     root_id: &str,
     nodes: &[NormalizedTreeNode],
 ) -> Result<SourcePreservingOwnerDocument, String> {
-    let index = NormalizedTreeIndex::new(nodes)?;
-    let root = index.root(root_id)?;
-    let mut owners = Vec::new();
-    for node in index.children(root) {
-        match node.kind.as_str() {
-            "comment" => {}
-            "function_definition" => {
-                let name = function_name(node, &index)
-                    .ok_or_else(|| "Bash function definition has no stable name".to_string())?;
-                let path = format!("/function:{name}");
-                owners.push(SourcePreservingOwner {
-                    id: path.clone(),
-                    path,
-                    fingerprint: node.source_fragment.clone(),
-                    start_byte: node.span.range.start_byte,
-                    end_byte: node.span.range.end_byte,
-                    start_line: node.span.start_point.row + 1,
-                    end_line: node.span.end_point.row + 1,
-                });
-            }
-            kind => return Err(format!("unsupported top-level Bash node {kind:?}")),
-        }
-    }
-    if owners.is_empty() {
-        return Err("Bash document has no supported top-level functions".to_string());
-    }
-    Ok(SourcePreservingOwnerDocument { source: source.to_string(), owners })
-}
-
-fn function_name(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> Option<String> {
-    index
-        .children(node)
-        .into_iter()
-        .find(|child| child.field_name.as_deref() == Some("name"))
-        .or_else(|| index.children(node).into_iter().find(|child| child.kind == "word"))
-        .map(|child| child.source_fragment.clone())
+    project_named_top_level_owners(
+        source,
+        root_id,
+        nodes,
+        NamedOwnerProjectionPolicy {
+            family: "Bash",
+            owner_kinds: BASH_OWNER_KINDS,
+            ignored_kinds: &[],
+            wrapper_kinds: &[],
+            name_fields: &["name"],
+            fallback_name_kinds: &["word"],
+            accept_any_named_kind: false,
+        },
+    )
 }
 
 #[cfg(test)]
