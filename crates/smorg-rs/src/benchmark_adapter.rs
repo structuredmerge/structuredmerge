@@ -11,6 +11,7 @@ use json_merge::{
     JsonDialect, json_semantically_equivalent, merge_json_source_preserving, merge_json_three_way,
 };
 use serde::Deserialize;
+use toml_merge::{TomlDialect, merge_toml};
 use yaml_merge::{YamlDialect, merge_yaml};
 
 const REQUEST_SCHEMA: &str = "structuredmerge.benchmark.adapter-request/v1";
@@ -34,6 +35,7 @@ struct Selector {
 #[derive(Clone, Copy)]
 enum BenchmarkDialect {
     Json(JsonDialect),
+    Toml(TomlDialect),
     Yaml(YamlDialect),
 }
 
@@ -65,6 +67,7 @@ pub fn run_merge2_files(args: &[String], output: &mut dyn Write, error: &mut dyn
             BenchmarkDialect::Json(dialect) => {
                 merge_json_source_preserving(&incoming, &current, dialect)
             }
+            BenchmarkDialect::Toml(dialect) => merge_toml(&incoming, &current, dialect, None),
             BenchmarkDialect::Yaml(dialect) => merge_yaml(&incoming, &current, dialect),
         })
     })();
@@ -96,8 +99,12 @@ pub fn run_diff_files(args: &[String], output: &mut dyn Write, error: &mut dyn W
     let result = (|| {
         let before = read_source(&args[0], "before")?;
         let after = read_source(&args[1], "after")?;
-        let BenchmarkDialect::Json(dialect) = selected_dialect(&args[2])? else {
-            return Err("unsupported benchmark diff family: yaml".to_string());
+        let dialect = selected_dialect(&args[2])?;
+        let BenchmarkDialect::Json(dialect) = dialect else {
+            return Err(format!(
+                "unsupported benchmark diff family: {}",
+                benchmark_family(dialect)
+            ));
         };
         json_semantically_equivalent(&before, &after, dialect)
     })();
@@ -132,8 +139,12 @@ pub fn run_merge3_files(args: &[String], error: &mut dyn Write) -> i32 {
         let base = read_source(&args[0], "base")?;
         let ours = read_source(&args[1], "ours")?;
         let theirs = read_source(&args[2], "theirs")?;
-        let BenchmarkDialect::Json(dialect) = selected_dialect(&args[3])? else {
-            return Err("unsupported benchmark merge3 family: yaml".to_string());
+        let dialect = selected_dialect(&args[3])?;
+        let BenchmarkDialect::Json(dialect) = dialect else {
+            return Err(format!(
+                "unsupported benchmark merge3 family: {}",
+                benchmark_family(dialect)
+            ));
         };
         Ok::<_, String>(merge_json_three_way(&base, &ours, &theirs, dialect))
     })();
@@ -172,6 +183,14 @@ fn selected_dialect(path: &str) -> Result<BenchmarkDialect, String> {
     }
     let extension = path.rsplit_once('.').map(|(_, extension)| extension).unwrap_or("json");
     parse_benchmark_dialect(extension)
+}
+
+fn benchmark_family(dialect: BenchmarkDialect) -> &'static str {
+    match dialect {
+        BenchmarkDialect::Json(_) => "json",
+        BenchmarkDialect::Toml(_) => "toml",
+        BenchmarkDialect::Yaml(_) => "yaml",
+    }
 }
 
 fn write_diagnostics(error: &mut dyn Write, diagnostics: &[ast_merge::Diagnostic]) {
@@ -225,6 +244,7 @@ fn execute(request: Request) -> Result<(i32, String, serde_json::Value), String>
     }
     match request.selector.family.as_str() {
         "json" => execute_json(request),
+        "toml" => execute_toml(request),
         "yaml" => execute_yaml(request),
         family => Err(format!("unsupported benchmark family: {family}")),
     }
@@ -302,6 +322,24 @@ fn execute_yaml(request: Request) -> Result<(i32, String, serde_json::Value), St
     Ok((status, output, result))
 }
 
+fn execute_toml(request: Request) -> Result<(i32, String, serde_json::Value), String> {
+    if request.selector.dialect != "toml" {
+        return Err(format!("unsupported TOML dialect: {}", request.selector.dialect));
+    }
+    if request.operation != "merge2" {
+        return Err(format!("unsupported TOML benchmark operation: {}", request.operation));
+    }
+
+    let incoming = source(&request.sources, "incoming")?;
+    let current = source(&request.sources, "current")?;
+    let result = merge_toml(&incoming, &current, TomlDialect::Toml, None);
+    let status = if result.ok { 0 } else { 2 };
+    let output = result.output.clone().unwrap_or_default();
+    let result = serde_json::to_value(result)
+        .map_err(|error| format!("serialize merge2 result: {error}"))?;
+    Ok((status, output, result))
+}
+
 fn source(sources: &BTreeMap<String, String>, role: &str) -> Result<String, String> {
     let encoded = sources.get(role).ok_or_else(|| format!("missing {role} source"))?;
     let bytes =
@@ -319,7 +357,10 @@ pub fn parse_dialect(value: &str) -> Result<JsonDialect, String> {
 }
 
 fn parse_benchmark_dialect(value: &str) -> Result<BenchmarkDialect, String> {
-    if value.trim().eq_ignore_ascii_case("yaml") || value.trim().eq_ignore_ascii_case("yml") {
+    if value.trim().eq_ignore_ascii_case("toml") {
+        Ok(BenchmarkDialect::Toml(TomlDialect::Toml))
+    } else if value.trim().eq_ignore_ascii_case("yaml") || value.trim().eq_ignore_ascii_case("yml")
+    {
         Ok(BenchmarkDialect::Yaml(YamlDialect::Yaml))
     } else {
         parse_dialect(value).map(BenchmarkDialect::Json)
@@ -454,6 +495,35 @@ mod tests {
         assert_eq!(merge3["status"], 2);
         assert!(
             merge3["stderr"].as_str().unwrap().contains("unsupported YAML benchmark operation")
+        );
+    }
+
+    #[test]
+    fn serves_toml_merge2_without_claiming_toml_merge3() {
+        let incoming = "[patient.name]\ngiven = \"Pat\"\nfamily = \"Template\"\n";
+        let current = "[patient.name]\nfamily = \"Destination\"\n";
+        let merge2 = execute_line(&request_for(
+            "merge2",
+            "toml",
+            "toml",
+            &[("incoming", incoming), ("current", current)],
+        ));
+        let merge3 = execute_line(&request_for(
+            "merge3",
+            "toml",
+            "toml",
+            &[("base", "a = 1\n"), ("ours", "a = 2\n"), ("theirs", "a = 3\n")],
+        ));
+
+        assert_eq!(merge2["status"], 0);
+        assert_eq!(
+            String::from_utf8(STANDARD.decode(merge2["output_base64"].as_str().unwrap()).unwrap())
+                .unwrap(),
+            "[patient.name]\ngiven = \"Pat\"\nfamily = \"Destination\"\n"
+        );
+        assert_eq!(merge3["status"], 2);
+        assert!(
+            merge3["stderr"].as_str().unwrap().contains("unsupported TOML benchmark operation")
         );
     }
 

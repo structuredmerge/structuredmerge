@@ -17,6 +17,11 @@
         "package": "json-merge",
         "profile": "source_preserving"
       },
+      "toml": {
+        "provider_id": "rust.toml",
+        "package": "toml-merge",
+        "profile": "source_preserving"
+      },
       "yaml": {
         "provider_id": "rust.yaml",
         "package": "yaml-merge",
@@ -32,13 +37,18 @@
   },
   "supports": {
     "operations": ["merge2", "merge3", "metamorphic"],
-    "families": ["json", "yaml"],
-    "dialects": ["json", "jsonc", "json5", "yaml"],
+    "families": ["json", "toml", "yaml"],
+    "dialects": ["json", "jsonc", "json5", "toml", "yaml"],
     "combinations": [
       {
         "family": "json",
         "operations": ["merge2", "merge3", "metamorphic"],
         "dialects": ["json", "jsonc", "json5"]
+      },
+      {
+        "family": "toml",
+        "operations": ["merge2"],
+        "dialects": ["toml"]
       },
       {
         "family": "yaml",
