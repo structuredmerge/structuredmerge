@@ -12,6 +12,8 @@ pub mod matching;
 pub use matching::*;
 pub mod layout;
 pub use layout::*;
+pub mod comment;
+pub use comment::*;
 pub mod source_render;
 pub use source_render::*;
 
