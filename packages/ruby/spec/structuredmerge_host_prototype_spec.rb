@@ -3,6 +3,7 @@
 require_relative "../lib/structuredmerge_host_prototype"
 require "digest"
 require "json"
+require "rbconfig"
 require "weakref"
 
 module HostPrototypeFixtures
@@ -115,6 +116,63 @@ module HostPrototypeFixtures
 
     def wait_until_entered
       @entered.pop
+    end
+  end
+
+  class SidecarWorkflowHost < IdentityWorkflowHost
+    SIDECAR = <<~RUBY
+      STDIN.binmode
+      STDOUT.binmode
+      while (header = STDIN.read(4))
+        length = header.unpack1("N")
+        payload = STDIN.read(length)
+        break unless payload&.bytesize == length
+
+        STDOUT.write(header)
+        STDOUT.write(payload)
+        STDOUT.flush
+      end
+    RUBY
+
+    def initialize(id)
+      super
+      @sidecar = IO.popen([RbConfig.ruby, "-e", SIDECAR], "r+b")
+    end
+
+    def execute_batch(request)
+      raise "sidecar unavailable: process exited" unless @sidecar
+
+      @callback_thread_ids << Thread.current.object_id
+      @requests << request
+      @sidecar.write([request.bytesize].pack("N"))
+      @sidecar.write(request)
+      @sidecar.flush
+      header = @sidecar.read(4)
+      raise "sidecar unavailable: closed response" unless header
+
+      response = @sidecar.read(header.unpack1("N"))
+      raise "sidecar unavailable: truncated response" unless response
+
+      response
+    rescue Errno::EPIPE, IOError => e
+      raise "sidecar unavailable: #{e.class}"
+    end
+
+    def terminate
+      return unless @sidecar
+
+      Process.kill("KILL", @sidecar.pid)
+      Process.wait(@sidecar.pid)
+    rescue Errno::ESRCH, Errno::ECHILD
+      nil
+    ensure
+      @sidecar&.close unless @sidecar&.closed?
+      @sidecar = nil
+    end
+
+    def shutdown
+      super
+      terminate
     end
   end
 
@@ -623,6 +681,25 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(provider.shutdown_count).to eq(1)
 
     expect(described_class.start_host_runtime).to be_nil
+  end
+
+  it "fails closed when an explicitly selected sidecar dies after preflight" do
+    sidecar = HostPrototypeFixtures::SidecarWorkflowHost.new("ruby.sidecar")
+    alternative = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.alternative")
+    StructuredmergeHostPrototypeCore.register_workflow_host(sidecar, "ruby.sidecar")
+    StructuredmergeHostPrototypeCore.register_workflow_host(alternative, "ruby.alternative")
+
+    expect(described_class.execute_identity("ruby.sidecar", [0, 255])).to eq([0, 255])
+    sidecar.terminate
+
+    expect do
+      described_class.execute_identity("ruby.sidecar", [1, 2, 3])
+    end.to raise_error(RuntimeError, /sidecar unavailable: process exited/)
+    expect(alternative.requests).to be_empty
+    expect(described_class.registered_workflow_hosts).to contain_exactly(
+      "ruby.alternative",
+      "ruby.sidecar"
+    )
   end
 
   it "dispatches concurrent native Rust workers onto a Ruby runtime thread" do
