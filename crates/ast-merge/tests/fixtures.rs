@@ -13390,10 +13390,10 @@ fn conforms_to_slice_716_supplied_yaml_snippet_synchronization_acceptance_fixtur
             assert!(final_content.contains("concurrency:"));
             assert!(final_content.contains("permissions:"));
             assert!(
-                final_content.contains("actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd")
+                final_content.contains("actions/checkout@1111111111111111111111111111111111111111")
             );
             assert!(
-                final_content.contains("ruby/setup-ruby@e65c17d16e57e481586a6a5a0282698790062f92")
+                final_content.contains("ruby/setup-ruby@2222222222222222222222222222222222222222")
             );
             assert!(!final_content.contains("actions/checkout@v3"));
             assert!(!final_content.contains("ruby/setup-ruby@v1"));

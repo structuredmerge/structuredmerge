@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Classify `.json5` template targets as the JSON family with the JSON5 dialect,
+  follow fixture-owned synthetic action pins in YAML synchronization tests, and
+  recognize the portable benchmark contract's new merge2 gold case.
 - Add a checked-in Ruby API/native ABI contract and require both local and
   isolated packaged bindings to match it; reproduce Alef's generated tree
   twice from clean inputs to reject generated drift and untracked output.

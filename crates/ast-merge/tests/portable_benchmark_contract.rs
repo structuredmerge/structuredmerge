@@ -7,7 +7,7 @@ use ast_merge::{
 };
 use serde_json::Value;
 
-const FIXTURE_DIGEST: &str = "1015727c1a9c4f132dfb8bb51118a594f6ad170459e2af9c73cdb586ec02ce22";
+const FIXTURE_DIGEST: &str = "cc65ce8cb9312e1487fbde257bb80ae53169da6c5e23299957af653af9a616a8";
 
 fn fixture_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -30,7 +30,7 @@ fn canonical_summary_matches_the_exact_shared_contract() {
         schema: "structuredmerge.benchmark/v1".into(),
         counts: PortableBenchmarkSummaryCounts {
             adapters: 2,
-            cases: 5,
+            cases: 6,
             results: 7,
             selected_cases: 5,
             score_eligible_results: 5,
@@ -39,6 +39,7 @@ fn canonical_summary_matches_the_exact_shared_contract() {
         },
         case_ids_by_operation: BTreeMap::from([
             ("diff".into(), string_vec(&["case.diff.json.object-update.v1"])),
+            ("merge2".into(), string_vec(&["case.merge2.json.current-owned-fields.v1"])),
             (
                 "merge3".into(),
                 string_vec(&[
@@ -57,6 +58,7 @@ fn canonical_summary_matches_the_exact_shared_contract() {
             (
                 "gold".into(),
                 string_vec(&[
+                    "case.merge2.json.current-owned-fields.v1",
                     "case.merge3.json.independent-fields.v1",
                     "case.merge3.json.region-conflict.v1",
                 ]),

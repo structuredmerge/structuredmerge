@@ -5209,6 +5209,9 @@ pub fn classify_template_target_path(path: &str) -> TemplateTargetClassification
     if lower_base == ".env" || lower_base.starts_with(".env.") {
         return classify("dotenv", "dotenv", "dotenv");
     }
+    if lower_path.ends_with(".json5") {
+        return classify("json", "json", "json5");
+    }
     if lower_path.ends_with(".jsonc") {
         return classify("json", "json", "jsonc");
     }
