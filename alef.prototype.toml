@@ -52,6 +52,8 @@ functions = [
   "execute_identity",
   "start_identity_worker",
   "poll_identity_worker",
+  "cancel_identity_worker",
+  "identity_worker_cancelled",
   "execute_in_process_identity",
   "execute_typed_identity",
   "execute_detached_identity",

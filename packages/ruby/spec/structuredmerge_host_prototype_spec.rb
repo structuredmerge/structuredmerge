@@ -32,6 +32,10 @@ module HostPrototypeFixtures
       request
     end
 
+    def execute_cancellable_batch(_task_id, request)
+      execute_batch(request)
+    end
+
     def execute_typed_batch(request, source)
       @typed_requests << [request, source]
       source
@@ -93,6 +97,23 @@ module HostPrototypeFixtures
     end
   end
 
+  class CancellationWorkflowHost < IdentityWorkflowHost
+    def initialize(id)
+      super
+      @entered = Queue.new
+    end
+
+    def execute_cancellable_batch(task_id, request)
+      @entered << task_id
+      sleep(0.001) until StructuredmergeHostPrototype.identity_worker_cancelled(task_id)
+      request
+    end
+
+    def wait_until_entered
+      @entered.pop
+    end
+  end
+
   class LifecycleWorkflowHost
     attr_reader :events, :shutdown_count
 
@@ -122,6 +143,10 @@ module HostPrototypeFixtures
 
     def execute_batch(request)
       request
+    end
+
+    def execute_cancellable_batch(_task_id, request)
+      execute_batch(request)
     end
 
     def execute_typed_batch(_request, source)
@@ -525,7 +550,22 @@ RSpec.describe StructuredmergeHostPrototype do
     task_id = described_class.start_identity_worker("ruby.native-failure", [0, 255])
 
     expect { wait_for_identity_worker(task_id) }
-      .to raise_error(RuntimeError, /Ruby method 'execute_batch' failed: native callback exploded/)
+      .to raise_error(RuntimeError, /Ruby method 'execute_cancellable_batch' failed: native callback exploded/)
+  end
+
+  it "cooperatively cancels an in-flight Ruby batch and rejects its late result" do
+    provider = HostPrototypeFixtures::CancellationWorkflowHost.new("ruby.cancelled")
+    StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.cancelled")
+    task_id = described_class.start_identity_worker("ruby.cancelled", [0, 255])
+    expect(provider.wait_until_entered).to eq(task_id)
+
+    described_class.cancel_identity_worker(task_id)
+
+    expect(described_class.identity_worker_cancelled(task_id)).to be(true)
+    expect { wait_for_identity_worker(task_id) }
+      .to raise_error(RuntimeError, /identity worker cancelled after invocation/)
+    expect { described_class.identity_worker_cancelled(task_id) }
+      .to raise_error(RuntimeError, /identity worker not found/)
   end
 
   it "lets an in-flight snapshot finish before finalizing an unregistered provider" do
@@ -592,6 +632,9 @@ RSpec.describe StructuredmergeHostPrototype do
     end
     def missing.execute_batch(request)
       request
+    end
+    def missing.execute_cancellable_batch(_task_id, request)
+      execute_batch(request)
     end
     def missing.execute_typed_batch(_request, source)
       source

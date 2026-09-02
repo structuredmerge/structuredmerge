@@ -23,8 +23,12 @@ const MAX_BATCH_ITEMS: usize = 32;
 
 type IdentityWorkerResult = Result<Vec<u8>, HostPrototypeError>;
 
-static IDENTITY_WORKERS: OnceLock<Mutex<BTreeMap<u64, Receiver<IdentityWorkerResult>>>> =
-    OnceLock::new();
+struct IdentityWorkerTask {
+    receiver: Receiver<IdentityWorkerResult>,
+    cancelled: Arc<AtomicBool>,
+}
+
+static IDENTITY_WORKERS: OnceLock<Mutex<BTreeMap<u64, IdentityWorkerTask>>> = OnceLock::new();
 static NEXT_IDENTITY_WORKER_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -95,6 +99,12 @@ pub trait WorkflowHost: Plugin {
     fn descriptor(&self) -> Result<String, HostPrototypeError>;
 
     fn execute_batch(&self, request: Vec<u8>) -> Result<Vec<u8>, HostPrototypeError>;
+
+    fn execute_cancellable_batch(
+        &self,
+        task_id: u64,
+        request: Vec<u8>,
+    ) -> Result<Vec<u8>, HostPrototypeError>;
 
     fn execute_typed_batch(
         &self,
@@ -465,16 +475,52 @@ pub fn start_identity_worker(
     }
 
     let (sender, receiver) = mpsc::sync_channel(1);
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let worker_cancelled = Arc::clone(&cancelled);
     std::thread::Builder::new()
         .name(format!("structuredmerge-host-{task_id}"))
         .spawn(move || {
-            let _ = sender.send(provider.provider.execute_batch(request));
+            let result = if worker_cancelled.load(Ordering::Acquire) {
+                Err(HostPrototypeError::new(format!(
+                    "identity worker cancelled before invocation: {task_id}"
+                )))
+            } else {
+                let result = provider.provider.execute_cancellable_batch(task_id, request);
+                if worker_cancelled.load(Ordering::Acquire) {
+                    Err(HostPrototypeError::new(format!(
+                        "identity worker cancelled after invocation: {task_id}"
+                    )))
+                } else {
+                    result
+                }
+            };
+            let _ = sender.send(result);
         })
         .map_err(|error| {
             HostPrototypeError::new(format!("failed to start identity worker: {error}"))
         })?;
-    IDENTITY_WORKERS.get_or_init(Default::default).lock().insert(task_id, receiver);
+    IDENTITY_WORKERS
+        .get_or_init(Default::default)
+        .lock()
+        .insert(task_id, IdentityWorkerTask { receiver, cancelled });
     Ok(task_id)
+}
+
+pub fn cancel_identity_worker(task_id: u64) -> Result<(), HostPrototypeError> {
+    let workers = IDENTITY_WORKERS.get_or_init(Default::default).lock();
+    let task = workers
+        .get(&task_id)
+        .ok_or_else(|| HostPrototypeError::new(format!("identity worker not found: {task_id}")))?;
+    task.cancelled.store(true, Ordering::Release);
+    Ok(())
+}
+
+pub fn identity_worker_cancelled(task_id: u64) -> Result<bool, HostPrototypeError> {
+    let workers = IDENTITY_WORKERS.get_or_init(Default::default).lock();
+    let task = workers
+        .get(&task_id)
+        .ok_or_else(|| HostPrototypeError::new(format!("identity worker not found: {task_id}")))?;
+    Ok(task.cancelled.load(Ordering::Acquire))
 }
 
 pub fn poll_identity_worker(task_id: u64) -> Result<Option<Vec<u8>>, HostPrototypeError> {
@@ -482,6 +528,7 @@ pub fn poll_identity_worker(task_id: u64) -> Result<Option<Vec<u8>>, HostPrototy
     let outcome = workers
         .get(&task_id)
         .ok_or_else(|| HostPrototypeError::new(format!("identity worker not found: {task_id}")))?
+        .receiver
         .try_recv();
 
     match outcome {
@@ -709,6 +756,14 @@ mod tests {
         }
 
         fn execute_batch(&self, request: Vec<u8>) -> Result<Vec<u8>, HostPrototypeError> {
+            Ok(request)
+        }
+
+        fn execute_cancellable_batch(
+            &self,
+            _task_id: u64,
+            request: Vec<u8>,
+        ) -> Result<Vec<u8>, HostPrototypeError> {
             Ok(request)
         }
 
