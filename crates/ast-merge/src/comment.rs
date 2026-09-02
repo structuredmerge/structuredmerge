@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
+use tree_haver::{NodeRole, NormalizedTreeNode};
 
 use crate::{
     CommentAttachment, CommentLine, CommentRegion, LayoutGap, LayoutOwner, augment_layout,
@@ -23,6 +24,115 @@ pub struct CommentAugmentation {
     pub preamble_region_id: Option<String>,
     pub postlude_region_id: Option<String>,
     pub orphan_region_ids: Vec<String>,
+}
+
+pub fn augment_normalized_tree_comments(
+    source: &str,
+    root_id: &str,
+    nodes: &[NormalizedTreeNode],
+    style: &str,
+    normalize_comment: impl Fn(&str) -> String,
+) -> Result<CommentAugmentation, String> {
+    let owners = normalized_root_layout_owners(source, root_id, nodes)?;
+    augment_normalized_comments_with_owners(source, &owners, nodes, style, normalize_comment)
+}
+
+pub fn augment_normalized_comments_with_owners(
+    source: &str,
+    owners: &[LayoutOwner],
+    nodes: &[NormalizedTreeNode],
+    style: &str,
+    normalize_comment: impl Fn(&str) -> String,
+) -> Result<CommentAugmentation, String> {
+    let lines = source_lines(source);
+    let comments = nodes
+        .iter()
+        .filter(|node| node.role == NodeRole::Comment)
+        .flat_map(|node| tracked_normalized_comment(&lines, node, &normalize_comment))
+        .collect::<Vec<_>>();
+    augment_comments(&lines, owners, &comments, style)
+}
+
+pub fn normalized_root_layout_owners(
+    source: &str,
+    root_id: &str,
+    nodes: &[NormalizedTreeNode],
+) -> Result<Vec<LayoutOwner>, String> {
+    let line_count = source_lines(source).len();
+    let root = nodes
+        .iter()
+        .find(|node| node.id == root_id)
+        .ok_or_else(|| "normalized tree omitted its root node".to_string())?;
+    let mut owners = nodes
+        .iter()
+        .filter(|node| {
+            node.parent_id.as_deref() == Some(root_id)
+                && node.named
+                && node.role == NodeRole::Structural
+                && node.span.range.start_byte < node.span.range.end_byte
+        })
+        .map(|node| normalized_layout_owner(node, line_count))
+        .collect::<Vec<_>>();
+    owners.sort_by_key(|owner| (owner.start_line, owner.end_line, owner.owner_id.clone()));
+
+    if owners.is_empty() || owners.windows(2).any(|pair| pair[1].start_line <= pair[0].end_line) {
+        owners = vec![normalized_layout_owner(root, line_count)];
+    }
+    Ok(owners)
+}
+
+fn source_lines(source: &str) -> Vec<String> {
+    let mut lines = source.split('\n').map(str::to_string).collect::<Vec<_>>();
+    if source.ends_with('\n') && lines.last().is_some_and(String::is_empty) {
+        lines.pop();
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
+}
+
+fn normalized_layout_owner(node: &NormalizedTreeNode, line_count: usize) -> LayoutOwner {
+    let start_line = (node.span.start_point.row + 1).min(line_count.max(1));
+    let end_line =
+        if node.span.end_point.column == 0 && node.span.end_point.row > node.span.start_point.row {
+            node.span.end_point.row
+        } else {
+            node.span.end_point.row + 1
+        };
+    LayoutOwner {
+        owner_id: node.id.clone(),
+        start_line,
+        end_line: end_line.max(start_line).min(line_count.max(1)),
+    }
+}
+
+fn tracked_normalized_comment(
+    source_lines: &[String],
+    node: &NormalizedTreeNode,
+    normalize_comment: &impl Fn(&str) -> String,
+) -> Vec<TrackedComment> {
+    let start_line = node.span.start_point.row + 1;
+    node.source_fragment
+        .split('\n')
+        .enumerate()
+        .map(|(offset, text)| {
+            let line = start_line + offset;
+            let text = text.trim_end_matches('\r').to_string();
+            let indent = if offset == 0 { node.span.start_point.column } else { 0 };
+            let full_line = source_lines
+                .get(line - 1)
+                .and_then(|source_line| source_line.get(..indent))
+                .is_none_or(|prefix| prefix.trim().is_empty());
+            TrackedComment {
+                line,
+                normalized_content: normalize_comment(&text),
+                text,
+                full_line,
+                indent: Some(indent),
+            }
+        })
+        .collect()
 }
 
 pub fn augment_comments(
@@ -420,5 +530,32 @@ mod tests {
         assert!(attachment.leading_region_id.is_none());
         assert!(attachment.trailing_region_id.is_none());
         assert_eq!(attachment.inline_region_id.as_deref(), Some("comment-region:inline:1-1"));
+    }
+
+    #[test]
+    fn projects_normalized_tree_comments_and_root_layout_once() {
+        let source = "# alpha\nalpha = 1\n\n# beta\nbeta = 2\n";
+        let parsed = tree_haver::parse_normalized_with_language_pack(&tree_haver::ParserRequest {
+            source: source.to_string(),
+            language: "toml".to_string(),
+            dialect: Some("toml".to_string()),
+        });
+        assert!(parsed.ok);
+
+        let augmentation = augment_normalized_tree_comments(
+            source,
+            &parsed.root_id,
+            &parsed.nodes,
+            "hash_comment",
+            |text| text.trim_start_matches('#').trim().to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(augmentation.regions.len(), 2);
+        assert_eq!(augmentation.regions[0].normalized_content(), "alpha");
+        assert_eq!(augmentation.regions[1].normalized_content(), "beta");
+        assert_eq!(augmentation.gaps.len(), 1);
+        assert_eq!(augmentation.gaps[0].lines, [""]);
+        assert_eq!(augmentation.attachments.len(), 2);
     }
 }

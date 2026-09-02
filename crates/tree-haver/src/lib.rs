@@ -1109,13 +1109,21 @@ fn tree_sitter_node_role(node: &tree_sitter_language_pack::Node) -> NodeRole {
     }
     let kind = node.kind();
     if node.is_named() {
-        return if kind == "comment" { NodeRole::Comment } else { NodeRole::Structural };
+        return if tree_sitter_comment_kind(&kind) {
+            NodeRole::Comment
+        } else {
+            NodeRole::Structural
+        };
     }
     match kind.as_str() {
         "," | ";" => NodeRole::Separator,
         "(" | ")" | "[" | "]" | "{" | "}" => NodeRole::Delimiter,
         _ => NodeRole::Token,
     }
+}
+
+fn tree_sitter_comment_kind(kind: &str) -> bool {
+    kind == "comment" || kind.ends_with("_comment") || kind.starts_with("comment_")
 }
 
 fn push_language_pack_node(
@@ -1619,6 +1627,22 @@ mod tests {
         assert!(
             result.nodes.iter().any(|node| node.kind == "," && node.role == NodeRole::Separator)
         );
+    }
+
+    #[test]
+    fn normalizes_language_specific_comment_node_kinds() {
+        let result = parse_normalized_with_language_pack(&ParserRequest {
+            source: "// retained\nfn answer() -> i32 { 42 }\n".to_string(),
+            language: "rust".to_string(),
+            dialect: Some("rust".to_string()),
+        });
+
+        assert!(result.ok);
+        assert!(result.nodes.iter().any(|node| {
+            node.kind == "line_comment"
+                && node.role == NodeRole::Comment
+                && node.source_fragment == "// retained"
+        }));
     }
 
     #[test]

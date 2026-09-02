@@ -5,7 +5,7 @@ use ast_merge::{
     DiagnosticCategory, DiagnosticSeverity, LayoutOwner, MergeConflict, MergeResult, NodeIdentity,
     NodeSignature, OwnedSourceRegion, SequenceConflictCategory, SequenceMergeAnalysis,
     SequenceNode, SourceEdit, SourceRevision, ThreeWayMergeOutcome, ThreeWayMergeResult,
-    TrackedComment, analyze_three_way_sequence, apply_source_edits, augment_comments,
+    analyze_three_way_sequence, apply_source_edits, augment_normalized_comments_with_owners,
 };
 use tree_haver::{
     ByteRange, NormalizedTreeNode, ParserRequest, parse_normalized_with_language_pack,
@@ -152,10 +152,6 @@ fn json_comment_augmentation(
     root: &JsonSyntaxValue,
     nodes: &[NormalizedTreeNode],
 ) -> Result<CommentAugmentation, String> {
-    let mut lines = source.split('\n').map(str::to_string).collect::<Vec<_>>();
-    if source.ends_with('\n') && lines.last().is_some_and(String::is_empty) {
-        lines.pop();
-    }
     let owners = if root.members.is_empty() {
         root.elements
             .iter()
@@ -172,12 +168,9 @@ fn json_comment_augmentation(
     } else {
         owners
     };
-    let comments = nodes
-        .iter()
-        .filter(|node| node.kind == "comment")
-        .flat_map(|node| tracked_json_comments(source, node))
-        .collect::<Vec<_>>();
-    augment_comments(&lines, &owners, &comments, "slash_comment")
+    augment_normalized_comments_with_owners(source, &owners, nodes, "slash_comment", |text| {
+        normalize_json_comment(text)
+    })
 }
 
 fn layout_owner(node_id: &str, region: &OwnedSourceRegion) -> LayoutOwner {
@@ -186,29 +179,6 @@ fn layout_owner(node_id: &str, region: &OwnedSourceRegion) -> LayoutOwner {
         start_line: region.start_line,
         end_line: region.end_line,
     }
-}
-
-fn tracked_json_comments(source: &str, node: &NormalizedTreeNode) -> Vec<TrackedComment> {
-    let source_lines = source.split('\n').collect::<Vec<_>>();
-    let start_line = node.span.start_point.row + 1;
-    let full_line = source_lines
-        .get(start_line - 1)
-        .and_then(|line| line.get(..node.span.start_point.column))
-        .is_none_or(|prefix| prefix.trim().is_empty());
-    node.source_fragment
-        .split('\n')
-        .enumerate()
-        .map(|(offset, text)| {
-            let text = text.trim_end_matches('\r').to_string();
-            TrackedComment {
-                line: start_line + offset,
-                normalized_content: normalize_json_comment(&text),
-                text,
-                full_line,
-                indent: Some(if offset == 0 { node.span.start_point.column } else { 0 }),
-            }
-        })
-        .collect()
 }
 
 fn normalize_json_comment(text: &str) -> String {
