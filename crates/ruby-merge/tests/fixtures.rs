@@ -644,6 +644,44 @@ fn merges_nested_ruby_owners_from_normalized_tree_ranges() {
 }
 
 #[test]
+fn preserves_ruby_method_visibility_sections() {
+    for (slice, fixture) in [
+        (
+            "slice-942-template-only-method-visibility-ordering",
+            "public-method-before-private-section.json",
+        ),
+        ("slice-945-template-owned-private-method-merge", "private-method-section-merge.json"),
+        (
+            "slice-946-existing-private-section-method-merge",
+            "private-method-into-existing-section.json",
+        ),
+        ("slice-947-template-owned-protected-method-merge", "protected-method-section-merge.json"),
+        (
+            "slice-948-existing-protected-section-method-merge",
+            "protected-method-into-existing-section.json",
+        ),
+        ("slice-949-template-public-method-merge", "public-method-without-marker.json"),
+    ] {
+        assert_merge_fixture(&["ruby", slice, fixture]);
+    }
+}
+
+#[test]
+fn preserves_comment_and_gap_owned_by_template_only_method() {
+    let template = "class Greeter\n  def greet\n    :template\n  end\n\n  # Keep the public API note.\n  def wave\n    :wave\n  end\nend\n";
+    let destination = "class Greeter\n  def greet\n    :destination\n  end\nend\n";
+    let result = merge_ruby(template, destination, RubyDialect::Ruby);
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(
+        result.output.as_deref(),
+        Some(
+            "class Greeter\n  def greet\n    :destination\n  end\n\n  # Keep the public API note.\n  def wave\n    :wave\n  end\nend\n"
+        )
+    );
+}
+
+#[test]
 fn projects_ruby_comments_and_blank_lines_through_shared_ownership() {
     let result = parse_ruby(
         "# frozen_string_literal: true\n\n# Loads support.\nrequire \"support\"\n\n# Public API.\nclass Api\nend\n",

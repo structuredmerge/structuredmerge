@@ -43,6 +43,8 @@ impl RubyOwnerKind {
 struct RubySyntaxOwner {
     identity: String,
     node_id: String,
+    visibility: String,
+    visibility_start_line: Option<usize>,
     start_line: usize,
     end_line: usize,
     owned_start_line: usize,
@@ -124,10 +126,28 @@ fn build_scope_owners(
     scope: &NormalizedTreeNode,
     nodes: &HashMap<&str, &NormalizedTreeNode>,
 ) -> Result<Vec<RubySyntaxOwner>, String> {
-    direct_children(scope, nodes)
-        .filter_map(|node| RubyOwnerKind::from_node(node).map(|kind| (node, kind)))
-        .map(|(node, kind)| build_owner(source, node, kind, nodes))
-        .collect()
+    let mut visibility = "public".to_string();
+    let mut visibility_start_line = None;
+    let mut owners = Vec::new();
+    for node in direct_children(scope, nodes) {
+        if node.kind == "identifier"
+            && matches!(node.source_fragment.as_str(), "public" | "protected" | "private")
+        {
+            visibility.clone_from(&node.source_fragment);
+            visibility_start_line = Some(node.span.start_point.row + 1);
+            continue;
+        }
+        let Some(kind) = RubyOwnerKind::from_node(node) else {
+            continue;
+        };
+        let mut owner = build_owner(source, node, kind, nodes)?;
+        if matches!(kind, RubyOwnerKind::Method | RubyOwnerKind::SingletonMethod) {
+            owner.visibility.clone_from(&visibility);
+            owner.visibility_start_line = visibility_start_line;
+        }
+        owners.push(owner);
+    }
+    Ok(owners)
 }
 
 fn build_owner(
@@ -166,6 +186,8 @@ fn build_owner(
     Ok(RubySyntaxOwner {
         identity: format!("{}:{name}", kind.identity_prefix()),
         node_id: node.id.clone(),
+        visibility: "public".to_string(),
+        visibility_start_line: None,
         start_line,
         end_line,
         owned_start_line: start_line,
@@ -286,21 +308,73 @@ fn plan_scope_insertions(
         }
     }
 
-    if !missing.is_empty() {
-        let fragments = missing
-            .into_iter()
-            .map(|owner| {
-                line_fragment(&template_document.source, owner.owned_start_line, owner.end_line)
-            })
-            .collect::<Vec<_>>();
-        insertions.entry(insertion_byte).or_default().push(section_fragment(
+    let mut scope_insertions = BTreeMap::<usize, Vec<String>>::new();
+    let mut emitted_visibility_markers = HashSet::new();
+    for owner in missing {
+        let destination_has_visibility =
+            destination_owners.iter().any(|candidate| candidate.visibility == owner.visibility);
+        let owner_insertion_byte = visibility_insertion_byte(
             &destination_document.source,
+            destination_owners,
+            &owner.visibility,
             insertion_byte,
-            !destination_owners.is_empty(),
+        );
+        let include_visibility = owner.visibility != "public"
+            && !destination_has_visibility
+            && emitted_visibility_markers.insert(owner.visibility.clone());
+        let start_line = if include_visibility {
+            owner.visibility_start_line.unwrap_or(owner.owned_start_line)
+        } else {
+            owner.owned_start_line
+        };
+        scope_insertions.entry(owner_insertion_byte).or_default().push(line_fragment(
+            &template_document.source,
+            start_line,
+            owner.end_line,
+        ));
+    }
+    for (byte, fragments) in scope_insertions {
+        insertions.entry(byte).or_default().push(section_fragment(
+            &destination_document.source,
+            byte,
+            destination_owners.iter().any(|owner| {
+                line_start_byte(&destination_document.source, owner.start_line) < byte
+            }),
+            byte < insertion_byte,
             fragments,
         ));
     }
     Ok(())
+}
+
+fn visibility_insertion_byte(
+    destination: &str,
+    owners: &[RubySyntaxOwner],
+    visibility: &str,
+    scope_end_byte: usize,
+) -> usize {
+    if visibility == "public" {
+        return owners
+            .iter()
+            .find(|owner| owner.visibility != "public")
+            .map(|owner| {
+                line_start_byte(
+                    destination,
+                    owner.visibility_start_line.unwrap_or(owner.owned_start_line),
+                )
+            })
+            .unwrap_or(scope_end_byte);
+    }
+
+    let Some(last_match_index) = owners.iter().rposition(|owner| owner.visibility == visibility)
+    else {
+        return scope_end_byte;
+    };
+    if owners[(last_match_index + 1)..].iter().any(|owner| owner.visibility != visibility) {
+        line_after_byte(destination, owners[last_match_index].end_line)
+    } else {
+        scope_end_byte
+    }
 }
 
 fn line_start_byte(source: &str, line: usize) -> usize {
@@ -323,6 +397,7 @@ fn section_fragment(
     destination: &str,
     insertion_byte: usize,
     has_existing_owners: bool,
+    has_following_owner: bool,
     fragments: Vec<String>,
 ) -> String {
     let mut fragment = fragments.join("\n");
@@ -337,6 +412,9 @@ fn section_fragment(
         && !fragment.starts_with('\n')
     {
         fragment.insert(0, '\n');
+    }
+    if has_following_owner && !fragment.ends_with("\n\n") {
+        fragment.push('\n');
     }
     fragment
 }
