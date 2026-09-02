@@ -39,6 +39,14 @@ fn rejects_compact_ruleset_edges() {
             "unknown-directive",
             "format json\nowners line_bound_statements\nmatch stable_path\nread native_read_portable_write\nattach layout_only\nmystery value\n",
         ),
+        (
+            "wrong-arity",
+            "format json extra\nowners line_bound_statements\nmatch stable_path\nread native_read_portable_write\nattach layout_only\ncapability incomplete\n",
+        ),
+        (
+            "non-boolean-atomic",
+            "format json\nowners line_bound_statements\nmatch stable_path\nread native_read_portable_write\nattach layout_only\natomic string maybe\n",
+        ),
     ];
     for (name, source) in cases {
         let result = parse_compact_ruleset(source);

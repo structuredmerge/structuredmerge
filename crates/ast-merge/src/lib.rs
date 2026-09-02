@@ -16,6 +16,8 @@ pub mod layout;
 pub use layout::*;
 pub mod comment;
 pub use comment::*;
+pub mod ruleset_runtime;
+pub use ruleset_runtime::*;
 pub mod source_render;
 pub use source_render::*;
 
@@ -2832,6 +2834,17 @@ pub fn parse_compact_ruleset(source: &str) -> ParseResult<CompactRuleset> {
             ));
             continue;
         }
+        if let Some(expected) = compact_ruleset_directive_arity(name)
+            && arguments.len() != expected
+        {
+            diagnostics.push(compact_ruleset_diagnostic(
+                format!(
+                    "directive {name:?} requires exactly {expected} argument{}",
+                    if expected == 1 { "" } else { "s" }
+                ),
+                path.clone(),
+            ));
+        }
         for argument in &arguments {
             if argument != "true"
                 && argument != "false"
@@ -2875,6 +2888,14 @@ pub fn parse_compact_ruleset(source: &str) -> ParseResult<CompactRuleset> {
             diagnostics.push(compact_ruleset_diagnostic(
                 format!("unknown attach value {:?}", arguments[0]),
                 path,
+            ));
+        }
+        if name == "atomic"
+            && !matches!(arguments.get(1).map(String::as_str), Some("true" | "false"))
+        {
+            diagnostics.push(compact_ruleset_diagnostic(
+                "atomic directives require true or false".to_string(),
+                Some(line_number.to_string()),
             ));
         }
 
@@ -3020,6 +3041,17 @@ fn compact_ruleset_repeatable_keyed_directive(name: &str) -> bool {
 
 fn compact_ruleset_known_directive(name: &str) -> bool {
     compact_ruleset_singleton_directive(name) || compact_ruleset_repeatable_keyed_directive(name)
+}
+
+fn compact_ruleset_directive_arity(name: &str) -> Option<usize> {
+    match name {
+        "format" | "owners" | "match" | "read" | "attach" | "comment_style" | "render"
+        | "render_strategy" => Some(1),
+        "backend" | "node_role" | "atomic" | "capability" | "logical_owner" | "repair"
+        | "surface" | "delegate" => Some(2),
+        "child_group" => Some(3),
+        _ => None,
+    }
 }
 
 fn compact_ruleset_repeatable_key(name: &str, arguments: &[String]) -> String {
