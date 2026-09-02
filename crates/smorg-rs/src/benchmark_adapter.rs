@@ -8,6 +8,7 @@ use std::{
 use ast_merge::{DiagnosticCategory, ThreeWayMergeOutcome};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use bash_merge::{BashDialect, merge_bash_three_way};
+use generic_merge::merge_generic_tslp_three_way;
 use go_merge::{GoDialect, merge_go_three_way};
 use json_merge::{
     JsonDialect, json_semantically_equivalent, merge_json_source_preserving, merge_json_three_way,
@@ -300,8 +301,37 @@ fn execute(request: Request) -> Result<(i32, String, serde_json::Value), String>
         "toml" => execute_toml(request),
         "typescript" => execute_typescript(request),
         "yaml" => execute_yaml(request),
-        family => Err(format!("unsupported benchmark family: {family}")),
+        _ => execute_generic(request),
     }
+}
+
+fn execute_generic(request: Request) -> Result<(i32, String, serde_json::Value), String> {
+    if request.operation != "merge3" {
+        return Err(format!(
+            "unsupported generic benchmark operation for {}: {}",
+            request.selector.family, request.operation
+        ));
+    }
+
+    let base = source(&request.sources, "base")?;
+    let ours = source(&request.sources, "ours")?;
+    let theirs = source(&request.sources, "theirs")?;
+    let result = merge_generic_tslp_three_way(
+        &base,
+        &ours,
+        &theirs,
+        &request.selector.family,
+        Some(&request.selector.dialect),
+    );
+    let status = match result.outcome {
+        ThreeWayMergeOutcome::Clean => 0,
+        ThreeWayMergeOutcome::Conflict => 1,
+        ThreeWayMergeOutcome::Error => 2,
+    };
+    let output = result.output.clone().unwrap_or_default();
+    let result = serde_json::to_value(result)
+        .map_err(|error| format!("serialize generic merge3 result: {error}"))?;
+    Ok((status, output, result))
 }
 
 fn execute_bash(request: Request) -> Result<(i32, String, serde_json::Value), String> {
@@ -779,6 +809,37 @@ mod tests {
         assert_eq!(merge2["status"], 2);
         assert!(
             merge2["stderr"].as_str().unwrap().contains("unsupported Bash benchmark operation")
+        );
+    }
+
+    #[test]
+    fn serves_experimental_generic_python_merge3_without_claiming_merge2() {
+        let base = "def left():\n    return 1\n\ndef right():\n    return 1\n";
+        let ours = "def left():\n    return 2\n\ndef right():\n    return 1\n";
+        let theirs = "def left():\n    return 1\n\ndef right():\n    return 2\n";
+        let expected = "def left():\n    return 2\n\ndef right():\n    return 2\n";
+        let merge3 = execute_line(&request_for(
+            "merge3",
+            "python",
+            "python",
+            &[("base", base), ("ours", ours), ("theirs", theirs)],
+        ));
+        let merge2 = execute_line(&request_for(
+            "merge2",
+            "python",
+            "python",
+            &[("incoming", theirs), ("current", ours)],
+        ));
+
+        assert_eq!(merge3["status"], 0);
+        assert_eq!(
+            String::from_utf8(STANDARD.decode(merge3["output_base64"].as_str().unwrap()).unwrap())
+                .unwrap(),
+            expected
+        );
+        assert_eq!(merge2["status"], 2);
+        assert!(
+            merge2["stderr"].as_str().unwrap().contains("unsupported generic benchmark operation")
         );
     }
 

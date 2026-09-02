@@ -32,6 +32,11 @@
         "package": "markdown-merge",
         "profile": "source_preserving"
       },
+      "python": {
+        "provider_id": "rust.generic.tslp",
+        "package": "generic-merge",
+        "profile": "experimental_named_top_level"
+      },
       "ruby": {
         "provider_id": "rust.ruby",
         "package": "ruby-merge",
@@ -72,8 +77,8 @@
   },
   "supports": {
     "operations": ["merge2", "merge3", "metamorphic"],
-    "families": ["bash", "go", "json", "markdown", "rbs", "ruby", "rust", "toml", "typescript", "yaml"],
-    "dialects": ["bash", "go", "json", "jsonc", "json5", "markdown", "rbs", "ruby", "rust", "toml", "typescript", "tsx", "yaml"],
+    "families": ["bash", "go", "json", "markdown", "python", "rbs", "ruby", "rust", "toml", "typescript", "yaml"],
+    "dialects": ["bash", "go", "json", "jsonc", "json5", "markdown", "python", "rbs", "ruby", "rust", "toml", "typescript", "tsx", "yaml"],
     "combinations": [
       {
         "family": "bash",
@@ -94,6 +99,11 @@
         "family": "markdown",
         "operations": ["merge2"],
         "dialects": ["markdown"]
+      },
+      {
+        "family": "python",
+        "operations": ["merge3"],
+        "dialects": ["python"]
       },
       {
         "family": "rbs",

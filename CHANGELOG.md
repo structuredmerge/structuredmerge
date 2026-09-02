@@ -24,3 +24,5 @@
 - Add an experimental generic TreeHaver/TSLP provider for languages without a
   dedicated substrate, limited to exact-layout three-way merges of uniquely
   named top-level owners and explicit fail-closed behavior everywhere else.
+- Advertise Python as the first reviewed generic-provider combination through
+  the Rust benchmark adapter without claiming generic two-way support.
