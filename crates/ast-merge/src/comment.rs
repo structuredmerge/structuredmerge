@@ -164,8 +164,13 @@ fn tracked_normalized_comment(
     normalize_comment: &impl Fn(&str) -> String,
 ) -> Vec<TrackedComment> {
     let start_line = node.span.start_point.row + 1;
-    node.source_fragment
-        .split('\n')
+    let mut fragments = node.source_fragment.split('\n').collect::<Vec<_>>();
+    if node.source_fragment.ends_with('\n') && fragments.last().is_some_and(|text| text.is_empty())
+    {
+        fragments.pop();
+    }
+    fragments
+        .into_iter()
         .enumerate()
         .map(|(offset, text)| {
             let line = start_line + offset;

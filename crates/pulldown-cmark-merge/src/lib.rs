@@ -131,6 +131,9 @@ pub fn parse_markdown(
             normalized_source: normalized_source.clone(),
             root_kind: markdown_merge::MarkdownRootKind::Document,
             owners: collect_markdown_owners(&normalized_source),
+            comment_regions: vec![],
+            layout_gaps: vec![],
+            comment_attachments: vec![],
         }),
         policies: vec![],
     }

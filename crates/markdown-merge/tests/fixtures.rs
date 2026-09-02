@@ -264,6 +264,9 @@ fn merge_uses_the_supplied_parser_for_both_inputs() {
                 normalized_source: normalized_source.clone(),
                 root_kind: MarkdownRootKind::Document,
                 owners: collect_markdown_owners(&normalized_source),
+                comment_regions: vec![],
+                layout_gaps: vec![],
+                comment_attachments: vec![],
             }),
             policies: vec![],
         }
@@ -279,6 +282,22 @@ fn merge_uses_the_supplied_parser_for_both_inputs() {
     assert!(result.ok);
     assert_eq!(calls.get(), 2);
     assert_eq!(result.output.as_deref(), Some("# Destination\n\nretained\n"));
+}
+
+#[test]
+fn projects_markdown_comments_and_blank_lines_through_shared_ownership() {
+    let result = parse_markdown_with_backend(
+        "<!-- package -->\n\n# Title\n\nBody.\n",
+        MarkdownDialect::Markdown,
+        MarkdownBackend::KreuzbergLanguagePack,
+    );
+    assert!(result.ok, "{:?}", result.diagnostics);
+    let analysis = result.analysis.expect("analysis should exist");
+
+    assert_eq!(analysis.comment_regions.len(), 1);
+    assert_eq!(analysis.comment_regions[0].normalized_content(), "package");
+    assert!(!analysis.layout_gaps.is_empty());
+    assert!(!analysis.comment_attachments.is_empty());
 }
 
 #[test]

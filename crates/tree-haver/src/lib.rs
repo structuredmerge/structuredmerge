@@ -1103,13 +1103,18 @@ fn language_pack_backend_capability(request: &ParserRequest) -> BackendCapabilit
     }
 }
 
-fn tree_sitter_node_role(node: &tree_sitter_language_pack::Node) -> NodeRole {
+fn tree_sitter_node_role(
+    node: &tree_sitter_language_pack::Node,
+    source_fragment: &str,
+) -> NodeRole {
     if node.is_error() || node.is_missing() {
         return NodeRole::Error;
     }
     let kind = node.kind();
     if node.is_named() {
-        return if tree_sitter_comment_kind(&kind) {
+        return if tree_sitter_comment_kind(&kind)
+            || (kind.contains("html") && source_fragment.trim_start().starts_with("<!--"))
+        {
             NodeRole::Comment
         } else {
             NodeRole::Structural
@@ -1143,7 +1148,7 @@ fn push_language_pack_node(
     nodes.push(NormalizedTreeNode {
         id: id.clone(),
         kind: kind.clone(),
-        role: tree_sitter_node_role(&node),
+        role: tree_sitter_node_role(&node, source_fragment),
         parent_id,
         child_ids: vec![],
         span: SourceSpan {

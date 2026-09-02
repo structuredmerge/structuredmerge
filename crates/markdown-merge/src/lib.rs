@@ -1,15 +1,17 @@
 use std::collections::HashMap;
 
 use ast_merge::{
-    AppliedDelegatedChildOutput, ConformanceFamilyPlanContext, ConformanceFeatureProfileView,
-    ConformanceManifestReviewState, ConformanceManifestReviewStateEnvelope,
-    DelegatedChildGroupReviewState, DelegatedChildOperation, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, DiscoveredSurface, FamilyFeatureProfile, MergeResult, ParseResult,
-    ReviewReplayBundle, ReviewReplayBundleEnvelope, SurfaceOwnerKind, SurfaceOwnerRef,
-    execute_reviewed_nested_merge, import_conformance_manifest_review_state_envelope,
-    import_review_replay_bundle_envelope, match_owner_paths,
+    AppliedDelegatedChildOutput, CommentAttachment, CommentRegion, ConformanceFamilyPlanContext,
+    ConformanceFeatureProfileView, ConformanceManifestReviewState,
+    ConformanceManifestReviewStateEnvelope, DelegatedChildGroupReviewState,
+    DelegatedChildOperation, Diagnostic, DiagnosticCategory, DiagnosticSeverity, DiscoveredSurface,
+    FamilyFeatureProfile, LayoutGap, MergeResult, ParseResult, ReviewReplayBundle,
+    ReviewReplayBundleEnvelope, SurfaceOwnerKind, SurfaceOwnerRef,
+    augment_normalized_tree_comments, execute_reviewed_nested_merge,
+    import_conformance_manifest_review_state_envelope, import_review_replay_bundle_envelope,
+    match_owner_paths,
 };
-use tree_haver::{ParserRequest, parse_with_language_pack};
+use tree_haver::{ParserRequest, parse_normalized_with_language_pack};
 
 pub const PACKAGE_NAME: &str = "markdown-merge";
 
@@ -62,6 +64,9 @@ pub struct MarkdownAnalysis {
     pub normalized_source: String,
     pub root_kind: MarkdownRootKind,
     pub owners: Vec<MarkdownOwner>,
+    pub comment_regions: Vec<CommentRegion>,
+    pub layout_gaps: Vec<LayoutGap>,
+    pub comment_attachments: Vec<CommentAttachment>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -323,7 +328,7 @@ pub fn parse_markdown_with_backend(
 
     match backend {
         MarkdownBackend::KreuzbergLanguagePack => {
-            let syntax = parse_with_language_pack(&ParserRequest {
+            let syntax = parse_normalized_with_language_pack(&ParserRequest {
                 source: source.to_string(),
                 language: "markdown".to_string(),
                 dialect: Some("markdown".to_string()),
@@ -331,26 +336,65 @@ pub fn parse_markdown_with_backend(
             if !syntax.ok {
                 return ParseResult {
                     ok: false,
-                    diagnostics: syntax.diagnostics.into_iter().map(Into::into).collect(),
+                    diagnostics: syntax
+                        .diagnostics
+                        .iter()
+                        .map(|message| Diagnostic {
+                            severity: DiagnosticSeverity::Error,
+                            category: DiagnosticCategory::ParseError,
+                            message: message.clone(),
+                            path: None,
+                            review: None,
+                        })
+                        .collect(),
                     analysis: None,
                     policies: vec![],
                 };
             }
+
+            let augmentation = match augment_normalized_tree_comments(
+                source,
+                &syntax.root_id,
+                &syntax.nodes,
+                "html_comment",
+                normalize_markdown_comment,
+            ) {
+                Ok(augmentation) => augmentation,
+                Err(error) => {
+                    return ParseResult {
+                        ok: false,
+                        diagnostics: vec![configuration_error(&error)],
+                        analysis: None,
+                        policies: vec![],
+                    };
+                }
+            };
+            let normalized_source = normalize_markdown_source(source);
+            ParseResult {
+                ok: true,
+                diagnostics: vec![],
+                analysis: Some(MarkdownAnalysis {
+                    dialect,
+                    normalized_source: normalized_source.clone(),
+                    root_kind: MarkdownRootKind::Document,
+                    owners: collect_markdown_owners(&normalized_source),
+                    comment_regions: augmentation.regions,
+                    layout_gaps: augmentation.gaps,
+                    comment_attachments: augmentation.attachments,
+                }),
+                policies: vec![],
+            }
         }
     }
+}
 
-    let normalized_source = normalize_markdown_source(source);
-    ParseResult {
-        ok: true,
-        diagnostics: vec![],
-        analysis: Some(MarkdownAnalysis {
-            dialect,
-            normalized_source: normalized_source.clone(),
-            root_kind: MarkdownRootKind::Document,
-            owners: collect_markdown_owners(&normalized_source),
-        }),
-        policies: vec![],
-    }
+fn normalize_markdown_comment(text: &str) -> String {
+    text.trim()
+        .strip_prefix("<!--")
+        .unwrap_or(text.trim())
+        .trim_end_matches("-->")
+        .trim()
+        .to_string()
 }
 
 pub fn match_markdown_owners(
