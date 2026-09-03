@@ -368,6 +368,33 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(described_class::VERSION).to match(/\A\d+\.\d+\.\d+/)
   end
 
+  it "discovers compiled and registered capabilities deterministically" do
+    ruby_provider = HostPrototypeFixtures::IdentityParserHost.new("ruby.parser.stable")
+    StructuredmergeHostPrototypeCore.register_parser_host(ruby_provider, "ruby.parser.stable")
+    described_class.register_tslp_parser_host("rust.tslp.json", "json")
+    def ruby_provider.descriptor
+      raise "discovery must use metadata captured at registration"
+    end
+
+    first = JSON.parse(described_class.capability_manifest)
+    second = JSON.parse(described_class.capability_manifest)
+
+    expect(second).to eq(first)
+    expect(first.fetch("schema")).to eq("structuredmerge.capability-manifest/v1")
+    expect(first.fetch("operations").map { |entry| entry.fetch("id") }).to eq(
+      %w[rust.json.tslp.merge2 rust.json.tslp.merge3]
+    )
+    expect(first.dig("operations", 0, "tree_haver_backend")).to eq(
+      "kreuzberg-language-pack"
+    )
+    expect(first.dig("parser_provider_factories", 0, "id")).to eq("rust.tslp")
+    registered = first.dig("registered_providers", "parser")
+    expect(registered.map { |entry| entry.fetch("id") }).to eq(
+      %w[ruby.parser.stable rust.tslp.json]
+    )
+    expect(registered.last.dig("descriptor", "language")).to eq("json")
+  end
+
   it "round trips the shared byte corpus through a Ruby workflow host" do
     provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.identity")
     StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.identity")

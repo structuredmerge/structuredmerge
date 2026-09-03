@@ -221,12 +221,14 @@ impl ParserHost for TreeHaverLanguagePackParserHost {
 
 struct ProviderEntry<P: Plugin + ?Sized> {
     provider: Arc<P>,
+    version: String,
+    descriptor: Value,
     finalized: AtomicBool,
 }
 
 impl<P: Plugin + ?Sized> ProviderEntry<P> {
-    fn new(provider: Arc<P>) -> Self {
-        Self { provider, finalized: AtomicBool::new(false) }
+    fn new(provider: Arc<P>, version: String, descriptor: Value) -> Self {
+        Self { provider, version, descriptor, finalized: AtomicBool::new(false) }
     }
 
     fn finalize(&self) -> Result<(), HostPrototypeError> {
@@ -253,6 +255,8 @@ fn replace_provider_if_same<P: Plugin + ?Sized>(
     providers: &mut BTreeMap<String, Arc<ProviderEntry<P>>>,
     expected: &Arc<ProviderEntry<P>>,
     provider: Arc<P>,
+    version: String,
+    descriptor: Value,
 ) -> Result<Arc<ProviderEntry<P>>, HostPrototypeError> {
     let name = provider.name().to_owned();
     let current = providers
@@ -264,7 +268,7 @@ fn replace_provider_if_same<P: Plugin + ?Sized>(
         )));
     }
     Ok(providers
-        .insert(name, Arc::new(ProviderEntry::new(provider)))
+        .insert(name, Arc::new(ProviderEntry::new(provider, version, descriptor)))
         .expect("existing provider checked above"))
 }
 
@@ -279,7 +283,21 @@ pub struct ParserHostRegistry {
 }
 
 impl ParserHostRegistry {
+    #[cfg(test)]
     fn insert(&mut self, provider: Arc<dyn ParserHost>) -> Result<(), HostPrototypeError> {
+        let name = provider.name().to_owned();
+        let version = provider.version()?;
+        let descriptor = provider.descriptor()?;
+        let descriptor = validate_provider_metadata(&name, &version, &descriptor)?;
+        self.insert_with_metadata(provider, version, descriptor)
+    }
+
+    fn insert_with_metadata(
+        &mut self,
+        provider: Arc<dyn ParserHost>,
+        version: String,
+        descriptor: Value,
+    ) -> Result<(), HostPrototypeError> {
         let name = provider.name().to_owned();
         if name.is_empty() {
             return Err(HostPrototypeError::new("provider name cannot be empty"));
@@ -287,7 +305,7 @@ impl ParserHostRegistry {
         if self.providers.contains_key(&name) {
             return Err(HostPrototypeError::new(format!("provider already registered: {name}")));
         }
-        self.providers.insert(name, Arc::new(ProviderEntry::new(provider)));
+        self.providers.insert(name, Arc::new(ProviderEntry::new(provider, version, descriptor)));
         Ok(())
     }
 
@@ -302,8 +320,10 @@ impl ParserHostRegistry {
         &mut self,
         expected: &Arc<ProviderEntry<dyn ParserHost>>,
         provider: Arc<dyn ParserHost>,
+        version: String,
+        descriptor: Value,
     ) -> Result<Arc<ProviderEntry<dyn ParserHost>>, HostPrototypeError> {
-        replace_provider_if_same(&mut self.providers, expected, provider)
+        replace_provider_if_same(&mut self.providers, expected, provider, version, descriptor)
     }
 
     fn remove(
@@ -323,13 +343,31 @@ impl ParserHostRegistry {
         self.providers.keys().cloned().collect()
     }
 
+    fn entries(&self) -> Vec<Arc<ProviderEntry<dyn ParserHost>>> {
+        self.providers.values().cloned().collect()
+    }
+
     fn contains(&self, name: &str) -> bool {
         self.providers.contains_key(name)
     }
 }
 
 impl WorkflowHostRegistry {
+    #[cfg(test)]
     fn insert(&mut self, provider: Arc<dyn WorkflowHost>) -> Result<(), HostPrototypeError> {
+        let name = provider.name().to_owned();
+        let version = provider.version()?;
+        let descriptor = provider.descriptor()?;
+        let descriptor = validate_provider_metadata(&name, &version, &descriptor)?;
+        self.insert_with_metadata(provider, version, descriptor)
+    }
+
+    fn insert_with_metadata(
+        &mut self,
+        provider: Arc<dyn WorkflowHost>,
+        version: String,
+        descriptor: Value,
+    ) -> Result<(), HostPrototypeError> {
         let name = provider.name().to_owned();
         if name.is_empty() {
             return Err(HostPrototypeError::new("provider name cannot be empty"));
@@ -337,7 +375,7 @@ impl WorkflowHostRegistry {
         if self.providers.contains_key(&name) {
             return Err(HostPrototypeError::new(format!("provider already registered: {name}")));
         }
-        self.providers.insert(name, Arc::new(ProviderEntry::new(provider)));
+        self.providers.insert(name, Arc::new(ProviderEntry::new(provider, version, descriptor)));
         Ok(())
     }
 
@@ -352,8 +390,10 @@ impl WorkflowHostRegistry {
         &mut self,
         expected: &Arc<ProviderEntry<dyn WorkflowHost>>,
         provider: Arc<dyn WorkflowHost>,
+        version: String,
+        descriptor: Value,
     ) -> Result<Arc<ProviderEntry<dyn WorkflowHost>>, HostPrototypeError> {
-        replace_provider_if_same(&mut self.providers, expected, provider)
+        replace_provider_if_same(&mut self.providers, expected, provider, version, descriptor)
     }
 
     fn remove(
@@ -371,6 +411,10 @@ impl WorkflowHostRegistry {
 
     fn names(&self) -> Vec<String> {
         self.providers.keys().cloned().collect()
+    }
+
+    fn entries(&self) -> Vec<Arc<ProviderEntry<dyn WorkflowHost>>> {
+        self.providers.values().cloned().collect()
     }
 
     fn contains(&self, name: &str) -> bool {
@@ -402,7 +446,7 @@ fn validate_provider_metadata(
     name: &str,
     version: &str,
     descriptor: &str,
-) -> Result<(), HostPrototypeError> {
+) -> Result<Value, HostPrototypeError> {
     if version.is_empty() {
         return Err(HostPrototypeError::new("provider version cannot be empty"));
     }
@@ -449,7 +493,7 @@ fn validate_provider_metadata(
         }
     }
 
-    Ok(())
+    Ok(parsed)
 }
 
 fn initialization_failure<P: Plugin + ?Sized>(
@@ -557,14 +601,16 @@ pub fn register_workflow_host(provider: Arc<dyn WorkflowHost>) -> Result<(), Hos
 
     let version = provider.version()?;
     let descriptor = provider.descriptor()?;
-    validate_provider_metadata(&name, &version, &descriptor)?;
+    let descriptor = validate_provider_metadata(&name, &version, &descriptor)?;
     if let Err(error) = provider.initialize() {
         return Err(initialization_failure(provider.as_ref(), error));
     }
 
     let publication = {
         let mut registry = registry::get_workflow_host_registry().write();
-        ensure_runtime_accepting_providers().and_then(|()| registry.insert(Arc::clone(&provider)))
+        ensure_runtime_accepting_providers().and_then(|()| {
+            registry.insert_with_metadata(Arc::clone(&provider), version, descriptor)
+        })
     };
     publication.map_err(|error| publication_failure(provider.as_ref(), error))
 }
@@ -584,15 +630,16 @@ pub fn replace_workflow_host(
     let expected = registry::get_workflow_host_registry().read().get(&name)?;
     let version = provider.version()?;
     let descriptor = provider.descriptor()?;
-    validate_provider_metadata(&name, &version, &descriptor)?;
+    let descriptor = validate_provider_metadata(&name, &version, &descriptor)?;
     if let Err(error) = provider.initialize() {
         return Err(initialization_failure(provider.as_ref(), error));
     }
 
     let replaced = {
         let mut registry = registry::get_workflow_host_registry().write();
-        ensure_runtime_accepting_providers()
-            .and_then(|()| registry.replace_if_same(&expected, Arc::clone(&provider)))
+        ensure_runtime_accepting_providers().and_then(|()| {
+            registry.replace_if_same(&expected, Arc::clone(&provider), version, descriptor)
+        })
     };
     let replaced = match replaced {
         Ok(replaced) => replaced,
@@ -616,14 +663,16 @@ pub fn register_parser_host(provider: Arc<dyn ParserHost>) -> Result<(), HostPro
 
     let version = provider.version()?;
     let descriptor = provider.descriptor()?;
-    validate_provider_metadata(&name, &version, &descriptor)?;
+    let descriptor = validate_provider_metadata(&name, &version, &descriptor)?;
     if let Err(error) = provider.initialize() {
         return Err(initialization_failure(provider.as_ref(), error));
     }
 
     let publication = {
         let mut registry = registry::get_parser_host_registry().write();
-        ensure_runtime_accepting_providers().and_then(|()| registry.insert(Arc::clone(&provider)))
+        ensure_runtime_accepting_providers().and_then(|()| {
+            registry.insert_with_metadata(Arc::clone(&provider), version, descriptor)
+        })
     };
     publication.map_err(|error| publication_failure(provider.as_ref(), error))
 }
@@ -656,15 +705,16 @@ pub fn replace_parser_host(
     let expected = registry::get_parser_host_registry().read().get(&name)?;
     let version = provider.version()?;
     let descriptor = provider.descriptor()?;
-    validate_provider_metadata(&name, &version, &descriptor)?;
+    let descriptor = validate_provider_metadata(&name, &version, &descriptor)?;
     if let Err(error) = provider.initialize() {
         return Err(initialization_failure(provider.as_ref(), error));
     }
 
     let replaced = {
         let mut registry = registry::get_parser_host_registry().write();
-        ensure_runtime_accepting_providers()
-            .and_then(|()| registry.replace_if_same(&expected, Arc::clone(&provider)))
+        ensure_runtime_accepting_providers().and_then(|()| {
+            registry.replace_if_same(&expected, Arc::clone(&provider), version, descriptor)
+        })
     };
     let replaced = match replaced {
         Ok(replaced) => replaced,
@@ -1120,6 +1170,75 @@ pub fn registered_parser_hosts() -> Vec<String> {
     registry::get_parser_host_registry().read().names()
 }
 
+fn registered_provider_manifest<P: Plugin + ?Sized>(entry: &ProviderEntry<P>) -> Value {
+    serde_json::json!({
+        "id": entry.provider.name(),
+        "version": entry.version,
+        "descriptor": entry.descriptor,
+    })
+}
+
+pub fn capability_manifest() -> Result<String, HostPrototypeError> {
+    let parser_entries = registry::get_parser_host_registry().read().entries();
+    let workflow_entries = registry::get_workflow_host_registry().read().entries();
+    let parser_hosts = parser_entries
+        .iter()
+        .map(|entry| registered_provider_manifest(entry.as_ref()))
+        .collect::<Vec<_>>();
+    let workflow_hosts = workflow_entries
+        .iter()
+        .map(|entry| registered_provider_manifest(entry.as_ref()))
+        .collect::<Vec<_>>();
+    let manifest = serde_json::json!({
+        "schema": "structuredmerge.capability-manifest/v1",
+        "bundle": {
+            "id": "structuredmerge-host-prototype",
+            "version": env!("CARGO_PKG_VERSION"),
+        },
+        "operations": [
+            {
+                "id": "rust.json.tslp.merge2",
+                "operation": "merge2",
+                "family": "json",
+                "dialects": ["json", "jsonc", "json5"],
+                "merge_provider": "json-merge",
+                "parser_provider": "rust.tslp",
+                "tree_haver_backend": "kreuzberg-language-pack",
+                "support_status": "production",
+                "required_extension_schemas": [],
+            },
+            {
+                "id": "rust.json.tslp.merge3",
+                "operation": "merge3",
+                "family": "json",
+                "dialects": ["json", "jsonc", "json5"],
+                "merge_provider": "json-merge",
+                "parser_provider": "rust.tslp",
+                "tree_haver_backend": "kreuzberg-language-pack",
+                "support_status": "production",
+                "required_extension_schemas": [],
+            },
+        ],
+        "parser_provider_factories": [
+            {
+                "id": "rust.tslp",
+                "operations": ["probe", "parse"],
+                "languages": "on_demand",
+                "tree_haver_backend": "kreuzberg-language-pack",
+                "support_status": "host_runtime_only",
+                "constraints": ["UTF-8 source"],
+            },
+        ],
+        "registered_providers": {
+            "parser": parser_hosts,
+            "workflow": workflow_hosts,
+        },
+    });
+    serde_json::to_string(&manifest).map_err(|error| {
+        HostPrototypeError::new(format!("failed to serialize capability manifest: {error}"))
+    })
+}
+
 pub fn merge_json_two_way(
     incoming_source: String,
     current_source: String,
@@ -1363,6 +1482,19 @@ mod tests {
             error.message(),
             "unsupported JSON dialect \"yaml\"; expected json, jsonc, or json5"
         );
+    }
+
+    #[test]
+    fn capability_manifest_declares_compiled_operations_and_provider_factory() {
+        let manifest: serde_json::Value =
+            serde_json::from_str(&capability_manifest().unwrap()).unwrap();
+
+        assert_eq!(manifest["schema"], "structuredmerge.capability-manifest/v1");
+        assert_eq!(manifest["operations"][0]["id"], "rust.json.tslp.merge2");
+        assert_eq!(manifest["operations"][0]["tree_haver_backend"], "kreuzberg-language-pack");
+        assert_eq!(manifest["operations"][1]["id"], "rust.json.tslp.merge3");
+        assert_eq!(manifest["parser_provider_factories"][0]["id"], "rust.tslp");
+        assert_eq!(manifest["parser_provider_factories"][0]["support_status"], "host_runtime_only");
     }
 
     #[test]

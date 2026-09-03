@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Expose a deterministic, versioned capability manifest from the generated
+  bundle so callers can distinguish compiled merge operations, on-demand
+  parser factories, and currently registered host providers before selection.
 - Measure packaged Ruby cold install, cold start, native TSLP parser load, and
   first merge paths in CI, retaining correctness-checked structured evidence
   without imposing noisy runner-dependent timing thresholds.

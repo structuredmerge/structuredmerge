@@ -8,6 +8,7 @@
   ],
   "facade_methods": [
     "cancel_identity_worker",
+    "capability_manifest",
     "clear_parser_hosts",
     "clear_workflow_hosts",
     "dispatch_identity_worker",
@@ -42,6 +43,7 @@
   ],
   "native_method_arities": {
     "cancel_identity_worker": 1,
+    "capability_manifest": 0,
     "clear_parser_hosts": 0,
     "clear_workflow_hosts": 0,
     "dispatch_identity_worker": 1,

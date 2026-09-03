@@ -56,6 +56,7 @@ types = [
   "ParserHost",
 ]
 functions = [
+  "capability_manifest",
   "unregister_workflow_host",
   "clear_workflow_hosts",
   "execute_identity",

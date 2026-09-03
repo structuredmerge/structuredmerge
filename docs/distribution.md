@@ -110,6 +110,37 @@ entry identifies the operation, format family, dialect, merge provider,
 TreeHaver backend, support status, package version, and required extension
 schemas. Selection is always explicit at the operation boundary.
 
+The generated Ruby bundle returns the manifest as JSON:
+
+```ruby
+require "json"
+require "structuredmerge_host_prototype"
+
+manifest = JSON.parse(StructuredmergeHostPrototype.capability_manifest)
+json_merge3 = manifest.fetch("operations").find do |capability|
+  capability.fetch("family") == "json" && capability.fetch("operation") == "merge3"
+end
+raise "JSON merge3 is unavailable" unless json_merge3
+```
+
+`operations` contains only operations compiled into that artifact.
+`parser_provider_factories` describes providers the artifact can register on
+demand; it does not imply that every grammar has reviewed merge behavior.
+`registered_providers` is the current process registry and includes the exact
+version and validated descriptor captured when each parser or workflow host was
+registered. Entries and registry snapshots are sorted by stable identifiers.
+
+Support statuses are claims, not preference weights:
+
+- `production` means the operation passed its declared Ruby-GM differential,
+  preservation, malformed-input, and false-auto-merge gates.
+- `experimental` means callers must opt into a reviewed but incomplete merge
+  contract.
+- `unsupported` records a known unavailable combination; callers must not
+  substitute another provider implicitly.
+- `host_runtime_only` exposes parsing or transport to the host without claiming
+  a merge operation for that language.
+
 Registration order, require order, and parser load order do not select a
 provider. No provider may silently substitute itself after an explicit
 selection fails. Automatic policy, when requested by the caller, is resolved by
