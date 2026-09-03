@@ -1195,6 +1195,13 @@ pub fn capability_manifest() -> Result<String, HostPrototypeError> {
             "id": "structuredmerge-host-prototype",
             "version": env!("CARGO_PKG_VERSION"),
         },
+        "selection_policy": {
+            "mode": "explicit",
+            "registered_provider_id": "exact_match",
+            "unavailable_provider": "error",
+            "implicit_provider_fallback": false,
+            "registration_order_affects_selection": false,
+        },
         "operations": [
             {
                 "id": "rust.json.tslp.merge2",
@@ -1490,6 +1497,8 @@ mod tests {
             serde_json::from_str(&capability_manifest().unwrap()).unwrap();
 
         assert_eq!(manifest["schema"], "structuredmerge.capability-manifest/v1");
+        assert_eq!(manifest["selection_policy"]["implicit_provider_fallback"], false);
+        assert_eq!(manifest["selection_policy"]["unavailable_provider"], "error");
         assert_eq!(manifest["operations"][0]["id"], "rust.json.tslp.merge2");
         assert_eq!(manifest["operations"][0]["tree_haver_backend"], "kreuzberg-language-pack");
         assert_eq!(manifest["operations"][1]["id"], "rust.json.tslp.merge3");

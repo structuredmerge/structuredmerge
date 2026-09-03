@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Publish and enforce exact provider selection: unavailable explicit provider
+  IDs fail closed even when another parser or workflow host is registered, and
+  the capability manifest declares that implicit provider fallback is disabled.
 - Expose a deterministic, versioned capability manifest from the generated
   bundle so callers can distinguish compiled merge operations, on-demand
   parser factories, and currently registered host providers before selection.

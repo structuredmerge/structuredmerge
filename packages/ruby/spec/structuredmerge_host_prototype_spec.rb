@@ -395,6 +395,24 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(registered.last.dig("descriptor", "language")).to eq("json")
   end
 
+  it "does not substitute a registered provider when an explicit provider is unavailable" do
+    parser = HostPrototypeFixtures::IdentityParserHost.new("ruby.parser.available")
+    workflow = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.workflow.available")
+    StructuredmergeHostPrototypeCore.register_parser_host(parser, "ruby.parser.available")
+    StructuredmergeHostPrototypeCore.register_workflow_host(workflow, "ruby.workflow.available")
+
+    expect do
+      described_class.parse_with_parser("ruby.parser.missing", "{}".bytes)
+    end.to raise_error(RuntimeError, /provider not registered: ruby\.parser\.missing/)
+    expect do
+      described_class.execute_identity("ruby.workflow.missing", "request".bytes)
+    end.to raise_error(RuntimeError, /provider not registered: ruby\.workflow\.missing/)
+    expect(parser.requests).to be_empty
+    expect(workflow.requests).to be_empty
+    manifest = JSON.parse(described_class.capability_manifest)
+    expect(manifest.dig("selection_policy", "implicit_provider_fallback")).to be(false)
+  end
+
   it "round trips the shared byte corpus through a Ruby workflow host" do
     provider = HostPrototypeFixtures::IdentityWorkflowHost.new("ruby.identity")
     StructuredmergeHostPrototypeCore.register_workflow_host(provider, "ruby.identity")

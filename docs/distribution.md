@@ -146,6 +146,13 @@ provider. No provider may silently substitute itself after an explicit
 selection fails. Automatic policy, when requested by the caller, is resolved by
 TreeHaver from declared metadata and included in the result trace.
 
+The manifest's `selection_policy` records this contract for machines. Registry
+operations require an exact provider ID; an unavailable ID is an error even if
+another compatible-looking provider is registered. Compiled operations such as
+`rust.json.tslp.merge3` are bound to the provider named by their manifest entry
+and do not perform runtime provider selection. Git-driver conflict-output modes
+do not alter parser selection and still return an unresolved-conflict status.
+
 ## Non-Goals
 
 - The Rust bundle does not replace Ruby-native parsers before evidence shows it
