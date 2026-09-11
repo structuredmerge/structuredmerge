@@ -76,3 +76,5 @@
 - Preserve Rust declaration kinds in source-aware host analysis and diff owner paths.
 
 - Support conservative one-sided top-level owner additions and deletions during source-preserving three-way merges while retaining fail-closed layout checks.
+
+- Build the TreeHaver consumer gem from its package directory in CI release and isolated-install workflows.

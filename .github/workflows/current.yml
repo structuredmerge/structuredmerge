@@ -114,9 +114,11 @@ jobs:
         shell: bash
         run: |
           gem_home="$(mktemp -d)"
-          SKIP_GEM_SIGNING=true \
-            gem build structuredmerge-ruby/gems/tree_haver/tree_haver.gemspec \
-              --output tree_haver-consumer.gem
+          (
+            cd structuredmerge-ruby/gems/tree_haver
+            SKIP_GEM_SIGNING=true gem build tree_haver.gemspec \
+              --output "$GITHUB_WORKSPACE/tree_haver-consumer.gem"
+          )
           gem install dist/*.gem --install-dir "$gem_home" --no-document
           gem install tree_haver-consumer.gem --install-dir "$gem_home" --no-document
           GEM_HOME="$gem_home" GEM_PATH="$gem_home" \
