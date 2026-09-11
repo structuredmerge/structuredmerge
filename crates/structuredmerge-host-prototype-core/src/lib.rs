@@ -1930,6 +1930,39 @@ mod tests {
     }
 
     #[test]
+    fn ast_crispr_source_edit_boundary_preserves_utf8_and_rejects_overlap() {
+        let response = apply_ast_crispr_source_edits_json(
+            serde_json::json!({
+                "source": "alpha = 1\nβeta = 2\n",
+                "edits": [
+                    {"start_byte": 8, "end_byte": 9, "replacement": "9"},
+                    {"start_byte": 10, "end_byte": 15, "replacement": "gamma"}
+                ]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let report: serde_json::Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(report["ok"], true);
+        assert_eq!(report["output"], "alpha = 9\ngamma = 2\n");
+
+        let response = apply_ast_crispr_source_edits_json(
+            serde_json::json!({
+                "source": "abcdef",
+                "edits": [
+                    {"start_byte": 1, "end_byte": 4, "replacement": "x"},
+                    {"start_byte": 3, "end_byte": 5, "replacement": "y"}
+                ]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let report: serde_json::Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(report["ok"], false);
+        assert_eq!(report["diagnostics"][0]["category"], "source_edit_rejected");
+    }
+
+    #[test]
     fn json_analysis_boundary_preserves_owner_contract() {
         let response =
             parse_json_analysis(r#"{"answer":42}"#.to_owned(), "json".to_owned()).unwrap();
