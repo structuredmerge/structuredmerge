@@ -122,3 +122,5 @@
 - Preserve differing existing packaged templates and report ownership ambiguity in kettle-rusty.
 
 - Retain malformed GitHub workflow paths in kettle-rusty facts with non-fatal parse diagnostics.
+
+- Keep the Ruby host transport benchmark identity provider compatible with the workflow-host callback contract.

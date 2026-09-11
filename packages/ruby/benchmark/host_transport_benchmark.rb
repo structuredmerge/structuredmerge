@@ -45,6 +45,14 @@ module HostTransportBenchmark
       request
     end
 
+    def execute_cancellable_batch(_task_id, request)
+      execute_batch(request)
+    end
+
+    def execute_async_batch(request)
+      execute_batch(request)
+    end
+
     def execute_typed_batch(_request, source)
       @callback_counts["generated_typed_values"] += 1
       @callback_bytes["generated_typed_values"] += source.bytesize
