@@ -79,6 +79,8 @@
 
 - Discover Cargo package facts from a single explicit workspace member in kettle-rusty.
 
+- Expose Cargo dependency requirements, sources, optionality, and target selectors in kettle-rusty facts.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
