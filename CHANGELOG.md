@@ -136,3 +136,5 @@
 - Retain malformed GitHub workflow paths in kettle-rusty facts with non-fatal parse diagnostics.
 
 - Keep the Ruby host transport benchmark identity provider compatible with the workflow-host callback contract.
+
+- Reject unsafe or glob-like Cargo workspace member paths in kettle-rusty discovery.
