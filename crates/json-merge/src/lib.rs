@@ -40,6 +40,8 @@ pub struct JsonOwner {
     pub path: String,
     pub owner_kind: JsonOwnerKind,
     pub match_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_fragment: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -281,31 +283,37 @@ mod tests {
                     path: "/meta".to_string(),
                     owner_kind: JsonOwnerKind::Member,
                     match_key: Some("meta".to_string()),
+                    source_fragment: Some("\"meta\": {\"enabled\": true}".to_string()),
                 },
                 JsonOwner {
                     path: "/meta/enabled".to_string(),
                     owner_kind: JsonOwnerKind::Member,
                     match_key: Some("enabled".to_string()),
+                    source_fragment: Some("\"enabled\": true".to_string()),
                 },
                 JsonOwner {
                     path: "/name".to_string(),
                     owner_kind: JsonOwnerKind::Member,
                     match_key: Some("name".to_string()),
+                    source_fragment: Some("\"name\": \"structuredmerge\"".to_string()),
                 },
                 JsonOwner {
                     path: "/tags".to_string(),
                     owner_kind: JsonOwnerKind::Member,
                     match_key: Some("tags".to_string()),
+                    source_fragment: Some("\"tags\": [\"merge\", \"ast\"]".to_string()),
                 },
                 JsonOwner {
                     path: "/tags/0".to_string(),
                     owner_kind: JsonOwnerKind::Element,
                     match_key: None,
+                    source_fragment: Some("\"merge\"".to_string()),
                 },
                 JsonOwner {
                     path: "/tags/1".to_string(),
                     owner_kind: JsonOwnerKind::Element,
                     match_key: None,
+                    source_fragment: Some("\"ast\"".to_string()),
                 }
             ]
         );

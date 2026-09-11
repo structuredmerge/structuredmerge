@@ -552,11 +552,13 @@ fn parses_strict_json_through_language_pack_and_preserves_analysis() {
                 path: "/alpha".to_string(),
                 owner_kind: JsonOwnerKind::Member,
                 match_key: Some("alpha".to_string()),
+                source_fragment: Some("\"alpha\":{\"beta\":1}".to_string()),
             },
             JsonOwner {
                 path: "/alpha/beta".to_string(),
                 owner_kind: JsonOwnerKind::Member,
                 match_key: Some("beta".to_string()),
+                source_fragment: Some("\"beta\":1".to_string()),
             },
         ])
     );

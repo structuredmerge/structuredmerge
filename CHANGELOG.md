@@ -85,6 +85,8 @@
 
 - Honor explicit kettle.yml template entries and disabled profiles in kettle-rusty packaged-template planning.
 
+- Include source fragments in JSON owner analysis so host adapters can recover line provenance.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

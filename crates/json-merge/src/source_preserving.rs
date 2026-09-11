@@ -208,6 +208,7 @@ fn collect_owners(value: &JsonSyntaxValue, path: &str, owners: &mut Vec<JsonOwne
             path: child_path.clone(),
             owner_kind: JsonOwnerKind::Member,
             match_key: Some(member.key.clone()),
+            source_fragment: Some(member.pair_source.clone()),
         });
         collect_owners(&member.value, &child_path, owners);
     }
@@ -217,6 +218,7 @@ fn collect_owners(value: &JsonSyntaxValue, path: &str, owners: &mut Vec<JsonOwne
             path: child_path.clone(),
             owner_kind: JsonOwnerKind::Element,
             match_key: None,
+            source_fragment: Some(element.source.clone()),
         });
         collect_owners(element, &child_path, owners);
     }
