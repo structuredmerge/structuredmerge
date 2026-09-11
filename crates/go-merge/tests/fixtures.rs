@@ -34,6 +34,19 @@ fn merges_independent_function_edits_with_exact_source_preservation() {
 }
 
 #[test]
+fn rejects_owner_membership_changes_with_independent_edits() {
+    let base = "package main\n\nfunc left() int { return 1 }\n\nfunc right() int { return 1 }\n";
+    let ours = "package main\n\nfunc left() int { return 2 }\n\nfunc right() int { return 1 }\n";
+    let theirs = "package main\n\nfunc left() int { return 1 }\n\nfunc right() int { return 1 }\n\nfunc added() int { return 3 }\n";
+
+    let result = merge_go_three_way(base, ours, theirs, GoDialect::Go);
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Conflict);
+    assert_eq!(result.conflicts[0].category, "unmanaged_source_change");
+    assert_eq!(result.conflicts[0].path, "<unmanaged-source>");
+}
+
+#[test]
 fn preserves_the_package_clause_in_two_way_merges() {
     let template = "package main\n\nfunc incoming() int { return 2 }\n";
     let destination = "package main\n\nfunc existing() int { return 1 }\n";
