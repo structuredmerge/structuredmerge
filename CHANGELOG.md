@@ -71,6 +71,8 @@
 
 - Expose kettle-rusty README style planning and application through the CLI.
 
+- Include sorted Cargo runtime and development dependency names in kettle-rusty discovery facts.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
