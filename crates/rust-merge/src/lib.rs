@@ -14,8 +14,17 @@ use tree_haver::{
 
 pub const PACKAGE_NAME: &str = "rust-merge";
 
-const RUST_FUNCTION_OWNER_KINDS: &[NamedOwnerKind<'static>] =
-    &[NamedOwnerKind { node_kind: "function_item", path_kind: "function" }];
+const RUST_SOURCE_PRESERVING_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
+    NamedOwnerKind { node_kind: "const_item", path_kind: "const" },
+    NamedOwnerKind { node_kind: "enum_item", path_kind: "enum" },
+    NamedOwnerKind { node_kind: "function_item", path_kind: "function" },
+    NamedOwnerKind { node_kind: "mod_item", path_kind: "mod" },
+    NamedOwnerKind { node_kind: "static_item", path_kind: "static" },
+    NamedOwnerKind { node_kind: "struct_item", path_kind: "struct" },
+    NamedOwnerKind { node_kind: "trait_item", path_kind: "trait" },
+    NamedOwnerKind { node_kind: "type_item", path_kind: "type" },
+    NamedOwnerKind { node_kind: "union_item", path_kind: "union" },
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -327,7 +336,7 @@ fn parse_source_preserving_rust(source: &str) -> Result<SourcePreservingOwnerDoc
         &parsed.nodes,
         NamedOwnerProjectionPolicy {
             family: "Rust",
-            owner_kinds: RUST_FUNCTION_OWNER_KINDS,
+            owner_kinds: RUST_SOURCE_PRESERVING_OWNER_KINDS,
             ignored_kinds: &["use_declaration"],
             wrapper_kinds: &[],
             name_fields: &["name"],

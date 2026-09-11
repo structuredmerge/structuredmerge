@@ -39,6 +39,21 @@ fn merges_independent_function_edits_with_exact_source_preservation() {
 }
 
 #[test]
+fn merges_independent_named_item_edits_with_exact_source_preservation() {
+    let base = "const LIMIT: usize = 1;\n\nstruct Config {\n    value: usize,\n}\n";
+    let ours = "const LIMIT: usize = 2;\n\nstruct Config {\n    value: usize,\n}\n";
+    let theirs = "const LIMIT: usize = 1;\n\nstruct Config {\n    value: u64,\n}\n";
+
+    let result = merge_rust_three_way(base, ours, theirs, RustDialect::Rust);
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
+    assert_eq!(
+        result.output.as_deref(),
+        Some("const LIMIT: usize = 2;\n\nstruct Config {\n    value: u64,\n}\n")
+    );
+}
+
+#[test]
 fn rejects_ambiguous_or_spanless_rust_three_way_inputs_without_fallback() {
     let base = "fn value() -> i32 { 1 }\n";
     let ours = "fn value() -> i32 { 2 }\n";

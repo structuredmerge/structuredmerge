@@ -68,3 +68,5 @@
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
+
+- Expand Rust source-preserving merge3 ownership beyond functions to named top-level items.
