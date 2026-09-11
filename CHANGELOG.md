@@ -87,6 +87,8 @@
 
 - Include source fragments in JSON owner analysis so host adapters can recover line provenance.
 
+- Honor explicit local and profiled template roots in kettle-rusty, failing closed when a selected source is missing.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
