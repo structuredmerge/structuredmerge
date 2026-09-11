@@ -98,3 +98,5 @@
 - Apply package-scoped kettle-rusty recipes inside the selected single-member workspace package.
 
 - Target README style planning and application at the selected workspace member.
+
+- Resolve workspace-member SECURITY.md from the selected package when rendering README style.
