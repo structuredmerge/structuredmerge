@@ -195,8 +195,10 @@ jobs:
             SKIP_GEM_SIGNING=true gem build tree_haver.gemspec \
               --output "$GITHUB_WORKSPACE/tree_haver-consumer.gem"
           )
-          gem install dist/*-x86_64-linux.gem --install-dir "$gem_home" --no-document
-          gem install tree_haver-consumer.gem --install-dir "$gem_home" --no-document
+          GEM_HOME="$gem_home" GEM_PATH="$gem_home" \
+            gem install dist/*-x86_64-linux.gem --install-dir "$gem_home" --no-document
+          GEM_HOME="$gem_home" GEM_PATH="$gem_home" \
+            gem install tree_haver-consumer.gem --install-dir "$gem_home" --no-document
           GEM_HOME="$gem_home" GEM_PATH="$gem_home" \
             ruby workspace-scripts/check_tree_haver_consumer.rb
 
