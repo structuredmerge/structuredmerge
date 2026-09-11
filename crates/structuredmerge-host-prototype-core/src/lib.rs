@@ -11,13 +11,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-use go_merge::{GoDialect, merge_go_three_way as merge_go_three_way_impl, parse_go};
+use go_merge::{GoDialect, merge_go, merge_go_three_way as merge_go_three_way_impl, parse_go};
 use json_merge::{
     JsonDialect, merge_json_source_preserving,
     merge_json_three_way as merge_json_three_way_source_preserving, parse_json,
 };
 use parking_lot::{Mutex, RwLock};
-use rust_merge::{RustDialect, merge_rust_three_way as merge_rust_three_way_impl, parse_rust};
+use rust_merge::{RustDialect, merge_rust, merge_rust_three_way as merge_rust_three_way_impl, parse_rust};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tree_haver::{ParserRequest, parse_normalized_with_language_pack, parse_with_language_pack};
@@ -1329,6 +1329,20 @@ pub fn merge_go_three_way(
     .map_err(|error| HostPrototypeError::new(format!("failed to serialize Go merge: {error}")))
 }
 
+pub fn merge_go_two_way(
+    template_source: String,
+    destination_source: String,
+    dialect: String,
+) -> Result<String, HostPrototypeError> {
+    if dialect.trim().to_ascii_lowercase() != "go" {
+        return Err(HostPrototypeError::new(format!(
+            "unsupported Go dialect {dialect:?}; expected go"
+        )));
+    }
+    serde_json::to_string(&merge_go(&template_source, &destination_source, GoDialect::Go))
+        .map_err(|error| HostPrototypeError::new(format!("failed to serialize Go merge: {error}")))
+}
+
 pub fn parse_rust_analysis(source: String, dialect: String) -> Result<String, HostPrototypeError> {
     if dialect.trim().to_ascii_lowercase() != "rust" {
         return Err(HostPrototypeError::new(format!(
@@ -1358,6 +1372,20 @@ pub fn merge_rust_three_way(
         RustDialect::Rust,
     ))
     .map_err(|error| HostPrototypeError::new(format!("failed to serialize Rust merge: {error}")))
+}
+
+pub fn merge_rust_two_way(
+    template_source: String,
+    destination_source: String,
+    dialect: String,
+) -> Result<String, HostPrototypeError> {
+    if dialect.trim().to_ascii_lowercase() != "rust" {
+        return Err(HostPrototypeError::new(format!(
+            "unsupported Rust dialect {dialect:?}; expected rust"
+        )));
+    }
+    serde_json::to_string(&merge_rust(&template_source, &destination_source, RustDialect::Rust))
+        .map_err(|error| HostPrototypeError::new(format!("failed to serialize Rust merge: {error}")))
 }
 
 fn json_dialect(dialect: &str) -> Result<JsonDialect, HostPrototypeError> {

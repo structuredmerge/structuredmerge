@@ -1130,6 +1130,26 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(merge.fetch("output")).to include("println!(\"one\")", "println!(\"two\")")
   end
 
+  it "serializes Go and Rust merge2 through the generated boundary" do
+    go = JSON.parse(
+      described_class.merge_go_two_way(
+        "package main\n\nfunc added() {}\n",
+        "package main\n\nfunc main() {}\n",
+        "go"
+      )
+    )
+    rust = JSON.parse(
+      described_class.merge_rust_two_way(
+        "fn added() {}\n",
+        "fn main() {}\n",
+        "rust"
+      )
+    )
+
+    expect(go.fetch("ok")).to be(true)
+    expect(rust.fetch("ok")).to be(true)
+  end
+
   it "serializes canonical normalized TreeHaver trees through the generated boundary" do
     result = JSON.parse(described_class.parse_normalized_with_tslp("json", '{"answer":42}', nil))
 
