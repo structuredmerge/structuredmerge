@@ -81,6 +81,8 @@
 
 - Expose Cargo dependency requirements, sources, optionality, and target selectors in kettle-rusty facts.
 
+- Discover workflow names, trigger keys, and job names alongside kettle-rusty workflow paths.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
