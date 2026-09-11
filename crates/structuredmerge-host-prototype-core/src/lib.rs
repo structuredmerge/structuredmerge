@@ -11,7 +11,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+use ast_merge::{MergeResult, ThreeWayMergeOutcome};
 use ast_merge_git::{Merge3Request as GitMerge3Request, merge3 as merge_git_three_way};
+use bash_merge::{BashDialect, merge_bash_three_way as merge_bash_three_way_impl, parse_bash};
 use go_merge::{GoDialect, merge_go, merge_go_three_way as merge_go_three_way_impl, parse_go};
 use json_merge::{
     JsonDialect, merge_json_source_preserving,
@@ -1547,6 +1549,81 @@ pub fn parse_json_analysis(source: String, dialect: String) -> Result<String, Ho
     })
 }
 
+pub fn parse_bash_analysis(source: String, dialect: String) -> Result<String, HostPrototypeError> {
+    if !dialect.trim().eq_ignore_ascii_case("bash") {
+        return Err(HostPrototypeError::new(format!(
+            "unsupported Bash dialect {dialect:?}; expected bash"
+        )));
+    }
+    let parsed = parse_bash(&source, BashDialect::Bash);
+    let analysis = parsed.analysis.as_ref().map(|analysis| {
+        serde_json::json!({
+            "owners": analysis.functions.iter().map(|function| {
+                serde_json::json!({
+                    "path": function.path,
+                    "match_key": function.name,
+                    "owner_kind": "function",
+                    "source_fragment": function.source
+                })
+            }).collect::<Vec<_>>()
+        })
+    });
+    serde_json::to_string(&serde_json::json!({
+        "ok": parsed.ok,
+        "diagnostics": parsed.diagnostics,
+        "analysis": analysis,
+        "policies": parsed.policies
+    }))
+    .map_err(|error| HostPrototypeError::new(format!("failed to serialize Bash analysis: {error}")))
+}
+
+pub fn merge_bash_three_way(
+    base_source: String,
+    ours_source: String,
+    theirs_source: String,
+    dialect: String,
+) -> Result<String, HostPrototypeError> {
+    if !dialect.trim().eq_ignore_ascii_case("bash") {
+        return Err(HostPrototypeError::new(format!(
+            "unsupported Bash dialect {dialect:?}; expected bash"
+        )));
+    }
+    serde_json::to_string(&merge_bash_three_way_impl(
+        &base_source,
+        &ours_source,
+        &theirs_source,
+        BashDialect::Bash,
+    ))
+    .map_err(|error| HostPrototypeError::new(format!("failed to serialize Bash merge: {error}")))
+}
+
+pub fn merge_bash_two_way(
+    template_source: String,
+    destination_source: String,
+    dialect: String,
+) -> Result<String, HostPrototypeError> {
+    if !dialect.trim().eq_ignore_ascii_case("bash") {
+        return Err(HostPrototypeError::new(format!(
+            "unsupported Bash dialect {dialect:?}; expected bash"
+        )));
+    }
+    let result = merge_bash_three_way_impl(
+        &destination_source,
+        &destination_source,
+        &template_source,
+        BashDialect::Bash,
+    );
+    let output = MergeResult {
+        ok: result.outcome == ThreeWayMergeOutcome::Clean,
+        diagnostics: result.diagnostics,
+        output: result.output,
+        policies: result.policies,
+    };
+    serde_json::to_string(&output).map_err(|error| {
+        HostPrototypeError::new(format!("failed to serialize Bash merge: {error}"))
+    })
+}
+
 pub fn parse_go_analysis(source: String, dialect: String) -> Result<String, HostPrototypeError> {
     if !dialect.trim().eq_ignore_ascii_case("go") {
         return Err(HostPrototypeError::new(format!(
@@ -2059,6 +2136,28 @@ mod tests {
         assert_eq!(result["analysis"]["root_kind"], "object");
         assert_eq!(result["analysis"]["owners"][0]["path"], "/answer");
         assert_eq!(result["analysis"]["owners"][0]["owner_kind"], "member");
+    }
+
+    #[test]
+    fn bash_boundary_preserves_analysis_and_merge_envelopes() {
+        let analysis = parse_bash_analysis(
+            "left() { echo one; }\nright() { echo one; }\n".to_owned(),
+            "bash".to_owned(),
+        )
+        .unwrap();
+        let analysis: serde_json::Value = serde_json::from_str(&analysis).unwrap();
+        assert_eq!(analysis["ok"], true);
+        assert_eq!(analysis["analysis"]["owners"][0]["match_key"], "left");
+
+        let merged = merge_bash_two_way(
+            "left() { echo two; }\nright() { echo one; }\n".to_owned(),
+            "left() { echo one; }\nright() { echo one; }\n".to_owned(),
+            "bash".to_owned(),
+        )
+        .unwrap();
+        let merged: serde_json::Value = serde_json::from_str(&merged).unwrap();
+        assert_eq!(merged["ok"], true);
+        assert!(merged["output"].as_str().is_some_and(|output| output.contains("echo two")));
     }
 
     #[test]

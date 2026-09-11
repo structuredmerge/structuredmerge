@@ -103,6 +103,8 @@
 
 - Add a parser and source-preserving merge cold/warm benchmark for the compiled Ruby host.
 
+- Expose opt-in Bash analysis and source-preserving merge operations through the generated Ruby host.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
