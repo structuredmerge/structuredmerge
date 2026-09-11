@@ -85,6 +85,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Checkout TreeHaver consumer fixture
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: structuredmerge/structuredmerge-ruby
+          ref: 680e6de509186ec7b845cfa8644b33a9f16a6766
+          path: structuredmerge-ruby
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Setup mise
@@ -108,12 +114,18 @@ jobs:
         shell: bash
         run: |
           gem_home="$(mktemp -d)"
+          SKIP_GEM_SIGNING=true \
+            gem build structuredmerge-ruby/gems/tree_haver/tree_haver.gemspec \
+              --output tree_haver-consumer.gem
           gem install dist/*.gem --install-dir "$gem_home" --no-document
+          gem install tree_haver-consumer.gem --install-dir "$gem_home" --no-document
           GEM_HOME="$gem_home" GEM_PATH="$gem_home" \
             STRUCTUREDMERGE_API_USE_INSTALLED=true \
             ruby workspace-scripts/check_ruby_api.rb
           GEM_HOME="$gem_home" GEM_PATH="$gem_home" \
             ruby workspace-scripts/check_ruby_normalized_parser.rb
+          GEM_HOME="$gem_home" GEM_PATH="$gem_home" \
+            ruby workspace-scripts/check_tree_haver_consumer.rb
       - name: Upload platform gem and provenance
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
