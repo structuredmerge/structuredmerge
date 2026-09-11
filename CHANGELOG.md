@@ -77,6 +77,8 @@
 
 - Discover sorted GitHub workflow paths in kettle-rusty Rust project facts.
 
+- Discover Cargo package facts from a single explicit workspace member in kettle-rusty.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
