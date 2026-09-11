@@ -166,24 +166,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ruby <<'RUBY'
-          require "rubygems/package"
-
-          expected = %w[ruby x86_64-linux aarch64-linux arm64-darwin x86_64-darwin x64-mingw-ucrt]
-          files = Dir["dist/structuredmerge_host_prototype-*.gem"].sort
-          abort "expected #{expected.length} gems, got #{files.length}" unless files.length == expected.length
-
-          specs = files.map { |file| [file, Gem::Package.new(file).spec] }
-          versions = specs.map { |_file, spec| spec.version.to_s }.uniq
-          abort "artifact versions differ: #{versions.inspect}" unless versions.length == 1
-          platforms = specs.map { |_file, spec| spec.platform.to_s }
-          abort "artifact platforms differ: #{platforms.inspect}" unless platforms.sort == expected.sort
-
-          if ENV.fetch("GITHUB_REF", "").start_with?("refs/tags/structuredmerge_host_prototype-v")
-            tag_version = ENV.fetch("GITHUB_REF_NAME").delete_prefix("structuredmerge_host_prototype-v")
-            abort "tag #{tag_version} does not match #{versions.fetch(0)}" unless tag_version == versions.fetch(0)
-          end
-          RUBY
+          ruby workspace-scripts/validate_ruby_release_artifacts.rb dist
+          tag_version="${GITHUB_REF_NAME#structuredmerge_host_prototype-v}"
+          if [[ "${GITHUB_REF:-}" == refs/tags/structuredmerge_host_prototype-v* ]]; then
+            version="$(ruby -e 'require "rubygems/package"; puts Gem::Package.new(ARGV.fetch(0)).spec.version' dist/structuredmerge_host_prototype-*.gem | head -n 1)"
+            test "$tag_version" = "$version"
+          fi
 
       - name: Exercise the installed Linux consumer path
         shell: bash

@@ -89,6 +89,8 @@
 
 - Honor explicit local and profiled template roots in kettle-rusty, failing closed when a selected source is missing.
 
+- Validate every Ruby host release artifact against its provenance digest, platform metadata, and cold-path evidence before publication.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
