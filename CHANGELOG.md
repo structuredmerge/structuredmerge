@@ -107,6 +107,8 @@
 
 - Include stable top-level Bash variable assignments in the opt-in Rust owner projection.
 
+- Extend the Bash Rust owner projection to literal-title test_expect_success calls.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

@@ -1559,12 +1559,30 @@ pub fn parse_bash_analysis(source: String, dialect: String) -> Result<String, Ho
     let analysis = parsed.analysis.as_ref().map(|analysis| {
         serde_json::json!({
             "owners": analysis.functions.iter().map(|function| {
-                serde_json::json!({
-                    "path": function.path,
-                    "match_key": function.name,
-                    "owner_kind": function.path.split(':').next().unwrap_or("function").trim_start_matches('/'),
-                    "source_fragment": function.source
-                })
+                let owner_kind = function.path.split(':').next().unwrap_or("function").trim_start_matches('/');
+                if owner_kind == "test_harness_call" {
+                    let identity = serde_json::from_str::<Vec<String>>(&function.name)
+                        .unwrap_or_else(|_| vec!["test_expect_success".to_string()]);
+                    let rendered = identity.iter().enumerate().map(|(index, value)| {
+                        if index == 0 {
+                            ":test_expect_success".to_string()
+                        } else {
+                            serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string())
+                        }
+                    }).collect::<Vec<_>>().join(", ");
+                    serde_json::json!({
+                        "path": format!("[:test_harness_call, {rendered}]"),
+                        "owner_kind": owner_kind,
+                        "source_fragment": function.source
+                    })
+                } else {
+                    serde_json::json!({
+                        "path": function.path,
+                        "match_key": function.name,
+                        "owner_kind": owner_kind,
+                        "source_fragment": function.source
+                    })
+                }
             }).collect::<Vec<_>>()
         })
     });
@@ -2152,6 +2170,18 @@ mod tests {
         let assignment = parse_bash_analysis("VALUE=one\n".to_owned(), "bash".to_owned()).unwrap();
         let assignment: serde_json::Value = serde_json::from_str(&assignment).unwrap();
         assert_eq!(assignment["analysis"]["owners"][0]["owner_kind"], "variable");
+
+        let test = parse_bash_analysis(
+            "test_expect_success 'works' 'echo one'\n".to_owned(),
+            "bash".to_owned(),
+        )
+        .unwrap();
+        let test: serde_json::Value = serde_json::from_str(&test).unwrap();
+        assert_eq!(test["analysis"]["owners"][0]["owner_kind"], "test_harness_call");
+        assert_eq!(
+            test["analysis"]["owners"][0]["path"],
+            "[:test_harness_call, :test_expect_success, \"'works'\"]"
+        );
 
         let merged = merge_bash_two_way(
             "left() { echo two; }\nright() { echo one; }\n".to_owned(),

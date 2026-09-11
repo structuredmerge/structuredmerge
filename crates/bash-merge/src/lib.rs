@@ -1,13 +1,15 @@
+use std::collections::HashSet;
+
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile,
-    NamedOwnerKind, NamedOwnerProjectionPolicy, ParseResult, PolicyReference,
-    SourcePreservingOwnerDocument, ThreeWayMergeResult, merge_source_preserving_owners,
-    normalized_parse_error_result, parse_error_result, project_named_top_level_owners,
-    three_way_parse_error,
+    NamedOwnerKind, ParseResult, PolicyReference, SourcePreservingOwnerDocument,
+    ThreeWayMergeResult, merge_source_preserving_owners, normalized_parse_error_result,
+    parse_error_result, three_way_parse_error,
 };
 use tree_haver::{
-    BackendReference, NormalizedTreeNode, ParserRequest, kreuzberg_language_pack_backend,
-    language_pack_adapter_info, parse_normalized_with_language_pack,
+    BackendReference, NodeRole, NormalizedTreeIndex, NormalizedTreeNode, ParserRequest,
+    kreuzberg_language_pack_backend, language_pack_adapter_info,
+    parse_normalized_with_language_pack,
 };
 
 pub const PACKAGE_NAME: &str = "bash-merge";
@@ -169,20 +171,122 @@ fn project_bash_functions(
     root_id: &str,
     nodes: &[NormalizedTreeNode],
 ) -> Result<SourcePreservingOwnerDocument, String> {
-    project_named_top_level_owners(
-        source,
-        root_id,
-        nodes,
-        NamedOwnerProjectionPolicy {
-            family: "Bash",
-            owner_kinds: BASH_OWNER_KINDS,
-            ignored_kinds: &[],
-            wrapper_kinds: &[],
-            name_fields: &["name"],
-            fallback_name_kinds: &["word"],
-            accept_any_named_kind: false,
-        },
-    )
+    let index = NormalizedTreeIndex::new(nodes)?;
+    let root = index.root(root_id)?;
+    let mut owners = Vec::new();
+    let mut owner_ids = HashSet::new();
+
+    for top_level in index.children(root) {
+        if top_level.role == NodeRole::Comment {
+            continue;
+        }
+
+        let (path, _name) = if let Some(owner_kind) =
+            BASH_OWNER_KINDS.iter().find(|candidate| candidate.node_kind == top_level.kind)
+        {
+            let name = named_child_source(&index, top_level)?;
+            let path = format!("/{}:{name}", owner_kind.path_kind);
+            (path, name)
+        } else if let Some(identity) = literal_test_harness_identity(&index, top_level) {
+            let encoded = serde_json::to_string(&identity)
+                .map_err(|error| format!("failed to encode Bash test identity: {error}"))?;
+            (format!("/test_harness_call:{encoded}"), encoded)
+        } else {
+            return Err(format!("unsupported top-level Bash node {:?}", top_level.kind));
+        };
+
+        if !owner_ids.insert(path.clone()) {
+            return Err(format!("Bash document has duplicate top-level owner identity {path:?}"));
+        }
+        if top_level.source_fragment.is_empty() {
+            return Err(format!("Bash owner {path:?} has no source fragment"));
+        }
+
+        owners.push(ast_merge::SourcePreservingOwner {
+            id: path.clone(),
+            path,
+            fingerprint: top_level.source_fragment.clone(),
+            start_byte: top_level.span.range.start_byte,
+            end_byte: top_level.span.range.end_byte,
+            start_line: top_level.span.start_point.row + 1,
+            end_line: top_level.span.end_point.row + 1,
+        });
+    }
+
+    if owners.is_empty() {
+        return Err("Bash document has no supported top-level named owners".to_string());
+    }
+
+    Ok(SourcePreservingOwnerDocument { source: source.to_string(), owners })
+}
+
+fn named_child_source(
+    index: &NormalizedTreeIndex<'_>,
+    node: &NormalizedTreeNode,
+) -> Result<String, String> {
+    let children = index.children(node);
+    let candidates = children
+        .iter()
+        .filter(|child| child.field_name.as_deref() == Some("name"))
+        .copied()
+        .collect::<Vec<_>>();
+    let candidates = if candidates.is_empty() {
+        children.iter().filter(|child| child.kind == "word").copied().collect::<Vec<_>>()
+    } else {
+        candidates
+    };
+    match candidates.as_slice() {
+        [candidate] if !candidate.source_fragment.trim().is_empty() => {
+            Ok(candidate.source_fragment.trim().to_string())
+        }
+        [] => Err(format!("Bash owner {:?} has no stable name", node.kind)),
+        _ => Err(format!("Bash owner {:?} has an ambiguous name", node.kind)),
+    }
+}
+
+fn literal_test_harness_identity(
+    index: &NormalizedTreeIndex<'_>,
+    node: &NormalizedTreeNode,
+) -> Option<Vec<String>> {
+    if node.kind != "command" {
+        return None;
+    }
+    let children = index.children(node);
+    let command_index = children.iter().position(|child| {
+        matches!(child.kind.as_str(), "command_name" | "word")
+            && child.source_fragment == "test_expect_success"
+    })?;
+    if children.iter().any(|child| child.kind.contains("redirect")) {
+        return None;
+    }
+    let arguments = children.into_iter().skip(command_index + 1).collect::<Vec<_>>();
+    if arguments.len() == 2 && literal_test_title(index, arguments[0]) {
+        return Some(vec!["test_expect_success".to_string(), arguments[0].source_fragment.clone()]);
+    }
+    if arguments.len() == 3
+        && arguments[0].kind == "word"
+        && index.children(arguments[0]).iter().all(|child| !child.named)
+        && literal_test_title(index, arguments[1])
+    {
+        return Some(vec![
+            "test_expect_success".to_string(),
+            arguments[0].source_fragment.clone(),
+            arguments[1].source_fragment.clone(),
+        ]);
+    }
+    None
+}
+
+fn literal_test_title(index: &NormalizedTreeIndex<'_>, node: &NormalizedTreeNode) -> bool {
+    if node.kind == "raw_string" {
+        return true;
+    }
+    node.kind == "string"
+        && index
+            .children(node)
+            .iter()
+            .filter(|child| child.named)
+            .all(|child| child.kind == "string_content")
 }
 
 #[cfg(test)]
@@ -239,6 +343,35 @@ mod tests {
         let result = merge_bash_three_way(base, ours, theirs, BashDialect::Bash);
         assert_eq!(result.outcome, ThreeWayMergeOutcome::Clean);
         assert_eq!(result.output.as_deref(), Some("VALUE=two\nleft() { echo two; }\n"));
+    }
+
+    #[test]
+    fn preserves_literal_test_harness_calls_as_named_owners() {
+        let base = "test_expect_success 'first test' 'echo one'\n";
+        let ours = "test_expect_success 'first test' 'echo two'\n";
+        let theirs = "test_expect_success 'first test' 'echo three'\n";
+
+        let parsed = parse_bash(base, BashDialect::Bash);
+        assert!(parsed.ok, "diagnostics: {:?}", parsed.diagnostics);
+        assert_eq!(
+            parsed.analysis.unwrap().functions[0].name,
+            "[\"test_expect_success\",\"'first test'\"]"
+        );
+
+        let result = merge_bash_three_way(base, ours, theirs, BashDialect::Bash);
+        assert_eq!(result.outcome, ThreeWayMergeOutcome::Conflict);
+        assert_eq!(
+            result.conflicts[0].path,
+            "/test_harness_call:[\"test_expect_success\",\"'first test'\"]"
+        );
+    }
+
+    #[test]
+    fn rejects_dynamic_test_harness_titles() {
+        let source = "test_expect_success \"dynamic $title\" 'echo one'\n";
+        let parsed = parse_bash(source, BashDialect::Bash);
+        assert!(!parsed.ok);
+        assert!(parsed.diagnostics[0].message.contains("unsupported top-level Bash node"));
     }
 
     #[test]
