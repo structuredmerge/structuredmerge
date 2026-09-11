@@ -75,6 +75,8 @@
 
 - Regenerate the kettle-rusty README with the current StructuredMerge family and backend compatibility inventory.
 
+- Discover sorted GitHub workflow paths in kettle-rusty Rust project facts.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
