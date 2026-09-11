@@ -370,6 +370,27 @@ mod tests {
     }
 
     #[test]
+    fn preserves_literal_test_harness_prerequisites_as_named_owners() {
+        let base = "test_expect_success PERL 'first test' 'echo one'\n";
+        let ours = "test_expect_success PERL 'first test' 'echo two'\n";
+        let theirs = "test_expect_success PERL 'first test' 'echo three'\n";
+
+        let parsed = parse_bash(base, BashDialect::Bash);
+        assert!(parsed.ok, "diagnostics: {:?}", parsed.diagnostics);
+        assert_eq!(
+            parsed.analysis.unwrap().functions[0].name,
+            "[\"test_expect_success\",\"PERL\",\"'first test'\"]"
+        );
+
+        let result = merge_bash_three_way(base, ours, theirs, BashDialect::Bash);
+        assert_eq!(result.outcome, ThreeWayMergeOutcome::Conflict);
+        assert_eq!(
+            result.conflicts[0].path,
+            "/test_harness_call:[\"test_expect_success\",\"PERL\",\"'first test'\"]"
+        );
+    }
+
+    #[test]
     fn rejects_dynamic_test_harness_titles() {
         let source = "test_expect_success \"dynamic $title\" 'echo one'\n";
         let parsed = parse_bash(source, BashDialect::Bash);
