@@ -105,6 +105,8 @@
 
 - Expose opt-in Bash analysis and source-preserving merge operations through the generated Ruby host.
 
+- Include stable top-level Bash variable assignments in the opt-in Rust owner projection.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

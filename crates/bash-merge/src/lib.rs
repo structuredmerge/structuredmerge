@@ -12,8 +12,10 @@ use tree_haver::{
 
 pub const PACKAGE_NAME: &str = "bash-merge";
 
-const BASH_OWNER_KINDS: &[NamedOwnerKind<'static>] =
-    &[NamedOwnerKind { node_kind: "function_definition", path_kind: "function" }];
+const BASH_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
+    NamedOwnerKind { node_kind: "function_definition", path_kind: "function" },
+    NamedOwnerKind { node_kind: "variable_assignment", path_kind: "variable" },
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BashDialect {
@@ -114,7 +116,10 @@ pub fn parse_bash(source: &str, dialect: BashDialect) -> ParseResult<BashAnalysi
         .iter()
         .map(|owner| BashFunction {
             path: owner.path.clone(),
-            name: owner.id.strip_prefix("/function:").unwrap_or(&owner.id).to_string(),
+            name: owner
+                .id
+                .rsplit_once(':')
+                .map_or_else(|| owner.id.clone(), |(_, name)| name.to_string()),
             source: source[owner.start_byte..owner.end_byte].to_string(),
         })
         .collect();
@@ -210,6 +215,30 @@ mod tests {
             result.output.as_deref(),
             Some("#!/usr/bin/env bash\nleft() { echo two; }\nright() { echo two; }\n")
         );
+    }
+
+    #[test]
+    fn preserves_top_level_variable_assignments_as_named_owners() {
+        let base = "VALUE=one\nleft() { echo one; }\n";
+        let ours = "VALUE=two\nleft() { echo one; }\n";
+        let theirs = "VALUE=one\nleft() { echo two; }\n";
+
+        let parsed = parse_bash(base, BashDialect::Bash);
+        assert!(parsed.ok, "diagnostics: {:?}", parsed.diagnostics);
+        assert_eq!(
+            parsed
+                .analysis
+                .unwrap()
+                .functions
+                .iter()
+                .map(|item| item.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["VALUE", "left"]
+        );
+
+        let result = merge_bash_three_way(base, ours, theirs, BashDialect::Bash);
+        assert_eq!(result.outcome, ThreeWayMergeOutcome::Clean);
+        assert_eq!(result.output.as_deref(), Some("VALUE=two\nleft() { echo two; }\n"));
     }
 
     #[test]

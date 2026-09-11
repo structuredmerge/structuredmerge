@@ -1562,7 +1562,7 @@ pub fn parse_bash_analysis(source: String, dialect: String) -> Result<String, Ho
                 serde_json::json!({
                     "path": function.path,
                     "match_key": function.name,
-                    "owner_kind": "function",
+                    "owner_kind": function.path.split(':').next().unwrap_or("function").trim_start_matches('/'),
                     "source_fragment": function.source
                 })
             }).collect::<Vec<_>>()
@@ -2148,6 +2148,10 @@ mod tests {
         let analysis: serde_json::Value = serde_json::from_str(&analysis).unwrap();
         assert_eq!(analysis["ok"], true);
         assert_eq!(analysis["analysis"]["owners"][0]["match_key"], "left");
+
+        let assignment = parse_bash_analysis("VALUE=one\n".to_owned(), "bash".to_owned()).unwrap();
+        let assignment: serde_json::Value = serde_json::from_str(&assignment).unwrap();
+        assert_eq!(assignment["analysis"]["owners"][0]["owner_kind"], "variable");
 
         let merged = merge_bash_two_way(
             "left() { echo two; }\nright() { echo one; }\n".to_owned(),
