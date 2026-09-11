@@ -82,3 +82,5 @@
 - Build the TreeHaver consumer gem from its package directory in CI release and isolated-install workflows.
 
 - Preserve TypeScript destination bytes in Rust two-way merges when no owners or imports are added.
+
+- Report ambiguous managed-block markers without overwriting destination content in kettle-rusty.
