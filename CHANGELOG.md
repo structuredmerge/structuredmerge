@@ -106,3 +106,5 @@
 - Resolve workspace-member SECURITY.md from the selected package when rendering README style.
 
 - Preserve differing existing packaged templates and report ownership ambiguity in kettle-rusty.
+
+- Retain malformed GitHub workflow paths in kettle-rusty facts with non-fatal parse diagnostics.
