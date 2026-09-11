@@ -1,0 +1,209 @@
+name: Release Ruby host gem
+
+permissions:
+  contents: read
+
+on:
+  push:
+    tags:
+      - "structuredmerge_host_prototype-v*"
+  workflow_dispatch:
+
+concurrency:
+  group: "ruby-host-release-${{ github.ref }}"
+  cancel-in-progress: false
+
+jobs:
+  build-platform:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: x86_64-linux
+            runner: ubuntu-latest
+            ruby: "4.0"
+            target: x86_64-unknown-linux-gnu
+          - platform: aarch64-linux
+            runner: ubuntu-24.04-arm
+            ruby: "4.0"
+            target: aarch64-unknown-linux-gnu
+          - platform: arm64-darwin
+            runner: macos-14
+            ruby: "4.0"
+            target: aarch64-apple-darwin
+          - platform: x86_64-darwin
+            runner: macos-15-intel
+            ruby: "4.0"
+            target: x86_64-apple-darwin
+          - platform: x64-mingw-ucrt
+            runner: windows-2025
+            ruby: "4.0"
+            target: x86_64-pc-windows-gnu
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+          working-directory: packages/ruby
+
+      - name: Install Alef
+        shell: bash
+        run: |
+          cargo install --git https://github.com/structuredmerge/alef.git \
+            --rev "$(cat workspace-scripts/alef-source-revision)" --locked
+
+      - name: Build and validate platform gem
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          alef publish build --lang ruby
+          alef publish package --lang ruby --target "$TARGET" --output dist
+          BUNDLE_GEMFILE=packages/ruby/Gemfile \
+            bundle exec ruby workspace-scripts/write_ruby_artifact_manifest.rb dist
+          ruby workspace-scripts/measure_ruby_cold_paths.rb dist
+          test "$(find dist -maxdepth 1 -name "*_" -prune -o -name "*-${PLATFORM}.gem" -print | wc -l)" -eq 1
+          gem specification "$(find dist -maxdepth 1 -name "*-${PLATFORM}.gem" -print -quit)" name version platform
+
+      - name: Upload platform artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: structuredmerge-host-prototype-${{ matrix.platform }}
+          path: |
+            dist/*.gem
+            dist/*.provenance.json
+            dist/*.cold-path.json
+          if-no-files-found: error
+
+  build-source:
+    name: Build source gem
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+
+      - name: Install Alef
+        shell: bash
+        run: |
+          cargo install --git https://github.com/structuredmerge/alef.git \
+            --rev "$(cat workspace-scripts/alef-source-revision)" --locked
+
+      - name: Build and validate source gem
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          alef publish build --lang ruby
+          version="$(ruby -e 'spec = Gem::Specification.load("packages/ruby/structuredmerge_host_prototype.gemspec"); puts spec.version')"
+          SKIP_GEM_SIGNING=true gem build packages/ruby/structuredmerge_host_prototype.gemspec \
+            --output "dist/structuredmerge_host_prototype-${version}.gem"
+          gem specification "dist/structuredmerge_host_prototype-${version}.gem" name version platform
+
+      - name: Upload source artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: structuredmerge-host-prototype-source
+          path: dist/*.gem
+          if-no-files-found: error
+
+  publish:
+    name: Publish RubyGems artifacts
+    needs: [build-platform, build-source]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+
+      - name: Checkout TreeHaver consumer fixture
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: structuredmerge/structuredmerge-ruby
+          ref: 680e6de509186ec7b845cfa8644b33a9f16a6766
+          path: structuredmerge-ruby
+
+      - name: Download validated artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: structuredmerge-host-prototype-*
+          path: dist
+          merge-multiple: true
+
+      - name: Verify release artifact set
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby <<'RUBY'
+          require "rubygems/package"
+
+          expected = %w[ruby x86_64-linux aarch64-linux arm64-darwin x86_64-darwin x64-mingw-ucrt]
+          files = Dir["dist/structuredmerge_host_prototype-*.gem"].sort
+          abort "expected #{expected.length} gems, got #{files.length}" unless files.length == expected.length
+
+          specs = files.map { |file| [file, Gem::Package.new(file).spec] }
+          versions = specs.map { |_file, spec| spec.version.to_s }.uniq
+          abort "artifact versions differ: #{versions.inspect}" unless versions.length == 1
+          platforms = specs.map { |_file, spec| spec.platform.to_s }
+          abort "artifact platforms differ: #{platforms.inspect}" unless platforms.sort == expected.sort
+
+          if ENV.fetch("GITHUB_REF", "").start_with?("refs/tags/structuredmerge_host_prototype-v")
+            tag_version = ENV.fetch("GITHUB_REF_NAME").delete_prefix("structuredmerge_host_prototype-v")
+            abort "tag #{tag_version} does not match #{versions.fetch(0)}" unless tag_version == versions.fetch(0)
+          end
+          RUBY
+
+      - name: Exercise the installed Linux consumer path
+        shell: bash
+        run: |
+          set -euo pipefail
+          gem_home="$(mktemp -d)"
+          SKIP_GEM_SIGNING=true \
+            gem build structuredmerge-ruby/gems/tree_haver/tree_haver.gemspec \
+              --output tree_haver-consumer.gem
+          gem install dist/*-x86_64-linux.gem --install-dir "$gem_home" --no-document
+          gem install tree_haver-consumer.gem --install-dir "$gem_home" --no-document
+          GEM_HOME="$gem_home" GEM_PATH="$gem_home" \
+            ruby workspace-scripts/check_tree_haver_consumer.rb
+
+      - name: Configure RubyGems trusted publishing
+        uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
+
+      - name: Publish source and platform gems
+        shell: bash
+        run: |
+          set -euo pipefail
+          for gem_file in dist/structuredmerge_host_prototype-*.gem; do
+            gem push "$gem_file"
+          done
