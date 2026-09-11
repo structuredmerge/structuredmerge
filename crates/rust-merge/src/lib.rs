@@ -1,6 +1,7 @@
 use ast_merge::{
-    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult,
-    NamedOwnerKind, NamedOwnerProjectionPolicy, ParseResult, PolicyReference, PolicySurface,
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, FamilyFeatureProfile, MergeConflict, MergeResult, NamedOwnerKind,
+    NamedOwnerProjectionPolicy, ParseResult, PolicyReference, PolicySurface,
     SourcePreservingOwnerDocument, ThreeWayMergeOutcome, ThreeWayMergeResult, error_diagnostic,
     merge_source_preserving_owners, normalized_parse_error_result, parse_error_result,
     project_named_top_level_owners, three_way_parse_error,
@@ -321,7 +322,62 @@ pub fn merge_rust_three_way_with_backend(
         Err(message) => return three_way_parse_error("theirs", message),
     };
 
+    if rust_membership_change_with_owner_edit(&base, &ours, &theirs) {
+        return conservative_membership_conflict();
+    }
+
     merge_source_preserving_owners(base, ours, theirs, parse_source_preserving_rust)
+}
+
+fn rust_membership_change_with_owner_edit(
+    base: &SourcePreservingOwnerDocument,
+    ours: &SourcePreservingOwnerDocument,
+    theirs: &SourcePreservingOwnerDocument,
+) -> bool {
+    let base_ids =
+        base.owners.iter().map(|owner| owner.id.as_str()).collect::<std::collections::HashSet<_>>();
+    let ours_ids =
+        ours.owners.iter().map(|owner| owner.id.as_str()).collect::<std::collections::HashSet<_>>();
+    let theirs_ids = theirs
+        .owners
+        .iter()
+        .map(|owner| owner.id.as_str())
+        .collect::<std::collections::HashSet<_>>();
+    let membership_changed = base_ids != ours_ids || base_ids != theirs_ids;
+    membership_changed
+        && base.owners.iter().any(|base_owner| {
+            [&ours.owners, &theirs.owners].into_iter().any(|owners| {
+                owners
+                    .iter()
+                    .find(|owner| owner.id == base_owner.id)
+                    .is_some_and(|owner| owner.fingerprint != base_owner.fingerprint)
+            })
+        })
+}
+
+fn conservative_membership_conflict() -> ThreeWayMergeResult<String> {
+    let conflict = MergeConflict {
+        conflict_id: "rust-unmanaged-source".to_string(),
+        category: "unmanaged_source_change".to_string(),
+        path: "<unmanaged-source>".to_string(),
+        fallback_scope: "full_file".to_string(),
+        message: "Rust owner membership changed alongside an existing owner edit; source ownership is unproven"
+            .to_string(),
+        alternatives: vec![],
+    };
+    ThreeWayMergeResult {
+        outcome: ThreeWayMergeOutcome::Conflict,
+        diagnostics: vec![Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            category: DiagnosticCategory::MergeConflict,
+            message: conflict.message.clone(),
+            path: Some(conflict.path.clone()),
+            review: None,
+        }],
+        conflicts: vec![conflict],
+        output: None,
+        policies: vec![],
+    }
 }
 
 fn parse_source_preserving_rust(source: &str) -> Result<SourcePreservingOwnerDocument, String> {
