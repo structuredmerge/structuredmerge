@@ -62,3 +62,5 @@
   projection, including the existing export and ambient wrapper policy.
 
 - Add the kettle-rusty plan/apply CLI with human-readable and JSON reports.
+
+- Expose packaged Rust project template inventory planning and application through kettle-rusty.
