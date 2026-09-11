@@ -1506,6 +1506,18 @@ mod tests {
     }
 
     #[test]
+    fn json_analysis_boundary_preserves_owner_contract() {
+        let response = parse_json_analysis(r#"{"answer":42}"#.to_owned(), "json".to_owned())
+            .unwrap();
+        let result: serde_json::Value = serde_json::from_str(&response).unwrap();
+
+        assert_eq!(result["ok"], true);
+        assert_eq!(result["analysis"]["root_kind"], "object");
+        assert_eq!(result["analysis"]["owners"][0]["path"], "/answer");
+        assert_eq!(result["analysis"]["owners"][0]["owner_kind"], "member");
+    }
+
+    #[test]
     fn json_boundary_rejects_unknown_dialects() {
         let error =
             merge_json_two_way(String::new(), String::new(), "yaml".to_owned()).unwrap_err();
