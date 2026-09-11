@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.82.1"
+alef_version = "0.85.15"
 languages = ["ruby"]
 
 [workspace.ownership]
@@ -22,6 +22,9 @@ error_constructor = "structuredmerge_host_prototype_core::HostPrototypeError::ne
 [crates.ruby]
 gem_name = "structuredmerge_host_prototype"
 scaffold_output = "packages/ruby"
+
+[crates.cargo_lints.clippy]
+redundant_locals = "allow"
 
 [crates.output]
 ruby = "packages/ruby/ext/structuredmerge_host_prototype_core_rb/src/"
