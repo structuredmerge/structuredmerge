@@ -77,6 +77,7 @@ pub struct ModuleImport {
 pub struct ModuleDeclaration {
     pub path: String,
     pub match_key: String,
+    pub declaration_kind: String,
     pub text: String,
 }
 
@@ -224,6 +225,7 @@ pub fn parse_rust_with_backend(
                 declarations.push(ModuleDeclaration {
                     path: format!("/declarations/{name}"),
                     match_key: name,
+                    declaration_kind: rust_declaration_kind(kind).to_string(),
                     text: format!(
                         "{}\n",
                         line_anchored_span(
@@ -359,6 +361,21 @@ fn supported_analysis_declaration(kind: &str) -> bool {
             | "type_item"
             | "union_item"
     )
+}
+
+fn rust_declaration_kind(node_kind: &str) -> &'static str {
+    match node_kind {
+        "const_item" => "const",
+        "enum_item" => "enum",
+        "function_item" => "function",
+        "mod_item" => "module",
+        "static_item" => "static",
+        "struct_item" => "struct",
+        "trait_item" => "trait",
+        "type_item" => "type",
+        "union_item" => "union",
+        _ => "declaration",
+    }
 }
 
 fn declaration_name(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> Option<String> {

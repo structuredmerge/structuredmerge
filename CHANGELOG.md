@@ -70,3 +70,5 @@
 - Preserve Go package clauses in source-preserving two-way merges.
 
 - Expand Rust source-preserving merge3 ownership beyond functions to named top-level items.
+
+- Preserve Rust declaration kinds in source-aware host analysis and diff owner paths.
