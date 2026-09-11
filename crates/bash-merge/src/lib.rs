@@ -256,6 +256,9 @@ fn literal_test_harness_identity(
         matches!(child.kind.as_str(), "command_name" | "word")
             && child.source_fragment == "test_expect_success"
     })?;
+    if command_index != 0 {
+        return None;
+    }
     if children.iter().any(|child| child.kind.contains("redirect")) {
         return None;
     }
@@ -369,6 +372,14 @@ mod tests {
     #[test]
     fn rejects_dynamic_test_harness_titles() {
         let source = "test_expect_success \"dynamic $title\" 'echo one'\n";
+        let parsed = parse_bash(source, BashDialect::Bash);
+        assert!(!parsed.ok);
+        assert!(parsed.diagnostics[0].message.contains("unsupported top-level Bash node"));
+    }
+
+    #[test]
+    fn does_not_promote_an_argument_named_test_expect_success() {
+        let source = "echo test_expect_success 'title' 'echo one'\n";
         let parsed = parse_bash(source, BashDialect::Bash);
         assert!(!parsed.ok);
         assert!(parsed.diagnostics[0].message.contains("unsupported top-level Bash node"));
