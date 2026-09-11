@@ -349,6 +349,21 @@ mod tests {
     }
 
     #[test]
+    fn preserves_comments_and_blank_line_gaps_between_independent_owner_edits() {
+        let base = "# left documentation\nleft() { echo one; }\n\n# right documentation\nright() { echo one; }\n";
+        let ours = base.replace("echo one; }\n\n# right", "echo two; }\n\n# right");
+        let theirs = base.replace("right() { echo one; }", "right() { echo two; }");
+
+        let result = merge_bash_three_way(base, &ours, &theirs, BashDialect::Bash);
+
+        assert_eq!(result.outcome, ThreeWayMergeOutcome::Clean);
+        assert_eq!(
+            result.output.as_deref(),
+            Some("# left documentation\nleft() { echo two; }\n\n# right documentation\nright() { echo two; }\n")
+        );
+    }
+
+    #[test]
     fn preserves_literal_test_harness_calls_as_named_owners() {
         let base = "test_expect_success 'first test' 'echo one'\n";
         let ours = "test_expect_success 'first test' 'echo two'\n";
