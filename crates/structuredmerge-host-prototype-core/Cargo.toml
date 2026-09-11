@@ -11,6 +11,7 @@ publish = false
 
 [dependencies]
 async-trait = "0.1"
+ast-merge-git = { version = "0.2.0", path = "../ast-merge-git" }
 go-merge = { version = "0.2.0", path = "../go-merge" }
 parking_lot = "0.12"
 json-merge = { version = "0.2.0", path = "../json-merge" }

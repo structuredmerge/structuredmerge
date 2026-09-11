@@ -11,6 +11,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use ast_merge_git::{Merge3Request as GitMerge3Request, merge3 as merge_git_three_way};
 use go_merge::{GoDialect, merge_go, merge_go_three_way as merge_go_three_way_impl, parse_go};
 use json_merge::{
     JsonDialect, merge_json_source_preserving,
@@ -1298,6 +1299,29 @@ pub fn merge_json_three_way(
     serialize_merge_result(&result)
 }
 
+pub fn merge_ast_merge_git_json(
+    base_source: String,
+    ours_source: String,
+    theirs_source: String,
+    dialect: String,
+) -> Result<String, HostPrototypeError> {
+    let request = GitMerge3Request {
+        base_source,
+        ours_source,
+        theirs_source,
+        path_name: Some(format!("merge-driver.{dialect}")),
+        language: Some(dialect.clone()),
+        dialect: Some(dialect),
+        profile_id: Some("source_preserving".to_string()),
+        fallback_policy: Some("none".to_string()),
+        conflict_marker_size: Some(7),
+        render_policy: Some("source_preserving_edits".to_string()),
+    };
+    serde_json::to_string(&merge_git_three_way(&request)).map_err(|error| {
+        HostPrototypeError::new(format!("failed to serialize ast-merge-git merge: {error}"))
+    })
+}
+
 pub fn parse_json_analysis(source: String, dialect: String) -> Result<String, HostPrototypeError> {
     serde_json::to_string(&parse_json(&source, json_dialect(&dialect)?)).map_err(|error| {
         HostPrototypeError::new(format!("failed to serialize JSON analysis: {error}"))
@@ -1653,6 +1677,32 @@ mod tests {
 
         assert_eq!(result["outcome"], "clean");
         assert_eq!(result["output"], r#"{"left":2,"right":2}"#);
+    }
+
+    #[test]
+    fn ast_merge_git_boundary_preserves_clean_and_conflict_envelopes() {
+        let clean = merge_ast_merge_git_json(
+            r#"{"shared":true}"#.to_owned(),
+            r#"{"shared":true,"ours":1}"#.to_owned(),
+            r#"{"shared":true,"theirs":2}"#.to_owned(),
+            "json".to_owned(),
+        )
+        .unwrap();
+        let clean: serde_json::Value = serde_json::from_str(&clean).unwrap();
+        assert_eq!(clean["ok"], true);
+        assert!(clean["merged_source"].as_str().unwrap().contains("\"ours\":1"));
+
+        let conflict = merge_ast_merge_git_json(
+            r#"{"enabled":true}"#.to_owned(),
+            r#"{"enabled":false}"#.to_owned(),
+            r#"{"enabled":"yes"}"#.to_owned(),
+            "json".to_owned(),
+        )
+        .unwrap();
+        let conflict: serde_json::Value = serde_json::from_str(&conflict).unwrap();
+        assert_eq!(conflict["ok"], false);
+        assert!(conflict["conflicted_source"].as_str().unwrap().contains("<<<<<<< ours"));
+        assert_eq!(conflict["conflicts"][0]["path"], "/enabled");
     }
 
     #[test]

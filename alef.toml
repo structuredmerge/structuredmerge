@@ -98,4 +98,5 @@ functions = [
   "registered_parser_hosts",
   "merge_json_two_way",
   "merge_json_three_way",
+  "merge_ast_merge_git_json",
 ]

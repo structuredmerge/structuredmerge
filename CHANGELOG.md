@@ -91,6 +91,8 @@
 
 - Validate every Ruby host release artifact against its provenance digest, platform metadata, and cold-path evidence before publication.
 
+- Expose the Rust ast-merge-git JSON merge3 operation through the generated Ruby host.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
