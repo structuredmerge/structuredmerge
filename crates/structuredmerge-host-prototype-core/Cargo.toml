@@ -10,6 +10,7 @@ license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 publish = false
 
 [dependencies]
+ast-crispr = { version = "0.2.0", path = "../ast-crispr" }
 async-trait = "0.1"
 ast-merge-git = { version = "0.2.0", path = "../ast-merge-git" }
 go-merge = { version = "0.2.0", path = "../go-merge" }

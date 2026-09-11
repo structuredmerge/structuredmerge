@@ -99,4 +99,5 @@ functions = [
   "merge_json_two_way",
   "merge_json_three_way",
   "merge_ast_merge_git_json",
+  "report_ast_crispr_json",
 ]

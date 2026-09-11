@@ -1322,6 +1322,93 @@ pub fn merge_ast_merge_git_json(
     })
 }
 
+/// Report the portable ast-crispr profile contract through the generated host.
+///
+/// This intentionally exposes profile metadata only. Structural selection and
+/// source editing remain owned by the Ruby package until an execution envelope
+/// with equivalent source-projection semantics exists.
+pub fn report_ast_crispr_json(request: String) -> Result<String, HostPrototypeError> {
+    let request: serde_json::Value = serde_json::from_str(&request)
+        .map_err(|error| HostPrototypeError::new(format!("invalid ast-crispr request: {error}")))?;
+    let kind = request
+        .get("kind")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| HostPrototypeError::new("ast-crispr request requires kind"))?;
+    let report = match kind {
+        "boundary" => ast_crispr::boundary_report(),
+        "limit" => ast_crispr::Limit::new(request.get("spec"))
+            .map(|limit| serde_json::json!({"description": limit.describe()}))
+            .map_err(|error| HostPrototypeError::new(error.message))?,
+        "match" => ast_crispr::MatchProfile::new(
+            required_string(&request, "start_boundary")?,
+            required_string(&request, "end_boundary")?,
+            required_string(&request, "payload_kind")?,
+        )
+        .report(),
+        "selection" => ast_crispr::SelectionProfile::new(
+            required_string(&request, "owner_scope")?,
+            required_string(&request, "owner_selector")?,
+            required_string(&request, "selector_kind")?,
+            required_string(&request, "selection_intent")?,
+            request.get("comment_region").and_then(serde_json::Value::as_str),
+            request
+                .get("include_trailing_gap")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
+        )
+        .report(),
+        "destination" => ast_crispr::DestinationProfile::new(
+            required_string(&request, "resolution_kind")?,
+            required_string(&request, "resolution_source")?,
+            required_string(&request, "anchor_boundary")?,
+            request.get("used_if_missing").and_then(serde_json::Value::as_bool).unwrap_or(false),
+        )
+        .report(),
+        "operation" => operation_profile_from_request(&request)?.report(),
+        "batch_operations" => {
+            let operations = request
+                .get("operations")
+                .and_then(serde_json::Value::as_array)
+                .ok_or_else(|| HostPrototypeError::new("batch_operations requires operations"))?
+                .iter()
+                .map(operation_profile_from_request)
+                .collect::<Result<Vec<_>, _>>()?;
+            ast_crispr::batch_operation_report(&operations)
+        }
+        _ => {
+            return Err(HostPrototypeError::new(format!(
+                "unsupported ast-crispr report kind {kind:?}"
+            )));
+        }
+    };
+    serde_json::to_string(&report).map_err(|error| {
+        HostPrototypeError::new(format!("failed to serialize ast-crispr report: {error}"))
+    })
+}
+
+fn required_string<'a>(
+    request: &'a serde_json::Value,
+    key: &str,
+) -> Result<&'a str, HostPrototypeError> {
+    request
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| HostPrototypeError::new(format!("ast-crispr request requires {key}")))
+}
+
+fn operation_profile_from_request(
+    request: &serde_json::Value,
+) -> Result<ast_crispr::OperationProfile, HostPrototypeError> {
+    Ok(ast_crispr::OperationProfile::new(
+        required_string(request, "operation_kind")?,
+        required_string(request, "source_requirement")?,
+        required_string(request, "destination_requirement")?,
+        required_string(request, "replacement_source")?,
+        request.get("captures_source_text").and_then(serde_json::Value::as_bool).unwrap_or(false),
+        request.get("supports_if_missing").and_then(serde_json::Value::as_bool).unwrap_or(false),
+    ))
+}
+
 pub fn parse_json_analysis(source: String, dialect: String) -> Result<String, HostPrototypeError> {
     serde_json::to_string(&parse_json(&source, json_dialect(&dialect)?)).map_err(|error| {
         HostPrototypeError::new(format!("failed to serialize JSON analysis: {error}"))
@@ -1703,6 +1790,40 @@ mod tests {
         assert_eq!(conflict["ok"], false);
         assert!(conflict["conflicted_source"].as_str().unwrap().contains("<<<<<<< ours"));
         assert_eq!(conflict["conflicts"][0]["path"], "/enabled");
+    }
+
+    #[test]
+    fn ast_crispr_boundary_reports_profile_contract() {
+        let response = report_ast_crispr_json(
+            serde_json::json!({
+                "kind": "batch_operations",
+                "operations": [
+                    {
+                        "operation_kind": "replace",
+                        "source_requirement": "required",
+                        "destination_requirement": "none",
+                        "replacement_source": "explicit_text",
+                        "captures_source_text": true,
+                        "supports_if_missing": false
+                    },
+                    {
+                        "operation_kind": "insert",
+                        "source_requirement": "none",
+                        "destination_requirement": "optional",
+                        "replacement_source": "explicit_text",
+                        "captures_source_text": false,
+                        "supports_if_missing": true
+                    }
+                ]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let report: serde_json::Value = serde_json::from_str(&response).unwrap();
+
+        assert_eq!(report["operation_count"], 2);
+        assert_eq!(report["operation_kinds"], serde_json::json!(["replace", "insert"]));
+        assert_eq!(report["operation_profiles"][1]["supports_destination"], true);
     }
 
     #[test]
