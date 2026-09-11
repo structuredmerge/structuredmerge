@@ -171,16 +171,13 @@ pub fn merge_source_preserving_owners(
         .collect::<HashSet<_>>();
     let membership_changed =
         base.owner_ids() != ours.owner_ids() || base.owner_ids() != theirs.owner_ids();
-    let layout_matches = if membership_changed {
+    let layout_matches = if membership_changed && stable_ids.is_empty() {
+        false
+    } else if membership_changed {
         let base_layout = layout_segments_for_ids(&base, &stable_ids);
         let ours_layout = layout_segments_for_ids(&ours, &stable_ids);
         let theirs_layout = layout_segments_for_ids(&theirs, &stable_ids);
-        base_layout.len() <= 2
-            || (base_layout.len() == ours_layout.len()
-                && base_layout.len() == theirs_layout.len()
-                && base_layout[1..base_layout.len() - 1] == ours_layout[1..ours_layout.len() - 1]
-                && base_layout[1..base_layout.len() - 1]
-                    == theirs_layout[1..theirs_layout.len() - 1])
+        base_layout == ours_layout && base_layout == theirs_layout
     } else {
         base.layout_segments() == ours.layout_segments()
             && base.layout_segments() == theirs.layout_segments()
