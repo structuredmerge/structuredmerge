@@ -70,6 +70,7 @@ jobs:
           TARGET: ${{ matrix.target }}
           PLATFORM: ${{ matrix.platform }}
           RUST_TARGET: ${{ matrix.target }}
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
           CARGO_FEATURE_LINK_RUBY: "1"
         run: |
           set -euo pipefail
