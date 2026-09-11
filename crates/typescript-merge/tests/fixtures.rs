@@ -70,7 +70,10 @@ fn preserves_single_lexical_declarations_when_merging_independent_edits() {
             .expect("analysis should be present")
             .declarations
             .iter()
-            .map(|declaration| (declaration.match_key.as_str(), declaration.declaration_kind.as_str()))
+            .map(|declaration| (
+                declaration.match_key.as_str(),
+                declaration.declaration_kind.as_str()
+            ))
             .collect::<Vec<_>>(),
         vec![("left", "variables"), ("right", "variables")]
     );
@@ -83,10 +86,7 @@ fn preserves_single_lexical_declarations_when_merging_independent_edits() {
 
 #[test]
 fn rejects_multi_declarator_lexical_statements_until_ownership_is_unambiguous() {
-    let result = parse_typescript(
-        "const left = 1, right = 2;\n",
-        TypeScriptDialect::TypeScript,
-    );
+    let result = parse_typescript("const left = 1, right = 2;\n", TypeScriptDialect::TypeScript);
 
     assert!(!result.ok);
     assert!(result.diagnostics[0].message.contains("unsupported top-level TypeScript node"));

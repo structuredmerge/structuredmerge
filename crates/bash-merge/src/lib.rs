@@ -359,7 +359,9 @@ mod tests {
         assert_eq!(result.outcome, ThreeWayMergeOutcome::Clean);
         assert_eq!(
             result.output.as_deref(),
-            Some("# left documentation\nleft() { echo two; }\n\n# right documentation\nright() { echo two; }\n")
+            Some(
+                "# left documentation\nleft() { echo two; }\n\n# right documentation\nright() { echo two; }\n"
+            )
         );
     }
 
