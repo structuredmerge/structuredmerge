@@ -69,6 +69,8 @@
 
 - Expose an opt-in TypeScript RustHostProvider for host-backed analyze, merge2, and merge3 operations.
 
+- Expose kettle-rusty README style planning and application through the CLI.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
