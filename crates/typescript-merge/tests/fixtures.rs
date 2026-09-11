@@ -56,6 +56,43 @@ fn preserves_imports_when_merging_independent_declaration_edits() {
 }
 
 #[test]
+fn preserves_single_lexical_declarations_when_merging_independent_edits() {
+    let base = "const left = 1;\n\nconst right = 1;\n";
+    let ours = base.replace("const left = 1", "const left = 2");
+    let theirs = base.replace("const right = 1", "const right = 2");
+
+    let parsed = parse_typescript(base, TypeScriptDialect::TypeScript);
+    assert!(parsed.ok, "diagnostics: {:?}", parsed.diagnostics);
+    assert_eq!(
+        parsed
+            .analysis
+            .as_ref()
+            .expect("analysis should be present")
+            .declarations
+            .iter()
+            .map(|declaration| (declaration.match_key.as_str(), declaration.declaration_kind.as_str()))
+            .collect::<Vec<_>>(),
+        vec![("left", "variables"), ("right", "variables")]
+    );
+
+    let result = merge_typescript_three_way(base, &ours, &theirs, TypeScriptDialect::TypeScript);
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
+    assert_eq!(result.output.as_deref(), Some("const left = 2;\n\nconst right = 2;\n"));
+}
+
+#[test]
+fn rejects_multi_declarator_lexical_statements_until_ownership_is_unambiguous() {
+    let result = parse_typescript(
+        "const left = 1, right = 2;\n",
+        TypeScriptDialect::TypeScript,
+    );
+
+    assert!(!result.ok);
+    assert!(result.diagnostics[0].message.contains("unsupported top-level TypeScript node"));
+}
+
+#[test]
 fn reports_incompatible_function_edits_as_a_local_conflict() {
     let base = "function value(): number { return 1; }\n";
     let ours = "function value(): number { return 2; }\n";

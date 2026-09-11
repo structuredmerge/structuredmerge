@@ -21,6 +21,7 @@ const TYPESCRIPT_DECLARATION_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
     NamedOwnerKind { node_kind: "interface_declaration", path_kind: "interface" },
     NamedOwnerKind { node_kind: "internal_module", path_kind: "internal_module" },
     NamedOwnerKind { node_kind: "type_alias_declaration", path_kind: "type_alias" },
+    NamedOwnerKind { node_kind: "variable_declarator", path_kind: "variables" },
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -304,7 +305,7 @@ fn parse_source_preserving_typescript(
             family: "TypeScript",
             owner_kinds: TYPESCRIPT_DECLARATION_OWNER_KINDS,
             ignored_kinds: &["import_statement"],
-            wrapper_kinds: &["export_statement", "ambient_declaration"],
+            wrapper_kinds: &["export_statement", "ambient_declaration", "lexical_declaration"],
             name_fields: &["name"],
             fallback_name_kinds: &["identifier", "type_identifier"],
             accept_any_named_kind: false,
@@ -337,6 +338,7 @@ fn supported_declaration_kind(kind: &str) -> bool {
             | "function_signature"
             | "interface_declaration"
             | "internal_module"
+            | "lexical_declaration"
             | "type_alias_declaration"
     )
 }
@@ -349,12 +351,29 @@ fn typescript_declaration_kind(node_kind: &str) -> &'static str {
         "function_signature" => "function_signature",
         "interface_declaration" => "interface",
         "internal_module" => "internal_module",
+        "lexical_declaration" => "variables",
         "type_alias_declaration" => "type_alias",
         _ => "declaration",
     }
 }
 
 fn declaration_name(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> Option<String> {
+    if node.kind == "lexical_declaration" {
+        let declarators = index
+            .children(node)
+            .into_iter()
+            .filter(|child| child.kind == "variable_declarator")
+            .collect::<Vec<_>>();
+        if declarators.len() != 1 {
+            return None;
+        }
+        return index
+            .children(declarators[0])
+            .into_iter()
+            .find(|child| child.field_name.as_deref() == Some("name"))
+            .map(|child| child.source_fragment.clone());
+    }
+
     index
         .children(node)
         .into_iter()
