@@ -100,5 +100,6 @@ functions = [
   "merge_json_three_way",
   "merge_ast_merge_git_json",
   "report_ast_crispr_json",
+  "apply_ast_crispr_source_edits_json",
   "report_ast_template_json",
 ]

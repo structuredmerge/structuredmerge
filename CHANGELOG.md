@@ -97,6 +97,8 @@
 
 - Expose the opt-in ast-template session-report bridge through the generated Ruby host.
 
+- Expose explicit UTF-8 source-edit projection through the ast-crispr Ruby host bridge.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

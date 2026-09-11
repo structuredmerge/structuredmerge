@@ -7,6 +7,7 @@
     "WorkflowProvider"
   ],
   "facade_methods": [
+    "apply_ast_crispr_source_edits_json",
     "cancel_identity_worker",
     "capability_manifest",
     "clear_parser_hosts",
@@ -56,6 +57,7 @@
     "HostSourceSegment"
   ],
   "native_method_arities": {
+    "apply_ast_crispr_source_edits_json": 1,
     "cancel_identity_worker": 1,
     "capability_manifest": 0,
     "clear_parser_hosts": 0,
@@ -94,6 +96,7 @@
     "replace_parser_host": 2,
     "replace_workflow_host": 2,
     "report_ast_crispr_json": 1,
+    "apply_ast_crispr_source_edits_json": 1,
     "report_ast_template_json": 1,
     "shutdown_host_runtime": 2,
     "start_host_runtime": 0,

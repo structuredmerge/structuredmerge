@@ -1386,6 +1386,62 @@ pub fn report_ast_crispr_json(request: String) -> Result<String, HostPrototypeEr
     })
 }
 
+/// Apply explicitly projected UTF-8 source edits through the shared Rust
+/// source renderer. This does not select AST nodes; callers must provide and
+/// own the byte ranges, so structural selection remains outside this bridge.
+pub fn apply_ast_crispr_source_edits_json(request: String) -> Result<String, HostPrototypeError> {
+    let request: serde_json::Value = serde_json::from_str(&request).map_err(|error| {
+        HostPrototypeError::new(format!("invalid ast-crispr edit request: {error}"))
+    })?;
+    let source = required_string(&request, "source")?;
+    let edits =
+        request
+            .get("edits")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| HostPrototypeError::new("ast-crispr edit request requires edits"))?
+            .iter()
+            .map(|edit| {
+                let object = edit
+                    .as_object()
+                    .ok_or_else(|| HostPrototypeError::new("ast-crispr edit must be an object"))?;
+                let start_byte =
+                    object.get("start_byte").and_then(serde_json::Value::as_u64).ok_or_else(
+                        || HostPrototypeError::new("ast-crispr edit requires start_byte"),
+                    )? as usize;
+                let end_byte =
+                    object.get("end_byte").and_then(serde_json::Value::as_u64).ok_or_else(|| {
+                        HostPrototypeError::new("ast-crispr edit requires end_byte")
+                    })? as usize;
+                let replacement =
+                    object.get("replacement").and_then(serde_json::Value::as_str).ok_or_else(
+                        || HostPrototypeError::new("ast-crispr edit requires replacement"),
+                    )?;
+                Ok(ast_merge::SourceEdit::replace(start_byte, end_byte, replacement))
+            })
+            .collect::<Result<Vec<_>, HostPrototypeError>>()?;
+    let report = match ast_merge::apply_source_edits(source, &edits) {
+        Ok(output) => serde_json::json!({
+            "ok": true,
+            "output": output,
+            "edit_count": edits.len(),
+            "source_projection": "explicit_byte_ranges"
+        }),
+        Err(error) => serde_json::json!({
+            "ok": false,
+            "edit_count": edits.len(),
+            "source_projection": "explicit_byte_ranges",
+            "diagnostics": [{
+                "severity": "error",
+                "category": "source_edit_rejected",
+                "message": error.message()
+            }]
+        }),
+    };
+    serde_json::to_string(&report).map_err(|error| {
+        HostPrototypeError::new(format!("failed to serialize ast-crispr edit report: {error}"))
+    })
+}
+
 /// Report the portable ast-template session configuration contract through the
 /// generated host. This is intentionally validation/resolution only: template
 /// execution and filesystem mutation remain outside the Ruby bridge until
