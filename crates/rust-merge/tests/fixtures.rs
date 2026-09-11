@@ -54,6 +54,33 @@ fn merges_independent_named_item_edits_with_exact_source_preservation() {
 }
 
 #[test]
+fn merges_an_independent_edit_with_a_deleted_rust_owner() {
+    let base = "fn left() -> i32 { 1 }\n\nfn right() -> i32 { 1 }\n";
+    let ours = "fn left() -> i32 { 2 }\n\nfn right() -> i32 { 1 }\n";
+    let theirs = "fn left() -> i32 { 1 }\n";
+
+    let result = merge_rust_three_way(base, ours, theirs, RustDialect::Rust);
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
+    assert_eq!(result.output.as_deref(), Some("fn left() -> i32 { 2 }\n"));
+}
+
+#[test]
+fn merges_an_independent_edit_with_an_added_rust_owner() {
+    let base = "fn left() -> i32 { 1 }\n";
+    let ours = "fn left() -> i32 { 2 }\n";
+    let theirs = "fn left() -> i32 { 1 }\n\nfn right() -> i32 { 3 }\n";
+
+    let result = merge_rust_three_way(base, ours, theirs, RustDialect::Rust);
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
+    assert_eq!(
+        result.output.as_deref(),
+        Some("fn left() -> i32 { 2 }\n\nfn right() -> i32 { 3 }\n")
+    );
+}
+
+#[test]
 fn rejects_ambiguous_or_spanless_rust_three_way_inputs_without_fallback() {
     let base = "fn value() -> i32 { 1 }\n";
     let ours = "fn value() -> i32 { 2 }\n";

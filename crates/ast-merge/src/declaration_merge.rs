@@ -84,52 +84,137 @@ pub fn merge_source_preserving_owners(
         return clean_result(theirs.source);
     }
 
-    if base.owner_ids() != ours.owner_ids() || base.owner_ids() != theirs.owner_ids() {
+    let base_by_id = owners_by_id(&base);
+    let ours_by_id = owners_by_id(&ours);
+    let theirs_by_id = owners_by_id(&theirs);
+    let mut selected = HashMap::new();
+    let mut conflicts = Vec::new();
+
+    for id in all_owner_ids(&base, &ours, &theirs) {
+        let base_owner = base_by_id.get(id.as_str()).copied();
+        let ours_owner = ours_by_id.get(id.as_str()).copied();
+        let theirs_owner = theirs_by_id.get(id.as_str()).copied();
+        match (base_owner, ours_owner, theirs_owner) {
+            (Some(base_owner), Some(ours_owner), Some(theirs_owner)) => {
+                if ours_owner.fingerprint == theirs_owner.fingerprint
+                    || base_owner.fingerprint == theirs_owner.fingerprint
+                {
+                    selected.insert(id, SourceRevision::Ours);
+                } else if base_owner.fingerprint == ours_owner.fingerprint {
+                    selected.insert(id, SourceRevision::Theirs);
+                } else {
+                    conflicts.push(owner_conflict(base_owner, ours_owner, theirs_owner));
+                }
+            }
+            (Some(base_owner), Some(ours_owner), None) => {
+                if base_owner.fingerprint != ours_owner.fingerprint {
+                    conflicts.push(owner_membership_conflict(
+                        Some(base_owner),
+                        Some(ours_owner),
+                        None,
+                    ));
+                }
+            }
+            (Some(base_owner), None, Some(theirs_owner)) => {
+                if base_owner.fingerprint != theirs_owner.fingerprint {
+                    conflicts.push(owner_membership_conflict(
+                        Some(base_owner),
+                        None,
+                        Some(theirs_owner),
+                    ));
+                }
+            }
+            (Some(_), None, None) => {}
+            (None, Some(ours_owner), Some(theirs_owner)) => {
+                if ours_owner.fingerprint == theirs_owner.fingerprint {
+                    selected.insert(id, SourceRevision::Ours);
+                } else {
+                    conflicts.push(owner_membership_conflict(
+                        None,
+                        Some(ours_owner),
+                        Some(theirs_owner),
+                    ));
+                }
+            }
+            (None, Some(_), None) => {
+                selected.insert(id, SourceRevision::Ours);
+            }
+            (None, None, Some(_)) => {
+                selected.insert(id, SourceRevision::Theirs);
+            }
+            (None, None, None) => unreachable!("owner id came from at least one document"),
+        }
+    }
+    if !conflicts.is_empty() {
+        return conflict_result(conflicts);
+    }
+
+    let selected_ids = selected.keys().cloned().collect::<HashSet<_>>();
+    let ours_ids = ours_by_id.keys().map(|id| (*id).to_string()).collect::<HashSet<_>>();
+    let theirs_ids = theirs_by_id.keys().map(|id| (*id).to_string()).collect::<HashSet<_>>();
+    let (baseline, baseline_revision) = if selected_ids == ours_ids {
+        (&ours, SourceRevision::Ours)
+    } else if selected_ids == theirs_ids {
+        (&theirs, SourceRevision::Theirs)
+    } else {
         return error_result(
             DiagnosticCategory::UnsupportedFeature,
-            "source-preserving declaration merge requires identical ordered owner identities",
+            "source-preserving declaration merge cannot prove a combined owner membership layout",
         );
-    }
-    if base.layout_segments() != ours.layout_segments()
-        || base.layout_segments() != theirs.layout_segments()
-    {
+    };
+
+    let stable_ids = base
+        .owner_ids()
+        .into_iter()
+        .filter(|id| ours_by_id.contains_key(*id) && theirs_by_id.contains_key(*id))
+        .map(str::to_string)
+        .collect::<HashSet<_>>();
+    let membership_changed =
+        base.owner_ids() != ours.owner_ids() || base.owner_ids() != theirs.owner_ids();
+    let layout_matches = if membership_changed {
+        let base_layout = layout_segments_for_ids(&base, &stable_ids);
+        let ours_layout = layout_segments_for_ids(&ours, &stable_ids);
+        let theirs_layout = layout_segments_for_ids(&theirs, &stable_ids);
+        base_layout.len() <= 2
+            || (base_layout.len() == ours_layout.len()
+                && base_layout.len() == theirs_layout.len()
+                && base_layout[1..base_layout.len() - 1] == ours_layout[1..ours_layout.len() - 1]
+                && base_layout[1..base_layout.len() - 1]
+                    == theirs_layout[1..theirs_layout.len() - 1])
+    } else {
+        base.layout_segments() == ours.layout_segments()
+            && base.layout_segments() == theirs.layout_segments()
+    };
+    if !layout_matches {
         return error_result(
             DiagnosticCategory::UnsupportedFeature,
             "source-preserving declaration merge cannot prove ownership of changed inter-owner layout",
         );
     }
 
-    let base_by_id = owners_by_id(&base);
-    let theirs_by_id = owners_by_id(&theirs);
     let mut replacements = Vec::new();
-    let mut conflicts = Vec::new();
     let mut expected = HashMap::new();
-    for ours_owner in &ours.owners {
-        let base_owner = base_by_id[ours_owner.id.as_str()];
-        let theirs_owner = theirs_by_id[ours_owner.id.as_str()];
-        let selected = if ours_owner.fingerprint == theirs_owner.fingerprint
-            || base_owner.fingerprint == theirs_owner.fingerprint
-        {
-            ours_owner
-        } else if base_owner.fingerprint == ours_owner.fingerprint {
-            replacements.push((ours_owner, theirs_owner));
-            theirs_owner
-        } else {
-            conflicts.push(owner_conflict(base_owner, ours_owner, theirs_owner));
-            ours_owner
-        };
-        expected.insert(selected.id.as_str(), selected.fingerprint.as_str());
-    }
-    if !conflicts.is_empty() {
-        return conflict_result(conflicts);
+    for baseline_owner in &baseline.owners {
+        let revision = selected[baseline_owner.id.as_str()];
+        let selected_owner = owner_for_revision(
+            baseline_owner.id.as_str(),
+            revision,
+            &base_by_id,
+            &ours_by_id,
+            &theirs_by_id,
+        );
+        expected.insert(baseline_owner.id.as_str(), selected_owner.fingerprint.as_str());
+        if revision != baseline_revision {
+            replacements.push((baseline_owner, selected_owner, revision));
+        }
     }
 
-    replacements.sort_by_key(|(owner, _)| std::cmp::Reverse(owner.start_byte));
-    let mut output = ours.source.clone();
-    for (ours_owner, theirs_owner) in replacements {
+    replacements.sort_by_key(|(owner, _, _)| std::cmp::Reverse(owner.start_byte));
+    let mut output = baseline.source.clone();
+    for (baseline_owner, selected_owner, revision) in replacements {
         output.replace_range(
-            ours_owner.start_byte..ours_owner.end_byte,
-            &theirs.source[theirs_owner.start_byte..theirs_owner.end_byte],
+            baseline_owner.start_byte..baseline_owner.end_byte,
+            source_for_revision(selected_owner, revision, &base, &ours, &theirs),
         );
     }
 
@@ -145,7 +230,7 @@ pub fn merge_source_preserving_owners(
     if let Err(message) = rendered.validate("output") {
         return error_result(DiagnosticCategory::ConfigurationError, message);
     }
-    if rendered.owner_ids() != ours.owner_ids()
+    if rendered.owner_ids() != baseline.owner_ids()
         || rendered
             .owners
             .iter()
@@ -156,7 +241,7 @@ pub fn merge_source_preserving_owners(
             "source-preserving declaration render changed the planned owner structure",
         );
     }
-    if rendered.layout_segments() != ours.layout_segments() {
+    if rendered.layout_segments() != baseline.layout_segments() {
         return error_result(
             DiagnosticCategory::ConfigurationError,
             "source-preserving declaration render changed inter-owner layout",
@@ -170,40 +255,116 @@ fn owners_by_id(document: &SourcePreservingOwnerDocument) -> HashMap<&str, &Sour
     document.owners.iter().map(|owner| (owner.id.as_str(), owner)).collect()
 }
 
+fn all_owner_ids(
+    base: &SourcePreservingOwnerDocument,
+    ours: &SourcePreservingOwnerDocument,
+    theirs: &SourcePreservingOwnerDocument,
+) -> Vec<String> {
+    let mut ids = Vec::new();
+    for owner in base.owners.iter().chain(ours.owners.iter()).chain(theirs.owners.iter()) {
+        if !ids.iter().any(|id| id == &owner.id) {
+            ids.push(owner.id.clone());
+        }
+    }
+    ids
+}
+
+fn owner_for_revision<'a>(
+    id: &str,
+    revision: SourceRevision,
+    base: &HashMap<&'a str, &'a SourcePreservingOwner>,
+    ours: &HashMap<&'a str, &'a SourcePreservingOwner>,
+    theirs: &HashMap<&'a str, &'a SourcePreservingOwner>,
+) -> &'a SourcePreservingOwner {
+    match revision {
+        SourceRevision::Base => base[id],
+        SourceRevision::Ours => ours[id],
+        SourceRevision::Theirs => theirs[id],
+    }
+}
+
+fn source_for_revision<'a>(
+    owner: &SourcePreservingOwner,
+    revision: SourceRevision,
+    base: &'a SourcePreservingOwnerDocument,
+    ours: &'a SourcePreservingOwnerDocument,
+    theirs: &'a SourcePreservingOwnerDocument,
+) -> &'a str {
+    let source = match revision {
+        SourceRevision::Base => &base.source,
+        SourceRevision::Ours => &ours.source,
+        SourceRevision::Theirs => &theirs.source,
+    };
+    &source[owner.start_byte..owner.end_byte]
+}
+
+fn layout_segments_for_ids(
+    document: &SourcePreservingOwnerDocument,
+    ids: &HashSet<String>,
+) -> Vec<String> {
+    let mut cursor = 0;
+    let mut segments = Vec::new();
+    for owner in &document.owners {
+        if ids.contains(&owner.id) {
+            segments.push(document.source[cursor..owner.start_byte].to_string());
+            cursor = owner.end_byte;
+        } else {
+            cursor = owner.end_byte;
+        }
+    }
+    segments.push(document.source[cursor..].to_string());
+    segments
+}
+
 fn owner_conflict(
     base: &SourcePreservingOwner,
     ours: &SourcePreservingOwner,
     theirs: &SourcePreservingOwner,
 ) -> MergeConflict {
+    owner_membership_conflict(Some(base), Some(ours), Some(theirs))
+}
+
+fn owner_membership_conflict(
+    base: Option<&SourcePreservingOwner>,
+    ours: Option<&SourcePreservingOwner>,
+    theirs: Option<&SourcePreservingOwner>,
+) -> MergeConflict {
+    let owner = ours.or(theirs).or(base).expect("a conflict has an owner");
     MergeConflict {
-        conflict_id: format!("declaration:{}", ours.id),
+        conflict_id: format!("declaration:{}", owner.id),
         category: "edit_edit".to_string(),
-        path: ours.path.clone(),
+        path: owner.path.clone(),
         fallback_scope: "owner".to_string(),
-        message: format!("{} changed incompatibly on both sides", ours.path),
+        message: format!("{} changed incompatibly on both sides", owner.path),
         alternatives: vec![
-            owner_alternative(SourceRevision::Base, base),
-            owner_alternative(SourceRevision::Ours, ours),
-            owner_alternative(SourceRevision::Theirs, theirs),
+            owner_alternative_optional(SourceRevision::Base, base),
+            owner_alternative_optional(SourceRevision::Ours, ours),
+            owner_alternative_optional(SourceRevision::Theirs, theirs),
         ],
     }
 }
 
-fn owner_alternative(
+fn owner_alternative_optional(
     revision: SourceRevision,
-    owner: &SourcePreservingOwner,
+    owner: Option<&SourcePreservingOwner>,
 ) -> ConflictAlternative {
     ConflictAlternative {
         revision,
-        state: ConflictAlternativeState::Present,
-        regions: vec![OwnedSourceRegion {
-            node_id: owner.id.clone(),
-            region_kind: "declaration".to_string(),
-            start_byte: owner.start_byte,
-            end_byte: owner.end_byte,
-            start_line: owner.start_line,
-            end_line: owner.end_line,
-        }],
+        state: owner
+            .map(|_| ConflictAlternativeState::Present)
+            .unwrap_or(ConflictAlternativeState::Absent),
+        regions: owner
+            .map(|owner| {
+                vec![OwnedSourceRegion {
+                    node_id: owner.id.clone(),
+                    region_kind: "declaration".to_string(),
+                    start_byte: owner.start_byte,
+                    end_byte: owner.end_byte,
+                    start_line: owner.start_line,
+                    end_line: owner.end_line,
+                }]
+            })
+            .unwrap_or_default(),
     }
 }
 
@@ -302,6 +463,52 @@ mod tests {
     }
 
     #[test]
+    fn merges_an_independent_edit_with_a_one_sided_owner_deletion() {
+        let base = document("one\n\ntwo\n", "one", "two");
+        let ours = document("ONE\n\ntwo\n", "ONE", "two");
+        let theirs = SourcePreservingOwnerDocument {
+            source: "one\n".to_string(),
+            owners: vec![owner("left", "one", 0, 3, 1)],
+        };
+
+        let result = merge_source_preserving_owners(base, ours, theirs, |source| {
+            Ok(SourcePreservingOwnerDocument {
+                source: source.to_string(),
+                owners: vec![owner("left", "ONE", 0, 3, 1)],
+            })
+        });
+
+        assert_eq!(result.outcome, ThreeWayMergeOutcome::Clean);
+        assert_eq!(result.output.as_deref(), Some("ONE\n"));
+    }
+
+    #[test]
+    fn merges_an_independent_edit_with_a_one_sided_owner_addition() {
+        let base = SourcePreservingOwnerDocument {
+            source: "one\n".to_string(),
+            owners: vec![owner("left", "one", 0, 3, 1)],
+        };
+        let ours = SourcePreservingOwnerDocument {
+            source: "ONE\n".to_string(),
+            owners: vec![owner("left", "ONE", 0, 3, 1)],
+        };
+        let theirs = SourcePreservingOwnerDocument {
+            source: "one\n\nthree\n".to_string(),
+            owners: vec![owner("left", "one", 0, 3, 1), owner("third", "three", 5, 10, 3)],
+        };
+
+        let result = merge_source_preserving_owners(base, ours, theirs, |source| {
+            Ok(SourcePreservingOwnerDocument {
+                source: source.to_string(),
+                owners: vec![owner("left", "ONE", 0, 3, 1), owner("third", "three", 5, 10, 3)],
+            })
+        });
+
+        assert_eq!(result.outcome, ThreeWayMergeOutcome::Clean);
+        assert_eq!(result.output.as_deref(), Some("ONE\n\nthree\n"));
+    }
+
+    #[test]
     fn rejects_changed_inter_owner_layout() {
         let base = document("one\n\ntwo\n", "one", "two");
         let ours = document("ONE\n\ntwo\n", "ONE", "two");
@@ -329,9 +536,18 @@ mod tests {
     #[test]
     fn rejects_owner_membership_changes() {
         let base = document("one\n\ntwo\n", "one", "two");
-        let ours = document("ONE\n\ntwo\n", "ONE", "two");
+        let ours = SourcePreservingOwnerDocument {
+            source: "ONE\n\ntwo\n\nfour\n".to_string(),
+            owners: vec![
+                owner("left", "ONE", 0, 3, 1),
+                owner("right", "two", 5, 8, 3),
+                owner("fourth", "four", 10, 14, 5),
+            ],
+        };
         let mut theirs = document("one\n\nTWO\n", "one", "TWO");
         theirs.owners.pop();
+        theirs.source = "one\n\nthree\n".to_string();
+        theirs.owners.push(owner("third", "three", 5, 10, 3));
 
         let result = merge_source_preserving_owners(base, ours, theirs, |_| unreachable!());
 

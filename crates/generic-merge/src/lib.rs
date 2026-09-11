@@ -231,8 +231,8 @@ mod tests {
         let ours = "def left():\n    return 2\n";
         let theirs = "def renamed():\n    return 1\n";
         let renamed = merge_generic_tslp_three_way(base, ours, theirs, "python", None);
-        assert_eq!(renamed.outcome, ThreeWayMergeOutcome::Error);
-        assert_eq!(renamed.diagnostics[0].category, DiagnosticCategory::UnsupportedFeature);
+        assert_eq!(renamed.outcome, ThreeWayMergeOutcome::Conflict);
+        assert_eq!(renamed.diagnostics[0].category, DiagnosticCategory::MergeConflict);
     }
 
     #[test]

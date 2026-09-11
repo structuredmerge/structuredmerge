@@ -72,3 +72,5 @@
 - Expand Rust source-preserving merge3 ownership beyond functions to named top-level items.
 
 - Preserve Rust declaration kinds in source-aware host analysis and diff owner paths.
+
+- Support conservative one-sided top-level owner additions and deletions during source-preserving three-way merges while retaining fail-closed layout checks.
