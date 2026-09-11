@@ -18,7 +18,7 @@ use json_merge::{
 use parking_lot::{Mutex, RwLock};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use tree_haver::{ParserRequest, parse_with_language_pack};
+use tree_haver::{ParserRequest, parse_normalized_with_language_pack, parse_with_language_pack};
 
 pub const PACKAGE_NAME: &str = "structuredmerge-host-prototype-core";
 const MAX_DESCRIPTOR_BYTES: usize = 64 * 1024;
@@ -1166,6 +1166,25 @@ pub fn parse_with_parser(
     provider.provider.parse_batch(request)
 }
 
+pub fn parse_normalized_with_tslp(
+    language: String,
+    source: String,
+    dialect: Option<String>,
+) -> Result<String, HostPrototypeError> {
+    if language.trim().is_empty() {
+        return Err(HostPrototypeError::new("parser language cannot be empty"));
+    }
+
+    serde_json::to_string(&parse_normalized_with_language_pack(&ParserRequest {
+        source,
+        language,
+        dialect,
+    }))
+    .map_err(|error| {
+        HostPrototypeError::new(format!("failed to serialize normalized parse: {error}"))
+    })
+}
+
 pub fn registered_parser_hosts() -> Vec<String> {
     registry::get_parser_host_registry().read().names()
 }
@@ -1489,6 +1508,28 @@ mod tests {
             error.message(),
             "unsupported JSON dialect \"yaml\"; expected json, jsonc, or json5"
         );
+    }
+
+    #[test]
+    fn normalized_tslp_boundary_serializes_tree_haver_parse_results() {
+        let response =
+            parse_normalized_with_tslp("json".to_owned(), "{\"answer\":42}".to_owned(), None)
+                .unwrap();
+        let result: serde_json::Value = serde_json::from_str(&response).unwrap();
+
+        assert_eq!(result["ok"], true);
+        assert_eq!(result["backend_capability"]["backend_ref"]["id"], "kreuzberg-language-pack");
+        assert!(result["root_id"].as_str().is_some_and(|id| !id.is_empty()));
+        assert_eq!(result["nodes"][0]["id"], result["root_id"]);
+        assert_eq!(result["nodes"][0]["kind"], "document");
+        assert_eq!(result["nodes"][0]["span"]["range"]["start_byte"], 0);
+    }
+
+    #[test]
+    fn normalized_tslp_boundary_rejects_empty_languages() {
+        let error = parse_normalized_with_tslp(" ".to_owned(), "{}".to_owned(), None).unwrap_err();
+
+        assert_eq!(error.message(), "parser language cannot be empty");
     }
 
     #[test]

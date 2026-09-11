@@ -1085,4 +1085,16 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(result.fetch("outcome")).to eq("clean")
     expect(result.fetch("output")).to eq('{"left":2,"right":2}')
   end
+
+  it "serializes canonical normalized TreeHaver trees through the generated boundary" do
+    result = JSON.parse(described_class.parse_normalized_with_tslp("json", '{"answer":42}', nil))
+
+    expect(result.fetch("ok")).to be(true)
+    expect(result.dig("backend_capability", "backend_ref", "id")).to eq("kreuzberg-language-pack")
+    expect(result.fetch("root_id")).not_to be_empty
+    expect(result.fetch("nodes").first).to include(
+      "id" => result.fetch("root_id"),
+      "kind" => "document"
+    )
+  end
 end
