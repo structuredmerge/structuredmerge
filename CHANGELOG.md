@@ -109,6 +109,8 @@
 
 - Extend the Bash Rust owner projection to literal-title test_expect_success calls.
 
+- Refresh GitHub Actions references for the Rust test and Ruby host release workflows.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
