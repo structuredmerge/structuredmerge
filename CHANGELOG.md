@@ -96,3 +96,5 @@
 - Report ambiguous managed-block markers without overwriting destination content in kettle-rusty.
 
 - Apply package-scoped kettle-rusty recipes inside the selected single-member workspace package.
+
+- Target README style planning and application at the selected workspace member.
