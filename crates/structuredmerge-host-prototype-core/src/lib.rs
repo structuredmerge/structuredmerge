@@ -1959,6 +1959,64 @@ mod tests {
     }
 
     #[test]
+    fn ast_template_boundary_reports_read_only_plan_and_rejects_apply_mode() {
+        let root = std::env::temp_dir()
+            .join(format!("structuredmerge-host-ast-template-{}", std::process::id()));
+        let template_root = root.join("templates");
+        let destination_root = root.join("destination");
+        std::fs::create_dir_all(&template_root).unwrap();
+        std::fs::create_dir_all(&destination_root).unwrap();
+        std::fs::write(template_root.join("README.md"), "# {{PACKAGE_NAME}}\n").unwrap();
+
+        let response = report_ast_template_json(
+            serde_json::json!({
+                "kind": "plan",
+                "options": {
+                    "mode": "plan",
+                    "template_root": template_root,
+                    "destination_root": destination_root,
+                    "context": {"project_name": "widget"},
+                    "default_strategy": "raw_copy",
+                    "overrides": [],
+                    "replacements": {"PACKAGE_NAME": "widget"},
+                    "allowed_families": null
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let report: serde_json::Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(report["mode"], "plan");
+        assert!(
+            report["runner_report"]["plan_report"]["entries"]
+                .as_array()
+                .is_some_and(|entries| !entries.is_empty())
+        );
+        assert!(!destination_root.join("README.md").exists());
+
+        let error = report_ast_template_json(
+            serde_json::json!({
+                "kind": "plan",
+                "options": {
+                    "mode": "apply",
+                    "template_root": template_root,
+                    "destination_root": destination_root,
+                    "context": {},
+                    "default_strategy": "raw_copy",
+                    "overrides": [],
+                    "replacements": {},
+                    "allowed_families": null
+                }
+            })
+            .to_string(),
+        )
+        .unwrap_err();
+        assert_eq!(error.message(), "ast-template plan reports require mode=plan");
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn ast_crispr_source_edit_boundary_preserves_utf8_and_rejects_overlap() {
         let response = apply_ast_crispr_source_edits_json(
             serde_json::json!({
