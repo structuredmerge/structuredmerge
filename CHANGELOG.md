@@ -101,6 +101,8 @@
 
 - Expose read-only ast-template directory plan reports through the generated Ruby host.
 
+- Add a parser and source-preserving merge cold/warm benchmark for the compiled Ruby host.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
