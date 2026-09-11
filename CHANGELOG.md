@@ -83,6 +83,8 @@
 
 - Discover workflow names, trigger keys, and job names alongside kettle-rusty workflow paths.
 
+- Honor explicit kettle.yml template entries and disabled profiles in kettle-rusty packaged-template planning.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
