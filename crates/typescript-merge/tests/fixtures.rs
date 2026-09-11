@@ -48,6 +48,33 @@ fn reports_incompatible_function_edits_as_a_local_conflict() {
 }
 
 #[test]
+fn serializes_all_supported_typescript_declaration_kinds() {
+    let source = concat!(
+        "class User {}\n",
+        "enum Kind { One }\n",
+        "function run(): void {}\n",
+        "interface Config {}\n",
+        "declare namespace Nested {}\n",
+        "type Alias = string;\n",
+    );
+    let result = parse_typescript(source, TypeScriptDialect::TypeScript);
+
+    assert!(result.ok, "diagnostics: {:?}", result.diagnostics);
+    let declarations = result.analysis.unwrap().declarations;
+    let kinds = declarations
+        .iter()
+        .map(|declaration| declaration.declaration_kind.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+
+    assert_eq!(
+        kinds,
+        ["class", "enum", "function", "interface", "internal_module", "type_alias"]
+            .into_iter()
+            .collect()
+    );
+}
+
+#[test]
 fn rejects_malformed_and_changed_layout_inputs_without_fallback() {
     let valid = "function left(): number { return 1; }\nfunction right(): number { return 1; }\n";
     let malformed = "function left(: number { return 1; }\n";
