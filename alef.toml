@@ -92,6 +92,7 @@ functions = [
   "parse_rust_analysis",
   "merge_rust_three_way",
   "parse_typescript_analysis",
+  "merge_typescript_two_way",
   "merge_typescript_three_way",
   "merge_rust_two_way",
   "registered_parser_hosts",

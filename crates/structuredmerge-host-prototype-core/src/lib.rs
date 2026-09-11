@@ -22,8 +22,8 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tree_haver::{ParserRequest, parse_normalized_with_language_pack, parse_with_language_pack};
 use typescript_merge::{
-    TypeScriptDialect, merge_typescript_three_way as merge_typescript_three_way_impl,
-    parse_typescript,
+    TypeScriptDialect, merge_typescript as merge_typescript_impl,
+    merge_typescript_three_way as merge_typescript_three_way_impl, parse_typescript,
 };
 
 pub const PACKAGE_NAME: &str = "structuredmerge-host-prototype-core";
@@ -1415,6 +1415,20 @@ pub fn merge_typescript_three_way(
     .map_err(|error| HostPrototypeError::new(format!("failed to serialize TypeScript merge: {error}")))
 }
 
+pub fn merge_typescript_two_way(
+    template_source: String,
+    destination_source: String,
+    dialect: String,
+) -> Result<String, HostPrototypeError> {
+    let dialect = typescript_dialect(&dialect)?;
+    serde_json::to_string(&merge_typescript_impl(
+        &template_source,
+        &destination_source,
+        dialect,
+    ))
+    .map_err(|error| HostPrototypeError::new(format!("failed to serialize TypeScript merge: {error}")))
+}
+
 fn json_dialect(dialect: &str) -> Result<JsonDialect, HostPrototypeError> {
     match dialect.trim().to_ascii_lowercase().as_str() {
         "json" => Ok(JsonDialect::Json),
@@ -1688,6 +1702,18 @@ mod tests {
         assert_eq!(merged["outcome"], "clean");
         assert!(merged["output"].as_str().is_some_and(|output| {
             output.contains("return 2") && output.contains("return 3")
+        }));
+
+        let merged = merge_typescript_two_way(
+            "function incoming(): number { return 4; }\n".to_owned(),
+            "function existing(): number { return 1; }\n".to_owned(),
+            "typescript".to_owned(),
+        )
+        .unwrap();
+        let merged: serde_json::Value = serde_json::from_str(&merged).unwrap();
+        assert_eq!(merged["ok"], true);
+        assert!(merged["output"].as_str().is_some_and(|output| {
+            output.contains("existing") && output.contains("incoming")
         }));
     }
 

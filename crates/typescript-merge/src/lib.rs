@@ -464,6 +464,27 @@ pub fn merge_typescript(
         .iter()
         .map(|item| item.path.clone())
         .collect::<std::collections::HashSet<_>>();
+    let destination_imports = destination_analysis
+        .imports
+        .iter()
+        .map(|item| item.match_key.as_str())
+        .collect::<std::collections::HashSet<_>>();
+    let has_missing_import = template_analysis
+        .imports
+        .iter()
+        .any(|item| !destination_imports.contains(item.match_key.as_str()));
+    let has_missing_declaration = template_analysis
+        .declarations
+        .iter()
+        .any(|item| !destination_declarations.contains(&item.path));
+    if !has_missing_import && !has_missing_declaration {
+        return MergeResult {
+            ok: true,
+            diagnostics: vec![],
+            output: Some(destination_source.to_string()),
+            policies: vec![],
+        };
+    }
     let import_lines = destination_analysis
         .imports
         .iter()

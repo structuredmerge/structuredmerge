@@ -67,6 +67,8 @@
 
 - Expose TypeScript analysis and source-preserving merge3 through the experimental Ruby host boundary.
 
+- Expose an opt-in TypeScript RustHostProvider for host-backed analyze, merge2, and merge3 operations.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
@@ -78,3 +80,5 @@
 - Support conservative one-sided top-level owner additions and deletions during source-preserving three-way merges while retaining fail-closed layout checks.
 
 - Build the TreeHaver consumer gem from its package directory in CI release and isolated-install workflows.
+
+- Preserve TypeScript destination bytes in Rust two-way merges when no owners or imports are added.
