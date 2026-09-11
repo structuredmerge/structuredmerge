@@ -95,6 +95,8 @@
 
 - Expose the opt-in ast-crispr profile-report bridge through the generated Ruby host.
 
+- Expose the opt-in ast-template session-report bridge through the generated Ruby host.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

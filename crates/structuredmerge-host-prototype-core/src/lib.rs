@@ -1386,6 +1386,53 @@ pub fn report_ast_crispr_json(request: String) -> Result<String, HostPrototypeEr
     })
 }
 
+/// Report the portable ast-template session configuration contract through the
+/// generated host. This is intentionally validation/resolution only: template
+/// execution and filesystem mutation remain outside the Ruby bridge until
+/// source ownership and edit semantics have equivalent evidence.
+pub fn report_ast_template_json(request: String) -> Result<String, HostPrototypeError> {
+    let request: serde_json::Value = serde_json::from_str(&request).map_err(|error| {
+        HostPrototypeError::new(format!("invalid ast-template request: {error}"))
+    })?;
+    let kind = request
+        .get("kind")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| HostPrototypeError::new("ast-template request requires kind"))?;
+    let options = request.get("options").cloned().unwrap_or_else(|| serde_json::json!({}));
+    let options: ast_template::DirectorySessionOptions =
+        serde_json::from_value(options).map_err(|error| {
+            HostPrototypeError::new(format!("invalid ast-template options: {error}"))
+        })?;
+    let report = match kind {
+        "options" => ast_template::report_template_directory_session_options_request(&options),
+        "profile" => {
+            let profile_name = request
+                .get("profile_name")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| HostPrototypeError::new("profile report requires profile_name"))?;
+            let profiles =
+                request.get("profiles").cloned().unwrap_or_else(|| serde_json::json!({}));
+            let profiles: std::collections::HashMap<String, ast_template::DirectorySessionProfile> =
+                serde_json::from_value(profiles).map_err(|error| {
+                    HostPrototypeError::new(format!("invalid ast-template profiles: {error}"))
+                })?;
+            ast_template::report_template_directory_session_profile_request(
+                &profiles,
+                profile_name,
+                &options,
+            )
+        }
+        _ => {
+            return Err(HostPrototypeError::new(format!(
+                "unsupported ast-template report kind {kind:?}"
+            )));
+        }
+    };
+    serde_json::to_string(&report).map_err(|error| {
+        HostPrototypeError::new(format!("failed to serialize ast-template report: {error}"))
+    })
+}
+
 fn required_string<'a>(
     request: &'a serde_json::Value,
     key: &str,

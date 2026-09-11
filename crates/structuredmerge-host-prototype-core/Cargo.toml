@@ -11,6 +11,7 @@ publish = false
 
 [dependencies]
 ast-crispr = { version = "0.2.0", path = "../ast-crispr" }
+ast-template = { version = "0.2.0", path = "../ast-template" }
 async-trait = "0.1"
 ast-merge-git = { version = "0.2.0", path = "../ast-merge-git" }
 go-merge = { version = "0.2.0", path = "../go-merge" }
