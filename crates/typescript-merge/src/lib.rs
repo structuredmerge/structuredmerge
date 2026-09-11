@@ -303,7 +303,7 @@ fn parse_source_preserving_typescript(
         NamedOwnerProjectionPolicy {
             family: "TypeScript",
             owner_kinds: TYPESCRIPT_DECLARATION_OWNER_KINDS,
-            ignored_kinds: &[],
+            ignored_kinds: &["import_statement"],
             wrapper_kinds: &["export_statement", "ambient_declaration"],
             name_fields: &["name"],
             fallback_name_kinds: &["identifier", "type_identifier"],

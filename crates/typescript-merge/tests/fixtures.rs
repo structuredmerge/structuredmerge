@@ -35,6 +35,27 @@ fn merges_independent_function_edits_with_exact_source_preservation() {
 }
 
 #[test]
+fn preserves_imports_when_merging_independent_declaration_edits() {
+    let base = "import { value } from './shared';\n\nfunction left(): string { return value; }\nfunction right(): string { return value; }\n";
+    let ours =
+        base.replace("return value; }\nfunction right", "return value.trim(); }\nfunction right");
+    let theirs = base.replace(
+        "function right(): string { return value; }",
+        "function right(): string { return value.toUpperCase(); }",
+    );
+
+    let result = merge_typescript_three_way(base, &ours, &theirs, TypeScriptDialect::TypeScript);
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
+    assert_eq!(
+        result.output.as_deref(),
+        Some(
+            "import { value } from './shared';\n\nfunction left(): string { return value.trim(); }\nfunction right(): string { return value.toUpperCase(); }\n"
+        )
+    );
+}
+
+#[test]
 fn reports_incompatible_function_edits_as_a_local_conflict() {
     let base = "function value(): number { return 1; }\n";
     let ours = "function value(): number { return 2; }\n";
