@@ -115,10 +115,11 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           alef publish build --lang ruby
-          version="$(ruby -e 'spec = Gem::Specification.load("packages/ruby/structuredmerge_host_prototype.gemspec"); puts spec.version')"
-          SKIP_GEM_SIGNING=true gem build packages/ruby/structuredmerge_host_prototype.gemspec \
-            --output "dist/structuredmerge_host_prototype-${version}.gem"
-          gem specification "dist/structuredmerge_host_prototype-${version}.gem" name version platform
+          cd packages/ruby
+          version="$(ruby -e 'spec = Gem::Specification.load("structuredmerge_host_prototype.gemspec"); puts spec.version')"
+          SKIP_GEM_SIGNING=true gem build structuredmerge_host_prototype.gemspec \
+            --output "../../dist/structuredmerge_host_prototype-${version}.gem"
+          gem specification "../../dist/structuredmerge_host_prototype-${version}.gem" name version platform
 
       - name: Upload source artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
