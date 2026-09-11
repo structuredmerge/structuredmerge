@@ -1086,6 +1086,16 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(result.fetch("output")).to eq('{"left":2,"right":2}')
   end
 
+  it "serializes source-aware JSON analysis through the generated boundary" do
+    result = JSON.parse(described_class.parse_json_analysis("{\"answer\":42}", "json"))
+
+    expect(result.fetch("ok")).to be(true)
+    expect(result.dig("analysis", "root_kind")).to eq("object")
+    expect(result.dig("analysis", "owners")).to include(
+      include("path" => "/answer", "owner_kind" => "member")
+    )
+  end
+
   it "serializes canonical normalized TreeHaver trees through the generated boundary" do
     result = JSON.parse(described_class.parse_normalized_with_tslp("json", '{"answer":42}', nil))
 

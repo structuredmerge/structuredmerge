@@ -85,6 +85,7 @@ functions = [
   "probe_with_parser",
   "parse_with_parser",
   "parse_normalized_with_tslp",
+  "parse_json_analysis",
   "registered_parser_hosts",
   "merge_json_two_way",
   "merge_json_three_way",

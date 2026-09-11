@@ -12,47 +12,50 @@ pub use source_preserving::{
 
 pub const PACKAGE_NAME: &str = "json-merge";
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum JsonDialect {
     Json,
     Jsonc,
     Json5,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum JsonRootKind {
     Object,
     Array,
     Scalar,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum JsonOwnerKind {
     Member,
     Element,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct JsonOwner {
     pub path: String,
     pub owner_kind: JsonOwnerKind,
     pub match_key: Option<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct JsonOwnerMatch {
     pub template_path: String,
     pub destination_path: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct JsonOwnerMatchResult {
     pub matched: Vec<JsonOwnerMatch>,
     pub unmatched_template: Vec<String>,
     pub unmatched_destination: Vec<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct JsonAnalysis {
     pub dialect: JsonDialect,
     pub allows_comments: bool,

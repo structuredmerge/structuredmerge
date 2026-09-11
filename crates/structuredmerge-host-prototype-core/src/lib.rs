@@ -13,7 +13,7 @@ use std::{
 
 use json_merge::{
     JsonDialect, merge_json_source_preserving,
-    merge_json_three_way as merge_json_three_way_source_preserving,
+    merge_json_three_way as merge_json_three_way_source_preserving, parse_json,
 };
 use parking_lot::{Mutex, RwLock};
 use serde_json::Value;
@@ -1288,6 +1288,12 @@ pub fn merge_json_three_way(
         json_dialect(&dialect)?,
     );
     serialize_merge_result(&result)
+}
+
+pub fn parse_json_analysis(source: String, dialect: String) -> Result<String, HostPrototypeError> {
+    serde_json::to_string(&parse_json(&source, json_dialect(&dialect)?)).map_err(|error| {
+        HostPrototypeError::new(format!("failed to serialize JSON analysis: {error}"))
+    })
 }
 
 fn json_dialect(dialect: &str) -> Result<JsonDialect, HostPrototypeError> {
