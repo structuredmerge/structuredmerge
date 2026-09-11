@@ -1348,6 +1348,181 @@ pub fn merge_markdown_source_preserving_with_parser(
     MergeResult { ok: true, diagnostics: vec![], output: Some(rendered.content), policies: vec![] }
 }
 
+pub fn merge_markdown_three_way(
+    base_source: &str,
+    ours_source: &str,
+    theirs_source: &str,
+    dialect: MarkdownDialect,
+) -> MergeResult<String> {
+    merge_markdown_three_way_with_backend(
+        base_source,
+        ours_source,
+        theirs_source,
+        dialect,
+        MarkdownBackend::KreuzbergLanguagePack,
+    )
+}
+
+pub fn merge_markdown_three_way_with_backend(
+    base_source: &str,
+    ours_source: &str,
+    theirs_source: &str,
+    dialect: MarkdownDialect,
+    backend: MarkdownBackend,
+) -> MergeResult<String> {
+    merge_markdown_three_way_with_parser(
+        base_source,
+        ours_source,
+        theirs_source,
+        dialect,
+        |source, parse_dialect| parse_markdown_with_backend(source, parse_dialect, backend),
+    )
+}
+
+pub fn merge_markdown_three_way_with_parser(
+    base_source: &str,
+    ours_source: &str,
+    theirs_source: &str,
+    dialect: MarkdownDialect,
+    parser: impl Fn(&str, MarkdownDialect) -> ParseResult<MarkdownAnalysis>,
+) -> MergeResult<String> {
+    let base = match parse_source_preserving_document(base_source, dialect, "base", &parser) {
+        Ok(document) => document,
+        Err(diagnostic) => return failed_markdown_merge(diagnostic),
+    };
+    let ours = match parse_source_preserving_document(ours_source, dialect, "ours", &parser) {
+        Ok(document) => document,
+        Err(diagnostic) => return failed_markdown_merge(diagnostic),
+    };
+    let theirs = match parse_source_preserving_document(theirs_source, dialect, "theirs", &parser) {
+        Ok(document) => document,
+        Err(diagnostic) => return failed_markdown_merge(diagnostic),
+    };
+
+    if ours.source == theirs.source {
+        return MergeResult { ok: true, diagnostics: vec![], output: Some(ours.source), policies: vec![] };
+    }
+    if ours.source == base.source {
+        return MergeResult { ok: true, diagnostics: vec![], output: Some(theirs.source), policies: vec![] };
+    }
+    if theirs.source == base.source {
+        return MergeResult { ok: true, diagnostics: vec![], output: Some(ours.source), policies: vec![] };
+    }
+
+    let base_by_id = base.sections.iter().map(|section| (section.id.as_str(), section)).collect::<HashMap<_, _>>();
+    let ours_by_id = ours.sections.iter().map(|section| (section.id.as_str(), section)).collect::<HashMap<_, _>>();
+    let theirs_by_id = theirs.sections.iter().map(|section| (section.id.as_str(), section)).collect::<HashMap<_, _>>();
+    let mut selected_ids = ours.sections.iter().map(|section| section.id.clone()).collect::<Vec<_>>();
+    let mut selected_set = selected_ids.iter().cloned().collect::<HashSet<_>>();
+    for section in &theirs.sections {
+        if selected_set.insert(section.id.clone()) {
+            selected_ids.push(section.id.clone());
+        }
+    }
+    let ordered = match merge_sequence_order_constraints(
+        &[
+            ours.sections.iter().map(|section| section.id.clone()).collect(),
+            theirs.sections.iter().map(|section| section.id.clone()).collect(),
+        ],
+        &selected_ids,
+    ) {
+        Ok(ordered) => ordered,
+        Err(error) => {
+            return failed_markdown_merge(Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::MergeConflict,
+                message: format!("Markdown section order cannot be proven: {error:?}"),
+                path: Some("<document>".to_string()),
+                review: None,
+            });
+        }
+    };
+
+    let mut chosen = HashMap::new();
+    for id in &ordered {
+        let base_section = base_by_id.get(id.as_str()).copied();
+        let ours_section = ours_by_id.get(id.as_str()).copied();
+        let theirs_section = theirs_by_id.get(id.as_str()).copied();
+        let choice = match (base_section, ours_section, theirs_section) {
+            (None, Some(ours), None) => Some((ours, SourceRevision::Ours)),
+            (None, None, Some(theirs)) => Some((theirs, SourceRevision::Theirs)),
+            (None, Some(ours), Some(theirs)) if ours.source == theirs.source => {
+                Some((ours, SourceRevision::Ours))
+            }
+            (Some(_), None, None) => None,
+            (Some(base), None, Some(theirs)) if base.source == theirs.source => None,
+            (Some(base), Some(ours), None) if base.source == ours.source => None,
+            (Some(_base), Some(ours), Some(theirs)) if ours.source == theirs.source => {
+                Some((ours, SourceRevision::Ours))
+            }
+            (Some(base), Some(ours), Some(theirs)) if ours.source == base.source => {
+                Some((theirs, SourceRevision::Theirs))
+            }
+            (Some(base), Some(ours), Some(theirs)) if theirs.source == base.source => {
+                Some((ours, SourceRevision::Ours))
+            }
+            _ => {
+                return failed_markdown_merge(Diagnostic {
+                    severity: DiagnosticSeverity::Error,
+                    category: DiagnosticCategory::MergeConflict,
+                    message: "both sides changed the same Markdown section".to_string(),
+                    path: Some(id.clone()),
+                    review: None,
+                });
+            }
+        };
+        if let Some(choice) = choice {
+            chosen.insert(id.clone(), choice);
+        }
+    }
+
+    let fragments = ordered
+        .iter()
+        .filter_map(|id| chosen.get(id))
+        .map(|(section, revision)| {
+            RenderFragment::Source(SourceFragment {
+                revision: *revision,
+                start_line: section.start_line,
+                end_line: section.end_line,
+                metadata: HashMap::from([
+                    ("section_id".to_string(), serde_json::json!(section.id)),
+                    ("source_preserved".to_string(), serde_json::json!(true)),
+                ]),
+            })
+        })
+        .collect::<Vec<_>>();
+    let plan = match SourceRenderPlan::new(
+        HashMap::from([
+            (SourceRevision::Ours, ours.source.clone()),
+            (SourceRevision::Theirs, theirs.source.clone()),
+        ]),
+        fragments,
+    ) {
+        Ok(plan) => plan,
+        Err(error) => return failed_render_merge(error.to_string()),
+    };
+    let rendered = match render_source_plan(&plan) {
+        Ok(rendered) => rendered,
+        Err(error) => return failed_render_merge(error.to_string()),
+    };
+    let verified = match parse_source_preserving_document(&rendered.content, dialect, "output", &parser) {
+        Ok(document) => document,
+        Err(diagnostic) => return failed_markdown_merge(diagnostic),
+    };
+    let expected = ordered.iter().filter(|id| chosen.contains_key(*id)).collect::<Vec<_>>();
+    if verified.sections.len() != expected.len()
+        || verified.sections.iter().zip(expected).any(|(actual, expected_id)| {
+            actual.id != **expected_id || actual.source != chosen[expected_id].0.source
+        })
+    {
+        return failed_render_merge(
+            "rendered Markdown sections did not retain their selected source bytes".to_string(),
+        );
+    }
+
+    MergeResult { ok: true, diagnostics: vec![], output: Some(rendered.content), policies: vec![] }
+}
+
 fn parse_source_preserving_document(
     source: &str,
     dialect: MarkdownDialect,

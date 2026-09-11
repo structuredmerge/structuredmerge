@@ -14,7 +14,8 @@ use markdown_merge::{
     available_markdown_backends, markdown_backend_feature_profile,
     markdown_delegated_child_operations, markdown_discovered_surfaces, markdown_embedded_families,
     markdown_feature_profile, markdown_plan_context_with_backend, match_markdown_owners,
-    merge_markdown, merge_markdown_source_preserving, merge_markdown_with_nested_outputs,
+    merge_markdown, merge_markdown_source_preserving, merge_markdown_three_way,
+    merge_markdown_with_nested_outputs,
     merge_markdown_with_parser, merge_markdown_with_reviewed_nested_outputs,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope,
@@ -290,6 +291,49 @@ fn source_preserving_merge_fails_closed_for_incompatible_order() {
     );
 
     assert!(!result.ok);
+    assert_eq!(result.diagnostics[0].category, ast_merge::DiagnosticCategory::MergeConflict);
+}
+
+#[test]
+fn three_way_source_preserving_merge_keeps_independent_section_edits() {
+    let base = "# First\n\nbase first\n\n# Last\n\nbase last\n";
+    let ours = "# First\n\nours first\n\n# Last\n\nbase last\n";
+    let theirs = "# First\n\nbase first\n\n# Last\n\ntheirs last\n";
+
+    let result = merge_markdown_three_way(base, ours, theirs, MarkdownDialect::Markdown);
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(
+        result.output.as_deref(),
+        Some("# First\n\nours first\n\n# Last\n\ntheirs last\n")
+    );
+}
+
+#[test]
+fn three_way_source_preserving_merge_fails_closed_for_same_section_edits() {
+    let result = merge_markdown_three_way(
+        "# Title\n\nbase\n",
+        "# Title\n\nours\n",
+        "# Title\n\ntheirs\n",
+        MarkdownDialect::Markdown,
+    );
+
+    assert!(!result.ok);
+    assert_eq!(result.output, None);
+    assert_eq!(result.diagnostics[0].category, ast_merge::DiagnosticCategory::MergeConflict);
+    assert_eq!(result.diagnostics[0].path.as_deref(), Some("[1,\"Title\"]"));
+}
+
+#[test]
+fn three_way_source_preserving_merge_fails_closed_on_section_deletion_boundary_change() {
+    let base = "# Keep\n\nbase keep\n\n# Remove\n\nbase remove\n";
+    let ours = "# Keep\n\nbase keep\n";
+    let theirs = "# Keep\n\nours keep\n\n# Remove\n\nbase remove\n";
+
+    let result = merge_markdown_three_way(base, ours, theirs, MarkdownDialect::Markdown);
+
+    assert!(!result.ok, "unexpectedly merged: {:?}", result.output);
+    assert_eq!(result.output, None);
     assert_eq!(result.diagnostics[0].category, ast_merge::DiagnosticCategory::MergeConflict);
 }
 
