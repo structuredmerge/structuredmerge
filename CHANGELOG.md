@@ -99,6 +99,8 @@
 
 - Expose explicit UTF-8 source-edit projection through the ast-crispr Ruby host bridge.
 
+- Expose read-only ast-template directory plan reports through the generated Ruby host.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

@@ -1442,10 +1442,10 @@ pub fn apply_ast_crispr_source_edits_json(request: String) -> Result<String, Hos
     })
 }
 
-/// Report the portable ast-template session configuration contract through the
-/// generated host. This is intentionally validation/resolution only: template
-/// execution and filesystem mutation remain outside the Ruby bridge until
-/// source ownership and edit semantics have equivalent evidence.
+/// Report the portable ast-template session contract through the generated
+/// host. Planning is read-only; template execution and filesystem mutation
+/// remain outside the Ruby bridge until source ownership and edit semantics
+/// have equivalent evidence.
 pub fn report_ast_template_json(request: String) -> Result<String, HostPrototypeError> {
     let request: serde_json::Value = serde_json::from_str(&request).map_err(|error| {
         HostPrototypeError::new(format!("invalid ast-template request: {error}"))
@@ -1460,7 +1460,9 @@ pub fn report_ast_template_json(request: String) -> Result<String, HostPrototype
             HostPrototypeError::new(format!("invalid ast-template options: {error}"))
         })?;
     let report = match kind {
-        "options" => ast_template::report_template_directory_session_options_request(&options),
+        "options" => serde_json::to_value(
+            ast_template::report_template_directory_session_options_request(&options),
+        ),
         "profile" => {
             let profile_name = request
                 .get("profile_name")
@@ -1472,10 +1474,34 @@ pub fn report_ast_template_json(request: String) -> Result<String, HostPrototype
                 serde_json::from_value(profiles).map_err(|error| {
                     HostPrototypeError::new(format!("invalid ast-template profiles: {error}"))
                 })?;
-            ast_template::report_template_directory_session_profile_request(
+            serde_json::to_value(ast_template::report_template_directory_session_profile_request(
                 &profiles,
                 profile_name,
                 &options,
+            ))
+        }
+        "plan" => {
+            if !matches!(options.mode, ast_template::DirectorySessionMode::Plan) {
+                return Err(HostPrototypeError::new("ast-template plan reports require mode=plan"));
+            }
+            let config = options
+                .config
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(ast_merge::default_template_token_config);
+            serde_json::to_value(
+                ast_template::plan_template_directory_session_from_directories(
+                    std::path::Path::new(&options.template_root),
+                    std::path::Path::new(&options.destination_root),
+                    &options.context,
+                    options.default_strategy,
+                    &options.overrides,
+                    &options.replacements,
+                    &config,
+                )
+                .map_err(|error| {
+                    HostPrototypeError::new(format!("ast-template plan failed: {error}"))
+                })?,
             )
         }
         _ => {
@@ -1484,6 +1510,9 @@ pub fn report_ast_template_json(request: String) -> Result<String, HostPrototype
             )));
         }
     };
+    let report = report.map_err(|error| {
+        HostPrototypeError::new(format!("failed to serialize ast-template report: {error}"))
+    })?;
     serde_json::to_string(&report).map_err(|error| {
         HostPrototypeError::new(format!("failed to serialize ast-template report: {error}"))
     })
