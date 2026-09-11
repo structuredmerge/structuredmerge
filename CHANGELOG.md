@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## [Unreleased]
+
+### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider
   IDs fail closed even when another parser or workflow host is registered, and
@@ -58,3 +60,5 @@
   projection while preserving its separate TSLP and native analysis contracts.
 - Route TypeScript and TSX three-way declaration ownership through the shared
   projection, including the existing export and ambient wrapper policy.
+
+- Add the kettle-rusty plan/apply CLI with human-readable and JSON reports.
