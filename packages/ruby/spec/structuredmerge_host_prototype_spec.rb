@@ -1096,6 +1096,40 @@ RSpec.describe StructuredmergeHostPrototype do
     )
   end
 
+  it "serializes Go analysis and merge3 through the generated boundary" do
+    analysis = JSON.parse(described_class.parse_go_analysis("package main\n\nfunc main() {}\n", "go"))
+    merge = JSON.parse(
+      described_class.merge_go_three_way(
+        "package main\n\nfunc main() {}\n\nfunc helper() {}\n",
+        "package main\n\nfunc main() { println(1) }\n\nfunc helper() {}\n",
+        "package main\n\nfunc main() {}\n\nfunc helper() { println(2) }\n",
+        "go"
+      )
+    )
+
+    expect(analysis.fetch("ok")).to be(true)
+    expect(analysis.dig("analysis", "declarations")).not_to be_empty
+    expect(merge.fetch("outcome")).to eq("clean")
+    expect(merge.fetch("output")).to include("println(1)", "println(2)")
+  end
+
+  it "serializes Rust analysis and merge3 through the generated boundary" do
+    analysis = JSON.parse(described_class.parse_rust_analysis("fn main() {}\n", "rust"))
+    merge = JSON.parse(
+      described_class.merge_rust_three_way(
+        "fn main() {}\n\nfn helper() {}\n",
+        "fn main() { println!(\"one\"); }\n\nfn helper() {}\n",
+        "fn main() {}\n\nfn helper() { println!(\"two\"); }\n",
+        "rust"
+      )
+    )
+
+    expect(analysis.fetch("ok")).to be(true)
+    expect(analysis.dig("analysis", "declarations")).not_to be_empty
+    expect(merge.fetch("outcome")).to eq("clean")
+    expect(merge.fetch("output")).to include("println!(\"one\")", "println!(\"two\")")
+  end
+
   it "serializes canonical normalized TreeHaver trees through the generated boundary" do
     result = JSON.parse(described_class.parse_normalized_with_tslp("json", '{"answer":42}', nil))
 

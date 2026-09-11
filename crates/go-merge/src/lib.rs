@@ -16,57 +16,60 @@ pub const PACKAGE_NAME: &str = "go-merge";
 const GO_FUNCTION_OWNER_KINDS: &[NamedOwnerKind<'static>] =
     &[NamedOwnerKind { node_kind: "function_declaration", path_kind: "function" }];
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum GoDialect {
     Go,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum GoBackend {
     TreeSitter,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum GoOwnerKind {
     Import,
     Declaration,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GoOwner {
     pub path: String,
     pub owner_kind: GoOwnerKind,
     pub match_key: Option<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GoOwnerMatch {
     pub template_path: String,
     pub destination_path: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GoOwnerMatchResult {
     pub matched: Vec<GoOwnerMatch>,
     pub unmatched_template: Vec<String>,
     pub unmatched_destination: Vec<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct ModuleImport {
     pub path: String,
     pub match_key: String,
     pub text: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct ModuleDeclaration {
     pub path: String,
     pub match_key: String,
     pub text: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GoAnalysis {
     pub dialect: GoDialect,
     pub source: String,

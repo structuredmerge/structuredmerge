@@ -11,8 +11,10 @@ publish = false
 
 [dependencies]
 async-trait = "0.1"
+go-merge = { version = "0.2.0", path = "../go-merge" }
 parking_lot = "0.12"
 json-merge = { version = "0.2.0", path = "../json-merge" }
+rust-merge = { version = "0.2.0", path = "../rust-merge" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
