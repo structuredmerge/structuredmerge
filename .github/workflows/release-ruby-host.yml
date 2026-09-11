@@ -69,6 +69,8 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           PLATFORM: ${{ matrix.platform }}
+          RUST_TARGET: ${{ matrix.target }}
+          CARGO_FEATURE_LINK_RUBY: "1"
         run: |
           set -euo pipefail
           mkdir -p dist
