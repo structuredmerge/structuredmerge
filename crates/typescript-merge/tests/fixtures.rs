@@ -85,11 +85,29 @@ fn preserves_single_lexical_declarations_when_merging_independent_edits() {
 }
 
 #[test]
-fn rejects_multi_declarator_lexical_statements_until_ownership_is_unambiguous() {
-    let result = parse_typescript("const left = 1, right = 2;\n", TypeScriptDialect::TypeScript);
+fn fails_closed_on_multi_declarator_lexical_merge_ownership() {
+    let base = "const left = 1, right = 2;\n";
+    let ours = base.replace("left = 1", "left = 3");
+    let theirs = base.replace("right = 2", "right = 4");
 
-    assert!(!result.ok);
-    assert!(result.diagnostics[0].message.contains("unsupported top-level TypeScript node"));
+    let parsed = parse_typescript(base, TypeScriptDialect::TypeScript);
+    assert!(parsed.ok, "diagnostics: {:?}", parsed.diagnostics);
+    assert_eq!(
+        parsed
+            .analysis
+            .as_ref()
+            .expect("analysis should be present")
+            .declarations
+            .iter()
+            .map(|declaration| declaration.match_key.as_str())
+            .collect::<Vec<_>>(),
+        vec!["left", "right"]
+    );
+
+    let result = merge_typescript_three_way(base, &ours, &theirs, TypeScriptDialect::TypeScript);
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Error);
+    assert!(result.diagnostics[0].message.contains("ambiguous owners"));
 }
 
 #[test]

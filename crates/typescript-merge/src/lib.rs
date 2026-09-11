@@ -211,6 +211,35 @@ pub fn parse_typescript(
             });
             continue;
         }
+        if node.kind == "lexical_declaration" {
+            let declarators = index
+                .children(node)
+                .into_iter()
+                .filter(|child| child.kind == "variable_declarator")
+                .collect::<Vec<_>>();
+            if declarators.is_empty() {
+                return parse_error("TypeScript lexical declaration has no variable declarator");
+            }
+            for declarator in declarators {
+                let Some(name) = declaration_name(declarator, &index) else {
+                    return parse_error("TypeScript variable declarator has no stable name");
+                };
+                declarations.push(ModuleDeclaration {
+                    path: format!("/declarations/{name}"),
+                    match_key: name,
+                    declaration_kind: "variables".to_string(),
+                    text: format!(
+                        "{}\n",
+                        line_anchored_span(
+                            source,
+                            declarator.span.range.start_byte,
+                            declarator.span.range.end_byte
+                        )
+                    ),
+                });
+            }
+            continue;
+        }
         let declaration = declaration_node(node, &index);
         let Some(name) = declaration.and_then(|value| declaration_name(value, &index)) else {
             return parse_error(format!("unsupported top-level TypeScript node {:?}", node.kind));
