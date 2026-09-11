@@ -310,6 +310,20 @@ fn three_way_source_preserving_merge_keeps_independent_section_edits() {
 }
 
 #[test]
+fn three_way_source_preserving_merge_returns_an_exact_changed_revision() {
+    let base = "# Title\n\nbase\n";
+    let result = merge_markdown_three_way(
+        base,
+        base,
+        "# Title\n\ntheirs\n",
+        MarkdownDialect::Markdown,
+    );
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some("# Title\n\ntheirs\n"));
+}
+
+#[test]
 fn three_way_source_preserving_merge_fails_closed_for_same_section_edits() {
     let result = merge_markdown_three_way(
         "# Title\n\nbase\n",
