@@ -421,7 +421,8 @@ pub fn merge_go(
     .trim()
     .to_string();
 
-    let output = [import_lines.trim().to_string(), merged_declarations]
+    let package_clause = package_clause_text(destination_source).unwrap_or_default();
+    let output = [package_clause, import_lines.trim().to_string(), merged_declarations]
         .into_iter()
         .filter(|section| !section.is_empty())
         .collect::<Vec<_>>()
@@ -433,4 +434,18 @@ pub fn merge_go(
         output: Some(format!("{output}\n")),
         policies: vec![destination_wins_array_policy()],
     }
+}
+
+fn package_clause_text(source: &str) -> Option<String> {
+    let parsed = parse_normalized_with_language_pack(&parse_request(source));
+    if !parsed.ok {
+        return None;
+    }
+    let index = NormalizedTreeIndex::new(&parsed.nodes).ok()?;
+    let root = index.root(&parsed.root_id).ok()?;
+    index
+        .children(root)
+        .into_iter()
+        .find(|node| node.kind == "package_clause")
+        .map(|node| node.source_fragment.trim().to_string())
 }

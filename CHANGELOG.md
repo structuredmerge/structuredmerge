@@ -64,3 +64,7 @@
 - Add the kettle-rusty plan/apply CLI with human-readable and JSON reports.
 
 - Expose packaged Rust project template inventory planning and application through kettle-rusty.
+
+### Fixed
+
+- Preserve Go package clauses in source-preserving two-way merges.

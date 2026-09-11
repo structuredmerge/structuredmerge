@@ -34,6 +34,22 @@ fn merges_independent_function_edits_with_exact_source_preservation() {
 }
 
 #[test]
+fn preserves_the_package_clause_in_two_way_merges() {
+    let template = "package main\n\nfunc incoming() int { return 2 }\n";
+    let destination = "package main\n\nfunc existing() int { return 1 }\n";
+
+    let result = merge_go(template, destination, GoDialect::Go);
+
+    assert!(result.ok);
+    assert_eq!(
+        result.output.as_deref(),
+        Some(
+            "package main\n\nfunc existing() int { return 1 }\n\nfunc incoming() int { return 2 }\n"
+        )
+    );
+}
+
+#[test]
 fn rejects_ambiguous_go_three_way_inputs_without_fallback() {
     let base = "package main\n\nfunc value() int { return 1 }\n";
     let ours = "package main\n\nfunc value() int { return 2 }\n";
