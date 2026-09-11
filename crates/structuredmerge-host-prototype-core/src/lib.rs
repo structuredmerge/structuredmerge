@@ -1299,7 +1299,7 @@ pub fn parse_json_analysis(source: String, dialect: String) -> Result<String, Ho
 }
 
 pub fn parse_go_analysis(source: String, dialect: String) -> Result<String, HostPrototypeError> {
-    if dialect.trim().to_ascii_lowercase() != "go" {
+    if !dialect.trim().eq_ignore_ascii_case("go") {
         return Err(HostPrototypeError::new(format!(
             "unsupported Go dialect {dialect:?}; expected go"
         )));
@@ -1315,7 +1315,7 @@ pub fn merge_go_three_way(
     theirs_source: String,
     dialect: String,
 ) -> Result<String, HostPrototypeError> {
-    if dialect.trim().to_ascii_lowercase() != "go" {
+    if !dialect.trim().eq_ignore_ascii_case("go") {
         return Err(HostPrototypeError::new(format!(
             "unsupported Go dialect {dialect:?}; expected go"
         )));
@@ -1334,7 +1334,7 @@ pub fn merge_go_two_way(
     destination_source: String,
     dialect: String,
 ) -> Result<String, HostPrototypeError> {
-    if dialect.trim().to_ascii_lowercase() != "go" {
+    if !dialect.trim().eq_ignore_ascii_case("go") {
         return Err(HostPrototypeError::new(format!(
             "unsupported Go dialect {dialect:?}; expected go"
         )));
@@ -1344,7 +1344,7 @@ pub fn merge_go_two_way(
 }
 
 pub fn parse_rust_analysis(source: String, dialect: String) -> Result<String, HostPrototypeError> {
-    if dialect.trim().to_ascii_lowercase() != "rust" {
+    if !dialect.trim().eq_ignore_ascii_case("rust") {
         return Err(HostPrototypeError::new(format!(
             "unsupported Rust dialect {dialect:?}; expected rust"
         )));
@@ -1360,7 +1360,7 @@ pub fn merge_rust_three_way(
     theirs_source: String,
     dialect: String,
 ) -> Result<String, HostPrototypeError> {
-    if dialect.trim().to_ascii_lowercase() != "rust" {
+    if !dialect.trim().eq_ignore_ascii_case("rust") {
         return Err(HostPrototypeError::new(format!(
             "unsupported Rust dialect {dialect:?}; expected rust"
         )));
@@ -1379,7 +1379,7 @@ pub fn merge_rust_two_way(
     destination_source: String,
     dialect: String,
 ) -> Result<String, HostPrototypeError> {
-    if dialect.trim().to_ascii_lowercase() != "rust" {
+    if !dialect.trim().eq_ignore_ascii_case("rust") {
         return Err(HostPrototypeError::new(format!(
             "unsupported Rust dialect {dialect:?}; expected rust"
         )));
