@@ -65,6 +65,8 @@
 
 - Expose packaged Rust project template inventory planning and application through kettle-rusty.
 
+- Expose TypeScript analysis and source-preserving merge3 through the experimental Ruby host boundary.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

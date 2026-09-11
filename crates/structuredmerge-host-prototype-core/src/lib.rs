@@ -21,6 +21,10 @@ use rust_merge::{RustDialect, merge_rust, merge_rust_three_way as merge_rust_thr
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tree_haver::{ParserRequest, parse_normalized_with_language_pack, parse_with_language_pack};
+use typescript_merge::{
+    TypeScriptDialect, merge_typescript_three_way as merge_typescript_three_way_impl,
+    parse_typescript,
+};
 
 pub const PACKAGE_NAME: &str = "structuredmerge-host-prototype-core";
 const MAX_DESCRIPTOR_BYTES: usize = 64 * 1024;
@@ -1388,6 +1392,29 @@ pub fn merge_rust_two_way(
         .map_err(|error| HostPrototypeError::new(format!("failed to serialize Rust merge: {error}")))
 }
 
+pub fn parse_typescript_analysis(source: String, dialect: String) -> Result<String, HostPrototypeError> {
+    let dialect = typescript_dialect(&dialect)?;
+    serde_json::to_string(&parse_typescript(&source, dialect)).map_err(|error| {
+        HostPrototypeError::new(format!("failed to serialize TypeScript analysis: {error}"))
+    })
+}
+
+pub fn merge_typescript_three_way(
+    base_source: String,
+    ours_source: String,
+    theirs_source: String,
+    dialect: String,
+) -> Result<String, HostPrototypeError> {
+    let dialect = typescript_dialect(&dialect)?;
+    serde_json::to_string(&merge_typescript_three_way_impl(
+        &base_source,
+        &ours_source,
+        &theirs_source,
+        dialect,
+    ))
+    .map_err(|error| HostPrototypeError::new(format!("failed to serialize TypeScript merge: {error}")))
+}
+
 fn json_dialect(dialect: &str) -> Result<JsonDialect, HostPrototypeError> {
     match dialect.trim().to_ascii_lowercase().as_str() {
         "json" => Ok(JsonDialect::Json),
@@ -1395,6 +1422,16 @@ fn json_dialect(dialect: &str) -> Result<JsonDialect, HostPrototypeError> {
         "json5" => Ok(JsonDialect::Json5),
         _ => Err(HostPrototypeError::new(format!(
             "unsupported JSON dialect {dialect:?}; expected json, jsonc, or json5"
+        ))),
+    }
+}
+
+fn typescript_dialect(dialect: &str) -> Result<TypeScriptDialect, HostPrototypeError> {
+    match dialect.trim().to_ascii_lowercase().as_str() {
+        "typescript" | "ts" => Ok(TypeScriptDialect::TypeScript),
+        "tsx" => Ok(TypeScriptDialect::Tsx),
+        _ => Err(HostPrototypeError::new(format!(
+            "unsupported TypeScript dialect {dialect:?}; expected typescript or tsx"
         ))),
     }
 }
@@ -1618,6 +1655,40 @@ mod tests {
             error.message(),
             "unsupported JSON dialect \"yaml\"; expected json, jsonc, or json5"
         );
+    }
+
+    #[test]
+    fn typescript_boundary_serializes_declaration_kinds_and_merge3() {
+        let analysis = parse_typescript_analysis(
+            "interface User { name: string }\nfunction answer(): number { return 42; }\n".to_owned(),
+            "typescript".to_owned(),
+        )
+        .unwrap();
+        let analysis: serde_json::Value = serde_json::from_str(&analysis).unwrap();
+        assert_eq!(analysis["ok"], true);
+        let declarations = analysis["analysis"]["declarations"].as_array().unwrap();
+        assert!(declarations
+            .iter()
+            .any(|declaration| declaration["declaration_kind"] == "function"));
+        assert!(declarations
+            .iter()
+            .any(|declaration| declaration["declaration_kind"] == "interface"));
+
+        let merged = merge_typescript_three_way(
+            "function left(): number { return 1; }\nfunction right(): number { return 1; }\n"
+                .to_owned(),
+            "function left(): number { return 2; }\nfunction right(): number { return 1; }\n"
+                .to_owned(),
+            "function left(): number { return 1; }\nfunction right(): number { return 3; }\n"
+                .to_owned(),
+            "typescript".to_owned(),
+        )
+        .unwrap();
+        let merged: serde_json::Value = serde_json::from_str(&merged).unwrap();
+        assert_eq!(merged["outcome"], "clean");
+        assert!(merged["output"].as_str().is_some_and(|output| {
+            output.contains("return 2") && output.contains("return 3")
+        }));
     }
 
     #[test]

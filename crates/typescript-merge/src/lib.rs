@@ -23,58 +23,62 @@ const TYPESCRIPT_DECLARATION_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
     NamedOwnerKind { node_kind: "type_alias_declaration", path_kind: "type_alias" },
 ];
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TypeScriptDialect {
     TypeScript,
     Tsx,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TypeScriptBackend {
     TreeSitter,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TypeScriptOwnerKind {
     Import,
     Declaration,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TypeScriptOwner {
     pub path: String,
     pub owner_kind: TypeScriptOwnerKind,
     pub match_key: Option<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TypeScriptOwnerMatch {
     pub template_path: String,
     pub destination_path: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TypeScriptOwnerMatchResult {
     pub matched: Vec<TypeScriptOwnerMatch>,
     pub unmatched_template: Vec<String>,
     pub unmatched_destination: Vec<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct ModuleImport {
     pub path: String,
     pub match_key: String,
     pub text: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct ModuleDeclaration {
     pub path: String,
     pub match_key: String,
+    pub declaration_kind: String,
     pub text: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TypeScriptAnalysis {
     pub dialect: TypeScriptDialect,
     pub source: String,
@@ -213,6 +217,10 @@ pub fn parse_typescript(
         declarations.push(ModuleDeclaration {
             path: format!("/declarations/{name}"),
             match_key: name,
+            declaration_kind: declaration
+                .map(|node| typescript_declaration_kind(&node.kind))
+                .unwrap_or("declaration")
+                .to_string(),
             text: format!(
                 "{}\n",
                 line_anchored_span(source, node.span.range.start_byte, node.span.range.end_byte)
@@ -331,6 +339,19 @@ fn supported_declaration_kind(kind: &str) -> bool {
             | "internal_module"
             | "type_alias_declaration"
     )
+}
+
+fn typescript_declaration_kind(node_kind: &str) -> &'static str {
+    match node_kind {
+        "class_declaration" => "class",
+        "enum_declaration" => "enum",
+        "function_declaration" => "function",
+        "function_signature" => "function_signature",
+        "interface_declaration" => "interface",
+        "internal_module" => "internal_module",
+        "type_alias_declaration" => "type_alias",
+        _ => "declaration",
+    }
 }
 
 fn declaration_name(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> Option<String> {

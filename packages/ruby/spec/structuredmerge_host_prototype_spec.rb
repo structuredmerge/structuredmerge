@@ -1130,6 +1130,30 @@ RSpec.describe StructuredmergeHostPrototype do
     expect(merge.fetch("output")).to include("println!(\"one\")", "println!(\"two\")")
   end
 
+  it "serializes TypeScript analysis and source-preserving merge3 through the generated boundary" do
+    analysis = JSON.parse(
+      described_class.parse_typescript_analysis(
+        "interface User { name: string }\nfunction answer(): number { return 42; }\n",
+        "typescript"
+      )
+    )
+    merge = JSON.parse(
+      described_class.merge_typescript_three_way(
+        "function left(): number { return 1; }\nfunction right(): number { return 1; }\n",
+        "function left(): number { return 2; }\nfunction right(): number { return 1; }\n",
+        "function left(): number { return 1; }\nfunction right(): number { return 3; }\n",
+        "typescript"
+      )
+    )
+
+    expect(analysis.fetch("ok")).to be(true)
+    declarations = analysis.dig("analysis", "declarations")
+    expect(declarations).to include(include("declaration_kind" => "function"))
+    expect(declarations).to include(include("declaration_kind" => "interface"))
+    expect(merge.fetch("outcome")).to eq("clean")
+    expect(merge.fetch("output")).to include("return 2", "return 3")
+  end
+
   it "serializes Go and Rust merge2 through the generated boundary" do
     go = JSON.parse(
       described_class.merge_go_two_way(
