@@ -73,6 +73,8 @@
 
 - Include sorted Cargo runtime and development dependency names in kettle-rusty discovery facts.
 
+- Regenerate the kettle-rusty README with the current StructuredMerge family and backend compatibility inventory.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
