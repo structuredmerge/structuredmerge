@@ -76,14 +76,13 @@ fn serializes_all_supported_typescript_declaration_kinds() {
 
 #[test]
 fn preserves_destination_bytes_when_two_way_merge_has_no_additions() {
-    let template = "function left(): number { return 1; }\nfunction right(): number { return 1; }\n";
-    let destination = "function left(): number { return 2; }\nfunction right(): number { return 1; }\n";
+    let template =
+        "function left(): number { return 1; }\nfunction right(): number { return 1; }\n";
+    let destination =
+        "function left(): number { return 2; }\nfunction right(): number { return 1; }\n";
 
-    let result = typescript_merge::merge_typescript(
-        template,
-        destination,
-        TypeScriptDialect::TypeScript,
-    );
+    let result =
+        typescript_merge::merge_typescript(template, destination, TypeScriptDialect::TypeScript);
 
     assert!(result.ok);
     assert_eq!(result.output.as_deref(), Some(destination));

@@ -17,7 +17,9 @@ use json_merge::{
     merge_json_three_way as merge_json_three_way_source_preserving, parse_json,
 };
 use parking_lot::{Mutex, RwLock};
-use rust_merge::{RustDialect, merge_rust, merge_rust_three_way as merge_rust_three_way_impl, parse_rust};
+use rust_merge::{
+    RustDialect, merge_rust, merge_rust_three_way as merge_rust_three_way_impl, parse_rust,
+};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tree_haver::{ParserRequest, parse_normalized_with_language_pack, parse_with_language_pack};
@@ -1389,10 +1391,15 @@ pub fn merge_rust_two_way(
         )));
     }
     serde_json::to_string(&merge_rust(&template_source, &destination_source, RustDialect::Rust))
-        .map_err(|error| HostPrototypeError::new(format!("failed to serialize Rust merge: {error}")))
+        .map_err(|error| {
+            HostPrototypeError::new(format!("failed to serialize Rust merge: {error}"))
+        })
 }
 
-pub fn parse_typescript_analysis(source: String, dialect: String) -> Result<String, HostPrototypeError> {
+pub fn parse_typescript_analysis(
+    source: String,
+    dialect: String,
+) -> Result<String, HostPrototypeError> {
     let dialect = typescript_dialect(&dialect)?;
     serde_json::to_string(&parse_typescript(&source, dialect)).map_err(|error| {
         HostPrototypeError::new(format!("failed to serialize TypeScript analysis: {error}"))
@@ -1412,7 +1419,9 @@ pub fn merge_typescript_three_way(
         &theirs_source,
         dialect,
     ))
-    .map_err(|error| HostPrototypeError::new(format!("failed to serialize TypeScript merge: {error}")))
+    .map_err(|error| {
+        HostPrototypeError::new(format!("failed to serialize TypeScript merge: {error}"))
+    })
 }
 
 pub fn merge_typescript_two_way(
@@ -1421,12 +1430,10 @@ pub fn merge_typescript_two_way(
     dialect: String,
 ) -> Result<String, HostPrototypeError> {
     let dialect = typescript_dialect(&dialect)?;
-    serde_json::to_string(&merge_typescript_impl(
-        &template_source,
-        &destination_source,
-        dialect,
-    ))
-    .map_err(|error| HostPrototypeError::new(format!("failed to serialize TypeScript merge: {error}")))
+    serde_json::to_string(&merge_typescript_impl(&template_source, &destination_source, dialect))
+        .map_err(|error| {
+            HostPrototypeError::new(format!("failed to serialize TypeScript merge: {error}"))
+        })
 }
 
 fn json_dialect(dialect: &str) -> Result<JsonDialect, HostPrototypeError> {
@@ -1674,19 +1681,20 @@ mod tests {
     #[test]
     fn typescript_boundary_serializes_declaration_kinds_and_merge3() {
         let analysis = parse_typescript_analysis(
-            "interface User { name: string }\nfunction answer(): number { return 42; }\n".to_owned(),
+            "interface User { name: string }\nfunction answer(): number { return 42; }\n"
+                .to_owned(),
             "typescript".to_owned(),
         )
         .unwrap();
         let analysis: serde_json::Value = serde_json::from_str(&analysis).unwrap();
         assert_eq!(analysis["ok"], true);
         let declarations = analysis["analysis"]["declarations"].as_array().unwrap();
-        assert!(declarations
-            .iter()
-            .any(|declaration| declaration["declaration_kind"] == "function"));
-        assert!(declarations
-            .iter()
-            .any(|declaration| declaration["declaration_kind"] == "interface"));
+        assert!(
+            declarations.iter().any(|declaration| declaration["declaration_kind"] == "function")
+        );
+        assert!(
+            declarations.iter().any(|declaration| declaration["declaration_kind"] == "interface")
+        );
 
         let merged = merge_typescript_three_way(
             "function left(): number { return 1; }\nfunction right(): number { return 1; }\n"
@@ -1700,9 +1708,11 @@ mod tests {
         .unwrap();
         let merged: serde_json::Value = serde_json::from_str(&merged).unwrap();
         assert_eq!(merged["outcome"], "clean");
-        assert!(merged["output"].as_str().is_some_and(|output| {
-            output.contains("return 2") && output.contains("return 3")
-        }));
+        assert!(
+            merged["output"].as_str().is_some_and(|output| {
+                output.contains("return 2") && output.contains("return 3")
+            })
+        );
 
         let merged = merge_typescript_two_way(
             "function incoming(): number { return 4; }\n".to_owned(),
@@ -1712,9 +1722,11 @@ mod tests {
         .unwrap();
         let merged: serde_json::Value = serde_json::from_str(&merged).unwrap();
         assert_eq!(merged["ok"], true);
-        assert!(merged["output"].as_str().is_some_and(|output| {
-            output.contains("existing") && output.contains("incoming")
-        }));
+        assert!(
+            merged["output"].as_str().is_some_and(|output| {
+                output.contains("existing") && output.contains("incoming")
+            })
+        );
     }
 
     #[test]
