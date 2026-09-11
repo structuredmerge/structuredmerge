@@ -38,3 +38,8 @@ run = "alef publish validate"
 
 [tasks.check]
 run = "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+
+[tasks.release]
+raw = true
+description = "Publish Rust crates; pass release options after --"
+run = "ruby workspace-scripts/release_rust_crates.rb"
