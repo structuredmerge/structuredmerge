@@ -83,7 +83,8 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
-          toolchain: ${{ runner.os == 'Windows' && 'stable-x86_64-pc-windows-gnu' || 'stable' }}
+          toolchain: stable
+          targets: ${{ runner.os == 'Windows' && 'x86_64-pc-windows-gnu' || '' }}
       - name: Match RubyInstaller ABI
         if: runner.os == 'Windows'
         shell: bash
