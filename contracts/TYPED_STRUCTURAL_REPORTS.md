@@ -26,6 +26,16 @@ match strings remain literal. Missing comment regions remain `None`/`nil`,
 distinct from an unknown region string. Unknown vocabulary is retained with
 false `known_*` flags, not executed or silently substituted.
 
-Boundary, limit, and template/session report contracts remain open, as does
+`report_structural_limit` accepts a `CrisprLimitRequest` containing optional
+ordered typed constraints and a required list of counts. It reports the
+description, original counts and corresponding
+allow/deny values. Operators are equal, not-equal, at-most, at-least, less-than,
+and greater-than. Omitted constraints mean exactly one; an empty list is the
+existing empty conjunction and permits every count. Constraints combine with
+logical AND in input order, including contradictory constraints. This evaluates
+counts only; it does not select or count AST nodes. Legacy expression parsing
+uses the same comparison predicates.
+
+Boundary and template/session report contracts remain open, as does
 the Ruby ast-crispr consumer cutover. Legacy report regression
 tests remain and pass; the facade does not depend on the legacy host crate.

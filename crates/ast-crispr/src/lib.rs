@@ -89,6 +89,43 @@ pub struct Error {
 
 type Predicate = fn(usize, usize) -> bool;
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CrisprLimitOperator {
+    Equal,
+    NotEqual,
+    AtMost,
+    AtLeast,
+    LessThan,
+    GreaterThan,
+}
+
+impl CrisprLimitOperator {
+    fn parts(self) -> (&'static str, Predicate) {
+        match self {
+            Self::Equal => ("==", |count, value| count == value),
+            Self::NotEqual => ("!=", |count, value| count != value),
+            Self::AtMost => ("<=", |count, value| count <= value),
+            Self::AtLeast => (">=", |count, value| count >= value),
+            Self::LessThan => ("<", |count, value| count < value),
+            Self::GreaterThan => (">", |count, value| count > value),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CrisprLimitConstraint {
+    pub operator: CrisprLimitOperator,
+    pub value: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CrisprLimitReport {
+    pub description: String,
+    pub counts: Vec<usize>,
+    pub allowed: Vec<bool>,
+}
+
 #[derive(Clone)]
 struct LimitConstraint {
     description: String,
@@ -141,6 +178,27 @@ struct ProfileDescriptor {
 }
 
 impl Limit {
+    /// None preserves the default exactly-one constraint; an empty list is
+    /// an empty conjunction, matching the existing array specification.
+    pub fn from_constraints(constraints: Option<Vec<CrisprLimitConstraint>>) -> Self {
+        let constraints = constraints.unwrap_or_else(|| {
+            vec![CrisprLimitConstraint { operator: CrisprLimitOperator::Equal, value: 1 }]
+        });
+        Self {
+            constraints: constraints
+                .into_iter()
+                .map(|constraint| {
+                    let (operator, predicate) = constraint.operator.parts();
+                    LimitConstraint {
+                        description: format!("{operator} {}", constraint.value),
+                        value: constraint.value,
+                        predicate,
+                    }
+                })
+                .collect(),
+        }
+    }
+
     pub fn new(spec: Option<&Value>) -> Result<Self, Error> {
         let default_spec = json!({"exactly": 1});
         let active_spec = match spec {
@@ -553,21 +611,20 @@ fn normalize_limit_map(
 
 fn constraint_for_operator(expression: &str) -> Result<LimitConstraint, Error> {
     let trimmed = expression.trim();
-    for operator in ["==", "!=", "<=", ">=", "<", ">"] {
+    for kind in [
+        CrisprLimitOperator::Equal,
+        CrisprLimitOperator::NotEqual,
+        CrisprLimitOperator::AtMost,
+        CrisprLimitOperator::AtLeast,
+        CrisprLimitOperator::LessThan,
+        CrisprLimitOperator::GreaterThan,
+    ] {
+        let (operator, predicate) = kind.parts();
         if let Some(rest) = trimmed.strip_prefix(operator) {
             let value = rest.trim().parse::<usize>().map_err(|_| Error {
                 code: "ast_crispr_limit_invalid_expression".to_string(),
                 message: "Invalid ast-crispr limit expression".to_string(),
             })?;
-            let predicate: Predicate = match operator {
-                "==" => |count, value| count == value,
-                "!=" => |count, value| count != value,
-                "<=" => |count, value| count <= value,
-                ">=" => |count, value| count >= value,
-                "<" => |count, value| count < value,
-                ">" => |count, value| count > value,
-                _ => unreachable!(),
-            };
             return Ok(LimitConstraint {
                 description: format!("{operator} {value}"),
                 value,

@@ -171,6 +171,8 @@
 
 - Expose typed match, selection, and destination profile reports through Ruby/Python core bindings, retaining ast-crispr defaults, unknown vocabulary, and optional comment-region values.
 
+- Expose typed structural limit constraints and evaluation reports in generated Ruby/Python core APIs, retaining exactly-one defaults, empty conjunctions, and all six comparison operators.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

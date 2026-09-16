@@ -15,6 +15,15 @@ RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
   it "reports structural operations as typed ordered profiles without selecting source" do
+    limit = described_class.report_structural_limit(described_class::CrisprLimitRequest.new(constraints: nil, counts: [0, 1, 2]))
+    expect(limit.description).to eq("== 1")
+    expect(limit.allowed).to eq([false, true, false])
+    limit = described_class.report_structural_limit(described_class::CrisprLimitRequest.new(constraints: [
+      described_class::CrisprLimitConstraint.new(operator: "at_least", value: 1),
+      described_class::CrisprLimitConstraint.new(operator: "at_most", value: 2)
+    ], counts: [0, 1, 2, 3]))
+    expect(limit.description).to eq(">= 1 and <= 2")
+    expect(limit.allowed).to eq([false, true, true, false])
     match = described_class.report_structural_match(described_class::CrisprMatchRequest.new(
       start_boundary: "future", end_boundary: "owner_end_plus_trailing_gap", payload_kind: "comment_owned_body"))
     expect(match.known_start_boundary).to be(false)

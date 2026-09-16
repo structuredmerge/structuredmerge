@@ -103,6 +103,14 @@ class TypedParserHostTest(unittest.TestCase):
         self.assertEqual(self.host.calls, 0)
 
     def test_structural_operation_reports_are_typed_and_preserve_unknowns(self):
+        limit = core.report_structural_limit(core.CrisprLimitRequest(constraints=None, counts=[0, 1, 2]))
+        self.assertEqual(limit.description, "== 1")
+        self.assertEqual(limit.allowed, [False, True, False])
+        limit = core.report_structural_limit(core.CrisprLimitRequest(constraints=[
+            core.CrisprLimitConstraint(operator=core.CrisprLimitOperator.AT_LEAST, value=1),
+            core.CrisprLimitConstraint(operator=core.CrisprLimitOperator.AT_MOST, value=2)], counts=[0, 1, 2, 3]))
+        self.assertEqual(limit.description, ">= 1 and <= 2")
+        self.assertEqual(limit.allowed, [False, True, True, False])
         match = core.report_structural_match(core.CrisprMatchRequest(start_boundary="future",
             end_boundary="owner_end_plus_trailing_gap", payload_kind="comment_owned_body"))
         self.assertFalse(match.known_start_boundary)

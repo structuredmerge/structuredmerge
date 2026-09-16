@@ -1,6 +1,23 @@
 //! Structural profile introspection only; no AST selection or source mutation.
 use serde::{Deserialize, Serialize};
 
+/// Describe and evaluate a conjunction of count constraints, not a selector.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CrisprLimitRequest {
+    pub constraints: Option<Vec<crate::CrisprLimitConstraint>>,
+    pub counts: Vec<usize>,
+}
+
+pub fn report_structural_limit(request: CrisprLimitRequest) -> crate::CrisprLimitReport {
+    let limit = ast_crispr::Limit::from_constraints(request.constraints);
+    let counts = request.counts;
+    crate::CrisprLimitReport {
+        description: limit.describe(),
+        allowed: counts.iter().map(|&count| limit.allows(count)).collect(),
+        counts,
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CrisprMatchRequest {
     pub start_boundary: String,

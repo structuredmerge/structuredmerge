@@ -33,7 +33,7 @@
       "disposition": "retain_until_consumer_migration",
       "consumers": ["ruby/gems/ast-crispr/lib/ast/crispr/rust_host_provider.rb"],
       "replacement": "Typed ast-crispr profile reports and explicit byte-range edit requests/results exported from structuredmerge-core.",
-      "gap": "Typed explicit edits and operation/batch/match/selection/destination reports have installed Ruby/Python evidence. Boundary/limit reports and Ruby consumer migration remain open. Neither reports nor explicit edits prove structural selection parity."
+      "gap": "Typed explicit edits and operation/batch/match/selection/destination/limit reports have installed Ruby/Python evidence. Boundary reports and Ruby consumer migration remain open. Neither reports nor explicit edits prove structural selection parity."
     },
     {
       "id": "template-session",

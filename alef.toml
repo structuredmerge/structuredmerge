@@ -71,6 +71,7 @@ param_name = "host"
 
 [crates.include]
 types = [
+  "CrisprLimitOperator", "CrisprLimitConstraint", "CrisprLimitReport", "CrisprLimitRequest",
   "CrisprMatchRequest", "CrisprMatchReport", "CrisprSelectionRequest", "CrisprSelectionReport",
   "CrisprDestinationRequest", "CrisprDestinationReport",
   "CrisprOperationRequest", "CrisprOperationReport", "CrisprBatchOperationReport",
@@ -90,7 +91,7 @@ types = [
   "NativeExtension", "ChildEdge", "ParseNode", "ParseSeverity", "ParseDiagnostic",
   "AttachmentHint", "ParseComment", "ParseOutput",
 ]
-functions = ["report_structural_match", "report_structural_selection", "report_structural_destination", "report_structural_operations", "apply_explicit_source_edits", "native_merge_profiles", "create_operation_control", "parse_sources", "parse_sources_controlled", "register_parser_host", "unregister_parser_host", "merge_yaml_mapping", "merge_yaml_mapping_controlled", "merge_python_declarations", "merge_python_declarations_controlled"]
+functions = ["report_structural_limit", "report_structural_match", "report_structural_selection", "report_structural_destination", "report_structural_operations", "apply_explicit_source_edits", "native_merge_profiles", "create_operation_control", "parse_sources", "parse_sources_controlled", "register_parser_host", "unregister_parser_host", "merge_yaml_mapping", "merge_yaml_mapping_controlled", "merge_python_declarations", "merge_python_declarations_controlled"]
 
 [crates.exclude]
 methods = ["ByteRange.contains_range", "ByteRange.overlaps", "OwnedSourceRegion.validate"]

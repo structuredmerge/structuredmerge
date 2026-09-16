@@ -1,6 +1,48 @@
 use structuredmerge_core::{CrisprOperationRequest, report_structural_operations};
 
 #[test]
+fn typed_limits_preserve_defaults_conjunctions_and_all_comparisons() {
+    use structuredmerge_core::*;
+    let report_structural_limit = |constraints, counts| {
+        structuredmerge_core::report_structural_limit(CrisprLimitRequest { constraints, counts })
+    };
+    let counts = vec![0, 1, 2];
+    assert_eq!(report_structural_limit(None, counts.clone()).allowed, [false, true, false]);
+    assert_eq!(report_structural_limit(Some(vec![]), counts.clone()).allowed, [true; 3]);
+    for (operator, expression, expected) in [
+        (CrisprLimitOperator::Equal, "== 1", [false, true, false]),
+        (CrisprLimitOperator::NotEqual, "!= 1", [true, false, true]),
+        (CrisprLimitOperator::AtMost, "<= 1", [true, true, false]),
+        (CrisprLimitOperator::AtLeast, ">= 1", [false, true, true]),
+        (CrisprLimitOperator::LessThan, "< 1", [true, false, false]),
+        (CrisprLimitOperator::GreaterThan, "> 1", [false, false, true]),
+    ] {
+        let report = report_structural_limit(
+            Some(vec![CrisprLimitConstraint { operator, value: 1 }]),
+            counts.clone(),
+        );
+        assert_eq!(report.description, expression);
+        assert_eq!(report.counts, counts);
+        assert_eq!(report.allowed, expected);
+        let legacy = ast_crispr::Limit::new(Some(&serde_json::json!(expression))).unwrap();
+        assert_eq!(legacy.describe(), report.description);
+        assert_eq!(
+            counts.iter().map(|&count| legacy.allows(count)).collect::<Vec<_>>(),
+            report.allowed
+        );
+    }
+    let report = report_structural_limit(
+        Some(vec![
+            CrisprLimitConstraint { operator: CrisprLimitOperator::AtLeast, value: 2 },
+            CrisprLimitConstraint { operator: CrisprLimitOperator::AtMost, value: 1 },
+        ]),
+        counts,
+    );
+    assert_eq!(report.description, ">= 2 and <= 1");
+    assert_eq!(report.allowed, [false; 3]);
+}
+
+#[test]
 fn match_selection_and_destination_keep_classification_and_optional_values() {
     use structuredmerge_core::*;
     let matched = report_structural_match(CrisprMatchRequest {
