@@ -1550,8 +1550,10 @@ dependencies = [
 name = "structuredmerge-core"
 version = "0.2.0"
 dependencies = [
+ "ast-merge",
  "serde",
  "tree-haver",
+ "yaml-merge",
 ]
 
 [[package]]

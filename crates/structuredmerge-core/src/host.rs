@@ -102,7 +102,7 @@ impl ParserProvider for HostParser {
 }
 
 static PARSERS: OnceLock<ParserRegistry> = OnceLock::new();
-fn registry() -> &'static ParserRegistry {
+pub(crate) fn registry() -> &'static ParserRegistry {
     PARSERS.get_or_init(ParserRegistry::default)
 }
 
@@ -145,6 +145,19 @@ pub struct ParseLimits {
     pub max_diagnostics: usize,
 }
 
+impl ParseLimits {
+    pub(crate) fn context(self) -> ExecutionContext {
+        ExecutionContext {
+            cancelled: Arc::new(AtomicBool::new(false)),
+            deadline: None,
+            max_batch_items: self.max_batch_items,
+            max_input_bytes: self.max_input_bytes,
+            max_nodes: self.max_nodes,
+            max_diagnostics: self.max_diagnostics,
+        }
+    }
+}
+
 pub fn parse_sources(
     requests: Vec<ParseRequest>,
     limits: ParseLimits,
@@ -152,14 +165,7 @@ pub fn parse_sources(
     let snapshot = registry()
         .snapshot()
         .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;
-    let context = ExecutionContext {
-        cancelled: Arc::new(AtomicBool::new(false)),
-        deadline: None,
-        max_batch_items: limits.max_batch_items,
-        max_input_bytes: limits.max_input_bytes,
-        max_nodes: limits.max_nodes,
-        max_diagnostics: limits.max_diagnostics,
-    };
+    let context = limits.context();
     TreeHaverParseService::default()
         .parse_batch(requests, &snapshot, &context)
         .map(|results| {

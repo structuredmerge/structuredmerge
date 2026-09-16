@@ -19,7 +19,7 @@ RSpec.describe StructuredmergeCore do
         parser: "psych", parser_version: Psych::VERSION,
         grammar: nil, grammar_version: nil, languages: ["yaml"], dialects: [],
         contracts: ["structuredmerge.parse-result/v1"],
-        capabilities: ["native_extensions", "source_spans"], probe_id: "psych.available",
+        capabilities: ["diagnostics", "native_extensions", "source_spans"], probe_id: "psych.available",
         priority: 0, metadata: {}, extensions: []
       )
     end
@@ -54,6 +54,88 @@ RSpec.describe StructuredmergeCore do
         StructuredmergeCore::ParseOutput.new(**facts)
       end)
     end
+  end
+
+  def merge_requests(sources)
+    %w[base ours theirs].zip(sources).map do |role, source|
+      descriptor = described_class::SourceDescriptor.new(
+        source_id: role, role: role, byte_length: source.bytesize,
+        sha256: Digest::SHA256.hexdigest(source), encoding: "utf8", bom: source.start_with?("\uFEFF"),
+        line_endings: described_class::LineEndings.new(
+          lf: source.count("\n") - source.scan("\r\n").length,
+          crlf: source.scan("\r\n").length, bare_cr: 0
+        ), final_newline: source.end_with?("\n")
+      )
+      described_class::ParseRequest.new(
+        schema: "structuredmerge.parse-request/v1", request_id: role,
+        source: described_class::SourceInput.new(descriptor: descriptor, bytes: source.bytes),
+        language: "yaml", dialect: nil,
+        selection: described_class::ParserSelection.new(backend_id: "ruby.typed.psych", preference: [], required_capabilities: []),
+        options: described_class::ParseOptions.new(comments: false, tokens: false, diagnostics: true, native_extensions: true),
+        metadata: {}, extra: {}
+      )
+    end.reverse # semantic roles, not argument positions
+  end
+
+  def merge_limits
+    described_class::ParseLimits.new(max_batch_items: 3, max_input_bytes: 10000, max_nodes: 1000, max_diagnostics: 20)
+  end
+
+  it "merges independent changes in Rust through generated Psych callbacks" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    result = described_class.merge_yaml_mapping(merge_requests([
+      "\uFEFF# header\r\né: 'one'  # stable\r\nbeta: two",
+      "\uFEFF# header\r\né: 'ours'  # stable\r\nbeta: two",
+      "\uFEFF# header\r\né: 'one'  # stable\r\nbeta: theirs"
+    ]), merge_limits)
+    expect(result.outcome.to_s).to eq("clean")
+    expect(result.output).to eq("\uFEFF# header\r\né: 'ours'  # stable\r\nbeta: theirs")
+    expect(result.conflicts).to be_empty
+    expect(result.rejected_parse).to be_nil
+    expect(host.calls).to eq(2) # input batch and Rust-requested output verification
+    expect(host.received_batch.items.first.source.descriptor.role.to_s).to eq("output")
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "returns Rust-classified conflicts with all three revision alternatives" do
+    described_class.register_parser_host(TypedPsychHost.new)
+    result = described_class.merge_yaml_mapping(merge_requests([
+      "a: one\n", "a: ours\n", "a: theirs\n"
+    ]), merge_limits)
+    expect(result.outcome.to_s).to eq("conflict")
+    expect(result.output).to be_nil
+    expect(result.conflicts.length).to eq(1)
+    expect(result.conflicts.first.path).to eq("/a")
+    expect(result.conflicts.first.alternatives.map { |alternative| alternative.revision.to_s }).to eq(%w[base ours theirs])
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "keeps malformed revision diagnostics and never emits fabricated merge output" do
+    described_class.register_parser_host(TypedPsychHost.new)
+    result = described_class.merge_yaml_mapping(merge_requests([
+      "a: one\n", "a: [\n", "a: theirs\n"
+    ]), merge_limits)
+    expect(result.outcome.to_s).to eq("error")
+    expect(result.output).to be_nil
+    expect(result.rejected_parse.parsed.source.role.to_s).to eq("ours")
+    expect(result.rejected_parse.parsed.diagnostics.first.code).to eq("psych.syntax")
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "fails closed when changed unowned comments cannot be preserved" do
+    described_class.register_parser_host(TypedPsychHost.new)
+    result = described_class.merge_yaml_mapping(merge_requests([
+      "# base\na: one\nb: two\n", "# changed\na: ours\nb: two\n", "# base\na: one\nb: theirs\n"
+    ]), merge_limits)
+    expect(result.outcome.to_s).to eq("error")
+    expect(result.output).to be_nil
+    expect(result.diagnostics).not_to be_empty
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
   end
 
   it "passes native typed batches through Psych and preserves parser diagnostics" do

@@ -24,10 +24,13 @@ name = "structuredmerge-core"
 sources = [
   "crates/structuredmerge-core/src/lib.rs",
   "crates/structuredmerge-core/src/host.rs",
+  "crates/structuredmerge-core/src/merge.rs",
   "crates/tree-haver/src/lib.rs",
   "crates/tree-haver/src/source.rs",
   "crates/tree-haver/src/parsed.rs",
   "crates/tree-haver/src/service.rs",
+  "crates/ast-merge/src/lib.rs",
+  "crates/ast-merge/src/source_render.rs",
 ]
 version_from = "crates/structuredmerge-core/Cargo.toml"
 core_import = "structuredmerge_core"
@@ -54,6 +57,10 @@ param_name = "host"
 
 [crates.include]
 types = [
+  "MappingMergeResult", "ThreeWayMergeOutcome", "Diagnostic", "DiagnosticCategory",
+  "DiagnosticSeverity", "ReviewDiagnosticDetail", "ReviewDiagnosticReason", "ReviewDecisionAction",
+  "MergeConflict", "ConflictAlternative", "ConflictAlternativeState", "OwnedSourceRegion",
+  "SourceRevision", "PolicyReference", "PolicySurface",
   "CoreError", "ParserHost", "CoreParseResult", "ParseLimits",
   "ParseBatchRequest", "ParseBatchResult", "ProbeBatchRequest", "ProbeBatchResult",
   "ParserSelection", "ParserProviderDescriptor", "ParserProbeRequest", "ParserProbeResult",
@@ -63,7 +70,7 @@ types = [
   "NativeExtension", "ChildEdge", "ParseNode", "ParseSeverity", "ParseDiagnostic",
   "AttachmentHint", "ParseComment", "ParseOutput",
 ]
-functions = ["parse_sources", "register_parser_host", "unregister_parser_host"]
+functions = ["parse_sources", "register_parser_host", "unregister_parser_host", "merge_yaml_mapping"]
 
 [crates.exclude]
-methods = ["ByteRange.contains_range", "ByteRange.overlaps"]
+methods = ["ByteRange.contains_range", "ByteRange.overlaps", "OwnedSourceRegion.validate"]

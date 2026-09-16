@@ -24,7 +24,7 @@ impl ParserHost for Host {
             parser_version: "1".into(),
             grammar: None,
             grammar_version: None,
-            languages: vec!["test".into()],
+            languages: vec!["test".into(), "yaml".into()],
             dialects: vec![],
             contracts: vec![service::PARSE_RESULT_SCHEMA.into()],
             capabilities: vec![],
@@ -116,7 +116,35 @@ fn facade_calls_typed_host_batches_through_tree_haver_and_keeps_native_failure()
     assert_eq!(results[0].selection.selected_backend.as_deref(), Some("core-test"));
     assert_eq!(host.calls.load(Ordering::SeqCst), 1);
     assert_eq!(host.descriptions.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        merge_yaml_mapping(vec![request.clone()], limits.clone()).unwrap_err().code,
+        "invalid_merge_inputs"
+    );
+    assert_eq!(host.calls.load(Ordering::SeqCst), 1);
+    let mapping_requests = [SourceRole::Base, SourceRole::Ours, SourceRole::Theirs]
+        .into_iter()
+        .enumerate()
+        .map(|(index, role)| ParseRequest {
+            language: "yaml".into(),
+            request_id: format!("mapping-{index}"),
+            source: source_input(
+                format!("mapping-{index}"),
+                role,
+                SourceEncoding::Utf8,
+                b"a: [\n".to_vec(),
+            )
+            .unwrap(),
+            ..request.clone()
+        })
+        .collect();
+    let rejected = merge_yaml_mapping(mapping_requests, limits.clone()).unwrap();
+    assert_eq!(rejected.outcome, ThreeWayMergeOutcome::Error);
+    assert!(rejected.output.is_none());
+    let parsed = rejected.rejected_parse.unwrap();
+    assert_eq!(parsed.parsed.source.role, SourceRole::Base);
+    assert_eq!(parsed.parsed.diagnostics[0].code.as_deref(), Some("test.syntax"));
+    assert_eq!(host.calls.load(Ordering::SeqCst), 2);
     unregister_parser_host("core-test".into()).unwrap();
     assert_eq!(parse_sources(vec![request], limits).unwrap_err().code, "parse_service");
-    assert_eq!(host.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(host.calls.load(Ordering::SeqCst), 2);
 }

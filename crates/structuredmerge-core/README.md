@@ -34,18 +34,26 @@ release, not a fork dependency. Reproducible generation with the declared
 upstream pin is therefore an **open gate**, not a passing check. Replace this
 development checkpoint with output from a released upstream fix before release.
 
-The merge operation facade, complete typed failure/preservation envelopes,
+The facade also exposes `merge_yaml_mapping`, a concrete projection of the
+existing YAML block-mapping operation. Generated Ruby/Psych tests exercise real
+Rust-owned analysis, matching, conflicts, and rendering. Shared result fields
+are retained, and native syntax rejection carries a typed parse result with its
+source role. This profile-specific entry point is not the complete Slice 1025
+provider-result envelope; service and unsupported-profile failures still use
+the preliminary `CoreError` bridge.
+
+The complete operation and typed failure/preservation envelopes,
 runtime lifecycle stress tests, clean Ruby artifact installation, broader
 Python public DTO ergonomics, and registry publication remain unfinished.
 Legacy Ruby packaging files still coexist with the new package and must be
 removed or isolated before publication; the current gem file glob must not
 ship the inherited prototype files.
 
-The next vertical slice must route a real native parser through TreeHaver and
-execute matching, ownership, conflict decisions and source-preserving rendering
-in Rust. Passing an encoded operation through a host-owned merge does not meet
-that requirement. Existing kernel mechanics should be reused; new parallel
-merge algorithms and independent parser-selection registries are not intended.
+The next vertical slice must provide corresponding Python/LibCST merge
+execution and installed-artifact evidence for both runtimes. Passing an encoded
+operation through a host-owned merge does not meet that requirement. Existing
+kernel mechanics should be reused; new parallel merge algorithms and
+independent parser-selection registries are not intended.
 
 Run the boundary tests with:
 

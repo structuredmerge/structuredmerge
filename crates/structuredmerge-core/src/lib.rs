@@ -7,6 +7,15 @@ use std::{collections::BTreeSet, error::Error, fmt};
 
 pub mod host;
 pub use host::*;
+pub mod merge;
+pub use ast_merge;
+pub use ast_merge::{
+    ConflictAlternative, ConflictAlternativeState, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, MergeConflict, OwnedSourceRegion, PolicyReference, PolicySurface,
+    ReviewDecisionAction, ReviewDiagnosticDetail, ReviewDiagnosticReason, SourceRevision,
+    ThreeWayMergeOutcome,
+};
+pub use merge::*;
 pub use tree_haver::parsed::{
     AttachmentHint, ChildEdge, Metadata, NativeExtension, ParseComment, ParseDiagnostic, ParseNode,
     ParseOutput, ParseSeverity,

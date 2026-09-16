@@ -127,6 +127,8 @@
 
 - Begin generated Ruby and Python structuredmerge-core bindings with typed parser-host batches, TreeHaver dispatch, and native Psych/LibCST callback tests; upstream generator fixes and full installed merge gates remain required before release.
 
+- Expose the Rust-owned YAML mapping merge through the typed core facade and generated bindings, retaining shared conflict alternatives and native syntax rejection details; the complete portable result contract remains in progress.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
