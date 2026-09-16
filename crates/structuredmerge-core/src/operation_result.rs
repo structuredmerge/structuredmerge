@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, error::Error, fmt};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ByteRange, Metadata, NativeExtension, OperationKind, SourceRole,
+    ByteRange, NativeExtension, OperationKind, SourceRole,
     operation::ValidatedOperationRequest,
     portable_conflict::{
         ConflictEvidence, ConflictRecord, ConflictValidationContext, validate_conflicts,
@@ -27,7 +27,7 @@ pub struct ResultProvider {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delegation: Option<Vec<ResultProvider>>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -39,7 +39,7 @@ pub struct ResultParserSelection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selection_mode: Option<String>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -49,7 +49,7 @@ pub struct ResultProfile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parser: Option<ResultParserSelection>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -57,7 +57,7 @@ pub struct ResultRange {
     pub start_byte: usize,
     pub end_byte: usize,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 impl ResultRange {
@@ -71,7 +71,7 @@ pub struct ResultPoint {
     pub row: usize,
     pub column: usize,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -80,7 +80,7 @@ pub struct ResultSpan {
     pub start_point: ResultPoint,
     pub end_point: ResultPoint,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -91,7 +91,7 @@ pub struct ResultSourceRegion {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -106,9 +106,9 @@ pub struct ResultDiagnostic {
     pub source_role: Option<SourceRole>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub span: Option<ResultSpan>,
-    pub metadata: Metadata,
+    pub metadata: std::collections::BTreeMap<String, serde_json::Value>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -119,11 +119,11 @@ pub struct ResultChange {
     pub subject_ref: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
-    pub role_states: Metadata,
+    pub role_states: std::collections::BTreeMap<String, serde_json::Value>,
     pub source_spans: BTreeMap<SourceRole, ResultSpan>,
-    pub metadata: Metadata,
+    pub metadata: std::collections::BTreeMap<String, serde_json::Value>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -138,9 +138,9 @@ pub struct ResultConflict {
     pub source_regions: Vec<ResultSourceRegion>,
     pub localized: bool,
     pub resolution: String,
-    pub metadata: Metadata,
+    pub metadata: std::collections::BTreeMap<String, serde_json::Value>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -149,7 +149,7 @@ pub struct PreservationProperty {
     pub required: bool,
     pub status: String,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -171,14 +171,14 @@ pub struct ResultVerification {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub retained_source_regions: Option<Vec<ResultSourceRegion>>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ResultDiff {
     pub change_ids: Vec<String>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 /// Analysis is an embedded Slice 1024 contract, not an unversioned payload.
@@ -187,7 +187,7 @@ pub struct ResultDiff {
 pub struct ResultAnalysis {
     pub schema: String,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -203,8 +203,8 @@ pub struct OperationResult {
     pub conflicts: Vec<ConflictRecord>,
     // Fallback records have family-specific evidence. None is implicitly
     // authorized; a registry-aware executor must validate named alternatives.
-    pub fallbacks: Vec<Metadata>,
-    pub render_report: Metadata,
+    pub fallbacks: Vec<std::collections::BTreeMap<String, serde_json::Value>>,
+    pub render_report: std::collections::BTreeMap<String, serde_json::Value>,
     pub verification: ResultVerification,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub analysis: Option<ResultAnalysis>,
@@ -215,9 +215,9 @@ pub struct OperationResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conflicted_output: Option<String>,
     pub extensions: Vec<NativeExtension>,
-    pub metadata: Metadata,
+    pub metadata: std::collections::BTreeMap<String, serde_json::Value>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

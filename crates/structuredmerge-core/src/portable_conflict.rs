@@ -1,7 +1,7 @@
 //! Slice 1028 conflict evidence. No marker scanning or implicit resolution.
 
 use crate::{
-    ByteRange, Metadata, NativeExtension, OperationKind, SourceDocument, SourceMap, SourceRole,
+    ByteRange, NativeExtension, OperationKind, SourceDocument, SourceMap, SourceRole,
     operation_result::{ResultConflict, ResultRange},
     portable_diagnostic::portable_code,
 };
@@ -74,7 +74,7 @@ pub struct ConflictSubject {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub whole_document: Option<bool>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -83,7 +83,7 @@ pub struct ExactConflictRegion {
     pub byte_length: u64,
     pub sha256: String,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -95,7 +95,7 @@ pub struct ConflictSourceAlternative {
     pub regions: Vec<ExactConflictRegion>,
     pub change_ids: Vec<String>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -105,7 +105,7 @@ pub struct ConflictClassification {
     pub change_ids: Vec<String>,
     pub decision_ids: Vec<String>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -114,7 +114,7 @@ pub struct ConflictLocalization {
     pub verified: bool,
     pub output_regions: Vec<ExactConflictRegion>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -126,7 +126,7 @@ pub struct ConflictResolution {
     pub resolver: Option<String>,
     pub reason: Option<String>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -149,9 +149,9 @@ pub struct PortableConflict {
     pub decision_ids: Vec<String>,
     pub render_fragment_ids: Vec<String>,
     pub extensions: Vec<NativeExtension>,
-    pub metadata: Metadata,
+    pub metadata: std::collections::BTreeMap<String, serde_json::Value>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]

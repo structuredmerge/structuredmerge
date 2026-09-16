@@ -6,6 +6,17 @@ and shared execution controls. Rust owns owner analysis, diff and merge decision
 This is an explicit experimental profile dispatcher, not a general provider
 registry, generated binding export, or default-backend change.
 
+The public Rust entry points `execute_operation` and
+`execute_operation_controlled` accept the common request plus `ParseLimits`
+(and shared `OperationControl` for the latter). They normalize checked inline
+content/bytes and use the existing registered `ParserHost` registry. Source
+references fail explicitly without implicit filesystem I/O. The deadline starts
+before normalization. Invalid input/control errors return `CoreError`; accepted
+requests return the request-correlated operation result, including operational
+failures. See [binding integration status](COMMON_OPERATION_BINDING_GAPS.md) for
+the current Ruby/Python generator issues; these new functions are not yet exported
+by the generated bindings.
+
 Supported profiles are `kernel.yaml.native_mapping.v1` and
 `kernel.python.native_declarations.v1`, with their existing bounded syntax and
 layout restrictions. Supported operations are bounded owner `analyze`, exact-source owner `diff2` and

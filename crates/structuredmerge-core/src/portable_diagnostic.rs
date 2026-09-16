@@ -64,7 +64,7 @@ pub struct DiagnosticOrigin {
     pub package_version: Option<String>,
     pub native_code: Option<String>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -74,7 +74,7 @@ pub struct DiagnosticSourceRef {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub span: Option<ResultSpan>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -82,7 +82,7 @@ pub struct DiagnosticSubjectRef {
     pub kind: String,
     pub id: String,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -105,11 +105,11 @@ pub struct PortableDiagnostic {
     pub cause_ids: Vec<String>,
     pub related_ids: Vec<String>,
     pub origin: DiagnosticOrigin,
-    pub data: Metadata,
+    pub data: std::collections::BTreeMap<String, serde_json::Value>,
     pub extensions: Vec<NativeExtension>,
-    pub metadata: Metadata,
+    pub metadata: std::collections::BTreeMap<String, serde_json::Value>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 /// A schema-bearing record is always parsed as canonical. Malformed canonical

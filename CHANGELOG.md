@@ -205,6 +205,8 @@
 
 - Exercise common analyze, diff2 and merge3 execution with real LibCST syntax in the Python CI matrix, sharing the syntax projector with installed-wheel tests and preserving Rust-owned decisions.
 
+- Add typed common-operation Rust facade entry points using registered ParserHost providers, checked inline source normalization and shared cancellation/deadline controls; unresolved source references never trigger implicit I/O.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

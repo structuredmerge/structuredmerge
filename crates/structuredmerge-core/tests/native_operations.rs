@@ -169,6 +169,93 @@ fn code(result: &operation_result::OperationResult) -> &str {
     &diagnostic.code
 }
 
+struct FacadeHost {
+    parser: Arc<NativeParser>,
+    context: ExecutionContext,
+}
+impl ParserHost for FacadeHost {
+    fn descriptor(&self) -> Result<ParserProviderDescriptor, CoreError> {
+        Ok(self.parser.descriptor.clone())
+    }
+    fn probe_batch(&self, request: ProbeBatchRequest) -> Result<ProbeBatchResult, CoreError> {
+        Ok(ProbeBatchResult {
+            items: request
+                .items
+                .iter()
+                .map(|_| ParserProbeResult { available: true, loadable: true })
+                .collect(),
+        })
+    }
+    fn parse_batch(&self, request: ParseBatchRequest) -> Result<ParseBatchResult, CoreError> {
+        self.parser
+            .parse_batch(request.items, &self.context)
+            .map(|items| ParseBatchResult { items })
+            .map_err(|error| CoreError { code: error.code, message: error.message })
+    }
+}
+fn operation_limits() -> ParseLimits {
+    ParseLimits {
+        max_batch_items: 3,
+        max_input_bytes: 4096,
+        max_nodes: 1000,
+        max_diagnostics: 20,
+        timeout_millis: None,
+    }
+}
+
+#[test]
+fn public_common_facade_checks_inline_sources_and_controls_before_dispatch() {
+    let input: OperationRequest = serde_json::from_value(wire("analyze", &["a: one"])).unwrap();
+    let control = create_operation_control();
+    control.cancel();
+    assert_eq!(
+        execute_operation_controlled(input.clone(), operation_limits(), &control).unwrap_err().code,
+        "execution.cancelled"
+    );
+    let mut limits = operation_limits();
+    limits.timeout_millis = Some(0);
+    assert_eq!(
+        execute_operation(input.clone(), limits).unwrap_err().code,
+        "execution.deadline_exceeded"
+    );
+    let mut limits = operation_limits();
+    limits.max_input_bytes = 1;
+    assert_eq!(execute_operation(input.clone(), limits).unwrap_err().code, "resource.limit");
+    let mut invalid = input.clone();
+    invalid.sources.get_mut(&SourceRole::Source).unwrap().sha256 = "0".repeat(64);
+    assert_eq!(
+        execute_operation(invalid, operation_limits()).unwrap_err().code,
+        "operation.invalid_request"
+    );
+    let mut referenced = input;
+    let source = referenced.sources.get_mut(&SourceRole::Source).unwrap();
+    source.content = None;
+    source.reference = Some("file:///must-not-be-opened".into());
+    assert_eq!(
+        execute_operation(referenced, operation_limits()).unwrap_err().code,
+        "source.unresolved_reference"
+    );
+}
+
+#[test]
+#[ignore = "native Ruby/Psych common-operation integration gate"]
+fn public_common_facade_executes_through_registered_typed_parser_host() {
+    let (parser, _, context) = setup(Behavior::Normal);
+    register_parser_host(Arc::new(FacadeHost { parser: parser.clone(), context })).unwrap();
+    for input in [
+        wire("analyze", &["a: one"]),
+        wire("diff2", &["a: one", "a: two"]),
+        wire("merge3", &["a: one\nb: two", "a: ours\nb: two", "a: one\nb: theirs"]),
+    ] {
+        let result =
+            execute_operation(serde_json::from_value(input).unwrap(), operation_limits()).unwrap();
+        assert!(result.ok, "{:?}", result.diagnostics);
+        assert_eq!(result.request_id, "native-op-1");
+    }
+    unregister_parser_host("test.psych".into()).unwrap();
+    assert_eq!(parser.calls.load(Ordering::SeqCst), 4);
+}
+
 #[test]
 #[ignore = "native Python/LibCST common-operation integration gate"]
 fn python_analysis_retains_nfkc_identity_native_statement_and_exact_layout() {

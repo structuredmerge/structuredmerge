@@ -7,8 +7,8 @@ use std::{collections::BTreeMap, error::Error, fmt};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    LineEndings, Metadata, NativeExtension, OPERATION_SCHEMA, OperationKind, SourceEncoding,
-    SourceMap, SourceRole, source_input,
+    LineEndings, NativeExtension, OPERATION_SCHEMA, OperationKind, SourceEncoding, SourceMap,
+    SourceRole, source_input,
 };
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -23,7 +23,7 @@ pub struct MergeProviderSelection {
     pub profile_id: Option<String>,
     pub required_capabilities: Vec<String>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -37,7 +37,7 @@ pub struct OperationParserSelection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language_version: Option<String>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -53,7 +53,7 @@ pub struct AnalyzePolicy {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native_extensions: Option<bool>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -65,7 +65,7 @@ pub struct DiffPolicy {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_preservation_evidence: Option<bool>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -75,7 +75,7 @@ pub struct DirectionalMergePolicy {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fallback_policy: Option<String>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -88,7 +88,7 @@ pub struct ThreeWayMergePolicy {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub labels: Option<BTreeMap<String, String>>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 /// The operation discriminator determines the policy type, not argument order.
@@ -144,7 +144,7 @@ pub struct OperationSource {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub final_newline: Option<bool>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -160,9 +160,9 @@ pub struct OperationRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path_name: Option<String>,
     pub extensions: Vec<NativeExtension>,
-    pub metadata: Metadata,
+    pub metadata: std::collections::BTreeMap<String, serde_json::Value>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
