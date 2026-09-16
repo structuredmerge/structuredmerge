@@ -101,3 +101,18 @@ Run the boundary tests with:
 ```sh
 cargo test -p structuredmerge-core -p tree-haver --locked
 ```
+
+Parser-service failures from both `parse_sources` and native merge calls use
+stable `CoreError.code` values: `request.invalid`, `source.invalid`,
+`selection.no_parser`, `resource.limit`, `execution.cancelled`,
+`execution.deadline_exceeded`, `parser.provider_fault`, `parser.provider_panic`,
+`parser.invalid_batch`, and `parser.invalid_result`. Input-byte and returned-node
+limits share `resource.limit`. Native provider codes never replace these core
+codes; their text remains in the human-readable message. Do not parse the
+message as a structured contract.
+
+This projection is not the complete Slice 1028 diagnostic envelope. Structured
+origin/native-code fields, selection reports on failure, cause references, and
+runtime-specific exception attributes remain to be implemented. Cancellation
+codes here do not imply that the generated API already exposes cancellation
+handles. Registration errors retain their existing separate codes.

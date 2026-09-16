@@ -168,3 +168,5 @@
 - Reject unsafe or glob-like Cargo workspace member paths in kettle-rusty discovery.
 
 - Include the complete combined license text in Python wheels and validate wheel contents plus real LibCST/Rust merges in a fresh installed consumer environment.
+
+- Give typed parser and native-merge service failures stable distinct core error codes, including consistent resource-limit classification and preserved provider fault text.

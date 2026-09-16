@@ -131,11 +131,12 @@ fn project_result(
                 parsed: parsed.document.output().clone(),
             }),
         }),
+        Err(MappingMergeError::Parse(error)) => Err(CoreError::from(error)),
         Err(error) => Err(CoreError {
             code: match &error {
                 MappingMergeError::InvalidInputs => "invalid_merge_inputs",
                 MappingMergeError::Unsupported(_) => "unsupported_native_profile",
-                MappingMergeError::Parse(_) => "parse_service",
+                MappingMergeError::Parse(_) => unreachable!(),
                 MappingMergeError::NativeParseRejected(_) => unreachable!(),
             }
             .into(),

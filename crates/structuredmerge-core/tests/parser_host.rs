@@ -110,6 +110,9 @@ fn facade_calls_typed_host_batches_through_tree_haver_and_keeps_native_failure()
         max_diagnostics: 100,
     };
     let results = parse_sources(vec![request.clone()], limits.clone()).unwrap();
+    let limited = ParseLimits { max_input_bytes: 0, ..limits.clone() };
+    assert_eq!(parse_sources(vec![request.clone()], limited).unwrap_err().code, "resource.limit");
+    assert_eq!(parse_sources(vec![], limits.clone()).unwrap_err().code, "request.invalid");
     assert_eq!(results[0].parsed.source, request.source.descriptor);
     assert!(!results[0].parsed.ok);
     assert_eq!(results[0].parsed.diagnostics[0].code.as_deref(), Some("test.syntax"));
@@ -121,7 +124,7 @@ fn facade_calls_typed_host_batches_through_tree_haver_and_keeps_native_failure()
         "invalid_merge_inputs"
     );
     assert_eq!(host.calls.load(Ordering::SeqCst), 1);
-    let mapping_requests = [SourceRole::Base, SourceRole::Ours, SourceRole::Theirs]
+    let mapping_requests: Vec<_> = [SourceRole::Base, SourceRole::Ours, SourceRole::Theirs]
         .into_iter()
         .enumerate()
         .map(|(index, role)| ParseRequest {
@@ -137,6 +140,16 @@ fn facade_calls_typed_host_batches_through_tree_haver_and_keeps_native_failure()
             ..request.clone()
         })
         .collect();
+    assert_eq!(
+        merge_yaml_mapping(
+            mapping_requests.clone(),
+            ParseLimits { max_input_bytes: 0, ..limits.clone() },
+        )
+        .unwrap_err()
+        .code,
+        "resource.limit"
+    );
+    assert_eq!(host.calls.load(Ordering::SeqCst), 1);
     let rejected = merge_yaml_mapping(mapping_requests, limits.clone()).unwrap();
     assert_eq!(rejected.outcome, ThreeWayMergeOutcome::Error);
     assert!(rejected.output.is_none());
@@ -145,6 +158,6 @@ fn facade_calls_typed_host_batches_through_tree_haver_and_keeps_native_failure()
     assert_eq!(parsed.parsed.diagnostics[0].code.as_deref(), Some("test.syntax"));
     assert_eq!(host.calls.load(Ordering::SeqCst), 2);
     unregister_parser_host("core-test".into()).unwrap();
-    assert_eq!(parse_sources(vec![request], limits).unwrap_err().code, "parse_service");
+    assert_eq!(parse_sources(vec![request], limits).unwrap_err().code, "selection.no_parser");
     assert_eq!(host.calls.load(Ordering::SeqCst), 2);
 }

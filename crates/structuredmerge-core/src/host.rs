@@ -11,7 +11,7 @@ use std::{
     sync::{Arc, OnceLock, atomic::AtomicBool},
 };
 use tree_haver::service::{
-    ExecutionContext, ParseService, ParserProvider, ParserRegistry, ProviderFault,
+    ExecutionContext, ParseService, ParserProvider, ParserRegistry, ProviderFault, ServiceError,
     TreeHaverParseService,
 };
 
@@ -32,6 +32,55 @@ impl fmt::Display for CoreError {
     }
 }
 impl Error for CoreError {}
+
+impl From<ServiceError> for CoreError {
+    fn from(error: ServiceError) -> Self {
+        let (code, message) = match error {
+            ServiceError::InvalidRequest => ("request.invalid", "invalid parser request".into()),
+            ServiceError::LimitExceeded => {
+                ("resource.limit", "parser resource limit exceeded".into())
+            }
+            ServiceError::Cancelled => ("execution.cancelled", "operation cancelled".into()),
+            ServiceError::DeadlineExceeded => {
+                ("execution.deadline_exceeded", "operation deadline exceeded".into())
+            }
+            ServiceError::Source(error) => (
+                if error.code == crate::SourceErrorCode::LimitExceeded {
+                    "resource.limit"
+                } else {
+                    "source.invalid"
+                },
+                error.to_string(),
+            ),
+            ServiceError::Selection(report) => (
+                "selection.no_parser",
+                match report.requested.backend_id {
+                    Some(id) => format!("no eligible parser for explicit backend {id}"),
+                    None => "no eligible parser for request".into(),
+                },
+            ),
+            ServiceError::Provider { backend_id, fault } => (
+                "parser.provider_fault",
+                format!("parser {backend_id}: {}: {}", fault.code, fault.message),
+            ),
+            ServiceError::ProviderPanic { backend_id } => {
+                ("parser.provider_panic", format!("parser {backend_id} panicked"))
+            }
+            ServiceError::InvalidBatch { backend_id } => {
+                ("parser.invalid_batch", format!("parser {backend_id} returned an invalid batch"))
+            }
+            ServiceError::InvalidResult { backend_id, error } => (
+                if error == crate::parsed::ParseValidationError::LimitExceeded {
+                    "resource.limit"
+                } else {
+                    "parser.invalid_result"
+                },
+                format!("parser {backend_id} result failed validation: {error:?}"),
+            ),
+        };
+        Self { code: code.into(), message }
+    }
+}
 
 /// Coarse owned parser calls. Generated wrappers must enforce their runtime's
 /// thread-affinity rules; these Rust bounds alone do not establish host safety.
@@ -179,5 +228,5 @@ pub fn parse_sources(
                 })
                 .collect()
         })
-        .map_err(|error| CoreError { code: "parse_service".into(), message: format!("{error:?}") })
+        .map_err(CoreError::from)
 }
