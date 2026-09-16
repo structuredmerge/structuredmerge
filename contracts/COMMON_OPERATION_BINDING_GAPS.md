@@ -18,20 +18,27 @@ operation tunnel or hand-edited generated code was introduced.
 All 30 installed Python tests and six generated fixtures pass, including
 wrong-policy-type rejection and cancellation before native callbacks.
 
-**Ruby typed policy input remains incomplete.** An installed-gem probe passes an
-`OperationPolicyAnalyze` holding an `AnalyzePolicy` into `OperationRequest.new`.
-Generated Magnus conversion calls generic JSON serialization, producing the
-Data object's display string instead of its typed enum payload, and raises
-`TypeError`. Fix the generator's typed variant conversion; do not require callers
-to assemble JSON or lower the common contract. Ruby's existing installed tests
-(25 examples plus six fixtures) pass but do not prove common-operation support.
+**Ruby typed policy input now passes installed execution tests.** Local Alef
+`2511d2e` extracts native DTO payloads directly from generated tagged-newtype
+variants. `c526b0b` fixes their Ruby Data accessors, which previously called a
+nonexistent superclass reader. There is no caller-side JSON workaround.
+All 133 Magnus generator tests pass. The installed Ruby gem passes 27 examples
+plus six generated fixtures, including typed common analyze/diff2/merge3 with
+real Psych callbacks, exact merge output and output reparsing, and rejection of
+wrong payload types and cancellation before callbacks.
+
+Ruby native build log: `tmp/typed-ruby-policy-native-build.log`; installed proof:
+`tmp/typed-ruby-policy-final-artifact.log`. Platform gem SHA-256:
+`408bd22d1764975be94d0541d474d4dc9b79e192e34d695c8f75b4bdf3de803c`.
+This fixes typed newtype input, not complete enum output or canonical-record
+round trips. Other data-enum representations still need dedicated verification.
 
 Logs under kernel `tmp/`: `typed-policy-{python,ruby}-build.log`,
 `typed-policy-python-final-artifact.log`, `typed-policy-ruby-artifact.log`, and
 `typed-policy-ruby-probe.log`. Python wheel SHA-256:
 `0c5488ead559af872a2f7b3e849a0f8d4ed93e1daed88368c7ab181d731a36fd`.
 These additive exports remain experimental: consumer migration, complete
-sum-type/canonical-record round trips, Ruby common operations, full platform
+sum-type/canonical-record round trips, broader policies/providers, full platform
 coverage, upstream-only generation and release/default authority remain open.
 All Alef fixes remain local. No package was published or default changed.
 

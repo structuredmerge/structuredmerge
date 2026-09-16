@@ -16,6 +16,68 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  def common_request(operation, texts, policy: nil)
+    roles = {"analyze" => %w[source], "diff2" => %w[before after], "merge3" => %w[base ours theirs]}.fetch(operation)
+    sources = roles.zip(texts).to_h do |role, text|
+      [role, described_class::OperationSource.new(source_id: role, role: role,
+        byte_length: text.bytesize, sha256: Digest::SHA256.hexdigest(text), encoding: "utf-8", content: text, extra: {})]
+    end
+    policy ||= case operation
+    when "analyze"
+      described_class::OperationPolicyAnalyze.new(value: described_class::AnalyzePolicy.new(extra: {}))
+    when "diff2"
+      described_class::OperationPolicyDiff2.new(value: described_class::DiffPolicy.new(extra: {}))
+    else
+      described_class::OperationPolicyMerge3.new(value: described_class::ThreeWayMergePolicy.new(
+        render_policy: "source-preserving", fallback_policy: "none", extra: {}))
+    end
+    described_class::OperationRequest.new(schema: "structuredmerge.operation-request/v1", request_id: "typed-common-#{operation}",
+      operation: policy, sources: sources, extensions: [], metadata: {}, extra: {},
+      provider_selection: described_class::MergeProviderSelection.new(provider_id: "kernel.yaml", family: "yaml",
+        profile_id: "kernel.yaml.native_mapping.v1", required_capabilities: [operation], extra: {}),
+      parser_selection: described_class::OperationParserSelection.new(backend: "ruby.typed.psych", preference: [],
+        required_capabilities: [], extra: {}))
+  end
+
+  it "executes typed common operations through the registered native Psych provider" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    cases = {"analyze" => ["a: one\n"], "diff2" => ["a: one\n", "a: two\n"],
+      "merge3" => ["a: one\nb: two\n", "a: ours\nb: two\n", "a: one\nb: theirs\n"]}
+    cases.each do |operation, texts|
+      request = common_request(operation, texts)
+      expect(request.sources.length).to eq(texts.length)
+      result = described_class.execute_operation(request, merge_limits)
+      expect(result.ok).to be(true)
+      expect(result.request_id).to eq(request.request_id)
+      case operation
+      when "analyze" then expect(result.analysis).to be_a(described_class::ResultAnalysis)
+      when "diff2" then expect(result.changes).not_to be_empty
+      else
+        expect(result.output).to eq("a: ours\nb: theirs\n")
+        expect(result.verification.output_reparsed).to be(true)
+      end
+    end
+    expect(host.calls).to eq(4)
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "rejects wrong typed policy payloads and cancelled common operations before callbacks" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    request = common_request("analyze", ["a: one\n"])
+    control = described_class.create_operation_control
+    control.cancel
+    expect { described_class.execute_operation_controlled(request, merge_limits, control) }
+      .to raise_error(RuntimeError, /execution.cancelled/)
+    bad = described_class::OperationPolicyAnalyze.new(value: described_class::DiffPolicy.new(extra: {}))
+    expect { common_request("analyze", ["a: one\n"], policy: bad) }.to raise_error(TypeError)
+    expect(host.calls).to eq(0)
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
   def diff_request(sources, roles: %w[before after])
     described_class::NativeDiffRequest.new(request_id: "diff-ruby", profile_id: "kernel.yaml.native_mapping.v1",
       parses: merge_requests(sources, roles: roles))
