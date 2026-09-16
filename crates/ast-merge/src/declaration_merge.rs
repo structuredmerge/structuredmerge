@@ -26,7 +26,7 @@ pub struct SourcePreservingOwnerDocument {
 }
 
 impl SourcePreservingOwnerDocument {
-    fn validate(&self, role: &str) -> Result<(), String> {
+    pub(crate) fn validate(&self, role: &str) -> Result<(), String> {
         let mut ids = HashSet::new();
         let mut previous_end = 0;
         for owner in &self.owners {

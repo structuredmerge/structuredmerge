@@ -177,6 +177,8 @@
 
 - Typed template options, profile resolution, and read-only directory-plan reports in structuredmerge-core and generated Ruby/Python bindings; template application remains outside this API.
 
+- Rust-owned exact-source structural diff primitive with deterministic owner changes, validated before/after byte regions, and independent order/layout evidence for the typed diff2 migration.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
