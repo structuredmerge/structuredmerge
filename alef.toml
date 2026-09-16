@@ -26,6 +26,8 @@ sources = [
   "crates/structuredmerge-core/src/host.rs",
   "crates/structuredmerge-core/src/merge.rs",
   "crates/structuredmerge-core/src/edits.rs",
+  "crates/structuredmerge-core/src/structural.rs",
+  "crates/ast-crispr/src/lib.rs",
   "crates/structuredmerge-core/src/profiles.rs",
   "crates/tree-haver/src/lib.rs",
   "crates/tree-haver/src/source.rs",
@@ -69,6 +71,7 @@ param_name = "host"
 
 [crates.include]
 types = [
+  "CrisprOperationRequest", "CrisprOperationReport", "CrisprBatchOperationReport",
   "ExplicitSourceEdit", "SourceEditRequest", "SourceEditLimits", "SourceEditResult",
   "OperationControl",
   "NativeMergeProfile",
@@ -85,7 +88,7 @@ types = [
   "NativeExtension", "ChildEdge", "ParseNode", "ParseSeverity", "ParseDiagnostic",
   "AttachmentHint", "ParseComment", "ParseOutput",
 ]
-functions = ["apply_explicit_source_edits", "native_merge_profiles", "create_operation_control", "parse_sources", "parse_sources_controlled", "register_parser_host", "unregister_parser_host", "merge_yaml_mapping", "merge_yaml_mapping_controlled", "merge_python_declarations", "merge_python_declarations_controlled"]
+functions = ["report_structural_operations", "apply_explicit_source_edits", "native_merge_profiles", "create_operation_control", "parse_sources", "parse_sources_controlled", "register_parser_host", "unregister_parser_host", "merge_yaml_mapping", "merge_yaml_mapping_controlled", "merge_python_declarations", "merge_python_declarations_controlled"]
 
 [crates.exclude]
 methods = ["ByteRange.contains_range", "ByteRange.overlaps", "OwnedSourceRegion.validate"]

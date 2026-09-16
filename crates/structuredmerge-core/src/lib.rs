@@ -18,6 +18,9 @@ pub use ast_merge::{
 pub use merge::*;
 mod edits;
 pub use edits::*;
+mod structural;
+pub use ast_crispr::{CrisprBatchOperationReport, CrisprOperationReport};
+pub use structural::*;
 mod profiles;
 pub use profiles::{NativeMergeProfile, native_merge_profiles};
 pub use tree_haver::parsed::{

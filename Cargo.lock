@@ -36,6 +36,7 @@ name = "ast-crispr"
 version = "0.2.0"
 dependencies = [
  "ast-merge",
+ "serde",
  "serde_json",
 ]
 
@@ -1559,6 +1560,7 @@ dependencies = [
 name = "structuredmerge-core"
 version = "0.2.0"
 dependencies = [
+ "ast-crispr",
  "ast-merge",
  "python-merge",
  "serde",

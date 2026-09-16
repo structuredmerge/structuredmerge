@@ -14,6 +14,21 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  it "reports structural operations as typed ordered profiles without selecting source" do
+    requests = %w[replace future].map do |kind|
+      described_class::CrisprOperationRequest.new(operation_kind: kind, source_requirement: "required",
+        destination_requirement: "none", replacement_source: "explicit_text",
+        captures_source_text: true, supports_if_missing: false)
+    end
+    report = described_class.report_structural_operations(requests)
+    expect(report.operation_count).to eq(2)
+    expect(report.operation_kinds).to eq(%w[replace future])
+    expect(report.operation_profiles.first.requires_source).to be(true)
+    expect(report.operation_profiles.first.known_operation_kind).to be(true)
+    expect(report.operation_profiles.last.known_operation_kind).to be(false)
+    expect(report.operation_profiles.last.operation_family).to eq("unknown")
+  end
+
   it "applies explicit UTF-8 byte edits in Rust without a parser host" do
     text = "\uFEFFé: one\r\nlast"
     source = described_class::SourceInput.new(

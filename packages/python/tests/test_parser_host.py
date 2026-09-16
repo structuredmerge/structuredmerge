@@ -102,6 +102,20 @@ class TypedParserHostTest(unittest.TestCase):
             core.apply_explicit_source_edits(invalid, limits)
         self.assertEqual(self.host.calls, 0)
 
+    def test_structural_operation_reports_are_typed_and_preserve_unknowns(self):
+        def request(kind):
+            return core.CrisprOperationRequest(operation_kind=kind, source_requirement="required",
+                destination_requirement="none", replacement_source="explicit_text",
+                captures_source_text=True, supports_if_missing=False)
+        report = core.report_structural_operations([request("replace"), request("future")])
+        self.assertEqual(report.operation_count, 2)
+        self.assertEqual(report.operation_kinds, ["replace", "future"])
+        self.assertTrue(report.operation_profiles[0].requires_source)
+        self.assertTrue(report.operation_profiles[0].known_operation_kind)
+        self.assertFalse(report.operation_profiles[1].known_operation_kind)
+        self.assertEqual(report.operation_profiles[1].operation_family, "unknown")
+        self.assertEqual(self.host.calls, 0)
+
     def merge(self, sources):
         return core.merge_python_declarations(self.merge_requests(sources), core.ParseLimits(
             max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20))

@@ -167,6 +167,8 @@
 
 - Expose typed explicit UTF-8 source edits through generated Ruby and Python core bindings, validating source identity and bounded output while reusing the shared Rust renderer.
 
+- Expose typed structural operation-profile batch reports through generated core bindings, sharing ast-crispr classification with the retained JSON report adapter.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

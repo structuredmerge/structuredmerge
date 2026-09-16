@@ -1,4 +1,33 @@
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CrisprOperationReport {
+    pub operation_kind: String,
+    pub operation_family: String,
+    pub known_operation_kind: bool,
+    pub source_requirement: String,
+    pub known_source_requirement: bool,
+    pub destination_requirement: String,
+    pub known_destination_requirement: bool,
+    pub replacement_source: String,
+    pub known_replacement_source: bool,
+    pub captures_source_text: bool,
+    pub supports_if_missing: bool,
+    pub selects_source: bool,
+    pub requires_source: bool,
+    pub supports_destination: bool,
+    pub requires_destination: bool,
+    pub explicit_replacement: bool,
+    pub may_reuse_captured_text: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CrisprBatchOperationReport {
+    pub operation_count: usize,
+    pub operation_kinds: Vec<String>,
+    pub operation_profiles: Vec<CrisprOperationReport>,
+}
 
 pub const PACKAGE_NAME: &str = "ast-crispr";
 
@@ -225,28 +254,32 @@ impl OperationProfile {
         }
     }
 
-    pub fn report(&self) -> Value {
+    pub fn typed_report(&self) -> CrisprOperationReport {
         let (operation_family, known_operation_kind) =
             descriptor_family(operation_kind_descriptor(&self.operation_kind));
-        json!({
-            "operation_kind": self.operation_kind,
-            "operation_family": operation_family,
-            "known_operation_kind": known_operation_kind,
-            "source_requirement": self.source_requirement,
-            "known_source_requirement": known_requirement(&self.source_requirement),
-            "destination_requirement": self.destination_requirement,
-            "known_destination_requirement": known_requirement(&self.destination_requirement),
-            "replacement_source": self.replacement_source,
-            "known_replacement_source": known_replacement_source(&self.replacement_source),
-            "captures_source_text": self.captures_source_text,
-            "supports_if_missing": self.supports_if_missing,
-            "selects_source": self.source_requirement != "none",
-            "requires_source": self.source_requirement == "required",
-            "supports_destination": self.destination_requirement != "none",
-            "requires_destination": self.destination_requirement == "required",
-            "explicit_replacement": self.replacement_source == "explicit_text",
-            "may_reuse_captured_text": self.replacement_source == "captured_text_or_explicit"
-        })
+        CrisprOperationReport {
+            operation_kind: self.operation_kind.clone(),
+            operation_family: operation_family.into(),
+            known_operation_kind,
+            source_requirement: self.source_requirement.clone(),
+            known_source_requirement: known_requirement(&self.source_requirement),
+            destination_requirement: self.destination_requirement.clone(),
+            known_destination_requirement: known_requirement(&self.destination_requirement),
+            replacement_source: self.replacement_source.clone(),
+            known_replacement_source: known_replacement_source(&self.replacement_source),
+            captures_source_text: self.captures_source_text,
+            supports_if_missing: self.supports_if_missing,
+            selects_source: self.source_requirement != "none",
+            requires_source: self.source_requirement == "required",
+            supports_destination: self.destination_requirement != "none",
+            requires_destination: self.destination_requirement == "required",
+            explicit_replacement: self.replacement_source == "explicit_text",
+            may_reuse_captured_text: self.replacement_source == "captured_text_or_explicit",
+        }
+    }
+
+    pub fn report(&self) -> Value {
+        json!(self.typed_report())
     }
 }
 
@@ -267,11 +300,15 @@ pub fn move_operation() -> OperationProfile {
 }
 
 pub fn batch_operation_report(profiles: &[OperationProfile]) -> Value {
-    json!({
-        "operation_count": profiles.len(),
-        "operation_kinds": profiles.iter().map(|profile| profile.operation_kind.as_str()).collect::<Vec<_>>(),
-        "operation_profiles": profiles.iter().map(OperationProfile::report).collect::<Vec<_>>()
-    })
+    json!(typed_batch_operation_report(profiles))
+}
+
+pub fn typed_batch_operation_report(profiles: &[OperationProfile]) -> CrisprBatchOperationReport {
+    CrisprBatchOperationReport {
+        operation_count: profiles.len(),
+        operation_kinds: profiles.iter().map(|profile| profile.operation_kind.clone()).collect(),
+        operation_profiles: profiles.iter().map(OperationProfile::typed_report).collect(),
+    }
 }
 
 fn defaulted(value: &str, fallback: &str) -> String {
