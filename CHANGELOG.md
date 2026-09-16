@@ -206,3 +206,5 @@
 - Retain independently validated merge input source descriptors on parser selection and callback failures while withholding incomplete parse results and output.
 
 - Check cancellation and deadlines before classifying native parser callback faults or contained panics, consistently with parser probing.
+
+- Include top-level error diagnostics for native syntax rejection, unsupported analysis, and input parser service failures while retaining detailed typed origin evidence.

@@ -494,6 +494,9 @@ class TypedParserHostTest(unittest.TestCase):
         self.assertEqual(result.source_segments, [])
         self.assertEqual(result.rejected_parse.parsed.source.role, core.SourceRole.THEIRS)
         self.assertEqual(result.rejected_parse.parsed.diagnostics[0].code, "libcst.syntax")
+        self.assertEqual(len(result.diagnostics), 1)
+        self.assertEqual(result.diagnostics[0].severity, core.DiagnosticSeverity.ERROR)
+        self.assertEqual(result.diagnostics[0].category, core.DiagnosticCategory.PARSE_ERROR)
 
     def test_native_failure_precedes_analysis_and_is_independent_of_request_order(self):
         sources = ["import os\n", "def broken(:\n", "class broken(:\n"]

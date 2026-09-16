@@ -172,10 +172,19 @@ fn project_result(
         Err(MappingMergeError::NativeParseRejected { parses, sources }) => {
             let input_parses: Vec<_> = parses.into_iter().map(CoreParseResult::from).collect();
             let rejected_parse = input_parses.iter().find(|result| !result.parsed.ok).cloned();
+            let diagnostics = input_parses
+                .iter()
+                .filter(|result| !result.parsed.ok)
+                .map(|result| failure_diagnostic(
+                    ast_merge::DiagnosticCategory::ParseError,
+                    format!("native parser rejected source {} ({:?}); see input_parses for native diagnostics",
+                        result.parsed.source.source_id, result.parsed.source.role),
+                ))
+                .collect();
             Ok(NativeMergeResult {
                 profile_id: profile_id.into(),
                 outcome: ast_merge::ThreeWayMergeOutcome::Error,
-                diagnostics: vec![],
+                diagnostics,
                 conflicts: vec![],
                 output: None,
                 policies: vec![],
@@ -191,10 +200,22 @@ fn project_result(
             })
         }
         Err(MappingMergeError::AnalysisRejected { failures, parses, sources }) => {
+            let diagnostics = failures
+                .iter()
+                .map(|failure| {
+                    failure_diagnostic(
+                        ast_merge::DiagnosticCategory::UnsupportedFeature,
+                        format!(
+                            "source {} ({:?}): {}",
+                            failure.source_id, failure.source_role, failure.message
+                        ),
+                    )
+                })
+                .collect();
             Ok(NativeMergeResult {
                 profile_id: profile_id.into(),
                 outcome: ast_merge::ThreeWayMergeOutcome::Error,
-                diagnostics: vec![],
+                diagnostics,
                 conflicts: vec![],
                 output: None,
                 policies: vec![],
@@ -227,10 +248,18 @@ fn project_result(
                 | ServiceError::InvalidResult { .. }
                     if CoreError::from(error.clone()).code != "resource.limit" =>
                 {
+                    let failure = crate::ParserFailure::from(error);
                     Ok(NativeMergeResult {
                         profile_id: profile_id.into(),
                         outcome: ast_merge::ThreeWayMergeOutcome::Error,
-                        diagnostics: vec![],
+                        diagnostics: vec![failure_diagnostic(
+                            if failure.code == "selection.no_parser" {
+                                ast_merge::DiagnosticCategory::ConfigurationError
+                            } else {
+                                ast_merge::DiagnosticCategory::ParseError
+                            },
+                            format!("{}: {}", failure.code, failure.message),
+                        )],
                         conflicts: vec![],
                         output: None,
                         policies: vec![],
@@ -242,7 +271,7 @@ fn project_result(
                         sources,
                         output_source: None,
                         source_segments: vec![],
-                        input_failure: Some(crate::ParserFailure::from(error)),
+                        input_failure: Some(failure),
                     })
                 }
                 _ => Err(CoreError::from(error)),
@@ -261,6 +290,21 @@ fn project_result(
             .into(),
             message: format!("{error:?}"),
         }),
+    }
+}
+
+// Summary diagnostics do not replace typed origin evidence. In particular,
+// a batch service failure cannot be attributed to a fabricated source or span.
+fn failure_diagnostic(
+    category: ast_merge::DiagnosticCategory,
+    message: String,
+) -> ast_merge::Diagnostic {
+    ast_merge::Diagnostic {
+        severity: ast_merge::DiagnosticSeverity::Error,
+        category,
+        message,
+        path: None,
+        review: None,
     }
 }
 
@@ -307,10 +351,41 @@ mod tests {
             )
             .unwrap();
             assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Error);
+            assert_eq!(result.diagnostics.len(), 1);
+            assert_eq!(result.diagnostics[0].severity, ast_merge::DiagnosticSeverity::Error);
+            assert_eq!(result.diagnostics[0].category, ast_merge::DiagnosticCategory::ParseError);
+            assert!(result.diagnostics[0].message.contains(code));
+            assert!(result.diagnostics[0].path.is_none());
             assert_eq!(result.input_failure.unwrap().code, code);
             assert!(result.output.is_none());
             assert!(result.sources.is_empty());
             assert!(result.input_parses.is_empty());
         }
+    }
+
+    #[test]
+    fn unsupported_analysis_has_error_diagnostics_and_retains_each_origin() {
+        let result = project_result(
+            "test",
+            Err(MappingMergeError::AnalysisRejected {
+                failures: vec![ast_merge::typed_merge::NativeAnalysisFailure {
+                    source_id: "ours".into(),
+                    source_role: crate::SourceRole::Ours,
+                    message: "unsupported owner".into(),
+                }],
+                parses: vec![],
+                sources: vec![],
+            }),
+        )
+        .unwrap();
+        assert_eq!(result.diagnostics.len(), 1);
+        assert_eq!(result.diagnostics[0].severity, ast_merge::DiagnosticSeverity::Error);
+        assert_eq!(
+            result.diagnostics[0].category,
+            ast_merge::DiagnosticCategory::UnsupportedFeature
+        );
+        assert_eq!(result.analysis_rejections[0].source_role, crate::SourceRole::Ours);
+        assert_eq!(result.analysis_rejections[0].code, "analysis.unsupported_profile");
+        assert!(result.output.is_none());
     }
 }

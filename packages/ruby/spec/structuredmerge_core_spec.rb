@@ -444,6 +444,9 @@ RSpec.describe StructuredmergeCore do
     expect(result.rejected_parse.parsed.source.role.to_s).to eq("ours")
     expect(result.sources.map { |source| source.role.to_s }).to eq(%w[base ours theirs])
     expect(result.rejected_parse.parsed.diagnostics.first.code).to eq("psych.syntax")
+    expect(result.diagnostics.length).to eq(1)
+    expect(result.diagnostics.first.severity.to_s).to eq("error")
+    expect(result.diagnostics.first.category.to_s).to eq("parse_error")
   ensure
     described_class.unregister_parser_host("ruby.typed.psych")
   end

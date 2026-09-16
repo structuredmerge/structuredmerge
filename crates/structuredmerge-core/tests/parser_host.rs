@@ -177,6 +177,12 @@ fn facade_calls_typed_host_batches_through_tree_haver_and_keeps_native_failure()
     assert_eq!(rejected.outcome, ThreeWayMergeOutcome::Error);
     assert!(rejected.output.is_none());
     assert_eq!(rejected.input_parses.len(), 3);
+    assert_eq!(rejected.diagnostics.len(), 3);
+    assert!(
+        rejected.diagnostics.iter().all(|diagnostic| diagnostic.severity
+            == structuredmerge_core::DiagnosticSeverity::Error
+            && diagnostic.category == structuredmerge_core::DiagnosticCategory::ParseError)
+    );
     assert!(rejected.input_parses.iter().all(|parsed| !parsed.parsed.ok));
     assert!(
         rejected
