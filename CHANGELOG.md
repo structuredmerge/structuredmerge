@@ -119,6 +119,8 @@
 
 - Refresh GitHub Actions references for the Rust test and Ruby host release workflows.
 
+- Begin the structuredmerge-core typed facade with explicit operation roles and a shared TreeHaver source map that verifies exact bytes, SHA-256, encoding, line endings, ranges, and input limits without depending on the prototype facade.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

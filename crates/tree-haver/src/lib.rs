@@ -10,6 +10,8 @@ use tree_sitter_language_pack::{PackConfig, ProcessConfig, configure, get_parser
 
 pub const PACKAGE_NAME: &str = "tree-haver";
 
+pub mod source;
+
 pub trait AnalysisHandle {
     fn kind(&self) -> &'static str;
 }

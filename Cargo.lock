@@ -1413,6 +1413,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "structuredmerge-core"
+version = "0.2.0"
+dependencies = [
+ "tree-haver",
+]
+
+[[package]]
 name = "structuredmerge-host-prototype-core"
 version = "0.2.0"
 dependencies = [
@@ -1594,6 +1601,7 @@ version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tree-sitter-language-pack",
 ]
 
