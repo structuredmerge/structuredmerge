@@ -15,7 +15,9 @@ use tree_haver::{
 };
 
 pub type DirectionalPlanner = fn(
+    &ParsedResult,
     &SourcePreservingOwnerDocument,
+    &ParsedResult,
     &SourcePreservingOwnerDocument,
 ) -> Result<Vec<DirectionalInsertion>, String>;
 
@@ -104,7 +106,8 @@ pub fn merge_directional_native_sources(
     let incoming =
         parsed.iter().position(|p| p.source.descriptor().role == SourceRole::Incoming).unwrap();
     let current = 1 - incoming;
-    let insertions = plan(&documents[incoming], &documents[current]);
+    let insertions =
+        plan(&parsed[incoming], &documents[incoming], &parsed[current], &documents[current]);
     context.check().map_err(NativeMergeError::Parse)?;
     let insertions = match insertions {
         Ok(insertions) => insertions,

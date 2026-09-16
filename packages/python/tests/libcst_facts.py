@@ -2,7 +2,7 @@
 import bisect
 import json
 import libcst
-from libcst.metadata import MetadataWrapper, ByteSpanPositionProvider
+from libcst.metadata import MetadataWrapper, ByteSpanPositionProvider, WhitespaceInclusivePositionProvider
 
 
 def project_facts(module, data):
@@ -14,9 +14,21 @@ def project_facts(module, data):
         raise ValueError("test LibCST projection requires UTF-8 and LF/CRLF")
     wrapper = MetadataWrapper(module)
     spans = wrapper.resolve(ByteSpanPositionProvider)
+    full_spans = wrapper.resolve(WhitespaceInclusivePositionProvider)
     bom = 3 if data.startswith(b"\xef\xbb\xbf") else 0
     starts = [0] + [index + 1 for index, byte in enumerate(data) if byte == 10]
     nodes = []
+
+    def byte_offset(position):
+        # LibCST positions use Unicode columns; source descriptors use bytes.
+        # Metadata may end at the virtual line following the last real line.
+        if position.line == len(starts) + 1 and position.column == 0:
+            return len(data)
+        start = starts[position.line - 1]
+        if position.line == 1:
+            start += bom
+        line = data[start:].decode("utf-8").split("\n", 1)[0]
+        return start + len(line[:position.column].encode("utf-8"))
 
     def point(offset):
         row = bisect.bisect_right(starts, offset) - 1
@@ -27,6 +39,9 @@ def project_facts(module, data):
         nodes.append(None)
         fields = []
         facts = {}
+        if isinstance(node, (libcst.FunctionDef, libcst.ClassDef, libcst.SimpleStatementLine)):
+            full = full_spans[node]
+            facts["full_span"] = dict(start_byte=byte_offset(full.start), end_byte=byte_offset(full.end))
         if isinstance(node, libcst.Module):
             fields = [("body", child) for child in node.body]
         elif isinstance(node, (libcst.FunctionDef, libcst.ClassDef)):

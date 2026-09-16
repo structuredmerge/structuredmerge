@@ -16,12 +16,14 @@ use tree_haver::{
 
 /// A family-derived incoming-only insertion. The range must contain the entire
 /// owner and may include its explicitly selected unowned layout, but never
-/// another owner. None places it after all current bytes; Some places it before
-/// the named current owner's leading gap. Order within a slot is explicit.
+/// another owner. The offset is within the named current owner's leading gap,
+/// or the suffix for None. Family-native layout facts select that offset so a
+/// prior statement's trailing comment is not detached. Slot order is explicit.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DirectionalInsertion {
     pub owner_id: String,
     pub before_current_owner_id: Option<String>,
+    pub current_offset: usize,
     pub source_range: ByteRange,
 }
 
@@ -187,19 +189,24 @@ pub fn render_directional_owners(
     let mut selected = Vec::new();
     let mut cursor = 0;
     for owner in current.owners.iter().map(Some).chain(std::iter::once(None)) {
-        // For the final slot retain the current suffix before appending new owners.
-        if owner.is_none() {
-            append(
-                &mut output,
-                &mut segments,
-                current_source,
-                ByteRange { start_byte: cursor, end_byte: current.source.len() },
-            );
-        }
         for insertion in insertions
             .iter()
             .filter(|i| i.before_current_owner_id.as_deref() == owner.map(|o| o.id.as_str()))
         {
+            let end = owner.map_or(current.source.len(), |o| o.start_byte);
+            if insertion.current_offset < cursor
+                || insertion.current_offset > end
+                || !current.source.is_char_boundary(insertion.current_offset)
+            {
+                return Err("insertion offset is outside its current layout slot".into());
+            }
+            append(
+                &mut output,
+                &mut segments,
+                current_source,
+                ByteRange { start_byte: cursor, end_byte: insertion.current_offset },
+            );
+            cursor = insertion.current_offset;
             append(&mut output, &mut segments, incoming_source, insertion.source_range.clone());
             selected.push((incoming_map[insertion.owner_id.as_str()], incoming));
         }
@@ -212,6 +219,13 @@ pub fn render_directional_owners(
             );
             cursor = owner.end_byte;
             selected.push((owner, current));
+        } else {
+            append(
+                &mut output,
+                &mut segments,
+                current_source,
+                ByteRange { start_byte: cursor, end_byte: current.source.len() },
+            );
         }
     }
     verify_directional_segments(output.as_bytes(), incoming_source, current_source, &segments)?;

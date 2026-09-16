@@ -5,6 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use tree_haver::{parsed::ParseNode, service::ParsedResult};
 use unicode_normalization::UnicodeNormalization;
 
+pub mod directional;
+
 /// Derive identities and whole-statement ownership in Rust. Nested bodies are
 /// opaque exact source, never recursively merged by this initial profile.
 pub fn declaration_owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, String> {

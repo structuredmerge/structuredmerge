@@ -165,6 +165,7 @@ fn directional_render_retains_current_bytes_and_explicit_incoming_layout() {
     let insertions = [DirectionalInsertion {
         owner_id: "b".into(),
         before_current_owner_id: Some("z".into()),
+        current_offset: 6,
         source_range: ByteRange { start_byte: 3, end_byte: 7 },
     }];
     let expected = "\u{feff}a=9\nb=2\r\n# local\r\nz=0";
@@ -223,6 +224,7 @@ fn incomplete_or_ambiguous_insertion_plans_fail_before_verification() {
     let valid = DirectionalInsertion {
         owner_id: "b".into(),
         before_current_owner_id: None,
+        current_offset: current.source.len(),
         source_range: ByteRange { start_byte: 4, end_byte: 8 },
     };
     for insertions in [
@@ -233,6 +235,8 @@ fn incomplete_or_ambiguous_insertion_plans_fail_before_verification() {
             before_current_owner_id: Some("missing".into()),
             ..valid.clone()
         }],
+        vec![DirectionalInsertion { current_offset: 1, ..valid.clone() }],
+        vec![DirectionalInsertion { current_offset: usize::MAX, ..valid.clone() }],
         vec![DirectionalInsertion {
             source_range: ByteRange { start_byte: 0, end_byte: 8 },
             ..valid.clone()
@@ -262,6 +266,7 @@ fn output_must_reparse_with_exact_selected_owners_not_just_equal_fingerprints() 
     let insertions = [DirectionalInsertion {
         owner_id: "b".into(),
         before_current_owner_id: None,
+        current_offset: current.source.len(),
         source_range: ByteRange { start_byte: 4, end_byte: 8 },
     }];
     for failure in 0..6 {
@@ -311,11 +316,13 @@ fn ownerless_current_accepts_explicit_order_and_rejects_overlapping_layout() {
     let b = DirectionalInsertion {
         owner_id: "b".into(),
         before_current_owner_id: None,
+        current_offset: current.source.len(),
         source_range: ByteRange { start_byte: 0, end_byte: 4 },
     };
     let c = DirectionalInsertion {
         owner_id: "c".into(),
         before_current_owner_id: None,
+        current_offset: current.source.len(),
         source_range: ByteRange { start_byte: 4, end_byte: 8 },
     };
     let result =

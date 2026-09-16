@@ -212,7 +212,9 @@ fn directional_requests(runtime: Runtime, incoming: &str, current: &str) -> Vec<
 // Explicit unit/integration seam for one tail insertion; not production family
 // placement policy. Native providers cannot supply this Rust planner callback.
 fn directional_tail_plan(
+    _: &ParsedResult,
     incoming: &ast_merge::SourcePreservingOwnerDocument,
+    _: &ParsedResult,
     current: &ast_merge::SourcePreservingOwnerDocument,
 ) -> Result<Vec<ast_merge::directional_render::DirectionalInsertion>, String> {
     let added: Vec<_> =
@@ -223,6 +225,7 @@ fn directional_tail_plan(
     Ok(vec![ast_merge::directional_render::DirectionalInsertion {
         owner_id: added[0].id.clone(),
         before_current_owner_id: None,
+        current_offset: current.source.len(),
         source_range: ByteRange {
             start_byte: added[0].start_byte,
             end_byte: incoming.source.len(),
@@ -359,6 +362,64 @@ fn directional_native_psych_orchestration() {
 #[ignore = "requires native Python/LibCST"]
 fn python_directional_native_orchestration() {
     check_directional_runtime(Runtime::Python);
+}
+
+#[test]
+#[ignore = "requires native Python/LibCST"]
+fn python_directional_family_placement_preserves_native_trivia() {
+    let cases = [
+        (
+            "# incoming header\nalpha = 1 # incoming tail\n\n# new\nbeta = 2 # added\nomega = 3\n# incoming footer\n",
+            "\u{feff}# current header\r\nalpha = 9 # keep\r\n\r\n# omega keep\r\nomega = 30\r\n# current footer",
+            "\u{feff}# current header\r\nalpha = 9 # keep\r\n\n# new\nbeta = 2 # added\n\r\n# omega keep\r\nomega = 30\r\n# current footer",
+        ),
+        (
+            "alpha = 1\nbeta = 2 # beta\n",
+            "alpha = 9 # alpha\n# footer",
+            "alpha = 9 # alpha\nbeta = 2 # beta\n# footer",
+        ),
+        (
+            "first = 1\nsecond = 2\nanchor = 3\n",
+            "# header\nanchor = 9",
+            "# header\nfirst = 1\nsecond = 2\nanchor = 9",
+        ),
+        ("alpha = 1\n", "alpha = 9 # no final newline", "alpha = 9 # no final newline"),
+        ("é = 1 # Unicode\r\n", "# header\r\n", "# header\r\né = 1 # Unicode\r\n"),
+        (
+            "alpha = 1\n\n# function\ndef f():\n    return 2\n",
+            "alpha = 9\n# footer\n",
+            "alpha = 9\n\n# function\ndef f():\n    return 2\n# footer\n",
+        ),
+    ];
+    for (incoming, current, expected) in cases {
+        let (parser, snapshot, context) = setup_runtime(Runtime::Python, Behavior::Normal);
+        let result = ast_merge::typed_merge2::merge_directional_native_sources(
+            "python",
+            directional_requests(Runtime::Python, incoming, current),
+            &TreeHaverParseService::default(),
+            &snapshot,
+            &context,
+            python_merge::declaration_owners,
+            python_merge::directional::plan_insertions,
+        )
+        .unwrap();
+        assert_eq!(result.rendered.unwrap().output, expected);
+        assert!(result.output_parse.is_some());
+        assert_eq!(parser.calls.load(Ordering::SeqCst), 2);
+    }
+    let (_, snapshot, context) = setup_runtime(Runtime::Python, Behavior::Normal);
+    let result = ast_merge::typed_merge2::merge_directional_native_sources(
+        "python",
+        directional_requests(Runtime::Python, "a = 1\nb = 2\nc = 3\n", "c = 30\na = 10\n"),
+        &TreeHaverParseService::default(),
+        &snapshot,
+        &context,
+        python_merge::declaration_owners,
+        python_merge::directional::plan_insertions,
+    )
+    .unwrap();
+    assert!(result.rendered.unwrap_err().contains("reordered"));
+    assert!(result.output_parse.is_none());
 }
 
 struct FacadeHost {

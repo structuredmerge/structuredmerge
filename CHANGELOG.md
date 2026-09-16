@@ -217,6 +217,8 @@
 
 - Add internal TreeHaver-backed directional merge orchestration with Rust-owned planning, native output verification, explicit incoming/current identities, and cancellation checks; production merge2 facade support remains pending.
 
+- Add Rust-owned Python directional placement using native whitespace-inclusive LibCST spans, preserving current comments and layout while inserting incoming-only declarations; common merge2 facade integration remains pending.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
