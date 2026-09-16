@@ -22,6 +22,7 @@ pub use ast_merge::owner_diff::{DiffSourceRegion, OwnerChange, OwnerChangeKind, 
 pub use diff::*;
 mod edits;
 pub mod native_conflict_projection;
+pub mod native_operation;
 pub mod operation;
 pub mod operation_result;
 pub mod portable_conflict;

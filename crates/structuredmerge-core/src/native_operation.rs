@@ -1,0 +1,610 @@
+//! Explicit native-profile execution of the common request/result contract.
+//! Not a replacement provider registry: profiles must be explicitly requested;
+//! no family-default selection, host workflow merge, or fallback is introduced.
+
+use crate::{
+    CoreError, CoreParseResult, DiagnosticSeverity, Metadata, OperationKind, ParseOptions,
+    ParseRequest, ParserSelection, SourceEncoding, SourceInput, SourceRole,
+    operation::{OperationPolicy, ValidatedOperationRequest},
+    operation_result::*,
+    portable_conflict::{ConflictEvidence, ConflictRecord},
+    portable_diagnostic::*,
+};
+use ast_merge::{
+    SourcePreservingOwnerDocument, SourceRevision, ThreeWayMergeOutcome,
+    typed_merge::{NativeMergeError, NativeMergeExecution, merge_native_sources_with_evidence},
+};
+use tree_haver::service::{
+    ExecutionContext, PARSE_REQUEST_SCHEMA, ParseService, ParsedResult, ParserRegistrySnapshot,
+    ServiceError, TreeHaverParseService,
+};
+
+type Analyzer = fn(&ParsedResult) -> Result<SourcePreservingOwnerDocument, String>;
+
+fn empty_result(request: &ValidatedOperationRequest) -> OperationResult {
+    let input = request.request();
+    OperationResult {
+        schema: OPERATION_RESULT_SCHEMA.into(),
+        request_id: input.request_id.clone(),
+        operation: input.operation.kind(),
+        ok: false,
+        provider: ResultProvider {
+            provider_id: None,
+            family: None,
+            delegation: None,
+            extra: Metadata::new(),
+        },
+        profile: ResultProfile { profile_id: None, parser: None, extra: Metadata::new() },
+        diagnostics: vec![],
+        changes: vec![],
+        conflicts: vec![],
+        fallbacks: vec![],
+        render_report: Metadata::new(),
+        verification: ResultVerification {
+            consumed_source_roles: None,
+            directional_roles_preserved: None,
+            base_participated: None,
+            classification_reached: Some(false),
+            output_reparsed: None,
+            structural_equivalence: None,
+            preservation: None,
+            retained_source_regions: None,
+            extra: Metadata::new(),
+        },
+        analysis: None,
+        diff: None,
+        output: None,
+        conflicted_output: None,
+        extensions: input.extensions.clone(),
+        metadata: input.metadata.clone(),
+        // Request-only forward fields must not shadow result-reserved fields.
+        extra: [("request_forwarding".into(), serde_json::json!({
+            "extra": input.extra, "path_name": input.path_name, "policy": input.operation,
+            "provider_selection": input.provider_selection, "parser_selection": input.parser_selection,
+        }))].into(),
+    }
+}
+
+fn diagnostic(
+    result: &mut OperationResult,
+    category: PortableCategory,
+    code: &str,
+    message: impl Into<String>,
+    layer: DiagnosticLayer,
+    source_refs: Vec<DiagnosticSourceRef>,
+) {
+    result.diagnostics.push(DiagnosticRecord::Canonical(PortableDiagnostic {
+        schema: DIAGNOSTIC_SCHEMA.into(),
+        id: format!("diagnostic.{}", result.diagnostics.len()),
+        sequence: result.diagnostics.len() as u64,
+        severity: DiagnosticSeverity::Error,
+        category,
+        code: code.into(),
+        message: message.into(),
+        blocking: true,
+        operation: Some(result.operation),
+        request_id: Some(result.request_id.clone()),
+        source_refs,
+        subject_refs: None,
+        cause_ids: vec![],
+        related_ids: vec![],
+        origin: DiagnosticOrigin {
+            layer,
+            provider_id: result.provider.provider_id.clone(),
+            backend_id: None,
+            package: None,
+            package_version: None,
+            native_code: None,
+            extra: Metadata::new(),
+        },
+        data: Metadata::new(),
+        extensions: vec![],
+        metadata: Metadata::new(),
+        extra: Metadata::new(),
+    }));
+}
+
+fn service_failure(result: &mut OperationResult, error: ServiceError) {
+    let category = match &error {
+        ServiceError::Cancelled => PortableCategory::Cancelled,
+        ServiceError::DeadlineExceeded => PortableCategory::DeadlineExceeded,
+        ServiceError::LimitExceeded => PortableCategory::ResourceLimit,
+        ServiceError::Selection(_) => PortableCategory::SelectionError,
+        ServiceError::Source(_) | ServiceError::InvalidRequest => PortableCategory::InvalidRequest,
+        _ => PortableCategory::InternalError,
+    };
+    let failure = crate::ParserFailure::from(error);
+    // Do not copy native exception text into the public diagnostic message.
+    diagnostic(
+        result,
+        category,
+        &failure.code,
+        "operation could not complete the parser service call",
+        DiagnosticLayer::Runner,
+        vec![],
+    );
+    let DiagnosticRecord::Canonical(record) = result.diagnostics.last_mut().unwrap() else {
+        unreachable!()
+    };
+    record.origin.backend_id = failure.backend_id;
+    record.origin.native_code = failure.native_code;
+    if let Some(selection) = failure.selection {
+        record.data.insert("selection".into(), serde_json::to_value(selection).unwrap());
+    }
+}
+
+fn retain_parses(result: &mut OperationResult, parses: &[ParsedResult]) {
+    if let Some(first) = parses.first() {
+        result.profile.parser = Some(ResultParserSelection {
+            requested_backend: first.selection.requested.backend_id.clone(),
+            selected_backend: Some(first.backend.id.clone()),
+            selection_mode: Some(
+                if first.selection.requested.backend_id.is_some() { "explicit" } else { "policy" }
+                    .into(),
+            ),
+            extra: Metadata::new(),
+        });
+    }
+    result.extra.insert(
+        "input_parses".into(),
+        serde_json::to_value(parses.iter().cloned().map(CoreParseResult::from).collect::<Vec<_>>())
+            .unwrap(),
+    );
+}
+
+fn execution_failure(result: &mut OperationResult, error: NativeMergeError) {
+    match error {
+        NativeMergeError::Parse(error) | NativeMergeError::InputParseFailed { error, .. } => {
+            service_failure(result, error)
+        }
+        NativeMergeError::NativeParseRejected { parses, .. } => {
+            retain_parses(result, &parses);
+            for parsed in parses.iter().filter(|parsed| !parsed.document.output().ok) {
+                diagnostic(
+                    result,
+                    PortableCategory::ParseError,
+                    "parse.rejected",
+                    "native parser rejected input",
+                    DiagnosticLayer::Parser,
+                    vec![DiagnosticSourceRef {
+                        source_id: parsed.source.descriptor().source_id.clone(),
+                        role: parsed.source.descriptor().role,
+                        span: None,
+                        extra: Metadata::new(),
+                    }],
+                );
+            }
+        }
+        NativeMergeError::AnalysisRejected { failures, parses, .. } => {
+            retain_parses(result, &parses);
+            for failure in failures {
+                diagnostic(
+                    result,
+                    PortableCategory::UnsupportedFeature,
+                    "analysis.unsupported",
+                    failure.message,
+                    DiagnosticLayer::Analysis,
+                    vec![DiagnosticSourceRef {
+                        source_id: failure.source_id,
+                        role: failure.source_role,
+                        span: None,
+                        extra: Metadata::new(),
+                    }],
+                );
+            }
+        }
+        NativeMergeError::InvalidInputs => diagnostic(
+            result,
+            PortableCategory::InvalidRequest,
+            "request.invalid",
+            "invalid native operation inputs",
+            DiagnosticLayer::Transport,
+            vec![],
+        ),
+        NativeMergeError::Unsupported(message) => diagnostic(
+            result,
+            PortableCategory::UnsupportedFeature,
+            "operation.unsupported",
+            message,
+            DiagnosticLayer::Provider,
+            vec![],
+        ),
+    }
+}
+
+fn finalize(
+    mut result: OperationResult,
+    request: &ValidatedOperationRequest,
+    evidence: &ConflictEvidence,
+    context: &ExecutionContext,
+) -> Result<OperationResult, CoreError> {
+    if let Err(error) = context.check() {
+        result = empty_result(request);
+        service_failure(&mut result, error);
+    }
+    result.validate_with_conflict_evidence(request, evidence).map_err(|error| CoreError {
+        code: "operation.invalid_evidence".into(),
+        message: error.to_string(),
+    })?;
+    if let Err(error) = context.check() {
+        result = empty_result(request);
+        service_failure(&mut result, error);
+    }
+    Ok(result)
+}
+
+/// Execute the explicitly selected YAML mapping/Python declaration profile.
+/// Source resolution/validation has already completed. TreeHaver owns parser
+/// selection; `context` covers the whole call, including output verification.
+pub fn execute_native_operation(
+    request: &ValidatedOperationRequest,
+    snapshot: &ParserRegistrySnapshot,
+    context: &ExecutionContext,
+) -> Result<OperationResult, CoreError> {
+    let finish = |result, request, evidence| finalize(result, request, evidence, context);
+    let mut result = empty_result(request);
+    let evidence = ConflictEvidence::default();
+    if let Err(error) = context.check() {
+        service_failure(&mut result, error);
+        return finish(result, request, &evidence);
+    }
+    let input = request.request();
+    let (family, provider, analyzer): (&str, &str, Analyzer) =
+        match input.provider_selection.profile_id.as_deref() {
+            Some(crate::profiles::YAML_MAPPING) => {
+                ("yaml", "kernel.yaml", yaml_merge::typed::mapping_owners)
+            }
+            Some(crate::profiles::PYTHON_DECLARATIONS) => {
+                ("python", "kernel.python", python_merge::declaration_owners)
+            }
+            _ => {
+                diagnostic(
+                    &mut result,
+                    PortableCategory::UnsupportedFeature,
+                    "selection.unsupported_profile",
+                    "an explicit implemented native profile is required",
+                    DiagnosticLayer::Registry,
+                    vec![],
+                );
+                return finish(result, request, &evidence);
+            }
+        };
+    if input.provider_selection.provider_id.as_deref().is_some_and(|id| id != provider)
+        || input.provider_selection.family.as_deref().is_some_and(|name| name != family)
+        || input.provider_selection.dialect.is_some()
+        || !input.provider_selection.extra.is_empty()
+        || input.parser_selection.profile_id.is_some()
+        || input.parser_selection.language_version.is_some()
+        || !input.parser_selection.extra.is_empty()
+    {
+        diagnostic(
+            &mut result,
+            PortableCategory::SelectionError,
+            "selection.unsupported_constraints",
+            "native execution cannot honor the requested selection constraints",
+            DiagnosticLayer::Registry,
+            vec![],
+        );
+        return finish(result, request, &evidence);
+    }
+    let supported = match &input.operation {
+        OperationPolicy::Merge3(policy) => {
+            policy.render_policy == "source-preserving"
+                && policy.extra.is_empty()
+                && policy.fallback_policy.as_deref().is_none_or(|policy| policy == "none")
+        }
+        OperationPolicy::Diff2(policy) => {
+            policy.extra.is_empty()
+                && policy
+                    .comparison_profile
+                    .as_deref()
+                    .is_none_or(|profile| profile == "exact-source-owners")
+                && policy
+                    .equivalence
+                    .as_ref()
+                    .is_none_or(|rules| rules.is_empty() || rules == &["exact-source"])
+        }
+        _ => false,
+    };
+    let operation = match input.operation.kind() {
+        OperationKind::Merge3 => "merge3",
+        OperationKind::Diff2 => "diff2",
+        _ => "unsupported",
+    };
+    if !supported
+        || input
+            .provider_selection
+            .required_capabilities
+            .iter()
+            .any(|capability| capability != operation)
+        || input.extensions.iter().any(|extension| !extension.capabilities.is_empty())
+    {
+        diagnostic(
+            &mut result,
+            PortableCategory::UnsupportedFeature,
+            "operation.unsupported_requirements",
+            "operation or policy requirements are not implemented by the selected native profile",
+            DiagnosticLayer::Registry,
+            vec![],
+        );
+        return finish(result, request, &evidence);
+    }
+    result.provider.provider_id = Some(provider.into());
+    result.provider.family = Some(family.into());
+    result.profile.profile_id = input.provider_selection.profile_id.clone();
+    let mut parses = vec![];
+    for &role in input.operation.kind().source_roles() {
+        let source = request
+            .sources()
+            .get(&input.sources[&role].source_id)
+            .map_err(|error| CoreError::new(error.to_string()))?;
+        parses.push(ParseRequest {
+            schema: PARSE_REQUEST_SCHEMA.into(),
+            request_id: format!("{}:{role:?}", input.request_id),
+            source: SourceInput {
+                descriptor: source.descriptor().clone(),
+                bytes: source.bytes().to_vec(),
+            },
+            language: family.into(),
+            dialect: None,
+            selection: ParserSelection {
+                backend_id: input.parser_selection.backend.clone(),
+                preference: input.parser_selection.preference.clone(),
+                required_capabilities: input.parser_selection.required_capabilities.clone(),
+            },
+            options: ParseOptions {
+                // These owner profiles retain comments/layout as source bytes;
+                // they do not require optional parser comment/token channels.
+                comments: false,
+                tokens: false,
+                diagnostics: false,
+                native_extensions: true,
+            },
+            metadata: input.metadata.clone(),
+            extra: Metadata::new(),
+        });
+    }
+    if input.operation.kind() == OperationKind::Diff2 {
+        match ast_merge::typed_diff::diff_native_sources_with_evidence(
+            family,
+            parses,
+            &TreeHaverParseService::default(),
+            snapshot,
+            context,
+            analyzer,
+        ) {
+            Ok(execution) => {
+                retain_parses(&mut result, &execution.input_parses);
+                result.ok = true;
+                result.verification.classification_reached = Some(true);
+                result.verification.consumed_source_roles =
+                    Some(input.operation.kind().source_roles().to_vec());
+                for change in &execution.diff.changes {
+                    result.changes.push(ResultChange {
+                        id: change.id.clone(),
+                        classification: match change.kind {
+                            ast_merge::owner_diff::OwnerChangeKind::Added => "added",
+                            ast_merge::owner_diff::OwnerChangeKind::Deleted => "deleted",
+                            ast_merge::owner_diff::OwnerChangeKind::Edited => "edited",
+                        }
+                        .into(),
+                        subject_ref: Some(change.owner_id.clone()),
+                        path: change.after_path.clone().or(change.before_path.clone()),
+                        role_states: [
+                            ("before".into(), serde_json::to_value(&change.before).unwrap()),
+                            ("after".into(), serde_json::to_value(&change.after).unwrap()),
+                        ]
+                        .into(),
+                        source_spans: Default::default(),
+                        metadata: Metadata::new(),
+                        extra: Metadata::new(),
+                    });
+                }
+                result.diff = Some(ResultDiff {
+                    change_ids: execution
+                        .diff
+                        .changes
+                        .iter()
+                        .map(|change| change.id.clone())
+                        .collect(),
+                    extra: [("owner_diff".into(), serde_json::to_value(&execution.diff).unwrap())]
+                        .into(),
+                });
+            }
+            Err(error) => execution_failure(&mut result, error),
+        }
+        return finish(result, request, &evidence);
+    }
+    let mut execution = match merge_native_sources_with_evidence(
+        family,
+        parses.clone(),
+        &TreeHaverParseService::default(),
+        snapshot,
+        context,
+        analyzer,
+    ) {
+        Ok(execution) => execution,
+        Err(error) => {
+            execution_failure(&mut result, error);
+            return finish(result, request, &evidence);
+        }
+    };
+    retain_parses(&mut result, &execution.input_parses);
+    let classified = execution.rendered.classification.is_some();
+    result.verification.classification_reached = Some(classified);
+    result.verification.base_participated = Some(classified);
+    if classified {
+        result.verification.consumed_source_roles =
+            Some(input.operation.kind().source_roles().to_vec());
+    }
+    result.verification.extra.insert(
+        "owner_classification".into(),
+        serde_json::to_value(&execution.rendered.classification).unwrap(),
+    );
+    match execution.rendered.result.outcome {
+        ThreeWayMergeOutcome::Conflict => {
+            let projection = crate::native_conflict_projection::project_native_merge_conflicts(
+                &execution, request, provider,
+            )
+            .map_err(|error| CoreError {
+                code: "operation.invalid_evidence".into(),
+                message: error.to_string(),
+            })?;
+            result.conflicts = projection
+                .conflicts
+                .into_iter()
+                .map(|conflict| ConflictRecord::Canonical(Box::new(conflict)))
+                .collect();
+            result.diagnostics =
+                projection.diagnostics.into_iter().map(DiagnosticRecord::Canonical).collect();
+            finish(result, request, &projection.evidence)
+        }
+        ThreeWayMergeOutcome::Clean => {
+            if execution.output_parse.is_none() {
+                if let Err(error) = reparse_selected_output(
+                    &mut execution,
+                    parses.remove(0),
+                    snapshot,
+                    context,
+                    analyzer,
+                ) {
+                    execution_failure(&mut result, error);
+                    result.extra.insert(
+                        "output_parse".into(),
+                        serde_json::to_value(execution.output_parse.map(CoreParseResult::from))
+                            .unwrap(),
+                    );
+                    return finish(result, request, &evidence);
+                }
+            }
+            if let Err(error) = context.check() {
+                service_failure(&mut result, error);
+                return finish(result, request, &evidence);
+            }
+            result.extra.insert(
+                "output_parse".into(),
+                serde_json::to_value(execution.output_parse.clone().map(CoreParseResult::from))
+                    .unwrap(),
+            );
+            result.ok = true;
+            result.output = execution.rendered.result.output;
+            result.verification.output_reparsed = Some(true);
+            result.verification.structural_equivalence = Some(true);
+            result.verification.preservation = Some(vec![PreservationProperty {
+                property: "exact-source-partition".into(),
+                required: true,
+                status: "passed".into(),
+                extra: Metadata::new(),
+            }]);
+            let mut retained = vec![];
+            for segment in &execution.rendered.source_segments {
+                let role = revision_role(segment.revision);
+                retained.push(ResultSourceRegion {
+                    source_id: input.sources[&role].source_id.clone(),
+                    source_role: role,
+                    range: ResultRange {
+                        start_byte: segment.source_range.start_byte,
+                        end_byte: segment.source_range.end_byte,
+                        extra: Metadata::new(),
+                    },
+                    sha256: Some(segment.sha256.clone()),
+                    extra: [(
+                        "output_range".into(),
+                        serde_json::to_value(&segment.output_range).unwrap(),
+                    )]
+                    .into(),
+                });
+            }
+            result.verification.retained_source_regions = Some(retained);
+            result.render_report = [
+                ("producer".into(), serde_json::json!(provider)),
+                ("strategy".into(), serde_json::json!("source-plan")),
+                (
+                    "source_segments".into(),
+                    serde_json::to_value(execution.rendered.source_segments).unwrap(),
+                ),
+            ]
+            .into();
+            finish(result, request, &evidence)
+        }
+        ThreeWayMergeOutcome::Error => {
+            if let Some(error) = execution.verification_error {
+                service_failure(&mut result, error);
+            } else {
+                diagnostic(
+                    &mut result,
+                    PortableCategory::VerificationError,
+                    "merge.not_accepted",
+                    "Rust owner merge could not prove an accepted output",
+                    DiagnosticLayer::Verifier,
+                    vec![],
+                );
+            }
+            result.extra.insert(
+                "merge_diagnostics".into(),
+                serde_json::to_value(execution.rendered.result.diagnostics).unwrap(),
+            );
+            result.extra.insert(
+                "output_parse".into(),
+                serde_json::to_value(execution.output_parse.map(CoreParseResult::from)).unwrap(),
+            );
+            finish(result, request, &evidence)
+        }
+    }
+}
+
+fn revision_role(revision: SourceRevision) -> SourceRole {
+    match revision {
+        SourceRevision::Base => SourceRole::Base,
+        SourceRevision::Ours => SourceRole::Ours,
+        SourceRevision::Theirs => SourceRole::Theirs,
+    }
+}
+
+fn reparse_selected_output(
+    execution: &mut NativeMergeExecution,
+    mut parse: ParseRequest,
+    snapshot: &ParserRegistrySnapshot,
+    context: &ExecutionContext,
+    analyzer: Analyzer,
+) -> Result<(), NativeMergeError> {
+    let selection = execution
+        .rendered
+        .classification
+        .as_ref()
+        .and_then(|c| c.whole_source_selection)
+        .ok_or(NativeMergeError::InvalidInputs)?;
+    let selected = execution
+        .input_parses
+        .iter()
+        .find(|p| p.source.descriptor().role == revision_role(selection))
+        .ok_or(NativeMergeError::InvalidInputs)?;
+    let output =
+        execution.rendered.result.output.as_ref().ok_or(NativeMergeError::InvalidInputs)?;
+    parse.request_id = format!("{}:output", parse.request_id);
+    parse.source = crate::source_input(
+        execution.output_source.as_ref().ok_or(NativeMergeError::InvalidInputs)?.source_id.clone(),
+        SourceRole::Output,
+        SourceEncoding::Utf8,
+        output.as_bytes().to_vec(),
+    )
+    .map_err(|error| NativeMergeError::Parse(ServiceError::Source(error)))?;
+    parse.selection.backend_id = Some(selected.backend.id.clone());
+    let mut parsed = TreeHaverParseService::default()
+        .parse_batch(vec![parse], snapshot, context)
+        .map_err(NativeMergeError::Parse)?;
+    context.check().map_err(NativeMergeError::Parse)?;
+    let parsed = parsed.pop().ok_or(NativeMergeError::InvalidInputs)?;
+    let accepted = parsed.document.output().ok
+        && analyzer(&parsed)
+            .ok()
+            .zip(analyzer(selected).ok())
+            .is_some_and(|(output, input)| output == input);
+    execution.output_parse = Some(parsed);
+    if !accepted {
+        return Err(NativeMergeError::Unsupported(
+            "selected output failed native reparse/owner verification".into(),
+        ));
+    }
+    Ok(())
+}

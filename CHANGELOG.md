@@ -193,6 +193,8 @@
 
 - Retain executed Rust owner-classification decisions and project edit/edit, delete/modify, and add/add conflicts into canonical source-verified records.
 
+- Execute explicit native diff2 and merge3 profiles through the common Rust operation contract, retaining parser and decision evidence, verifying selected outputs, and rejecting unsupported requirements without fallback.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

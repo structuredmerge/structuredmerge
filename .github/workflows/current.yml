@@ -96,6 +96,8 @@ jobs:
           ruby-version: "4.0"
       - name: Verify native Psych facts drive Rust merge decisions
         run: mise exec -- cargo test -p yaml-merge --test typed_psych_merge --locked -- --ignored
+      - name: Verify common operation execution with native Psych
+        run: mise exec -- cargo test -p structuredmerge-core --test native_operations --locked -- --ignored
 
   ruby-bindings:
     name: Ruby bindings (${{ matrix.platform }}, Ruby ${{ matrix.ruby }})
