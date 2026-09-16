@@ -153,6 +153,8 @@
 
 - Generate Ruby and Python native-profile conformance tests from shared fixtures and run them against isolated installed core artifacts.
 
+- Exercise native Python merges through generated fixture suites against the installed core wheel, using a test-only LibCST provider adapter.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

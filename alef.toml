@@ -96,3 +96,16 @@ function = "native_merge_profiles"
 module = "structuredmerge_core"
 returns_result = false
 result_is_vec = true
+
+[crates.e2e.call.overrides.python]
+module = "native_merge_fixture"
+
+[crates.e2e.calls.python_native_merge]
+function = "run_python_native_merge"
+module = "native_merge_fixture"
+skip_languages = ["ruby"]
+args = [
+  { name = "base", field = "input.base", type = "string" },
+  { name = "ours", field = "input.ours", type = "string" },
+  { name = "theirs", field = "input.theirs", type = "string" },
+]

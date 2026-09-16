@@ -56,7 +56,7 @@ def main():
     python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     consumer = stage / "consumer"
     consumer.mkdir()
-    for name in ("test_parser_host.py", "libcst_facts.py"):
+    for name in ("test_parser_host.py", "libcst_facts.py", "native_merge_fixture.py"):
         shutil.copyfile(root / "packages/python/tests" / name, consumer / name)
     shutil.copytree(root / "e2e/python/tests", consumer / "generated")
     env = {key: value for key, value in os.environ.items() if key not in ("PYTHONPATH", "PYTHONHOME")}
