@@ -201,6 +201,8 @@
 
 - Share exact byte-gap layout evidence between native owner analysis and rendering, retaining source digests and explicit emission controllers without inferring comment attachment or deletion fallback.
 
+- Execute bounded common analyze requests through TreeHaver and Rust family ownership, retaining native parse references, verified owner/layout evidence and explicit unsupported-policy failures without rendering output.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

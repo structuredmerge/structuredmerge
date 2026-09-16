@@ -8,7 +8,7 @@ registry, generated binding export, or default-backend change.
 
 Supported profiles are `kernel.yaml.native_mapping.v1` and
 `kernel.python.native_declarations.v1`, with their existing bounded syntax and
-layout restrictions. Supported operations are exact-source owner `diff2` and
+layout restrictions. Supported operations are bounded owner `analyze`, exact-source owner `diff2` and
 source-preserving `merge3` without fallback. Requests must name a profile.
 Unsupported operations, selection constraints, policy fields and required
 extension capabilities fail before parsing. Parser selection remains TreeHaver's
@@ -36,7 +36,7 @@ deadline expiry discards completed output before returning a failure result.
 the implemented owner profile. They are not proofs of general language semantic
 equivalence. Marker options are preserved but no conflict markers are emitted.
 Complete common merge change/span projection, native diagnostic projection, provider
-registry/policy coverage, analyze/merge2, generated binding adoption and full
+registry/policy coverage, full analysis policy support, merge2, generated binding adoption and full
 portable conformance remain open. The entry point does not authorize filesystem
 writes, package publication or default cutover.
 
@@ -47,7 +47,7 @@ inputs, unsupported requirements, cancellation, deadlines, native output faults,
 source-ID collisions and reserved result-field isolation. It is not an installed
 Ruby/Python artifact test; Python dispatcher coverage remains to be added.
 
-## Analysis prerequisite: native node provenance
+## Native analysis and provenance
 
 `yaml_merge::typed::mapping_analysis` and `python_merge::declaration_analysis`
 retain a shared `NativeOwnerAnalysis`: the existing Rust-owned source document
@@ -63,11 +63,28 @@ merge/diff family entry points use this validation before returning owner data.
 These checks establish reference integrity, not semantic correctness of arbitrary
 external ownership decisions; only the Rust family analyzers produce this data.
 
-This is a prerequisite for common `analyze`, not its implementation. Slice 1024
-also requires comment regions, attachment and layout-controller decisions.
-The existing conservative source-gap retention must not be presented as those
-unimplemented decisions. No complete analysis-result envelope or new generated
-analysis API is claimed yet.
+Common `analyze` uses these executed family analyses and embeds their typed
+projection in the analysis-result envelope. The accepted depth is
+`exact-source-owners` (also the default). Comment/token requests, disabling
+ownership or native extensions, unknown depths and unknown policy fields fail
+before parsing. The profile requires native facts for ownership; it does not
+silently drop those requests. A selected parser returning unhandled comments
+also fails rather than reporting unperformed attachment analysis.
+
+The result retains a complete `CoreParseResult` and its parse request reference,
+actual owners, logical match keys, byte spans/digests, layout attachments and
+one emission-ownership decision per nonempty gap. `node_id` identifies the first
+native boundary node; compatible `node_ids` retains all nodes establishing a
+composite owner (Psych key/value pairs). No synthetic parser pair node is created.
+Native extensions stay intact inside the embedded parse result.
+
+Comment-region arrays are empty and explicitly marked not requested; source gaps
+containing comment bytes are not described as classified comments. There is no
+output, diff, edit plan or output-verification claim. Syntax/analysis failures
+retain source-role diagnostics and parsed evidence, and cancellation/deadline
+checks discard late successful analysis. The common envelope's general analysis
+validation remains schema-level; it does not independently validate arbitrary
+external analysis payloads. This executor builds from validated Rust analysis.
 
 `NativeOwnerAnalysis::layout_gaps` now exposes the exact byte-gap plan also used
 by the owner renderer. It contains one slot preceding each owner and one suffix,
@@ -85,4 +102,6 @@ its declared controller emits it. Empty slots have no attachment reference.
 This extends the existing layout module with byte-source evidence; the older
 line-based blank-run augmenter remains for its existing callers. Native layout
 must not be reconstructed from that augmenter's blank-line counts. Common
-analysis still needs the remaining attachment contract and policy projection.
+analysis rejects nonempty ownerless layout because document ownership is not
+implemented. Complete comment/token policy support, generic analysis validation,
+Python common-dispatch integration tests and generated analysis exports remain open.

@@ -267,7 +267,18 @@ fn diff_spans_use_exact_utf8_bytes_and_do_not_invent_absent_revision_ranges() {
 #[ignore = "native Ruby/Psych common-operation integration gate"]
 fn unsupported_operations_policies_and_selection_never_invoke_the_parser() {
     let (provider, registry, context) = setup(Behavior::Normal);
-    let mut cases = vec![wire("analyze", &["a: one"]), wire("merge2", &["a: one", "a: two"])];
+    let mut cases = vec![wire("merge2", &["a: one", "a: two"])];
+    for (key, value) in [
+        ("comments", json!(true)),
+        ("tokens", json!(true)),
+        ("ownership", json!(false)),
+        ("native_extensions", json!(false)),
+        ("analysis_depth", json!("full")),
+    ] {
+        let mut analysis = wire("analyze", &["a: one"]);
+        analysis["policy"][key] = value;
+        cases.push(analysis);
+    }
     let base = wire("merge3", &["a: one", "a: two", "a: three"]);
     for pointer in [
         "/policy/fallback_policy",
@@ -309,6 +320,84 @@ fn native_parse_and_analysis_failures_keep_exact_revision_and_original_parse_evi
         assert_eq!(result.extra["input_parses"].as_array().unwrap().len(), 3);
         assert_eq!(result.verification.classification_reached, Some(false));
     }
+}
+
+#[test]
+#[ignore = "native Ruby/Psych common-operation integration gate"]
+fn analysis_retains_native_nodes_and_exact_shared_layout_without_rendering() {
+    let (provider, registry, context) = setup(Behavior::Normal);
+    let mut value = wire("analyze", &["# café\r\na: one\r\nb: two"]);
+    value["policy"] = json!({"analysis_depth": "exact-source-owners", "comments": false,
+        "tokens": false, "ownership": true, "native_extensions": true});
+    let input = request(value);
+    let result = execute_native_operation(&input, &registry, &context).unwrap();
+    assert!(result.ok);
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
+    assert!(result.output.is_none());
+    assert!(result.diff.is_none());
+    assert!(result.changes.is_empty());
+    assert!(result.conflicts.is_empty());
+    assert_eq!(result.verification.consumed_source_roles, Some(vec![SourceRole::Source]));
+    assert_eq!(result.verification.output_reparsed, None);
+    let analysis = serde_json::to_value(result.analysis.as_ref().unwrap()).unwrap();
+    assert_eq!(analysis["schema"], "structuredmerge.analysis-result/v1");
+    assert_eq!(analysis["parse_result_ref"], analysis["parse_result"]["parsed"]["request_id"]);
+    assert_eq!(analysis["parse_result"]["parsed"]["source"]["role"], "source");
+    let nodes = analysis["parse_result"]["parsed"]["nodes"].as_array().unwrap();
+    let owners = analysis["owners"].as_array().unwrap();
+    assert_eq!(owners.len(), 2);
+    assert_eq!(owners[0]["logical_identity"], json!(["yaml", "/a"]));
+    for owner in owners {
+        let ids = owner["node_ids"].as_array().unwrap();
+        assert_eq!(ids.len(), 2);
+        assert_eq!(owner["node_id"], ids[0]);
+        for id in ids {
+            assert!(nodes.iter().any(|node| node["id"] == *id));
+        }
+    }
+    let gaps = analysis["layout_gaps"].as_array().unwrap();
+    assert_eq!(gaps.len(), 2); // zero-width suffix is not a reported gap
+    assert_eq!(gaps[0]["kind"], "preamble");
+    assert_eq!(gaps[0]["span"]["range"]["end_byte"], "# café\r\n".len());
+    assert_eq!(gaps[1]["kind"], "interstitial");
+    assert!(gaps.iter().all(|gap| gap["fallback_controller_side"].is_null()));
+    let source = input.sources().get("source").unwrap();
+    for gap in gaps {
+        let range: ByteRange = serde_json::from_value(gap["span"]["range"].clone()).unwrap();
+        assert_eq!(gap["source_sha256"], source.range_digest(range).unwrap());
+    }
+    assert_eq!(
+        analysis["attachments"][0]["trailing_gap_id"],
+        analysis["attachments"][1]["leading_gap_id"]
+    );
+    assert_eq!(analysis["ownership"][1]["selected_owner_ref"], "/b");
+    assert!(analysis["comment_regions"].as_array().unwrap().is_empty());
+    assert_eq!(analysis["metadata"]["comment_analysis"], "not-requested");
+    result.validate_against(&input).unwrap();
+}
+
+#[test]
+#[ignore = "native Ruby/Psych common-operation integration gate"]
+fn analysis_failures_preserve_source_role_and_discard_late_results() {
+    for (text, expected) in [("a: [", "parse.rejected"), ("a: one\na: two", "analysis.unsupported")]
+    {
+        let (_, registry, context) = setup(Behavior::Normal);
+        let input = request(wire("analyze", &[text]));
+        let result = execute_native_operation(&input, &registry, &context).unwrap();
+        assert!(!result.ok);
+        assert!(result.analysis.is_none());
+        assert_eq!(code(&result), expected);
+        let DiagnosticRecord::Canonical(diagnostic) = &result.diagnostics[0] else { panic!() };
+        assert_eq!(diagnostic.source_refs[0].role, SourceRole::Source);
+        assert_eq!(result.extra["input_parses"].as_array().unwrap().len(), 1);
+    }
+    let (_, registry, context) = setup(Behavior::Cancel);
+    let result =
+        execute_native_operation(&request(wire("analyze", &["a: one"])), &registry, &context)
+            .unwrap();
+    assert_eq!(code(&result), "execution.cancelled");
+    assert!(!result.ok);
+    assert!(result.analysis.is_none());
 }
 
 #[test]

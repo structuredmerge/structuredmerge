@@ -318,6 +318,17 @@ pub fn execute_native_operation(
         return finish(result, request, &evidence);
     }
     let supported = match &input.operation {
+        OperationPolicy::Analyze(policy) => {
+            policy.extra.is_empty()
+                && policy
+                    .analysis_depth
+                    .as_deref()
+                    .is_none_or(|depth| depth == "exact-source-owners")
+                && policy.comments != Some(true)
+                && policy.tokens != Some(true)
+                && policy.ownership != Some(false)
+                && policy.native_extensions != Some(false)
+        }
         OperationPolicy::Merge3(policy) => {
             policy.render_policy == "source-preserving"
                 && policy.extra.is_empty()
@@ -337,6 +348,7 @@ pub fn execute_native_operation(
         _ => false,
     };
     let operation = match input.operation.kind() {
+        OperationKind::Analyze => "analyze",
         OperationKind::Merge3 => "merge3",
         OperationKind::Diff2 => "diff2",
         _ => "unsupported",
@@ -393,6 +405,66 @@ pub fn execute_native_operation(
             metadata: input.metadata.clone(),
             extra: Metadata::new(),
         });
+    }
+    if input.operation.kind() == OperationKind::Analyze {
+        let expected_source = parses[0].source.descriptor.clone();
+        let parsed = TreeHaverParseService::default().parse_batch(parses, snapshot, context);
+        if let Err(error) = context.check() {
+            service_failure(&mut result, error);
+            return finish(result, request, &evidence);
+        }
+        let parsed = match parsed {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                service_failure(&mut result, error);
+                return finish(result, request, &evidence);
+            }
+        };
+        if parsed.len() != 1 || parsed[0].source.descriptor() != &expected_source {
+            execution_failure(&mut result, NativeMergeError::InvalidInputs);
+            return finish(result, request, &evidence);
+        }
+        retain_parses(&mut result, &parsed);
+        if !parsed[0].document.output().ok {
+            execution_failure(
+                &mut result,
+                NativeMergeError::NativeParseRejected {
+                    sources: vec![parsed[0].source.descriptor().clone()],
+                    parses: parsed,
+                },
+            );
+            return finish(result, request, &evidence);
+        }
+        let analysis = match family {
+            "yaml" => yaml_merge::typed::mapping_analysis(&parsed[0]),
+            "python" => python_merge::declaration_analysis(&parsed[0]),
+            _ => unreachable!("profile already selected"),
+        }
+        .and_then(|analysis| {
+            crate::native_analysis_projection::project(&parsed[0], &analysis, family)
+        });
+        match analysis {
+            Ok(analysis) => {
+                result.analysis = Some(analysis);
+                result.ok = true;
+                result.verification.classification_reached = Some(true);
+                result.verification.consumed_source_roles = Some(vec![SourceRole::Source]);
+            }
+            Err(message) => diagnostic(
+                &mut result,
+                PortableCategory::UnsupportedFeature,
+                "analysis.unsupported",
+                message,
+                DiagnosticLayer::Analysis,
+                vec![DiagnosticSourceRef {
+                    source_id: parsed[0].source.descriptor().source_id.clone(),
+                    role: SourceRole::Source,
+                    span: None,
+                    extra: Metadata::new(),
+                }],
+            ),
+        }
+        return finish(result, request, &evidence);
     }
     if input.operation.kind() == OperationKind::Diff2 {
         match ast_merge::typed_diff::diff_native_sources_with_evidence(
