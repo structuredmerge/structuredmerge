@@ -26,6 +26,11 @@ sources = [
   "crates/structuredmerge-core/src/host.rs",
   "crates/structuredmerge-core/src/merge.rs",
   "crates/structuredmerge-core/src/diff.rs",
+  "crates/structuredmerge-core/src/operations.rs",
+  "crates/structuredmerge-core/src/operation.rs",
+  "crates/structuredmerge-core/src/operation_result.rs",
+  "crates/structuredmerge-core/src/portable_diagnostic.rs",
+  "crates/structuredmerge-core/src/portable_conflict.rs",
   "crates/ast-merge/src/owner_diff.rs",
   "crates/structuredmerge-core/src/edits.rs",
   "crates/structuredmerge-core/src/structural.rs",
@@ -75,6 +80,16 @@ param_name = "host"
 
 [crates.include]
 types = [
+  "OperationKind", "OperationRequest", "OperationSource", "OperationPolicy",
+  "AnalyzePolicy", "DiffPolicy", "DirectionalMergePolicy", "ThreeWayMergePolicy",
+  "MergeProviderSelection", "OperationParserSelection", "OperationResult",
+  "ResultProvider", "ResultParserSelection", "ResultProfile", "ResultRange", "ResultPoint", "ResultSpan",
+  "ResultSourceRegion", "ResultDiagnostic", "ResultChange", "ResultConflict", "PreservationProperty",
+  "ResultVerification", "ResultDiff", "ResultAnalysis",
+  "PortableCategory", "DiagnosticLayer", "DiagnosticOrigin", "DiagnosticSourceRef", "DiagnosticSubjectRef",
+  "PortableDiagnostic", "DiagnosticRecord", "ConflictCategory", "AlternativeState", "LocalizationStatus",
+  "ResolutionStatus", "ResolutionStrategy", "ConflictSubject", "ExactConflictRegion", "ConflictSourceAlternative",
+  "ConflictClassification", "ConflictLocalization", "ConflictResolution", "PortableConflict", "ConflictRecord",
   "NativeDiffRequest", "NativeDiffResult", "OwnerDiff", "OwnerChange", "OwnerChangeKind", "DiffSourceRegion",
   "TemplateSessionOptions", "TemplateSessionRequestReport", "TemplateProfileRequest",
   "DirectorySessionMode", "DirectorySessionProfile", "SessionDiagnostic", "TemplateSessionPlanReport",
@@ -105,10 +120,16 @@ types = [
   "NativeExtension", "ChildEdge", "ParseNode", "ParseSeverity", "ParseDiagnostic",
   "AttachmentHint", "ParseComment", "ParseOutput",
 ]
-functions = ["diff_native_owners", "diff_native_owners_controlled", "report_template_options", "report_template_profile", "plan_template_directory", "report_structural_boundary", "report_structural_limit", "report_structural_match", "report_structural_selection", "report_structural_destination", "report_structural_operations", "apply_explicit_source_edits", "native_merge_profiles", "create_operation_control", "parse_sources", "parse_sources_controlled", "register_parser_host", "unregister_parser_host", "merge_yaml_mapping", "merge_yaml_mapping_controlled", "merge_python_declarations", "merge_python_declarations_controlled"]
+functions = ["execute_operation", "execute_operation_controlled", "diff_native_owners", "diff_native_owners_controlled", "report_template_options", "report_template_profile", "plan_template_directory", "report_structural_boundary", "report_structural_limit", "report_structural_match", "report_structural_selection", "report_structural_destination", "report_structural_operations", "apply_explicit_source_edits", "native_merge_profiles", "create_operation_control", "parse_sources", "parse_sources_controlled", "register_parser_host", "unregister_parser_host", "merge_yaml_mapping", "merge_yaml_mapping_controlled", "merge_python_declarations", "merge_python_declarations_controlled"]
 
 [crates.exclude]
-methods = ["ByteRange.contains_range", "ByteRange.overlaps", "OwnedSourceRegion.validate"]
+types = ["ValidatedOperationRequest", "ConflictEvidence", "ResolutionAuthorization", "ConflictValidationContext",
+  "SourceDocument", "SourceMap", "ParserProvider", "ExecutionContext", "ParserRegistrySnapshot",
+  "ResultContractError", "DiagnosticContractError", "ConflictContractError", "OperationRequestError", "OperationRequestErrorCode"]
+methods = ["ByteRange.contains_range", "ByteRange.overlaps", "OwnedSourceRegion.validate",
+  "OperationRequest.validate", "OperationResult.validate_against", "OperationResult.validate_with_conflict_evidence",
+  "OperationKind.source_roles", "OperationPolicy.kind", "OperationPolicy.fallback_policy",
+  "DiagnosticRecord.id", "DiagnosticRecord.blocking", "ConflictRecord.id", "ConflictRecord.unresolved", "ConflictRecord.matches_path"]
 
 [crates.e2e]
 fixtures = "../fixtures/polyglot/typed-core"

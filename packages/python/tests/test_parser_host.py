@@ -454,6 +454,10 @@ class TypedParserHostTest(unittest.TestCase):
         classes = [node for node in declarations.body if isinstance(node, ast.ClassDef)]
         self.assertTrue(classes)
         for declaration in classes:
+            # TypedDict wire shapes exist only in the stub; actual native classes
+            # still require every declared runtime member to be present.
+            if any(isinstance(base, ast.Name) and base.id == "TypedDict" for base in declaration.bases):
+                continue
             exported = getattr(native, declaration.name)
             for member in declaration.body:
                 if isinstance(member, ast.FunctionDef):
@@ -463,6 +467,77 @@ class TypedParserHostTest(unittest.TestCase):
         for node in declarations.body:
             if isinstance(node, ast.FunctionDef):
                 self.assertTrue(callable(getattr(native, node.name)))
+
+    def test_native_source_roles_are_hashable_and_agree_with_integer_equality(self):
+        roles = ["SOURCE", "BEFORE", "AFTER", "INCOMING", "CURRENT", "BASE", "OURS", "THEIRS", "OUTPUT"]
+        for name in roles:
+            role = getattr(native.SourceRole, name)
+            copy = native.SourceRole(str(role))
+            self.assertEqual(role, copy)
+            self.assertEqual(hash(role), hash(copy))
+            discriminant = int(role)
+            self.assertEqual(role, discriminant)
+            self.assertEqual(hash(role), hash(discriminant))
+            self.assertEqual({role: name}[copy], name)
+            self.assertEqual({role: name}[discriminant], name)
+
+    def common_request(self, operation, texts):
+        roles = {"analyze": ["SOURCE"], "diff2": ["BEFORE", "AFTER"],
+                 "merge3": ["BASE", "OURS", "THEIRS"]}[operation]
+        sources = {}
+        for role_name, text in zip(roles, texts):
+            role = getattr(native.SourceRole, role_name)
+            data = text.encode("utf-8")
+            sources[role] = native.OperationSource(
+                source_id=role_name.lower(), role=role, byte_length=len(data),
+                sha256=hashlib.sha256(data).hexdigest(), encoding="utf-8", content=text, extra={})
+        if operation == "analyze":
+            policy = native.OperationPolicy.from_analyze(native.AnalyzePolicy(extra={}))
+            self.assertIsInstance(policy.analyze, native.AnalyzePolicy)
+        elif operation == "diff2":
+            policy = native.OperationPolicy.from_diff2(native.DiffPolicy(extra={}))
+            self.assertIsInstance(policy.diff2, native.DiffPolicy)
+        else:
+            policy = native.OperationPolicy.from_merge3(native.ThreeWayMergePolicy(
+                render_policy="source-preserving", fallback_policy="none", extra={}))
+            self.assertIsInstance(policy.merge3, native.ThreeWayMergePolicy)
+        return native.OperationRequest(
+            schema="structuredmerge.operation-request/v1", request_id="typed-common-" + operation,
+            operation=policy, sources=sources,
+            provider_selection=native.MergeProviderSelection(provider_id="kernel.python", family="python",
+                profile_id="kernel.python.native_declarations.v1", required_capabilities=[operation], extra={}),
+            parser_selection=native.OperationParserSelection(backend="python.libcst", preference=[],
+                required_capabilities=[], extra={}), extensions=[], metadata={}, extra={})
+
+    def test_common_operations_use_typed_factories_maps_and_registered_libcst(self):
+        limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+        cases = [("analyze", ["a = 1\n"]), ("diff2", ["a = 1\n", "a = 2\n"]),
+                 ("merge3", ["a = 1\nb = 2\n", "a = 3\nb = 2\n", "a = 1\nb = 4\n"])]
+        for operation, texts in cases:
+            request = self.common_request(operation, texts)
+            self.assertEqual(len(request.sources), len(texts))
+            result = core.execute_operation(request, limits)
+            self.assertTrue(result.ok, str(result.diagnostics))
+            self.assertEqual(result.request_id, request.request_id)
+            if operation == "analyze":
+                self.assertIsInstance(result.analysis, native.ResultAnalysis)
+            elif operation == "diff2":
+                self.assertTrue(result.changes)
+            else:
+                self.assertEqual(result.output, "a = 3\nb = 4\n")
+                self.assertTrue(result.verification.output_reparsed)
+        self.assertEqual(self.host.calls, 4)
+
+    def test_common_control_and_factory_type_errors_fail_before_callbacks(self):
+        with self.assertRaises(TypeError):
+            native.OperationPolicy.from_analyze(native.DiffPolicy(extra={}))
+        request = self.common_request("analyze", ["a = 1\n"])
+        limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+        control = core.create_operation_control()
+        control.cancel()
+        with self.assertRaisesRegex(RuntimeError, r"execution\.cancelled:"):
+            core.execute_operation_controlled(request, limits, control)
+        self.assertEqual(self.host.calls, 0)
 
     def test_portable_service_errors_cross_installed_binding(self):
         requests = self.merge_requests(["a = 1\n"] * 3)

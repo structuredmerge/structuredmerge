@@ -207,6 +207,8 @@
 
 - Add typed common-operation Rust facade entry points using registered ParserHost providers, checked inline source normalization and shared cancellation/deadline controls; unresolved source references never trigger implicit I/O.
 
+- Expose the experimental common operation facade and DTOs through Alef; verify typed Python analyze, diff2, and merge3 with installed LibCST callbacks. Ruby typed policy input remains a documented generator gap.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

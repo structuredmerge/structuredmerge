@@ -1,5 +1,43 @@
 # Common-operation binding integration status
 
+## Current status: additive common exports enabled locally
+
+Alef `6849273` generates typed Python tuple-variant factories (`from_analyze`,
+`from_diff2`, `from_merge3`, etc.) without replacing the payload getters. Runtime
+unit-enum hashing uses the discriminant, consistent with existing integer
+equality. Factory discovery, DTO coercion discovery and stubs share the Python
+variant selection. Generator tests pass: 234 PyO3 tests and 179 shared-generator
+tests. These are targeted checks, not a full Alef suite or platform matrix.
+
+The single active `alef.toml` now includes the common facade and DTOs. Both native
+targets compile. Installed Python tests construct requests entirely from typed
+DTOs and enum-keyed maps, execute analyze/diff2/merge3 with real LibCST callbacks,
+and verify exact merged output plus output reparsing. The declaration checker
+now distinguishes type-only `TypedDict` shapes from runtime classes. No JSON
+operation tunnel or hand-edited generated code was introduced.
+All 30 installed Python tests and six generated fixtures pass, including
+wrong-policy-type rejection and cancellation before native callbacks.
+
+**Ruby typed policy input remains incomplete.** An installed-gem probe passes an
+`OperationPolicyAnalyze` holding an `AnalyzePolicy` into `OperationRequest.new`.
+Generated Magnus conversion calls generic JSON serialization, producing the
+Data object's display string instead of its typed enum payload, and raises
+`TypeError`. Fix the generator's typed variant conversion; do not require callers
+to assemble JSON or lower the common contract. Ruby's existing installed tests
+(25 examples plus six fixtures) pass but do not prove common-operation support.
+
+Logs under kernel `tmp/`: `typed-policy-{python,ruby}-build.log`,
+`typed-policy-python-final-artifact.log`, `typed-policy-ruby-artifact.log`, and
+`typed-policy-ruby-probe.log`. Python wheel SHA-256:
+`0c5488ead559af872a2f7b3e849a0f8d4ed93e1daed88368c7ab181d731a36fd`.
+These additive exports remain experimental: consumer migration, complete
+sum-type/canonical-record round trips, Ruby common operations, full platform
+coverage, upstream-only generation and release/default authority remain open.
+All Alef fixes remain local. No package was published or default changed.
+
+The sections below preserve the earlier trials and their evidence; their
+restored-export status is superseded by this section.
+
 The Rust facade now exposes `execute_operation` and
 `execute_operation_controlled`, accepting the existing common `OperationRequest`
 and returning `OperationResult`. They normalize inline content/bytes, use the
