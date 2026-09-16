@@ -81,6 +81,8 @@ end
 
 git_status = capture!("git", "status", "--porcelain", "--untracked-files=no")
 alef_version = capture!("alef", "--version").lines.first.chomp
+alef_release = File.read(File.join(ROOT, "workspace-scripts", "alef-version")).strip
+abort "expected alef #{alef_release}, found #{alef_version}" unless alef_version == "alef #{alef_release}"
 manifest = {
   "schema" => "structuredmerge.distribution-artifact/v1",
   "artifact" => {
@@ -102,7 +104,7 @@ manifest = {
   },
   "generation" => {
     "alef" => alef_version,
-    "alef_source_revision" => File.read(File.join(ROOT, "workspace-scripts", "alef-source-revision")).strip,
+    "alef_release" => alef_release,
     "config_sha256" => Digest::SHA256.file(File.join(ROOT, "alef.toml")).hexdigest,
     "record_sha256" => Digest::SHA256.file(File.join(ROOT, ".alef-generation.toml")).hexdigest
   },

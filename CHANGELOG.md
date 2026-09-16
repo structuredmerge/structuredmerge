@@ -6,6 +6,8 @@
 
 - Point kernel crate metadata and new artifact provenance at structuredmerge/structuredmerge; remove kettle-rusty from this repository’s release inventory while accepting pre-split registry metadata.
 
+- Use upstream Alef 0.89.0, preserve generated Ruby API compatibility, include dual-license texts in generated packages, generate platform linker configuration, and track the kernel Cargo dependency lock.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider

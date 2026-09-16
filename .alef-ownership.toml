@@ -20,6 +20,7 @@ owned_paths = [
   "docs/reference/errors.md",
   "docs/reference/types.md",
   "packages/ruby/Gemfile",
+  "packages/ruby/LICENSE",
   "packages/ruby/README.md",
   "packages/ruby/Rakefile",
   "packages/ruby/Steepfile",

@@ -104,8 +104,7 @@ jobs:
       - name: Install Alef
         shell: bash
         run: |
-          cargo install --git https://github.com/structuredmerge/alef.git \
-            --rev "$(cat workspace-scripts/alef-source-revision)" --locked
+          cargo install alef --version "=$(cat workspace-scripts/alef-version)" --locked
       - name: Build platform gem and provenance
         run: mise run ruby-package
       - name: Measure packaged cold paths
@@ -149,8 +148,7 @@ jobs:
       - name: Install Alef
         shell: bash
         run: |
-          cargo install --git https://github.com/structuredmerge/alef.git \
-            --rev "$(cat workspace-scripts/alef-source-revision)" --locked
+          cargo install alef --version "=$(cat workspace-scripts/alef-version)" --locked
       - name: Verify generated bindings
         run: alef verify --exit-code
       - name: Reproduce generated tree twice

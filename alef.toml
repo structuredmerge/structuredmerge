@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.85.15"
+alef_version = "0.89.0"
 languages = ["ruby"]
 
 [workspace.ownership]
@@ -7,9 +7,18 @@ user_owned = ["rustfmt.toml"]
 
 [workspace.scaffold]
 description = "Generated Ruby host-provider prototype for StructuredMerge"
-license = "AGPL-3.0-or-later"
+license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 repository = "https://github.com/structuredmerge/structuredmerge"
 authors = ["Peter Boling"]
+
+[workspace.scaffold.cargo.env]
+RUST_MIN_STACK = "16777216"
+
+# ARM Linux builds run on native ARM runners, not cross-compilation hosts.
+[workspace.scaffold.cargo.targets]
+aarch64_unknown_linux_gnu = false
+x86_64_unknown_linux_musl = false
+wasm32_unknown_unknown = false
 
 [[crates]]
 name = "structuredmerge-host-prototype-core"
