@@ -32,6 +32,9 @@ pub struct NativeMergeResult {
     /// Complete input parse results in semantic role order, including warnings
     /// and every rejected revision. `rejected_parse` is the primary shorthand.
     pub input_parses: Vec<CoreParseResult>,
+    /// Actual reparse of synthesized output, including native rejection. None
+    /// when rendering was not attempted or an already-parsed input was selected.
+    pub output_parse: Option<CoreParseResult>,
     pub sources: Vec<crate::SourceDescriptor>,
     pub output_source: Option<crate::SourceDescriptor>,
     pub source_segments: Vec<RetainedSourceSegment>,
@@ -113,6 +116,7 @@ fn project_result(
                 output: result.output,
                 policies: result.policies,
                 rejected_parse: None,
+                output_parse: execution.output_parse.map(CoreParseResult::from),
                 input_parses: execution
                     .input_parses
                     .into_iter()
@@ -136,6 +140,7 @@ fn project_result(
                 output_source: None,
                 source_segments: vec![],
                 rejected_parse,
+                output_parse: None,
                 input_parses,
             })
         }

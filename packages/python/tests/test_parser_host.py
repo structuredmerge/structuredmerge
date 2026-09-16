@@ -139,6 +139,10 @@ class TypedParserHostTest(unittest.TestCase):
         output = result.output.encode()
         self.assertEqual(result.output_source.sha256, hashlib.sha256(output).hexdigest())
         self.assertEqual(result.output_source.byte_length, len(output))
+        self.assertTrue(result.output_parse.parsed.ok)
+        self.assertEqual(result.output_parse.parsed.source.role, core.SourceRole.OUTPUT)
+        self.assertEqual(result.output_parse.parsed.source.sha256, result.output_source.sha256)
+        self.assertEqual(result.output_parse.selection.selected_backend, "python.libcst")
         descriptors = {source.source_id: source for source in result.sources}
         self.assertNotIn(result.output_source.source_id, descriptors)
         cursor = 0
@@ -152,6 +156,37 @@ class TypedParserHostTest(unittest.TestCase):
             self.assertEqual(descriptors[segment.source_id].role, segment.source_role)
             cursor = segment.output_range.end_byte
         self.assertEqual(cursor, len(output))
+
+    def test_verification_rejection_retains_diagnostics_without_exposing_output(self):
+        original = self.host.parse_batch
+        def reject_output(request):
+            if request.items[0].source.descriptor.role != core.SourceRole.OUTPUT:
+                return original(request)
+            item = request.items[0]
+            # Controlled provider rejection tests the verification boundary,
+            # not LibCST's acceptance of this otherwise valid rendered source.
+            diagnostic = core.ParseDiagnostic(id="verification.reject", severity=core.ParseSeverity.ERROR,
+                category="parse_error", message="controlled output rejection", source_role=core.SourceRole.OUTPUT,
+                blocking=True, metadata={}, extra={}, code="test.output_rejected", span=None, node_id=None)
+            return core.ParseBatchResult(items=[native.ParseOutput(request_id=item.request_id,
+                source=item.source.descriptor, ok=False, root_id=None, nodes=[], comments=[],
+                diagnostics=[diagnostic], extensions=[], metadata={}, extra={})])
+        self.host.parse_batch = reject_output
+        result = self.merge(["a = 1\nb = 2\n", "a = 3\nb = 2\n", "a = 1\nb = 4\n"])
+        self.assertEqual(result.outcome, core.ThreeWayMergeOutcome.ERROR)
+        self.assertIsNone(result.output)
+        self.assertIsNone(result.output_source)
+        self.assertEqual(result.source_segments, [])
+        self.assertEqual(len(result.input_parses), 3)
+        self.assertFalse(result.output_parse.parsed.ok)
+        self.assertEqual(result.output_parse.parsed.diagnostics[0].code, "test.output_rejected")
+
+    def test_whole_source_selection_does_not_fabricate_verification_parse(self):
+        result = self.merge(["a = 1\n"] * 3)
+        self.assertEqual(result.output, "a = 1\n")
+        self.assertIsNone(result.output_parse)
+        self.assertEqual(self.host.calls, 1)
+        self.assertEqual(len(result.input_parses), 3)
 
     def test_function_and_class_bodies_merge_as_whole_declarations(self):
         base = "def café():\n    return 1\n\nclass Thing:\n    value = 2\n"

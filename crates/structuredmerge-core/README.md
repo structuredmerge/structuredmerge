@@ -127,5 +127,14 @@ on clean, conflicted, rendering-failed, and native-syntax-rejected results.
 `rejected_parse` remains a compatibility shorthand for the first failing input.
 Native warnings and errors belong to each parse result; they are not recoded as
 merge diagnostics. Provider-service and unsupported-analysis exceptions still
-need the full portable failure envelope, and output-verification parse details
-are not yet included in this input-only collection.
+need the full portable failure envelope.
+
+`output_parse` separately retains the actual native reparse of rendered bytes,
+including its parser identity, source digest, syntax facts, and diagnostics.
+An explicit native rejection prevents owner analysis and clean output; its
+parse evidence remains available even though `output`, `output_source`, and
+`source_segments` are absent. `output_parse` is absent when no output reparse
+occurred, including whole-source selection of an already validated input.
+Absence is not a successful verification claim. Callback exceptions and
+malformed verification batches still require structured service-failure
+evidence in the eventual operation envelope.

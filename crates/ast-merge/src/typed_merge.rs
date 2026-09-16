@@ -38,6 +38,7 @@ pub struct NativeMergeExecution {
     pub sources: Vec<SourceDescriptor>,
     pub output_source: Option<SourceDescriptor>,
     pub input_parses: Vec<ParsedResult>,
+    pub output_parse: Option<ParsedResult>,
 }
 
 pub fn merge_native_sources_with_evidence(
@@ -82,6 +83,7 @@ pub fn merge_native_sources_with_evidence(
     while sources.iter().any(|source| source.source_id == output_id) {
         output_id.push('_');
     }
+    let mut output_parse = None;
     let mut verify = |output: &str| -> Result<SourcePreservingOwnerDocument, String> {
         verification.request_id = "merge-verification".into();
         verification.source = source_input(
@@ -91,10 +93,20 @@ pub fn merge_native_sources_with_evidence(
             output.as_bytes().to_vec(),
         )
         .map_err(|error| error.to_string())?;
-        let parsed = service
+        let mut parsed = service
             .parse_batch(vec![verification.clone()], snapshot, context)
             .map_err(|error| format!("{error:?}"))?;
-        analyze(parsed.first().ok_or("missing verification parse")?)
+        if parsed.len() != 1 {
+            return Err("expected one verification parse".into());
+        }
+        let parsed = parsed.remove(0);
+        let analysis = if parsed.document.output().ok {
+            analyze(&parsed)
+        } else {
+            Err("native parser rejected rendered output".into())
+        };
+        output_parse = Some(parsed);
+        analysis
     };
     let rendered = merge_source_preserving_owners_with_evidence(
         documents.remove(&SourceRole::Base).ok_or(NativeMergeError::InvalidInputs)?,
@@ -118,5 +130,11 @@ pub fn merge_native_sources_with_evidence(
             .map_err(|error| NativeMergeError::Unsupported(error.to_string()))
         })
         .transpose()?;
-    Ok(NativeMergeExecution { rendered, sources, output_source, input_parses: parsed })
+    Ok(NativeMergeExecution {
+        rendered,
+        sources,
+        output_source,
+        input_parses: parsed,
+        output_parse,
+    })
 }

@@ -145,6 +145,10 @@ RSpec.describe StructuredmergeCore do
     expect(descriptors).not_to have_key(result.output_source.source_id)
     expect(result.output_source.sha256).to eq(Digest::SHA256.hexdigest(result.output))
     expect(result.output_source.byte_length).to eq(result.output.bytesize)
+    expect(result.output_parse.parsed.ok).to be(true)
+    expect(result.output_parse.parsed.source.role.to_s).to eq("output")
+    expect(result.output_parse.parsed.source.sha256).to eq(result.output_source.sha256)
+    expect(result.output_parse.selection.selected_backend).to eq("ruby.typed.psych")
     cursor = 0
     expect(result.source_segments).not_to be_empty
     result.source_segments.each do |segment|
@@ -157,6 +161,48 @@ RSpec.describe StructuredmergeCore do
       cursor = segment.output_range.end_byte
     end
     expect(cursor).to eq(result.output.bytesize)
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "retains output verification rejection without exposing unverified output" do
+    host = TypedPsychHost.new
+    original = host.method(:parse_batch)
+    host.define_singleton_method(:parse_batch) do |request|
+      item = request.items.first
+      next original.call(request) unless item.source.descriptor.role.to_s == "output"
+      # Controlled provider rejection, not a claim about Psych accepting these bytes.
+      diagnostic = StructuredmergeCore::ParseDiagnostic.new(
+        id: "verification.reject", severity: "error", category: "parse_error",
+        message: "controlled output rejection", source_role: "output", blocking: true,
+        metadata: {}, extra: {}, code: "test.output_rejected", span: nil, node_id: nil
+      )
+      StructuredmergeCore::ParseBatchResult.new(items: [StructuredmergeCore::ParseOutput.new(
+        request_id: item.request_id, source: item.source.descriptor, ok: false,
+        root_id: nil, nodes: [], comments: [], diagnostics: [diagnostic], extensions: [], metadata: {}, extra: {}
+      )])
+    end
+    described_class.register_parser_host(host)
+    result = described_class.merge_yaml_mapping(merge_requests(["a: 1\nb: 2\n", "a: 3\nb: 2\n", "a: 1\nb: 4\n"]), merge_limits)
+    expect(result.outcome.to_s).to eq("error")
+    expect(result.output).to be_nil
+    expect(result.output_source).to be_nil
+    expect(result.source_segments).to be_empty
+    expect(result.input_parses.length).to eq(3)
+    expect(result.output_parse.parsed.ok).to be(false)
+    expect(result.output_parse.parsed.diagnostics.first.code).to eq("test.output_rejected")
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "does not fabricate a verification parse for whole-source selection" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    result = described_class.merge_yaml_mapping(merge_requests(["a: one\n"] * 3), merge_limits)
+    expect(result.output).to eq("a: one\n")
+    expect(result.output_parse).to be_nil
+    expect(result.input_parses.length).to eq(3)
+    expect(host.calls).to eq(1)
   ensure
     described_class.unregister_parser_host("ruby.typed.psych")
   end

@@ -139,6 +139,8 @@
 
 - Expose all validated native input parse results, diagnostics, and parser-selection provenance on typed merge results in both generated bindings.
 
+- Retain native output-verification parse evidence through both bindings, including rejection diagnostics without exposing unverified merged output.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
