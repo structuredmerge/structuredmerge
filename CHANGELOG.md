@@ -213,6 +213,8 @@
 
 - Add Rust directional whole-owner classification with explicit incoming/current identities, current-preferred decisions, and exact layout evidence; merge2 facade execution remains unsupported.
 
+- Add directional byte rendering for explicit Rust family insertion plans, preserving all current bytes and incoming/current provenance with independent byte and output-owner verification; native merge2 integration remains pending.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
