@@ -149,6 +149,8 @@
 
 - Generate Ruby RBS and Python native type declarations from the shared Alef configuration, ship them in isolated artifacts, and validate them in artifact tests.
 
+- Expose scoped native merge profile descriptions and correlate merge results with the invoked profile, explicitly separating experimental support from parser availability and default approval.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

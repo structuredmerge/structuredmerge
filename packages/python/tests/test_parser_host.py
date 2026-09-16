@@ -88,6 +88,22 @@ class TypedParserHostTest(unittest.TestCase):
     def tearDown(self):
         core.unregister_parser_host("python.libcst")
 
+    def test_native_profiles_declare_scope_without_default_approval(self):
+        profiles = core.native_merge_profiles()
+        self.assertEqual([profile.family for profile in profiles], ["python", "yaml"])
+        self.assertEqual(len({profile.id for profile in profiles}), 2)
+        for profile in profiles:
+            self.assertEqual(profile.operation, "merge3")
+            self.assertEqual(profile.semantic_runtime, "rust")
+            self.assertEqual(profile.merge_crate, "ast-merge")
+            self.assertEqual(profile.parse_contract, "structuredmerge.parse-result/v1")
+            self.assertTrue(profile.experimental)
+            self.assertFalse(profile.approved_as_default)
+            self.assertTrue(profile.syntax_scope)
+            self.assertTrue(profile.limitations)
+            self.assertTrue(callable(getattr(core, profile.entry_point)))
+        self.assertEqual(self.host.calls, 0)
+
     def test_installed_native_type_declarations_match_exported_names(self):
         stub = Path(core.__file__).parent / "_native.pyi"
         declarations = ast.parse(stub.read_text(encoding="utf-8"))
@@ -132,6 +148,7 @@ class TypedParserHostTest(unittest.TestCase):
         self.assertEqual(failed.outcome, core.ThreeWayMergeOutcome.ERROR)
         self.assertEqual(failed.input_failure.code, "parser.provider_fault")
         self.assertEqual(failed.input_failure.backend_id, "python.libcst")
+        self.assertEqual(failed.profile_id, "kernel.python.native_declarations.v1")
         self.assertIn("native test failure", failed.input_failure.native_message)
         self.assertIsNone(failed.output)
         self.assertIsNone(failed.output_parse)
@@ -168,6 +185,7 @@ class TypedParserHostTest(unittest.TestCase):
         ]
         result = self.merge(sources)
         self.assertEqual(result.outcome, core.ThreeWayMergeOutcome.CLEAN)
+        self.assertEqual(result.profile_id, "kernel.python.native_declarations.v1")
         self.assertEqual(result.output, "\ufeff# header\r\né = 'ours'  # stable\r\nbeta = 3")
         self.assertEqual(self.host.calls, 2)
         self.assertEqual([parsed.parsed.source.role for parsed in result.input_parses],

@@ -91,6 +91,23 @@ RSpec.describe StructuredmergeCore do
     described_class::ParseLimits.new(max_batch_items: 3, max_input_bytes: 10000, max_nodes: 1000, max_diagnostics: 20)
   end
 
+  it "declares native profile scope separately from parser availability and default approval" do
+    profiles = described_class.native_merge_profiles
+    expect(profiles.map(&:family)).to eq(%w[python yaml])
+    expect(profiles.map(&:id).uniq.length).to eq(2)
+    profiles.each do |profile|
+      expect(profile.operation).to eq("merge3")
+      expect(profile.semantic_runtime).to eq("rust")
+      expect(profile.merge_crate).to eq("ast-merge")
+      expect(profile.parse_contract).to eq("structuredmerge.parse-result/v1")
+      expect(profile.experimental).to be(true)
+      expect(profile.approved_as_default).to be(false)
+      expect(profile.syntax_scope).not_to be_empty
+      expect(profile.limitations).not_to be_empty
+      expect(described_class).to respond_to(profile.entry_point)
+    end
+  end
+
   it "preserves portable service failure codes through the installed binding" do
     host = TypedPsychHost.new
     described_class.register_parser_host(host)
@@ -116,6 +133,7 @@ RSpec.describe StructuredmergeCore do
     expect(failed.outcome.to_s).to eq("error")
     expect(failed.input_failure.code).to eq("parser.provider_fault")
     expect(failed.input_failure.backend_id).to eq("ruby.typed.psych")
+    expect(failed.profile_id).to eq("kernel.yaml.native_mapping.v1")
     expect(failed.input_failure.native_message).to include("native test failure")
     expect(failed.output).to be_nil
     expect(failed.output_parse).to be_nil
@@ -154,6 +172,7 @@ RSpec.describe StructuredmergeCore do
     ]
     result = described_class.merge_yaml_mapping(merge_requests(sources), merge_limits)
     expect(result.outcome.to_s).to eq("clean")
+    expect(result.profile_id).to eq("kernel.yaml.native_mapping.v1")
     expect(result.output).to eq("\uFEFF# header\r\né: 'ours'  # stable\r\nbeta: theirs")
     expect(result.conflicts).to be_empty
     expect(result.rejected_parse).to be_nil

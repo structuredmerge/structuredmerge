@@ -160,3 +160,15 @@ identity and the selection report. No retry or parser substitution occurs.
 These records are not the full Slice 1028 envelope: stage/request references,
 causes, and portable category/origin nesting still need implementation.
 `parse_sources` retains its existing exception-based API for service failures.
+
+`native_merge_profiles()` lists the two explicit native merge profiles, including
+their merge3 entry points, required native fact schema, Rust analysis/merge
+owners, syntax scope, and limitations. It performs no parser loading, probing,
+or selection. Every returned merge result carries the invoked `profile_id`,
+including failures before parsing. This ID is not a parser backend ID.
+Both profiles remain experimental and `approved_as_default: false`.
+
+This listing is not the complete Slice 1026 capability request/result protocol
+or a merge-provider registry. It does not advertise analyze/diff2/merge2 support,
+guarantee that a host parser is installed, or confer default authority. Actual
+TreeHaver selection evidence remains in the parse/failure records.

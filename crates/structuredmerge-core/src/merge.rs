@@ -31,6 +31,7 @@ pub struct NativeAnalysisRejection {
 /// separately retained as a typed parse result, including its revision role.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct NativeMergeResult {
+    pub profile_id: String,
     pub outcome: ast_merge::ThreeWayMergeOutcome,
     pub diagnostics: Vec<ast_merge::Diagnostic>,
     pub conflicts: Vec<ast_merge::MergeConflict>,
@@ -62,14 +63,17 @@ pub fn merge_yaml_mapping(
     let snapshot = crate::host::registry()
         .snapshot()
         .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;
-    project_result(merge_native_sources_with_evidence(
-        "yaml",
-        requests,
-        &TreeHaverParseService::default(),
-        &snapshot,
-        &limits.context(),
-        yaml_merge::typed::mapping_owners,
-    ))
+    project_result(
+        crate::profiles::YAML_MAPPING,
+        merge_native_sources_with_evidence(
+            "yaml",
+            requests,
+            &TreeHaverParseService::default(),
+            &snapshot,
+            &limits.context(),
+            yaml_merge::typed::mapping_owners,
+        ),
+    )
 }
 
 /// Rust derives Python owners from LibCST facts and uses the same shared merge
@@ -81,17 +85,21 @@ pub fn merge_python_declarations(
     let snapshot = crate::host::registry()
         .snapshot()
         .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;
-    project_result(merge_native_sources_with_evidence(
-        "python",
-        requests,
-        &TreeHaverParseService::default(),
-        &snapshot,
-        &limits.context(),
-        python_merge::declaration_owners,
-    ))
+    project_result(
+        crate::profiles::PYTHON_DECLARATIONS,
+        merge_native_sources_with_evidence(
+            "python",
+            requests,
+            &TreeHaverParseService::default(),
+            &snapshot,
+            &limits.context(),
+            python_merge::declaration_owners,
+        ),
+    )
 }
 
 fn project_result(
+    profile_id: &str,
     result: Result<NativeMergeExecution, MappingMergeError>,
 ) -> Result<NativeMergeResult, CoreError> {
     match result {
@@ -122,6 +130,7 @@ fn project_result(
             }
             let result = execution.rendered.result;
             Ok(NativeMergeResult {
+                profile_id: profile_id.into(),
                 outcome: result.outcome,
                 diagnostics: result.diagnostics,
                 conflicts: result.conflicts,
@@ -146,6 +155,7 @@ fn project_result(
             let input_parses: Vec<_> = parses.into_iter().map(CoreParseResult::from).collect();
             let rejected_parse = input_parses.iter().find(|result| !result.parsed.ok).cloned();
             Ok(NativeMergeResult {
+                profile_id: profile_id.into(),
                 outcome: ast_merge::ThreeWayMergeOutcome::Error,
                 diagnostics: vec![],
                 conflicts: vec![],
@@ -164,6 +174,7 @@ fn project_result(
         }
         Err(MappingMergeError::AnalysisRejected { failures, parses, sources }) => {
             Ok(NativeMergeResult {
+                profile_id: profile_id.into(),
                 outcome: ast_merge::ThreeWayMergeOutcome::Error,
                 diagnostics: vec![],
                 conflicts: vec![],
@@ -199,6 +210,7 @@ fn project_result(
                     if CoreError::from(error.clone()).code != "resource.limit" =>
                 {
                     Ok(NativeMergeResult {
+                        profile_id: profile_id.into(),
                         outcome: ast_merge::ThreeWayMergeOutcome::Error,
                         diagnostics: vec![],
                         conflicts: vec![],
@@ -258,7 +270,7 @@ mod tests {
                 MappingMergeError::Parse(error.clone()),
                 MappingMergeError::InputParseFailed { error, sources: vec![] },
             ] {
-                assert_eq!(project_result(Err(failure)).unwrap_err().code, code);
+                assert_eq!(project_result("test", Err(failure)).unwrap_err().code, code);
             }
         }
         for (error, code) in [
@@ -271,9 +283,11 @@ mod tests {
                 "parser.invalid_result",
             ),
         ] {
-            let result =
-                project_result(Err(MappingMergeError::InputParseFailed { error, sources: vec![] }))
-                    .unwrap();
+            let result = project_result(
+                "test",
+                Err(MappingMergeError::InputParseFailed { error, sources: vec![] }),
+            )
+            .unwrap();
             assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Error);
             assert_eq!(result.input_failure.unwrap().code, code);
             assert!(result.output.is_none());
