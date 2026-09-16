@@ -42,6 +42,13 @@ source role. This profile-specific entry point is not the complete Slice 1025
 provider-result envelope; service and unsupported-profile failures still use
 the preliminary `CoreError` bridge.
 
+`merge_python_declarations` now derives whole top-level Python owners in Rust
+from native LibCST syntax facts. It shares parse/verification orchestration and
+the owner merge engine with YAML. Installed-wheel tests cover assignments,
+function/class bodies, conflicts, syntax failure, exact-byte retention, and
+unsupported forms. See [`python-merge`](../python-merge/README.md) for the bounded
+profile and remaining gates. Both operations return `NativeMergeResult`.
+
 The complete operation and typed failure/preservation envelopes,
 runtime lifecycle stress tests, clean Ruby artifact installation, broader
 Python public DTO ergonomics, and registry publication remain unfinished.
@@ -49,8 +56,8 @@ Legacy Ruby packaging files still coexist with the new package and must be
 removed or isolated before publication; the current gem file glob must not
 ship the inherited prototype files.
 
-The next vertical slice must provide corresponding Python/LibCST merge
-execution and installed-artifact evidence for both runtimes. Passing an encoded
+The next gates include clean Ruby installed-artifact evidence and complete
+operation/preservation contracts for both runtimes. Passing an encoded
 operation through a host-owned merge does not meet that requirement. Existing
 kernel mechanics should be reused; new parallel merge algorithms and
 independent parser-selection registries are not intended.

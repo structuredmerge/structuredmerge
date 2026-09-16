@@ -1,0 +1,69 @@
+"""Test-only native syntax projection. No merge identities, owners, or decisions."""
+import bisect
+import json
+import libcst
+from libcst.metadata import MetadataWrapper, ByteSpanPositionProvider
+import structuredmerge_core as core
+
+
+def project(module, data):
+    # ByteSpanPositionProvider measures UTF-8 codegen, excluding a UTF-8 BOM.
+    # Fail closed instead of silently changing coordinates for other encodings.
+    data.decode("utf-8-sig")
+    if module.encoding not in ("utf-8", "utf-8-sig") or b"\r" in data.replace(b"\r\n", b""):
+        raise ValueError("test LibCST projection requires UTF-8 and LF/CRLF")
+    wrapper = MetadataWrapper(module)
+    spans = wrapper.resolve(ByteSpanPositionProvider)
+    bom = 3 if data.startswith(b"\xef\xbb\xbf") else 0
+    starts = [0] + [index + 1 for index, byte in enumerate(data) if byte == 10]
+    nodes = []
+
+    def point(offset):
+        row = bisect.bisect_right(starts, offset) - 1
+        return core.SourcePoint(row=row, column=offset-starts[row])
+
+    def visit(node, parent=None):
+        node_id = str(len(nodes))
+        nodes.append(None)
+        fields = []
+        facts = {}
+        if isinstance(node, libcst.Module):
+            fields = [("body", child) for child in node.body]
+        elif isinstance(node, (libcst.FunctionDef, libcst.ClassDef)):
+            fields = [("name", node.name)]
+            facts["decorators_count"] = len(node.decorators)
+        elif isinstance(node, libcst.SimpleStatementLine):
+            fields = [("body", child) for child in node.body]
+        elif isinstance(node, libcst.Assign):
+            fields = [("targets", child) for child in node.targets]
+        elif isinstance(node, libcst.AssignTarget):
+            fields = [("target", node.target)]
+        elif isinstance(node, libcst.Name):
+            facts["value"] = node.value
+        children = [core.ChildEdge(node_id=visit(child, node_id), index=index,
+            field_name=field, extra={}) for index, (field, child) in enumerate(fields)]
+        if parent is None:
+            start, end = 0, len(data)
+        else:
+            span = spans[node]
+            start, end = span.start + bom, span.start + span.length + bom
+            if end > len(data):
+                raise ValueError("native span exceeds exact source")
+        kind = type(node).__name__
+        extensions = [core.NativeExtension(
+            schema="structuredmerge.extension/python-libcst/v1", namespace="python-libcst",
+            # Alef's Python Value field currently accepts JSON text. Only this
+            # namespaced extension payload is encoded, never the parse batch.
+            capabilities=[], payload=json.dumps(facts), extra={})] if facts else []
+        nodes[int(node_id)] = core.ParseNode(
+            id=node_id, type=kind, native_type=f"libcst.{kind}", role=core.NodeRole.STRUCTURAL,
+            named=True, missing=False, has_error=False,
+            span=core.SourceSpan(range=core.ByteRange(start_byte=start, end_byte=end),
+                start_point=point(start), end_point=point(end)),
+            parent_id=parent, children=children, semantic_roles=[], unsupported_features=[],
+            extensions=extensions, metadata={}, extra={},
+        )
+        return node_id
+
+    visit(wrapper.module)
+    return nodes

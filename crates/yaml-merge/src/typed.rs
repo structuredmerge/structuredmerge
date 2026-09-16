@@ -1,30 +1,17 @@
 //! Rust-owned block-mapping analysis over TreeHaver facts. This initial profile
 //! is not a claim of full YAML, comment-ownership, or operation-envelope parity.
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
-use ast_merge::{
-    SourcePreservingOwner, SourcePreservingOwnerDocument, ThreeWayMergeResult,
-    merge_source_preserving_owners,
-};
+use ast_merge::{SourcePreservingOwner, SourcePreservingOwnerDocument, ThreeWayMergeResult};
 use tree_haver::{
     ByteRange,
     parsed::ParseNode,
-    service::{
-        ExecutionContext, ParseRequest, ParseService, ParsedResult, ParserRegistrySnapshot,
-        ServiceError,
-    },
-    source::{SourceEncoding, SourceRole, source_input},
+    service::{ExecutionContext, ParseRequest, ParseService, ParsedResult, ParserRegistrySnapshot},
 };
 
 pub const PSYCH_EXTENSION: &str = "structuredmerge.extension/ruby-psych/v1";
 
-#[derive(Debug)]
-pub enum MappingMergeError {
-    InvalidInputs,
-    Parse(ServiceError),
-    NativeParseRejected(Box<ParsedResult>),
-    Unsupported(String),
-}
+pub use ast_merge::typed_merge::NativeMergeError as MappingMergeError;
 
 /// Analysis is derived here, never accepted as a parser-supplied owner list.
 /// Entire top-level entries are owners; nested entries are not independently
@@ -150,51 +137,12 @@ pub fn merge_mapping_sources(
     snapshot: &ParserRegistrySnapshot,
     context: &ExecutionContext,
 ) -> Result<ThreeWayMergeResult<String>, MappingMergeError> {
-    let roles: BTreeSet<_> =
-        requests.iter().map(|request| request.source.descriptor.role).collect();
-    if requests.len() != 3
-        || roles != BTreeSet::from([SourceRole::Base, SourceRole::Ours, SourceRole::Theirs])
-        || requests.iter().any(|request| request.language != "yaml")
-    {
-        return Err(MappingMergeError::InvalidInputs);
-    }
-    let mut verification = requests[0].clone();
-    let parsed =
-        service.parse_batch(requests, snapshot, context).map_err(MappingMergeError::Parse)?;
-    // A merge cannot mix native parser profiles across revisions.
-    let backend = parsed.first().ok_or(MappingMergeError::InvalidInputs)?.backend.id.clone();
-    if parsed.iter().any(|result| result.backend.id != backend) {
-        return Err(MappingMergeError::InvalidInputs);
-    }
-    verification.selection.backend_id = Some(backend);
-    let mut documents = BTreeMap::new();
-    for result in parsed {
-        if !result.document.output().ok {
-            return Err(MappingMergeError::NativeParseRejected(Box::new(result)));
-        }
-        let role = result.source.descriptor().role;
-        documents.insert(role, mapping_owners(&result).map_err(MappingMergeError::Unsupported)?);
-    }
-    let mut verify = |output: &str| -> Result<SourcePreservingOwnerDocument, String> {
-        verification.request_id = "merge-verification".into();
-        verification.source = source_input(
-            "merge-output".into(),
-            SourceRole::Output,
-            SourceEncoding::Utf8,
-            output.as_bytes().to_vec(),
-        )
-        .map_err(|error| error.to_string())?;
-        let parsed = service
-            .parse_batch(vec![verification.clone()], snapshot, context)
-            .map_err(|error| format!("{error:?}"))?;
-        mapping_owners(parsed.first().ok_or("missing verification parse")?)
-    };
-    let result = merge_source_preserving_owners(
-        documents.remove(&SourceRole::Base).ok_or(MappingMergeError::InvalidInputs)?,
-        documents.remove(&SourceRole::Ours).ok_or(MappingMergeError::InvalidInputs)?,
-        documents.remove(&SourceRole::Theirs).ok_or(MappingMergeError::InvalidInputs)?,
-        &mut verify,
-    );
-    context.check().map_err(MappingMergeError::Parse)?;
-    Ok(result)
+    ast_merge::typed_merge::merge_native_sources(
+        "yaml",
+        requests,
+        service,
+        snapshot,
+        context,
+        mapping_owners,
+    )
 }

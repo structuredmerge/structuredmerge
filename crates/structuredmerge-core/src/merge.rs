@@ -1,4 +1,4 @@
-//! Concrete binding projection of the existing YAML mapping operation.
+//! Concrete binding projection of native-parser family operations.
 //! This is not yet the complete portable provider-result envelope.
 use crate::{CoreError, CoreParseResult, ParseLimits, ParseRequest};
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ use yaml_merge::typed::{MappingMergeError, merge_mapping_sources};
 /// its conflicts, diagnostics, policies, or output. Native syntax rejection is
 /// separately retained as a typed parse result, including its revision role.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct MappingMergeResult {
+pub struct NativeMergeResult {
     pub outcome: ast_merge::ThreeWayMergeOutcome,
     pub diagnostics: Vec<ast_merge::Diagnostic>,
     pub conflicts: Vec<ast_merge::MergeConflict>,
@@ -24,17 +24,42 @@ pub struct MappingMergeResult {
 pub fn merge_yaml_mapping(
     requests: Vec<ParseRequest>,
     limits: ParseLimits,
-) -> Result<MappingMergeResult, CoreError> {
+) -> Result<NativeMergeResult, CoreError> {
     let snapshot = crate::host::registry()
         .snapshot()
         .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;
-    match merge_mapping_sources(
+    project_result(merge_mapping_sources(
         requests,
         &TreeHaverParseService::default(),
         &snapshot,
         &limits.context(),
-    ) {
-        Ok(result) => Ok(MappingMergeResult {
+    ))
+}
+
+/// Rust derives Python owners from LibCST facts and uses the same shared merge
+/// engine as YAML. This initial profile supports whole top-level declarations.
+pub fn merge_python_declarations(
+    requests: Vec<ParseRequest>,
+    limits: ParseLimits,
+) -> Result<NativeMergeResult, CoreError> {
+    let snapshot = crate::host::registry()
+        .snapshot()
+        .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;
+    project_result(ast_merge::typed_merge::merge_native_sources(
+        "python",
+        requests,
+        &TreeHaverParseService::default(),
+        &snapshot,
+        &limits.context(),
+        python_merge::declaration_owners,
+    ))
+}
+
+fn project_result(
+    result: Result<ast_merge::ThreeWayMergeResult<String>, MappingMergeError>,
+) -> Result<NativeMergeResult, CoreError> {
+    match result {
+        Ok(result) => Ok(NativeMergeResult {
             outcome: result.outcome,
             diagnostics: result.diagnostics,
             conflicts: result.conflicts,
@@ -42,7 +67,7 @@ pub fn merge_yaml_mapping(
             policies: result.policies,
             rejected_parse: None,
         }),
-        Err(MappingMergeError::NativeParseRejected(parsed)) => Ok(MappingMergeResult {
+        Err(MappingMergeError::NativeParseRejected(parsed)) => Ok(NativeMergeResult {
             outcome: ast_merge::ThreeWayMergeOutcome::Error,
             diagnostics: vec![],
             conflicts: vec![],
@@ -58,7 +83,7 @@ pub fn merge_yaml_mapping(
         Err(error) => Err(CoreError {
             code: match &error {
                 MappingMergeError::InvalidInputs => "invalid_merge_inputs",
-                MappingMergeError::Unsupported(_) => "unsupported_mapping_profile",
+                MappingMergeError::Unsupported(_) => "unsupported_native_profile",
                 MappingMergeError::Parse(_) => "parse_service",
                 MappingMergeError::NativeParseRejected(_) => unreachable!(),
             }

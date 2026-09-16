@@ -9,6 +9,7 @@ repository = "https://github.com/structuredmerge/structuredmerge"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
+python-merge = { version = "0.2.0", path = "../python-merge" }
 ast-merge = { version = "0.2.0", path = "../ast-merge" }
 yaml-merge = { version = "0.2.0", path = "../yaml-merge" }
 serde = { version = "1", features = ["derive"] }

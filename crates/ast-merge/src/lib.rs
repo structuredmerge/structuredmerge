@@ -26,6 +26,7 @@ pub mod owner_projection;
 pub use owner_projection::*;
 pub mod diagnostics;
 pub use diagnostics::*;
+pub mod typed_merge;
 
 pub const PACKAGE_NAME: &str = "ast-merge";
 pub const MERGE_ENGINE_ENVIRONMENT_VARIABLE: &str = "SMORG_MERGE_ENGINE";

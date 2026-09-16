@@ -129,6 +129,8 @@
 
 - Expose the Rust-owned YAML mapping merge through the typed core facade and generated bindings, retaining shared conflict alternatives and native syntax rejection details; the complete portable result contract remains in progress.
 
+- Add Rust-owned Python declaration merging from native LibCST facts through generated bindings, sharing TreeHaver parse and verification orchestration with YAML; installed-wheel tests cover exact source bytes, conflicts, syntax failures, and fail-closed unsupported syntax.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

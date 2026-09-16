@@ -1,0 +1,13 @@
+[package]
+name = "python-merge"
+version = "0.2.0"
+edition = "2024"
+authors = ["Peter H. Boling"]
+description = "Rust-owned Python declaration merge over native LibCST facts"
+repository = "https://github.com/structuredmerge/structuredmerge"
+license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
+
+[dependencies]
+unicode-normalization = "0.1.25"
+ast-merge = { version = "0.2.0", path = "../ast-merge" }
+tree-haver = { version = "0.2.0", path = "../tree-haver" }
