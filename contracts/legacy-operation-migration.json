@@ -30,18 +30,20 @@
     {
       "id": "structural-editing",
       "methods": ["report_ast_crispr_json", "apply_ast_crispr_source_edits_json"],
-      "disposition": "retain_until_consumer_migration",
+      "disposition": "local_consumer_migrated",
+      "consumer_revision": "structuredmerge/structuredmerge-ruby@0a1f4ee32",
       "consumers": ["ruby/gems/ast-crispr/lib/ast/crispr/rust_host_provider.rb"],
       "replacement": "Typed ast-crispr profile reports and explicit byte-range edit requests/results exported from structuredmerge-core.",
-      "gap": "Typed explicit edits and operation/batch/match/selection/destination/limit/boundary reports are implemented. Ruby consumer migration remains open, including normalization of existing limit specifications and legacy Hash/error result compatibility. Neither reports nor explicit edits prove structural selection parity."
+      "gap": "Local Ruby main now uses typed reports and explicit edits, with request normalization and legacy Hash result projection. Revalidated 51 examples against the current installed core artifact. Hosted/released-package, remaining downstream, lint/coverage and exact malformed-input message parity remain open. Neither reports nor explicit edits prove structural selection parity; retain legacy regression evidence without publishing the prototype."
     },
     {
       "id": "template-session",
       "methods": ["report_ast_template_json"],
-      "disposition": "retain_until_consumer_migration",
+      "disposition": "local_consumer_migrated",
+      "consumer_revision": "structuredmerge/structuredmerge-ruby@0a1f4ee32",
       "consumers": ["ruby/gems/ast-template/lib/ast/template/rust_host_provider.rb"],
       "replacement": "Typed options/profile/plan reports from ast-template through structuredmerge-core.",
-      "gap": "Typed options/profile/read-only directory-plan reports are implemented in structuredmerge-core. Ruby adapter normalization and legacy report projection remain open. Report generation is not template execution or filesystem apply. Preserve Ruby apply behavior and downstream kettle-jem gates."
+      "gap": "Local Ruby main now uses typed options/profile/read-only directory plans with transport normalization and legacy report projection. Revalidated 78 examples against the current installed core artifact. Hosted/released-package, remaining downstream and lint/coverage gates remain open. Report generation is not template execution or filesystem apply; Ruby apply behavior is retained."
     },
     {
       "id": "parser-services",

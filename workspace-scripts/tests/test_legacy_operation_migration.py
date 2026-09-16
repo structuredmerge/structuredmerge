@@ -20,7 +20,9 @@ class LegacyOperationMigrationTest(unittest.TestCase):
         for group in migration["groups"]:
             with self.subTest(group=group["id"]):
                 self.assertIn(group["disposition"], (
-                    "retain_until_consumer_migration", "retain_regression_only"))
+                    "retain_until_consumer_migration", "retain_regression_only", "local_consumer_migrated"))
+                if group["disposition"] == "local_consumer_migrated":
+                    self.assertTrue(group.get("consumer_revision"))
                 for field in ("methods", "consumers", "replacement", "gap"):
                     self.assertTrue(group[field], field)
 

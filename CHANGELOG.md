@@ -16,6 +16,8 @@
 
 - Return typed input parser-selection and provider failures from native merge operations while retaining request/resource/cancellation errors and the existing parse_sources exception API.
 
+- Record ast-crispr and ast-template consumers as migrated on local Ruby main after revalidating their typed adapters against the current installed core gem; remaining release and downstream gates stay explicit.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider

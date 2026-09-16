@@ -8,6 +8,15 @@ depend on that crate as a shortcut.
 
 ## Evidence and limits
 
+Revalidated 2026-09-16: Ruby local main was fast-forwarded from `4c31387bf` to
+`0a1f4ee32`, integrating the typed ast-crispr and ast-template adapters. Their
+artifact bundles pass 51 and 78 examples respectively against core gem SHA-256
+`96291c720058b22cc80d2992943f65878faf36808639ebfc06f52ec24b71209e`.
+The inventory marks these two groups `local_consumer_migrated`, retaining the
+consumer revision and remaining gates. This is not a claim of publication,
+hosted acceptance, complete downstream parity, or permission to delete legacy
+regressions. Other consumer groups remain unmigrated.
+
 Inspected the legacy Rust facade, Ruby adapters, generated legacy loader, and
 existing compatibility record on 2026-09-16. Kernel starting revision:
 `922c513`; Ruby worktree: `9ace81a5e`. The inspected shared merge, structural-edit,
