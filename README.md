@@ -1,12 +1,14 @@
-# StructuredMerge Rust
+# StructuredMerge Kernel
 
-StructuredMerge Rust provides Cargo crates for native tools that need portable
+StructuredMerge provides a Rust kernel and generated bindings for tools that need portable
 structured-merge contracts, fixture-backed behavior, and embeddable merge
 components.
 
 The workspace includes the core AST/review contracts, parser substrate support,
 format-specific merge crates, binary/ZIP planning helpers, provider adapters,
-and a Rust packaging recipe crate.
+and generated host bindings. Rust project tooling, including
+[`kettle-rusty`][rust-kettle-rusty], lives in the separate
+[Rust native-layer repository](https://github.com/structuredmerge/structuredmerge-rust).
 
 Project links:
 
@@ -71,27 +73,26 @@ The family is intentionally layered:
 | [`yaml-serde-merge`][rust-yaml-serde-merge] | YAML provider | Uses [`serde_yaml`][serde-yaml] as the YAML parser/emitter provider path. |
 | [`pest-toml-merge`][rust-pest-toml-merge] | TOML provider | Uses [Pest][pest] with [`pest_grammars`][pest-grammars] as the TOML parser provider path. |
 | [`pulldown-cmark-merge`][rust-pulldown-cmark-merge] | Markdown provider | Uses [pulldown-cmark][pulldown-cmark] as the Markdown parser provider path. |
-| [`kettle-rusty`][rust-kettle-rusty] | Recipe tooling | Cargo workspace maintenance and package recipe helpers. |
 
-[rust-tree-haver]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/tree-haver
-[rust-ast-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/ast-merge
-[rust-ast-template]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/ast-template
-[rust-ast-crispr]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/ast-crispr
-[rust-ast-merge-git]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/ast-merge-git
-[rust-plain-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/plain-merge
-[rust-json-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/json-merge
-[rust-yaml-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/yaml-merge
-[rust-toml-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/toml-merge
-[rust-markdown-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/markdown-merge
-[rust-ruby-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/ruby-merge
-[rust-go-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/go-merge
-[rust-rust-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/rust-merge
-[rust-typescript-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/typescript-merge
-[rust-binary-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/binary-merge
-[rust-zip-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/zip-merge
-[rust-yaml-serde-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/yaml-serde-merge
-[rust-pest-toml-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/pest-toml-merge
-[rust-pulldown-cmark-merge]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/pulldown-cmark-merge
+[rust-tree-haver]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/tree-haver
+[rust-ast-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/ast-merge
+[rust-ast-template]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/ast-template
+[rust-ast-crispr]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/ast-crispr
+[rust-ast-merge-git]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/ast-merge-git
+[rust-plain-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/plain-merge
+[rust-json-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/json-merge
+[rust-yaml-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/yaml-merge
+[rust-toml-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/toml-merge
+[rust-markdown-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/markdown-merge
+[rust-ruby-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/ruby-merge
+[rust-go-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/go-merge
+[rust-rust-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/rust-merge
+[rust-typescript-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/typescript-merge
+[rust-binary-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/binary-merge
+[rust-zip-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/zip-merge
+[rust-yaml-serde-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/yaml-serde-merge
+[rust-pest-toml-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/pest-toml-merge
+[rust-pulldown-cmark-merge]: https://github.com/structuredmerge/structuredmerge/tree/main/crates/pulldown-cmark-merge
 [rust-kettle-rusty]: https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/kettle-rusty
 [tree-sitter-language-pack]: https://github.com/kreuzberg-dev/tree-sitter-language-pack
 [serde-yaml]: https://docs.rs/serde_yaml
@@ -150,30 +151,29 @@ coverage.
 
 Core:
 
-- [`tree-haver`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/tree-haver) - parser substrate, byte ranges, backend adapters, and binary tree contracts.
-- [`ast-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/ast-merge) - AST merge contracts, diagnostics, planning, review, replay, and nested-merge vocabulary.
-- [`ast-template`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/ast-template) - template/session transport contracts.
+- [`tree-haver`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/tree-haver) - parser substrate, byte ranges, backend adapters, and binary tree contracts.
+- [`ast-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/ast-merge) - AST merge contracts, diagnostics, planning, review, replay, and nested-merge vocabulary.
+- [`ast-template`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/ast-template) - template/session transport contracts.
 
 Format libraries:
 
-- [`plain-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/plain-merge)
-- [`json-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/json-merge)
-- [`yaml-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/yaml-merge)
-- [`toml-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/toml-merge)
-- [`markdown-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/markdown-merge)
-- [`ruby-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/ruby-merge)
-- [`go-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/go-merge)
-- [`rust-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/rust-merge)
-- [`typescript-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/typescript-merge)
-- [`binary-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/binary-merge)
-- [`zip-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/zip-merge)
+- [`plain-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/plain-merge)
+- [`json-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/json-merge)
+- [`yaml-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/yaml-merge)
+- [`toml-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/toml-merge)
+- [`markdown-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/markdown-merge)
+- [`ruby-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/ruby-merge)
+- [`go-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/go-merge)
+- [`rust-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/rust-merge)
+- [`typescript-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/typescript-merge)
+- [`binary-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/binary-merge)
+- [`zip-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/zip-merge)
 
-Provider and recipe crates:
+Provider crates:
 
-- [`yaml-serde-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/yaml-serde-merge)
-- [`pest-toml-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/pest-toml-merge)
-- [`pulldown-cmark-merge`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/pulldown-cmark-merge)
-- [`kettle-rusty`](https://github.com/structuredmerge/structuredmerge-rust/tree/main/crates/kettle-rusty)
+- [`yaml-serde-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/yaml-serde-merge)
+- [`pest-toml-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/pest-toml-merge)
+- [`pulldown-cmark-merge`](https://github.com/structuredmerge/structuredmerge/tree/main/crates/pulldown-cmark-merge)
 
 ## Portability
 

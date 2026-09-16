@@ -1,7 +1,7 @@
 [package]
 name = "yaml-merge"
 version = "0.2.0"
-repository = "https://github.com/structuredmerge/structuredmerge-rust"
+repository = "https://github.com/structuredmerge/structuredmerge"
 homepage = "https://structuredmerge.org"
 authors = ["Peter H. Boling"]
 edition = "2024"

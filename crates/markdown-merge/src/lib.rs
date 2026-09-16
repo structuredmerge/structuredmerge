@@ -1400,19 +1400,47 @@ pub fn merge_markdown_three_way_with_parser(
     };
 
     if ours.source == theirs.source {
-        return MergeResult { ok: true, diagnostics: vec![], output: Some(ours.source), policies: vec![] };
+        return MergeResult {
+            ok: true,
+            diagnostics: vec![],
+            output: Some(ours.source),
+            policies: vec![],
+        };
     }
     if ours.source == base.source {
-        return MergeResult { ok: true, diagnostics: vec![], output: Some(theirs.source), policies: vec![] };
+        return MergeResult {
+            ok: true,
+            diagnostics: vec![],
+            output: Some(theirs.source),
+            policies: vec![],
+        };
     }
     if theirs.source == base.source {
-        return MergeResult { ok: true, diagnostics: vec![], output: Some(ours.source), policies: vec![] };
+        return MergeResult {
+            ok: true,
+            diagnostics: vec![],
+            output: Some(ours.source),
+            policies: vec![],
+        };
     }
 
-    let base_by_id = base.sections.iter().map(|section| (section.id.as_str(), section)).collect::<HashMap<_, _>>();
-    let ours_by_id = ours.sections.iter().map(|section| (section.id.as_str(), section)).collect::<HashMap<_, _>>();
-    let theirs_by_id = theirs.sections.iter().map(|section| (section.id.as_str(), section)).collect::<HashMap<_, _>>();
-    let mut selected_ids = ours.sections.iter().map(|section| section.id.clone()).collect::<Vec<_>>();
+    let base_by_id = base
+        .sections
+        .iter()
+        .map(|section| (section.id.as_str(), section))
+        .collect::<HashMap<_, _>>();
+    let ours_by_id = ours
+        .sections
+        .iter()
+        .map(|section| (section.id.as_str(), section))
+        .collect::<HashMap<_, _>>();
+    let theirs_by_id = theirs
+        .sections
+        .iter()
+        .map(|section| (section.id.as_str(), section))
+        .collect::<HashMap<_, _>>();
+    let mut selected_ids =
+        ours.sections.iter().map(|section| section.id.clone()).collect::<Vec<_>>();
     let mut selected_set = selected_ids.iter().cloned().collect::<HashSet<_>>();
     for section in &theirs.sections {
         if selected_set.insert(section.id.clone()) {
@@ -1505,10 +1533,11 @@ pub fn merge_markdown_three_way_with_parser(
         Ok(rendered) => rendered,
         Err(error) => return failed_render_merge(error.to_string()),
     };
-    let verified = match parse_source_preserving_document(&rendered.content, dialect, "output", &parser) {
-        Ok(document) => document,
-        Err(diagnostic) => return failed_markdown_merge(diagnostic),
-    };
+    let verified =
+        match parse_source_preserving_document(&rendered.content, dialect, "output", &parser) {
+            Ok(document) => document,
+            Err(diagnostic) => return failed_markdown_merge(diagnostic),
+        };
     let expected = ordered.iter().filter(|id| chosen.contains_key(*id)).collect::<Vec<_>>();
     if verified.sections.len() != expected.len()
         || verified.sections.iter().zip(expected).any(|(actual, expected_id)| {

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Point kernel crate metadata and new artifact provenance at structuredmerge/structuredmerge; remove kettle-rusty from this repository’s release inventory while accepting pre-split registry metadata.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider

@@ -15,8 +15,8 @@ use markdown_merge::{
     markdown_delegated_child_operations, markdown_discovered_surfaces, markdown_embedded_families,
     markdown_feature_profile, markdown_plan_context_with_backend, match_markdown_owners,
     merge_markdown, merge_markdown_source_preserving, merge_markdown_three_way,
-    merge_markdown_with_nested_outputs,
-    merge_markdown_with_parser, merge_markdown_with_reviewed_nested_outputs,
+    merge_markdown_with_nested_outputs, merge_markdown_with_parser,
+    merge_markdown_with_reviewed_nested_outputs,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle,
     merge_markdown_with_reviewed_nested_outputs_from_replay_bundle_envelope,
     merge_markdown_with_reviewed_nested_outputs_from_review_state,
@@ -303,21 +303,14 @@ fn three_way_source_preserving_merge_keeps_independent_section_edits() {
     let result = merge_markdown_three_way(base, ours, theirs, MarkdownDialect::Markdown);
 
     assert!(result.ok, "{:?}", result.diagnostics);
-    assert_eq!(
-        result.output.as_deref(),
-        Some("# First\n\nours first\n\n# Last\n\ntheirs last\n")
-    );
+    assert_eq!(result.output.as_deref(), Some("# First\n\nours first\n\n# Last\n\ntheirs last\n"));
 }
 
 #[test]
 fn three_way_source_preserving_merge_returns_an_exact_changed_revision() {
     let base = "# Title\n\nbase\n";
-    let result = merge_markdown_three_way(
-        base,
-        base,
-        "# Title\n\ntheirs\n",
-        MarkdownDialect::Markdown,
-    );
+    let result =
+        merge_markdown_three_way(base, base, "# Title\n\ntheirs\n", MarkdownDialect::Markdown);
 
     assert!(result.ok, "{:?}", result.diagnostics);
     assert_eq!(result.output.as_deref(), Some("# Title\n\ntheirs\n"));

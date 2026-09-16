@@ -11,8 +11,10 @@ require "time"
 require "uri"
 
 RUST_REPO = File.expand_path("..", __dir__)
-CRATES_IO_USER_AGENT = "structuredmerge-release-script (https://github.com/structuredmerge/structuredmerge-rust)"
-STRUCTUREDMERGE_REPOSITORY = "https://github.com/structuredmerge/structuredmerge-rust"
+CRATES_IO_USER_AGENT = "structuredmerge-release-script (https://github.com/structuredmerge/structuredmerge)"
+STRUCTUREDMERGE_REPOSITORY = "https://github.com/structuredmerge/structuredmerge"
+# Already-published versions retain their original repository metadata.
+STRUCTUREDMERGE_PRE_SPLIT_REPOSITORY = "https://github.com/structuredmerge/structuredmerge-rust"
 STRUCTUREDMERGE_HOMEPAGE = "https://structuredmerge.org"
 STRUCTUREDMERGE_LICENSE = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 PUBLISH_RETRY_BUFFER_SECONDS = 10
@@ -37,7 +39,6 @@ CRATES = [
   ["yaml-serde-merge", "yaml-serde-merge"],
   ["pest-toml-merge", "pest-toml-merge"],
   ["pulldown-cmark-merge", "pulldown-cmark-merge"],
-  ["kettle-rusty", "kettle-rusty"],
 ].freeze
 
 options = {
@@ -153,7 +154,7 @@ def crates_io_get(path)
 end
 
 def structuredmerge_crate_metadata?(crate)
-  crate["repository"] == STRUCTUREDMERGE_REPOSITORY &&
+  [STRUCTUREDMERGE_REPOSITORY, STRUCTUREDMERGE_PRE_SPLIT_REPOSITORY].include?(crate["repository"]) &&
     crate["homepage"] == STRUCTUREDMERGE_HOMEPAGE
 end
 

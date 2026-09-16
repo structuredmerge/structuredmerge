@@ -96,7 +96,7 @@ manifest = {
     "required_ruby_version" => spec.required_ruby_version.to_s
   },
   "source" => {
-    "repository" => "https://github.com/structuredmerge/structuredmerge-rust",
+    "repository" => "https://github.com/structuredmerge/structuredmerge",
     "revision" => capture!("git", "rev-parse", "HEAD"),
     "dirty" => !git_status.empty?
   },

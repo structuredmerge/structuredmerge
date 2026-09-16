@@ -5,7 +5,7 @@ authors = ["Peter H. Boling"]
 edition = "2024"
 description = "Experimental host-provider bridge core for StructuredMerge"
 homepage = "https://structuredmerge.org"
-repository = "https://github.com/structuredmerge/structuredmerge-rust"
+repository = "https://github.com/structuredmerge/structuredmerge"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 publish = false
 
