@@ -56,7 +56,7 @@ class LibCSTHost:
 
 
 class TypedParserHostTest(unittest.TestCase):
-    def merge(self, sources):
+    def merge_requests(self, sources):
         requests = []
         for role, source in zip([core.SourceRole.BASE, core.SourceRole.OURS, core.SourceRole.THEIRS], sources):
             data = source.encode("utf-8")
@@ -72,7 +72,10 @@ class TypedParserHostTest(unittest.TestCase):
                 selection=core.ParserSelection(backend_id="python.libcst", preference=[], required_capabilities=[]),
                 options=core.ParseOptions(native_extensions=True), metadata={}, extra={},
             ))
-        return core.merge_python_declarations(requests[::-1], core.ParseLimits(
+        return requests[::-1]
+
+    def merge(self, sources):
+        return core.merge_python_declarations(self.merge_requests(sources), core.ParseLimits(
             max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20))
 
     def setUp(self):
@@ -83,6 +86,37 @@ class TypedParserHostTest(unittest.TestCase):
 
     def tearDown(self):
         core.unregister_parser_host("python.libcst")
+
+    def test_portable_service_errors_cross_installed_binding(self):
+        requests = self.merge_requests(["a = 1\n"] * 3)
+        limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+        with self.assertRaisesRegex(RuntimeError, r"request\.invalid:"):
+            core.parse_sources([], limits)
+        limited = core.ParseLimits(max_batch_items=3, max_input_bytes=0, max_nodes=1000, max_diagnostics=20)
+        for operation in (core.parse_sources, core.merge_python_declarations):
+            with self.assertRaisesRegex(RuntimeError, r"resource\.limit:"):
+                operation(requests, limited)
+        self.assertEqual(self.host.calls, 0)
+
+        def explode(request):
+            self.host.calls += 1
+            raise ValueError("native test failure")
+
+        self.host.parse_batch = explode
+        with self.assertRaisesRegex(RuntimeError, r"parser\.provider_fault:.*native test failure"):
+            core.parse_sources(requests, limits)
+        self.assertEqual(self.host.calls, 1)  # no retry or parser substitution
+
+        self.host.parse_batch = lambda request: core.ParseBatchResult(items=[])
+        with self.assertRaisesRegex(RuntimeError, r"parser\.invalid_batch:"):
+            core.parse_sources(requests, limits)
+
+        core.unregister_parser_host("python.libcst")
+        try:
+            with self.assertRaisesRegex(RuntimeError, r"selection\.no_parser:"):
+                core.parse_sources(requests, limits)
+        finally:
+            core.register_parser_host(self.host)
 
     def test_independent_assignments_preserve_exact_source(self):
         sources = [

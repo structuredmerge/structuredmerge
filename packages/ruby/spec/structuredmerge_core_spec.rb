@@ -91,6 +91,36 @@ RSpec.describe StructuredmergeCore do
     described_class::ParseLimits.new(max_batch_items: 3, max_input_bytes: 10000, max_nodes: 1000, max_diagnostics: 20)
   end
 
+  it "preserves portable service failure codes through the installed binding" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    requests = merge_requests(["a: one\n"] * 3)
+    expect { described_class.parse_sources([], merge_limits) }.to raise_error(RuntimeError, /request\.invalid:/)
+    limited = described_class::ParseLimits.new(max_batch_items: 3, max_input_bytes: 0, max_nodes: 1000, max_diagnostics: 20)
+    %i[parse_sources merge_yaml_mapping].each do |operation|
+      expect { described_class.public_send(operation, requests, limited) }.to raise_error(RuntimeError, /resource\.limit:/)
+    end
+    expect(host.calls).to eq(0)
+    host.define_singleton_method(:parse_batch) do |_request|
+      @calls += 1
+      raise "native test failure"
+    end
+    expect { described_class.parse_sources(requests, merge_limits) }.to raise_error(RuntimeError, /parser\.provider_fault:.*native test failure/)
+    expect(host.calls).to eq(1)
+    host.define_singleton_method(:parse_batch) do |_request|
+      StructuredmergeCore::ParseBatchResult.new(items: [])
+    end
+    expect { described_class.parse_sources(requests, merge_limits) }.to raise_error(RuntimeError, /parser\.invalid_batch:/)
+    described_class.unregister_parser_host("ruby.typed.psych")
+    begin
+      expect { described_class.parse_sources(requests, merge_limits) }.to raise_error(RuntimeError, /selection\.no_parser:/)
+    ensure
+      described_class.register_parser_host(host)
+    end
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
   it "merges independent changes in Rust through generated Psych callbacks" do
     host = TypedPsychHost.new
     described_class.register_parser_host(host)
