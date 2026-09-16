@@ -4,6 +4,7 @@
 
 use std::{collections::BTreeSet, error::Error, fmt};
 
+pub use tree_haver::service::ParserSelection;
 pub use tree_haver::source::{
     LineEndings, SourceDescriptor, SourceDocument, SourceEncoding, SourceError, SourceErrorCode,
     SourceInput, SourceMap, SourceRole, source_input,
@@ -35,13 +36,6 @@ impl OperationKind {
 pub struct ProviderSelection {
     pub provider_id: Option<String>,
     pub family: String,
-    pub required_capabilities: Vec<String>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ParserSelection {
-    pub backend_id: Option<String>,
-    pub preference: Vec<String>,
     pub required_capabilities: Vec<String>,
 }
 

@@ -121,6 +121,8 @@
 
 - Begin the structuredmerge-core typed facade with explicit operation roles and a shared TreeHaver source map that verifies exact bytes, SHA-256, encoding, line endings, ranges, and input limits without depending on the prototype facade.
 
+- Add typed TreeHaver parser records, validated source-backed trees, and in-process provider selection with immutable registry snapshots and coarse batch dispatch; retain parser faults without hidden fallback.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

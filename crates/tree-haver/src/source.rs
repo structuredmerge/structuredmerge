@@ -122,6 +122,7 @@ pub fn source_input(
 #[derive(Clone, Debug)]
 pub struct SourceDocument {
     input: SourceInput,
+    line_starts: Vec<usize>,
 }
 
 impl SourceDocument {
@@ -139,7 +140,15 @@ impl SourceDocument {
         if *descriptor != verified.descriptor {
             return Err(failure(SourceErrorCode::DescriptorMismatch, &descriptor.source_id));
         }
-        Ok(Self { input: verified })
+        let mut line_starts = vec![0];
+        line_starts.extend(
+            verified
+                .bytes
+                .iter()
+                .enumerate()
+                .filter_map(|(index, &byte)| (byte == b'\n').then_some(index + 1)),
+        );
+        Ok(Self { input: verified, line_starts })
     }
 
     pub fn descriptor(&self) -> &SourceDescriptor {
@@ -166,12 +175,9 @@ impl SourceDocument {
         if self.descriptor().encoding != SourceEncoding::Utf8 {
             return Err(failure(SourceErrorCode::InvalidEncoding, &self.descriptor().source_id));
         }
-        let prefix = self.slice(ByteRange { start_byte: 0, end_byte: offset })?;
-        let row = prefix.iter().filter(|&&byte| byte == b'\n').count();
-        let column = prefix
-            .iter()
-            .rposition(|&byte| byte == b'\n')
-            .map_or(offset, |index| offset - index - 1);
+        self.slice(ByteRange { start_byte: offset, end_byte: offset })?;
+        let row = self.line_starts.partition_point(|&start| start <= offset) - 1;
+        let column = offset - self.line_starts[row];
         Ok(SourcePoint { row, column })
     }
 }

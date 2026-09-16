@@ -107,3 +107,25 @@ fn source_map_cannot_replace_an_existing_identity() {
     assert_eq!(map.get("missing").unwrap_err().code, SourceErrorCode::UnknownSource);
     assert_eq!(map.get("source-1").unwrap().bytes(), b"a");
 }
+
+#[test]
+fn indexed_points_match_byte_positions_at_every_offset() {
+    for bytes in [b"".as_slice(), b"\n\n", "é\r\n中\nlast\rbare".as_bytes()] {
+        let document = SourceDocument::validate(input(bytes), 100).unwrap();
+        let mut expected = SourcePoint { row: 0, column: 0 };
+        assert_eq!(document.point(0).unwrap(), expected);
+        for (index, byte) in bytes.iter().enumerate() {
+            if *byte == b'\n' {
+                expected.row += 1;
+                expected.column = 0;
+            } else {
+                expected.column += 1;
+            }
+            assert_eq!(document.point(index + 1).unwrap(), expected);
+        }
+        assert_eq!(
+            document.point(bytes.len() + 1).unwrap_err().code,
+            SourceErrorCode::InvalidRange
+        );
+    }
+}
