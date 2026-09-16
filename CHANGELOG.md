@@ -179,6 +179,8 @@
 
 - Rust-owned exact-source structural diff primitive with deterministic owner changes, validated before/after byte regions, and independent order/layout evidence for the typed diff2 migration.
 
+- TreeHaver-backed native structural diff orchestration with a YAML/Psych family entry point, validated before/after roles, retained parser and analysis failures, and cancellation-safe result handling.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

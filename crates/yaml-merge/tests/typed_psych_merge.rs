@@ -15,7 +15,19 @@ use tree_haver::{
     service::*,
     source::{SourceEncoding, SourceRole, source_input},
 };
-use yaml_merge::typed::{MappingMergeError, merge_mapping_sources};
+use yaml_merge::typed::{MappingMergeError, diff_mapping_sources, merge_mapping_sources};
+
+fn diff_requests(before: &str, after: &str) -> Vec<ParseRequest> {
+    requests(["", before, after])
+        .into_iter()
+        .skip(1)
+        .zip([SourceRole::Before, SourceRole::After])
+        .map(|(mut request, role)| {
+            request.source.descriptor.role = role;
+            request
+        })
+        .collect()
+}
 
 struct Psych {
     descriptor: ParserProviderDescriptor,
@@ -285,4 +297,176 @@ fn bom_is_retained_outside_native_first_key_coordinates() {
     .unwrap();
     assert_eq!(result.outcome, ThreeWayMergeOutcome::Clean);
     assert_eq!(result.output.as_deref(), Some("\u{feff}é: ours\nnext: theirs\n"));
+}
+
+#[test]
+#[ignore = "native Ruby/Psych integration gate"]
+fn diffs_native_owners_in_rust_with_one_parse_batch_and_no_rendering() {
+    use ast_merge::owner_diff::OwnerChangeKind;
+    let (provider, snapshot, context) = setup();
+    let mut requests =
+        diff_requests("# header\r\na: one\r\nb: two", "# header\r\na: edited\r\nc: three");
+    requests.reverse();
+    let result =
+        diff_mapping_sources(requests, &TreeHaverParseService::default(), &snapshot, &context)
+            .unwrap();
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(result.input_parses.len(), 2);
+    assert_eq!(result.input_parses[0].source.descriptor().role, SourceRole::Before);
+    assert_eq!(result.input_parses[1].source.descriptor().role, SourceRole::After);
+    assert_eq!(
+        result.diff.changes.iter().map(|change| change.kind).collect::<Vec<_>>(),
+        vec![OwnerChangeKind::Edited, OwnerChangeKind::Deleted, OwnerChangeKind::Added]
+    );
+    assert_eq!(result.diff.before_layout[0].range.end_byte, "# header\r\n".len());
+    assert_eq!(result.diff.before_layout[0].sha256, result.diff.after_layout[0].sha256);
+}
+
+#[test]
+#[ignore = "native Ruby/Psych integration gate"]
+fn diff_native_parse_and_analysis_failures_retain_exact_roles() {
+    let (_, snapshot, context) = setup();
+    let result = diff_mapping_sources(
+        diff_requests("a: [\n", "a: one\n"),
+        &TreeHaverParseService::default(),
+        &snapshot,
+        &context,
+    );
+    let Err(MappingMergeError::NativeParseRejected { parses, sources }) = result else {
+        panic!("expected native syntax failure")
+    };
+    assert_eq!(sources.len(), 2);
+    assert_eq!(parses[0].source.descriptor().role, SourceRole::Before);
+    assert!(!parses[0].document.output().ok);
+    assert_eq!(parses[0].document.output().diagnostics[0].code.as_deref(), Some("psych.syntax"));
+    let result = diff_mapping_sources(
+        diff_requests("a: one\n", "a: one\na: two\n"),
+        &TreeHaverParseService::default(),
+        &snapshot,
+        &context,
+    );
+    let Err(MappingMergeError::AnalysisRejected { failures, parses, sources }) = result else {
+        panic!("expected ownership rejection")
+    };
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0].source_role, SourceRole::After);
+    assert_eq!(parses.len(), 2);
+    assert_eq!(sources.len(), 2);
+}
+
+#[test]
+#[ignore = "native Ruby/Psych integration gate"]
+fn diff_rejects_bad_roles_corrupt_sources_and_limits_before_parsing() {
+    let (provider, snapshot, mut context) = setup();
+    let service = TreeHaverParseService::default();
+    assert!(matches!(
+        diff_mapping_sources(requests(["a: 1", "a: 2", "a: 3"]), &service, &snapshot, &context),
+        Err(MappingMergeError::InvalidInputs)
+    ));
+    let mut corrupt = diff_requests("a: one", "a: two");
+    corrupt[1].source.bytes[0] = b'z';
+    assert!(matches!(
+        diff_mapping_sources(corrupt, &service, &snapshot, &context),
+        Err(MappingMergeError::Parse(ServiceError::Source(_)))
+    ));
+    context.max_batch_items = 1;
+    assert!(matches!(
+        diff_mapping_sources(diff_requests("a: one", "a: two"), &service, &snapshot, &context),
+        Err(MappingMergeError::Parse(ServiceError::LimitExceeded))
+    ));
+    context.cancelled.store(true, Ordering::SeqCst);
+    assert!(matches!(
+        diff_mapping_sources(diff_requests("a: one", "a: two"), &service, &snapshot, &context),
+        Err(MappingMergeError::Parse(ServiceError::Cancelled))
+    ));
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+#[ignore = "native Ruby/Psych integration gate"]
+fn diff_never_substitutes_an_explicit_missing_parser() {
+    let (provider, snapshot, context) = setup();
+    let mut requests = diff_requests("a: one", "a: two");
+    for request in &mut requests {
+        request.selection.backend_id = Some("missing".into());
+    }
+    let error =
+        diff_mapping_sources(requests, &TreeHaverParseService::default(), &snapshot, &context)
+            .unwrap_err();
+    let MappingMergeError::InputParseFailed { error: ServiceError::Selection(report), sources } =
+        error
+    else {
+        panic!("expected selection failure")
+    };
+    assert!(report.selected_backend.is_none());
+    assert_eq!(sources.len(), 2);
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+}
+
+struct CancellingPsych {
+    inner: Psych,
+    fail: bool,
+}
+
+impl ParserProvider for CancellingPsych {
+    fn descriptor(&self) -> &ParserProviderDescriptor {
+        self.inner.descriptor()
+    }
+    fn probe(&self, request: &ParserProbeRequest) -> Result<ParserProbeResult, ProviderFault> {
+        self.inner.probe(request)
+    }
+    fn parse_batch(
+        &self,
+        requests: Vec<ParseRequest>,
+        context: &ExecutionContext,
+    ) -> Result<Vec<ParseOutput>, ProviderFault> {
+        let parsed = self.inner.parse_batch(requests, context);
+        context.cancelled.store(true, Ordering::SeqCst);
+        if self.fail { Err(fault("late native error")) } else { parsed }
+    }
+}
+
+#[test]
+#[ignore = "native Ruby/Psych integration gate"]
+fn diff_discards_late_native_results_and_errors_after_cancellation() {
+    for fail in [false, true] {
+        let provider = Arc::new(CancellingPsych { inner: Psych::new(), fail });
+        let registry = ParserRegistry::default();
+        registry.register(provider.clone()).unwrap();
+        let (_, _, context) = setup();
+        let result = diff_mapping_sources(
+            diff_requests("a: one", "a: two"),
+            &TreeHaverParseService::default(),
+            &registry.snapshot().unwrap(),
+            &context,
+        );
+        assert!(matches!(result, Err(MappingMergeError::Parse(ServiceError::Cancelled))));
+        assert_eq!(provider.inner.calls.load(Ordering::SeqCst), 1);
+    }
+}
+
+#[test]
+#[ignore = "native Ruby/Psych integration gate"]
+fn diff_checks_family_analysis_against_validated_sources() {
+    fn stale(_: &ParsedResult) -> Result<ast_merge::SourcePreservingOwnerDocument, String> {
+        Ok(ast_merge::SourcePreservingOwnerDocument { source: "stale".into(), owners: vec![] })
+    }
+    let (_, snapshot, context) = setup();
+    let result = ast_merge::typed_diff::diff_native_sources_with_evidence(
+        "yaml",
+        diff_requests("a: one", "a: two"),
+        &TreeHaverParseService::default(),
+        &snapshot,
+        &context,
+        stale,
+    );
+    let Err(MappingMergeError::AnalysisRejected { failures, parses, sources }) = result else {
+        panic!("expected stale analysis rejection")
+    };
+    assert_eq!(
+        failures.iter().map(|failure| failure.source_role).collect::<Vec<_>>(),
+        vec![SourceRole::Before, SourceRole::After]
+    );
+    assert_eq!(parses.len(), 2);
+    assert_eq!(sources.len(), 2);
 }

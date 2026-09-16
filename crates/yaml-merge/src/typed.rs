@@ -13,6 +13,24 @@ pub const PSYCH_EXTENSION: &str = "structuredmerge.extension/ruby-psych/v1";
 
 pub use ast_merge::typed_merge::NativeMergeError as MappingMergeError;
 
+/// Compare two explicit before/after revisions using the same native syntax
+/// ownership profile as merge3. TreeHaver selects/parses; Rust classifies diff.
+pub fn diff_mapping_sources(
+    requests: Vec<ParseRequest>,
+    service: &dyn ParseService,
+    snapshot: &ParserRegistrySnapshot,
+    context: &ExecutionContext,
+) -> Result<ast_merge::typed_diff::NativeDiffExecution, MappingMergeError> {
+    ast_merge::typed_diff::diff_native_sources_with_evidence(
+        "yaml",
+        requests,
+        service,
+        snapshot,
+        context,
+        mapping_owners,
+    )
+}
+
 /// Analysis is derived here, never accepted as a parser-supplied owner list.
 /// Entire top-level entries are owners; nested entries are not independently
 /// merged in this first profile. Changed unowned layout fails closed.
