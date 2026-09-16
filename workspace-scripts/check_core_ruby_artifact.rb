@@ -46,6 +46,11 @@ copies.each do |destination, source|
   FileUtils.cp(source, target)
   File.chmod(destination.end_with?(extension) ? 0o755 : 0o644, target)
 end
+baseline = JSON.parse(File.read(File.join(root, "contracts/typed-api/ruby/manifest.json")))
+baseline.fetch("files").each do |name, digest|
+  path = File.join(gem_root, name)
+  raise "gem API differs from reviewed baseline: #{name}" unless File.file?(path) && Digest::SHA256.file(path).hexdigest == digest
+end
 spec.files = copies.keys.sort
 spec.extensions = []
 spec.executables = []
@@ -104,6 +109,7 @@ report = {
   "files" => archive.contents.sort, "installed_merge_tests" => "passed",
   "linkage_check" => "passed",
   "type_declarations" => "validated",
+  "api_review_baseline" => "ruby source surface matched",
   "generated_e2e_tests" => "passed",
   "publication_gate" => false, "source_gem_gate" => false,
 }

@@ -1,5 +1,6 @@
 """Negative archive gates; temporary data stays inside the kernel workspace."""
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -22,9 +23,11 @@ class ArchiveValidationTest(unittest.TestCase):
                     "License-Expression: AGPL-3.0-only OR PolyForm-Small-Business-1.0.0\n")
                 if license_bytes is not None:
                     archive.writestr("core.dist-info/licenses/LICENSE", license_bytes)
-                if typing_files:
-                    archive.writestr("structuredmerge_core/_native.pyi", "def example() -> None: ...\n")
-                    archive.writestr("structuredmerge_core/py.typed", "")
+                baseline = json.loads((ROOT / "contracts/typed-api/python/manifest.json").read_text())
+                for name in baseline["files"]:
+                    if name in (extra or {}) or not typing_files and name.endswith((".pyi", "py.typed")):
+                        continue
+                    archive.writestr(name, (ROOT / "packages/python" / name).read_bytes())
                 for name, data in (extra or {}).items():
                     archive.writestr(name, data)
             return ARTIFACT.inspect_wheel(ROOT, wheel)
@@ -52,6 +55,16 @@ class ArchiveValidationTest(unittest.TestCase):
     def test_rejects_missing_type_declarations(self):
         with self.assertRaisesRegex(ValueError, "native type declarations"):
             self.check(license_bytes=(ROOT / "LICENSE").read_bytes(), typing_files=False)
+
+    def test_rejects_valid_but_changed_api_source(self):
+        for name, data in (("structuredmerge_core/__init__.py", "__all__ = []\n"),
+                           ("structuredmerge_core/_native.pyi", "def wrong() -> None: ...\n")):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "API differs from reviewed baseline"):
+                self.check(license_bytes=(ROOT / "LICENSE").read_bytes(), extra={name: data})
+
+    def test_rejects_unreviewed_api_module(self):
+        with self.assertRaisesRegex(ValueError, "API file set differs"):
+            self.check(license_bytes=(ROOT / "LICENSE").read_bytes(), extra={"structuredmerge_core/extra.py": ""})
 
 
 if __name__ == "__main__":

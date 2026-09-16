@@ -221,6 +221,8 @@
 
 - Enable common typed merge2 execution for the explicit native Python declaration profile with Rust-owned current-preferred insertion, verified incoming/current provenance, stage-specific failure diagnostics, and installed-binding fixtures.
 
+- Add explicit Ruby/Python typed API source-review snapshots with a non-mutating CI drift gate and packaged-surface checks; runtime semantic compatibility and platform ABI approval remain separate.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

@@ -40,6 +40,14 @@ def inspect_wheel(root, wheel):
         if stub not in names or "structuredmerge_core/py.typed" not in names:
             raise ValueError("wheel must contain native type declarations and py.typed")
         ast.parse(archive.read(stub).decode("utf-8"))
+        baseline = json.loads((root / "contracts/typed-api/python/manifest.json").read_text(encoding="utf-8"))
+        surfaces = [name for name in names if name.startswith("structuredmerge_core/")
+                    and (name.endswith((".py", ".pyi")) or name.endswith("/py.typed"))]
+        if len(surfaces) != len(set(surfaces)) or set(surfaces) != baseline["files"].keys():
+            raise ValueError("wheel API file set differs from reviewed baseline")
+        for name, digest in baseline["files"].items():
+            if name not in names or hashlib.sha256(archive.read(name)).hexdigest() != digest:
+                raise ValueError(f"wheel API differs from reviewed baseline: {name}")
     return metadata, license_files
 
 
@@ -72,6 +80,7 @@ def main():
         "python": sys.version, "libcst": "1.9.0", "license_files": license_files,
         "installed_merge_tests": "passed", "publication_gate": False,
         "generated_e2e_tests": "passed",
+        "api_review_baseline": "python source surface matched",
     }
     (stage / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report))

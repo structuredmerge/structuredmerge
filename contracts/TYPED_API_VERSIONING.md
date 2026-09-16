@@ -7,6 +7,34 @@ change the default execution owner.
 
 ## API review surfaces
 
+Exact, per-target source review baselines now live under
+`contracts/typed-api/{ruby,python}/`. Each contains a manifest with a review
+reason and SHA-256 records, plus full snapshots suitable for ordinary diffs.
+Ruby includes the RBS, public facade, loader and version module. Python includes
+all package `.py`/`.pyi` modules and `py.typed`, including the public facade rather
+than only the native stub. New or missing surface files fail the gate.
+
+Run `python3 workspace-scripts/check_typed_api_baselines.py` to check both targets
+without changing files. The typed Python CI matrix runs this cross-target gate.
+Installed artifact gates also compare the packaged surface against its target
+manifest; the wheel gate rejects unreviewed or duplicate surface files.
+
+After regenerating with Alef, review the source/declaration diff and compatibility
+impact before recording an intentional change:
+
+```sh
+python3 workspace-scripts/check_typed_api_baselines.py --record --target ruby --reason 'Describe the reviewed compatibility impact'
+python3 workspace-scripts/check_typed_api_baselines.py --record --target python --reason 'Describe the reviewed compatibility impact'
+```
+
+Commit the generated snapshots, manifests, owning generator/config changes and
+changelog together. The recorder does not delete stale snapshots; remove only
+the specifically reviewed obsolete snapshot when an API file is intentionally
+removed, then recheck. Never hand-edit snapshots to disguise drift. Exact source
+comparison intentionally also catches formatting, version and generator-marker
+changes; it is a review trigger, not a semantic breaking-change classifier.
+Initial baselines describe unreleased development APIs, not stability approval.
+
 The generated declarations are checked-in review surfaces for the currently
 exposed typed API:
 
@@ -54,8 +82,9 @@ remain required.
 
 Neither language publishes a stable raw Rust memory-layout ABI. Language-visible
 API review, artifact loader/linkage checks, and semantic conformance are separate
-gates. Full per-target API snapshots and supported-platform ABI baselines remain
-release work, not implied by these development declarations.
+gates. Source snapshots do not prove complete runtime signature equivalence or
+semantic compatibility. Supported-platform ABI baselines remain release work,
+not implied by these development declarations or source-review checks.
 
 ## Release discipline
 
