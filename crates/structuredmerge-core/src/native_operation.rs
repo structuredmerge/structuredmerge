@@ -318,17 +318,7 @@ pub fn execute_native_operation(
         return finish(result, request, &evidence);
     }
     let supported = match &input.operation {
-        OperationPolicy::Analyze(policy) => {
-            policy.extra.is_empty()
-                && policy
-                    .analysis_depth
-                    .as_deref()
-                    .is_none_or(|depth| depth == "exact-source-owners")
-                && policy.comments != Some(true)
-                && policy.tokens != Some(true)
-                && policy.ownership != Some(false)
-                && policy.native_extensions != Some(false)
-        }
+        OperationPolicy::Analyze(policy) => crate::native_analysis_projection::supports(policy),
         OperationPolicy::Merge3(policy) => {
             policy.render_policy == "source-preserving"
                 && policy.extra.is_empty()

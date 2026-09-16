@@ -378,6 +378,65 @@ fn analysis_retains_native_nodes_and_exact_shared_layout_without_rendering() {
 
 #[test]
 #[ignore = "native Ruby/Psych common-operation integration gate"]
+fn common_analysis_validation_rejects_forged_owner_layout_and_parser_evidence() {
+    let (_, registry, context) = setup(Behavior::Normal);
+    let input = request(wire("analyze", &["# header\na: one\nb: two\n"]));
+    let result = execute_native_operation(&input, &registry, &context).unwrap();
+    assert!(result.ok);
+    let original = serde_json::to_value(result.analysis.as_ref().unwrap()).unwrap();
+    for (pointer, value) in [
+        ("/parse_result_ref", json!("different-parse")),
+        ("/request_id", json!("different-request")),
+        ("/parse_result/schema", json!("unknown/v9")),
+        ("/parse_result/parsed/source/sha256", json!("0".repeat(64))),
+        ("/parse_result/parsed/source/role", json!("before")),
+        ("/parse_result/selection/selected_backend", json!("invented.backend")),
+        ("/parse_result/selection/requested/backend_id", json!("invented.backend")),
+        ("/owners/0/node_id", json!("missing-node")),
+        ("/owners/0/node_ids", json!([])),
+        ("/owners/0/logical_identity", json!(["yaml", "/forged"])),
+        ("/owners/0/match_keys", json!(["forged"])),
+        ("/owners/0/source_sha256", json!("0".repeat(64))),
+        ("/owners/0/span/start_point/column", json!(1)),
+        ("/layout_gaps/0/source_sha256", json!("0".repeat(64))),
+        ("/layout_gaps/1/controller_side", json!("before")),
+        ("/layout_gaps/1/fallback_controller_side", json!("before")),
+        ("/attachments/0/trailing_gap_id", json!("unknown-gap")),
+        ("/ownership/1/selected_owner_ref", json!("/a")),
+        ("/ownership/1/confidence", json!("guessed")),
+        ("/comment_regions", json!([{"invented": true}])),
+        (
+            "/extensions",
+            json!([{"schema": "example/v1", "namespace": "", "capabilities": [], "payload": {}}]),
+        ),
+    ] {
+        let mut corrupted = original.clone();
+        *corrupted.pointer_mut(pointer).unwrap_or_else(|| panic!("missing pointer: {pointer}")) =
+            value;
+        let mut changed = result.clone();
+        changed.analysis = Some(serde_json::from_value(corrupted).unwrap());
+        assert!(changed.validate_against(&input).is_err(), "accepted mutation at {pointer}");
+    }
+    let mut changed = result.clone();
+    changed.analysis.as_mut().unwrap().extra.remove("parse_result");
+    assert!(changed.validate_against(&input).is_err());
+    let mut unsupported = input.request().clone();
+    unsupported.parser_selection.language_version = Some("unimplemented-version".into());
+    let unsupported = unsupported.validate(4096, |_, _| panic!()).unwrap();
+    assert!(result.validate_against(&unsupported).is_err());
+    let mut future = original;
+    future["future"] = json!({"opaque": [null, false, 7]});
+    future["owners"][0]["future"] = json!("retained");
+    future["extensions"] = json!([{"schema": "example.analysis/v1", "namespace": "example.analysis",
+        "capabilities": [], "payload": {"opaque": "preserved"}}]);
+    let mut changed = result;
+    changed.analysis = Some(serde_json::from_value(future.clone()).unwrap());
+    changed.validate_against(&input).unwrap();
+    assert_eq!(serde_json::to_value(changed.analysis.unwrap()).unwrap(), future);
+}
+
+#[test]
+#[ignore = "native Ruby/Psych common-operation integration gate"]
 fn analysis_failures_preserve_source_role_and_discard_late_results() {
     for (text, expected) in [("a: [", "parse.rejected"), ("a: one\na: two", "analysis.unsupported")]
     {

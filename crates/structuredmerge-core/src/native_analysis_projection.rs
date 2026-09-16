@@ -4,6 +4,151 @@ use ast_merge::native_analysis::NativeOwnerAnalysis;
 use serde::Serialize;
 use tree_haver::service::ParsedResult;
 
+pub(crate) fn supports(policy: &crate::operation::AnalyzePolicy) -> bool {
+    policy.extra.is_empty()
+        && policy.analysis_depth.as_deref().is_none_or(|depth| depth == "exact-source-owners")
+        && policy.comments != Some(true)
+        && policy.tokens != Some(true)
+        && policy.ownership != Some(false)
+        && policy.native_extensions != Some(false)
+}
+
+/// Reconstruct family decisions from validated embedded syntax, not from the
+/// result's owner/layout claims. This checks evidence consistency; it does not
+/// authenticate a foreign parser or prove a registry snapshot was executed.
+pub(crate) fn validate_embedded(
+    result: &crate::operation_result::OperationResult,
+    request: &crate::operation::ValidatedOperationRequest,
+) -> Result<(), crate::operation_result::ResultContractError> {
+    use crate::operation_result::ResultContractError::InvalidSourceEvidence as Invalid;
+    let (family, provider) = match result.profile.profile_id.as_deref() {
+        Some(crate::profiles::YAML_MAPPING) => ("yaml", "kernel.yaml"),
+        Some(crate::profiles::PYTHON_DECLARATIONS) => ("python", "kernel.python"),
+        _ => return Ok(()), // Other profiles need their own analysis validator.
+    };
+    let analysis = result.analysis.as_ref().ok_or(Invalid)?;
+    let crate::operation::OperationPolicy::Analyze(policy) = &request.request().operation else {
+        return Err(Invalid);
+    };
+    if !supports(policy)
+        || !result.ok
+        || result.provider.family.as_deref() != Some(family)
+        || result.provider.provider_id.as_deref() != Some(provider)
+        || request.request().provider_selection.dialect.is_some()
+        || !request.request().provider_selection.extra.is_empty()
+        || request
+            .request()
+            .provider_selection
+            .required_capabilities
+            .iter()
+            .any(|capability| capability != "analyze")
+        || request.request().parser_selection.profile_id.is_some()
+        || request.request().parser_selection.language_version.is_some()
+        || !request.request().parser_selection.extra.is_empty()
+        || request.request().extensions.iter().any(|extension| !extension.capabilities.is_empty())
+    {
+        return Err(Invalid);
+    }
+    let core: CoreParseResult =
+        serde_json::from_value(analysis.extra.get("parse_result").ok_or(Invalid)?.clone())
+            .map_err(|_| Invalid)?;
+    let selection = &request.request().parser_selection;
+    let parser = result.profile.parser.as_ref().ok_or(Invalid)?;
+    if core.schema != crate::service::PARSE_RESULT_SCHEMA
+        || !core.parsed.ok
+        || core.backend.id.is_empty()
+        || core.selection.selected_backend.as_deref() != Some(&core.backend.id)
+        || core.selection.requested.backend_id != selection.backend
+        || core.selection.requested.preference != selection.preference
+        || core.selection.requested.required_capabilities != selection.required_capabilities
+        || selection.backend.as_ref().is_some_and(|id| id != &core.backend.id)
+        || parser.selected_backend.as_ref() != Some(&core.backend.id)
+        || parser.requested_backend != selection.backend
+        || parser.selection_mode.as_deref()
+            != Some(if selection.backend.is_some() { "explicit" } else { "policy" })
+        || !core.backend.languages.iter().any(|language| language == family)
+        || !core
+            .backend
+            .contracts
+            .iter()
+            .any(|schema| schema == crate::service::PARSE_RESULT_SCHEMA)
+        || !core.backend.capabilities.iter().any(|capability| capability == "native_extensions")
+        || selection
+            .required_capabilities
+            .iter()
+            .any(|capability| !core.backend.capabilities.contains(capability))
+    {
+        return Err(Invalid);
+    }
+    let selected: Vec<_> =
+        core.selection.candidates.iter().filter(|candidate| candidate.selected).collect();
+    if selected.len() != 1
+        || selected[0].backend_id != core.backend.id
+        || !selected[0].rejections.is_empty()
+        || selected[0].available != Some(true)
+        || selected[0].loadable != Some(true)
+        || selected[0].probe_fault.is_some()
+    {
+        return Err(Invalid);
+    }
+    let source_id =
+        &request.request().sources.get(&crate::SourceRole::Source).ok_or(Invalid)?.source_id;
+    let source = request.sources().get(source_id).map_err(|_| Invalid)?.clone();
+    let parse_id = core.parsed.request_id.clone();
+    let limits = crate::parsed::ParseValidationLimits {
+        max_nodes: core.parsed.nodes.len(),
+        max_diagnostics: core.parsed.diagnostics.len(),
+        partial_tree_allowed: false,
+        comments_supported: false,
+    };
+    let document = crate::parsed::ParsedDocument::validate(core.parsed, &parse_id, &source, limits)
+        .map_err(|_| Invalid)?;
+    let parsed = ParsedResult {
+        schema: core.schema,
+        selection: core.selection,
+        backend: core.backend,
+        document,
+        source,
+    };
+    let owners = match family {
+        "yaml" => yaml_merge::typed::mapping_analysis(&parsed),
+        "python" => python_merge::declaration_analysis(&parsed),
+        _ => unreachable!(),
+    }
+    .map_err(|_| Invalid)?;
+    let expected = project(&parsed, &owners, family).map_err(|_| Invalid)?;
+    let mut expected = serde_json::to_value(expected).map_err(|_| Invalid)?;
+    // Passive compatible analysis extensions are retained, not mistaken for
+    // known ownership decisions. Deserialization still checks their shape.
+    let extensions: Vec<crate::NativeExtension> =
+        serde_json::from_value(analysis.extra.get("extensions").ok_or(Invalid)?.clone())
+            .map_err(|_| Invalid)?;
+    crate::parsed::validate_extensions(&extensions).map_err(|_| Invalid)?;
+    expected.as_object_mut().ok_or(Invalid)?.remove("extensions");
+    if !contains_expected(&serde_json::to_value(analysis).map_err(|_| Invalid)?, &expected) {
+        return Err(Invalid);
+    }
+    Ok(())
+}
+
+fn contains_expected(actual: &serde_json::Value, expected: &serde_json::Value) -> bool {
+    match (actual, expected) {
+        (serde_json::Value::Object(actual), serde_json::Value::Object(expected)) => {
+            expected.iter().all(|(key, value)| {
+                actual.get(key).is_some_and(|actual| contains_expected(actual, value))
+            })
+        }
+        (serde_json::Value::Array(actual), serde_json::Value::Array(expected)) => {
+            actual.len() == expected.len()
+                && actual
+                    .iter()
+                    .zip(expected)
+                    .all(|(actual, expected)| contains_expected(actual, expected))
+        }
+        _ => actual == expected,
+    }
+}
+
 #[derive(Serialize)]
 struct Owner {
     id: String,

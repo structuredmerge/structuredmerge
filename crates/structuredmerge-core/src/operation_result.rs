@@ -473,6 +473,9 @@ impl OperationResult {
         {
             return Err(E::UnsupportedSchema);
         }
+        if self.analysis.is_some() {
+            crate::native_analysis_projection::validate_embedded(self, request)?;
+        }
         for (requested, actual) in [
             (&input.provider_selection.provider_id, &self.provider.provider_id),
             (&input.provider_selection.family, &self.provider.family),

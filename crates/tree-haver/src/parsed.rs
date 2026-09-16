@@ -269,9 +269,9 @@ fn sorted_unique(values: &[String]) -> bool {
     values.iter().all(|value| !value.is_empty()) && values.windows(2).all(|pair| pair[0] < pair[1])
 }
 
-pub(crate) fn validate_extensions(
-    extensions: &[NativeExtension],
-) -> Result<(), ParseValidationError> {
+/// Validate portable extension identity/capability sets without interpreting
+/// native payloads. Shared analysis transport uses the same rules as parsing.
+pub fn validate_extensions(extensions: &[NativeExtension]) -> Result<(), ParseValidationError> {
     let mut schemas = BTreeSet::new();
     for extension in extensions {
         if extension.schema.is_empty()

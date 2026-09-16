@@ -82,9 +82,15 @@ Comment-region arrays are empty and explicitly marked not requested; source gaps
 containing comment bytes are not described as classified comments. There is no
 output, diff, edit plan or output-verification claim. Syntax/analysis failures
 retain source-role diagnostics and parsed evidence, and cancellation/deadline
-checks discard late successful analysis. The common envelope's general analysis
-validation remains schema-level; it does not independently validate arbitrary
-external analysis payloads. This executor builds from validated Rust analysis.
+checks discard late successful analysis. For these two native profiles, the
+common result validator requires a complete embedded parse, checks its identity,
+source bytes, tree and selection consistency, reruns the Rust family analyzer,
+and compares required owner/layout/attachment fields against that reconstruction.
+Removing the embedded parse cannot bypass validation. Compatible extra fields
+and well-formed passive extensions are retained. This verifies consistency with
+the embedded syntax facts, not the authenticity of an external parser or registry
+execution. Other profiles and content-addressed external analysis references
+still need their own resolvers/validators; those retain schema-level checking.
 
 `NativeOwnerAnalysis::layout_gaps` now exposes the exact byte-gap plan also used
 by the owner renderer. It contains one slot preceding each owner and one suffix,

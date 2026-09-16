@@ -250,3 +250,5 @@
 - Export Python source descriptors and line-ending DTOs with their native identity so public SourceInput construction works without private-module types.
 
 - Reject native merge family analysis that changes verified source bytes or supplies invalid owner ranges before classification.
+
+- Validate embedded native analysis results against request sources and reconstructed Rust family decisions, rejecting inconsistent parser, owner, layout and attachment evidence while preserving compatible fields.
