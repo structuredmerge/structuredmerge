@@ -211,6 +211,8 @@
 
 - Add common typed analyze, diff2, and merge3 fixtures for installed Ruby/Psych and Python/LibCST bindings, including syntax rejection, conflicts, and byte preservation.
 
+- Add Rust directional whole-owner classification with explicit incoming/current identities, current-preferred decisions, and exact layout evidence; merge2 facade execution remains unsupported.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

@@ -29,6 +29,7 @@ pub use diagnostics::*;
 pub mod byte_evidence;
 pub mod native_analysis;
 pub mod owner_diff;
+pub mod owner_merge2;
 pub mod typed_diff;
 pub mod typed_merge;
 
