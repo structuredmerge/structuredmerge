@@ -140,8 +140,9 @@ facade's unsupported-analysis exception; the older internal Rust convenience
 entry point retains its error contract. Input selection/provider failures
 produce an error result with `input_failure`, preserving the candidate report
 or backend/native fault identity without fabricating a complete validated parse
-batch. These results have empty `input_parses` and `sources`; they do not claim
-that no inputs were submitted. Full operation request/source correlation remains
+batch. These results retain source descriptors independently validated by the
+immutable source map, while `input_parses` remains empty. Descriptors do not
+claim that parsing succeeded. Full operation request correlation remains
 to be added. Invalid requests/sources, resource limits, and cancellation/deadline
 controls still raise `CoreError`.
 

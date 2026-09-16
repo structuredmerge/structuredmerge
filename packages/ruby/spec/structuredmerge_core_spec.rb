@@ -120,7 +120,8 @@ RSpec.describe StructuredmergeCore do
     expect(failed.output).to be_nil
     expect(failed.output_parse).to be_nil
     expect(failed.input_parses).to be_empty
-    expect(failed.sources).to be_empty
+    expect(failed.sources.map(&:source_id)).to eq(requests.reverse.map { |request| request.source.descriptor.source_id })
+    expect(failed.sources.map(&:sha256)).to eq(requests.reverse.map { |request| request.source.descriptor.sha256 })
     expect(host.calls).to eq(2)
     host.define_singleton_method(:parse_batch) do |_request|
       StructuredmergeCore::ParseBatchResult.new(items: [])
@@ -135,6 +136,7 @@ RSpec.describe StructuredmergeCore do
       expect(failed.input_failure.selection.requested.backend_id).to eq("ruby.typed.psych")
       expect(failed.input_failure.selection.selected_backend).to be_nil
       expect(failed.input_failure.selection.digest).not_to be_empty
+      expect(failed.sources.length).to eq(3)
     ensure
       described_class.register_parser_host(host)
     end

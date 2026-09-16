@@ -186,3 +186,5 @@
 - Retain all validated input source descriptors on typed native syntax rejection and select syntax failures by semantic role before family analysis, independent of request order.
 
 - Reject duplicate source IDs across typed parser batches before probes or parsing, including distinct requests with identical bytes or different merge roles.
+
+- Retain independently validated merge input source descriptors on parser selection and callback failures while withholding incomplete parse results and output.

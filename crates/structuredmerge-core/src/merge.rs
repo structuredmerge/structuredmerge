@@ -188,7 +188,7 @@ fn project_result(
                     .collect(),
             })
         }
-        Err(MappingMergeError::Parse(error)) => {
+        Err(MappingMergeError::InputParseFailed { error, sources }) => {
             use tree_haver::service::ServiceError;
             match &error {
                 ServiceError::Selection(_)
@@ -209,7 +209,7 @@ fn project_result(
                         output_parse: None,
                         verification_failure: None,
                         analysis_rejections: vec![],
-                        sources: vec![],
+                        sources,
                         output_source: None,
                         source_segments: vec![],
                         input_failure: Some(crate::ParserFailure::from(error)),
@@ -218,11 +218,13 @@ fn project_result(
                 _ => Err(CoreError::from(error)),
             }
         }
+        Err(MappingMergeError::Parse(error)) => Err(CoreError::from(error)),
         Err(error) => Err(CoreError {
             code: match &error {
                 MappingMergeError::InvalidInputs => "invalid_merge_inputs",
                 MappingMergeError::Unsupported(_) => "unsupported_native_profile",
                 MappingMergeError::Parse(_) => unreachable!(),
+                MappingMergeError::InputParseFailed { .. } => unreachable!(),
                 MappingMergeError::NativeParseRejected { .. } => unreachable!(),
                 MappingMergeError::AnalysisRejected { .. } => unreachable!(),
             }
@@ -252,10 +254,12 @@ mod tests {
                 "resource.limit",
             ),
         ] {
-            assert_eq!(
-                project_result(Err(MappingMergeError::Parse(error))).unwrap_err().code,
-                code
-            );
+            for failure in [
+                MappingMergeError::Parse(error.clone()),
+                MappingMergeError::InputParseFailed { error, sources: vec![] },
+            ] {
+                assert_eq!(project_result(Err(failure)).unwrap_err().code, code);
+            }
         }
         for (error, code) in [
             (ServiceError::ProviderPanic { backend_id: "native".into() }, "parser.provider_panic"),
@@ -267,7 +271,9 @@ mod tests {
                 "parser.invalid_result",
             ),
         ] {
-            let result = project_result(Err(MappingMergeError::Parse(error))).unwrap();
+            let result =
+                project_result(Err(MappingMergeError::InputParseFailed { error, sources: vec![] }))
+                    .unwrap();
             assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Error);
             assert_eq!(result.input_failure.unwrap().code, code);
             assert!(result.output.is_none());

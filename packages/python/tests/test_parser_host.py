@@ -136,7 +136,10 @@ class TypedParserHostTest(unittest.TestCase):
         self.assertIsNone(failed.output)
         self.assertIsNone(failed.output_parse)
         self.assertEqual(failed.input_parses, [])
-        self.assertEqual(failed.sources, [])
+        self.assertEqual([source.source_id for source in failed.sources],
+            [request.source.descriptor.source_id for request in requests[::-1]])
+        self.assertEqual([source.sha256 for source in failed.sources],
+            [request.source.descriptor.sha256 for request in requests[::-1]])
         self.assertEqual(self.host.calls, 2)
 
         self.host.parse_batch = lambda request: core.ParseBatchResult(items=[])
@@ -153,6 +156,7 @@ class TypedParserHostTest(unittest.TestCase):
             self.assertEqual(failed.input_failure.selection.requested.backend_id, "python.libcst")
             self.assertIsNone(failed.input_failure.selection.selected_backend)
             self.assertTrue(failed.input_failure.selection.digest)
+            self.assertEqual(len(failed.sources), 3)
         finally:
             core.register_parser_host(self.host)
 

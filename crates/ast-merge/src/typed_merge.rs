@@ -10,13 +10,17 @@ use tree_haver::{
         ExecutionContext, ParseRequest, ParseService, ParsedResult, ParserRegistrySnapshot,
         ServiceError,
     },
-    source::{SourceDescriptor, SourceEncoding, SourceRole, source_input},
+    source::{SourceDescriptor, SourceEncoding, SourceMap, SourceRole, source_input},
 };
 
 #[derive(Debug)]
 pub enum NativeMergeError {
     InvalidInputs,
     Parse(ServiceError),
+    InputParseFailed {
+        error: ServiceError,
+        sources: Vec<SourceDescriptor>,
+    },
     NativeParseRejected {
         parses: Vec<ParsedResult>,
         sources: Vec<SourceDescriptor>,
@@ -51,6 +55,7 @@ pub fn merge_native_sources(
             NativeMergeError::AnalysisRejected { failures, .. } => NativeMergeError::Unsupported(
                 failures.into_iter().map(|failure| failure.message).collect::<Vec<_>>().join("; "),
             ),
+            NativeMergeError::InputParseFailed { error, .. } => NativeMergeError::Parse(error),
             error => error,
         })
 }
@@ -81,8 +86,32 @@ pub fn merge_native_sources_with_evidence(
         return Err(NativeMergeError::InvalidInputs);
     }
     let mut verification = requests[0].clone();
-    let mut parsed =
-        service.parse_batch(requests, snapshot, context).map_err(NativeMergeError::Parse)?;
+    context.check().map_err(NativeMergeError::Parse)?;
+    if requests.len() > context.max_batch_items {
+        return Err(NativeMergeError::Parse(ServiceError::LimitExceeded));
+    }
+    // Retain only independently validated identities on a later service failure.
+    // Reuse the operation source-map contract, not provider-returned descriptors.
+    let mut sources = {
+        let map = SourceMap::validate(
+            requests.iter().map(|request| request.source.clone()).collect(),
+            context.max_input_bytes,
+        )
+        .map_err(|error| NativeMergeError::Parse(ServiceError::Source(error)))?;
+        requests
+            .iter()
+            .map(|request| {
+                map.get(&request.source.descriptor.source_id)
+                    .map(|source| source.descriptor().clone())
+                    .map_err(|error| NativeMergeError::Parse(ServiceError::Source(error)))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    sources.sort_by_key(|source| source.role);
+    let mut parsed = match service.parse_batch(requests, snapshot, context) {
+        Ok(parsed) => parsed,
+        Err(error) => return Err(NativeMergeError::InputParseFailed { error, sources }),
+    };
     let backend = parsed.first().ok_or(NativeMergeError::InvalidInputs)?.backend.id.clone();
     if parsed.iter().any(|result| result.backend.id != backend) {
         return Err(NativeMergeError::InvalidInputs);
@@ -91,7 +120,6 @@ pub fn merge_native_sources_with_evidence(
     // Failure identity must not depend on request order, and a family-analysis
     // rejection must not hide native syntax errors in another revision.
     parsed.sort_by_key(|result| result.source.descriptor().role);
-    let sources: Vec<_> = parsed.iter().map(|result| result.source.descriptor().clone()).collect();
     if parsed.iter().any(|result| !result.document.output().ok) {
         return Err(NativeMergeError::NativeParseRejected { parses: parsed, sources });
     }
