@@ -116,7 +116,7 @@ pub fn merge_python_declarations_controlled(
     )
 }
 
-fn project_result(
+pub(crate) fn project_result(
     profile_id: &str,
     result: Result<NativeMergeExecution, MappingMergeError>,
 ) -> Result<NativeMergeResult, CoreError> {

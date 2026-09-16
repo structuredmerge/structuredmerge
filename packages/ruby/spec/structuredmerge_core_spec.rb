@@ -16,6 +16,58 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  def diff_request(sources, roles: %w[before after])
+    described_class::NativeDiffRequest.new(request_id: "diff-ruby", profile_id: "kernel.yaml.native_mapping.v1",
+      parses: merge_requests(sources, roles: roles))
+  end
+
+  it "classifies native YAML diff in Rust without a merge or output parse" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    result = described_class.diff_native_owners(diff_request(["# header\r\na: one\r\nb: two", "# header\r\na: edited\r\nc: three"]), merge_limits)
+    expect(result.ok).to be(true)
+    expect(result.request_id).to eq("diff-ruby")
+    expect(result.diff.changes.map(&:kind)).to eq(%i[edited deleted added])
+    expect(result.diff.changes.map(&:id)).to eq(%w[change-0 change-1 change-2])
+    expect(result.diff.changes[0].before.range.start_byte).to eq("# header\r\n".bytesize)
+    expect(result.diff.changes[1].after).to be_nil
+    expect(result.diff.changes[2].before).to be_nil
+    expect(result.input_parses.map { |item| item.parsed.source.role }).to eq(%i[before after])
+    expect(result).not_to respond_to(:output)
+    expect(host.calls).to eq(1)
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "retains diff syntax and unsupported-analysis failures without partial changes" do
+    described_class.register_parser_host(TypedPsychHost.new)
+    result = described_class.diff_native_owners(diff_request(["a: [\n", "a: two\n"]), merge_limits)
+    expect(result.ok).to be(false)
+    expect(result.diff).to be_nil
+    expect(result.input_parses.first.parsed.source.role).to eq(:before)
+    expect(result.input_parses.first.parsed.ok).to be(false)
+    result = described_class.diff_native_owners(diff_request(["a: one\n", "a: one\na: two\n"]), merge_limits)
+    expect(result.ok).to be(false)
+    expect(result.diff).to be_nil
+    expect(result.analysis_rejections.map(&:source_role)).to eq([:after])
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "rejects diff role substitution and cancellation before callbacks" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    expect { described_class.diff_native_owners(diff_request(["a: one", "a: two"], roles: %w[incoming current]), merge_limits) }
+      .to raise_error(RuntimeError, /invalid_diff_inputs/)
+    control = described_class.create_operation_control
+    control.cancel
+    expect { described_class.diff_native_owners_controlled(diff_request(["a: one", "a: two"]), merge_limits, control) }
+      .to raise_error(RuntimeError, /execution.cancelled/)
+    expect(host.calls).to eq(0)
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
   it "plans directory content through the typed API without writing it" do
     FileUtils.mkdir_p("tmp")
     Dir.mktmpdir("typed-template-", "tmp") do |root|

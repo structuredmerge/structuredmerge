@@ -3,7 +3,8 @@
 `ast_merge::owner_diff::diff_owner_documents` matches family-analyzed owner
 identities and classifies added, deleted and edited owners in Rust. This is a
 building block for the planned typed analyze/diff2 migration, not a replacement
-for the complete Slice 1025 operation/result envelope or an exported binding API.
+for the complete Slice 1025 operation/result envelope. A development typed
+binding boundary now exposes it as described below.
 
 Inputs are validated `SourceDocument`s with distinct IDs and exact before/after
 roles plus corresponding `SourcePreservingOwnerDocument`s. The primitive rejects
@@ -54,7 +55,38 @@ cargo test -p yaml-merge --test typed_psych_merge -- --ignored
 
 These are native parser process tests, not generated binding tests. The shared
 internal failure type is currently `NativeMergeError`; it is reused rather than
-inventing a parallel diagnostic vocabulary. Typed core projection, portable
-operation/result envelopes, Python-family dispatch, and migration of the Ruby
-family adapters remain unfinished. No diff capability was added to the binding
-manifest or advertised as a completed public provider operation.
+inventing a parallel diagnostic vocabulary. Complete portable
+operation/result envelopes and migration of the Ruby family adapters remain
+unfinished. No diff capability is advertised as a completed portable provider
+operation or approved as a default.
+
+## Generated typed development boundary
+
+`diff_native_owners(NativeDiffRequest, ParseLimits)` and its `_controlled`
+counterpart accept request identity, an explicit profile ID and typed parse
+requests with before/after sources. The supported profiles are
+`kernel.yaml.native_mapping.v1` and `kernel.python.native_declarations.v1`.
+Both reuse their Rust family analyzers and the common diff engine. TreeHaver
+retains parser selection; the request cannot substitute an arbitrary analyzer
+or ask a host to classify changes.
+
+`NativeDiffResult` retains request identity, profile ID, validated source
+descriptors, input parse evidence, diagnostics, service failure and analysis
+rejections. A successful result contains `OwnerDiff`; a rejected result has no
+partial diff. Invalid requests, unsupported profiles, resource limits and
+cancellation/deadline failures remain structured core errors. Failure projection
+shares the existing core merge error categorization, but never executes a merge.
+There is no output field, base synthesis or output verification parse.
+
+Installed Ruby/Psych and Python/LibCST tests cover real edits/additions/deletions,
+exact role/range evidence, missing alternatives, input syntax/analysis failures,
+role substitution and cancellation before callbacks. These development DTOs
+still do not implement the full Slice 1025 schema/policy/extensions/result
+envelope. The existing `native_merge_profiles` function remains merge-entry-point
+introspection, not a negotiated registry manifest for these diff operations.
+
+Python `ParseRequest` and `ParseOptions` now reexport their native classes,
+like the existing source descriptors. This keeps nested request constructors
+compatible with objects created through the public namespace. Dataclass-specific
+introspection/equality is not retained; these are development API identities,
+not yet a stable-version compatibility promise.

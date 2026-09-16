@@ -16,6 +16,10 @@ pub use ast_merge::{
     ThreeWayMergeOutcome,
 };
 pub use merge::*;
+mod diff;
+pub use ast_merge::owner_diff;
+pub use ast_merge::owner_diff::{DiffSourceRegion, OwnerChange, OwnerChangeKind, OwnerDiff};
+pub use diff::*;
 mod edits;
 pub use edits::*;
 mod structural;

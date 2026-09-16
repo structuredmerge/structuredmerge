@@ -63,9 +63,9 @@ class LibCSTHost:
 
 
 class TypedParserHostTest(unittest.TestCase):
-    def merge_requests(self, sources, shared_source_id=None):
+    def merge_requests(self, sources, shared_source_id=None, roles=None):
         requests = []
-        for role, source in zip([core.SourceRole.BASE, core.SourceRole.OURS, core.SourceRole.THEIRS], sources):
+        for role, source in zip(roles or [core.SourceRole.BASE, core.SourceRole.OURS, core.SourceRole.THEIRS], sources):
             data = source.encode("utf-8")
             descriptor = native.SourceDescriptor(
                 source_id=shared_source_id or ("merge-output" if role == core.SourceRole.BASE else str(role)), role=role, byte_length=len(data), sha256=hashlib.sha256(data).hexdigest(),
@@ -80,6 +80,49 @@ class TypedParserHostTest(unittest.TestCase):
                 options=core.ParseOptions(native_extensions=True), metadata={}, extra={},
             ))
         return requests[::-1]
+
+    def diff_request(self, sources, roles=None):
+        self.assertIs(core.ParseRequest, native.ParseRequest)
+        self.assertIs(core.ParseOptions, native.ParseOptions)
+        return core.NativeDiffRequest(request_id="diff-python", profile_id="kernel.python.native_declarations.v1",
+            parses=self.merge_requests(sources, roles=roles or [core.SourceRole.BEFORE, core.SourceRole.AFTER]))
+
+    def test_native_diff_uses_rust_classification_and_exact_roles(self):
+        result = core.diff_native_owners(self.diff_request(["# header\r\na = 1\r\nb = 2", "# header\r\na = 3\r\nc = 4"]),
+            core.ParseLimits(max_batch_items=2, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20))
+        self.assertTrue(result.ok)
+        self.assertEqual(result.request_id, "diff-python")
+        self.assertEqual([c.kind for c in result.diff.changes],
+            [core.OwnerChangeKind.EDITED, core.OwnerChangeKind.DELETED, core.OwnerChangeKind.ADDED])
+        self.assertEqual([c.id for c in result.diff.changes], ["change-0", "change-1", "change-2"])
+        self.assertEqual(result.diff.changes[0].before.range.start_byte, len(b"# header\r\n"))
+        self.assertIsNone(result.diff.changes[1].after)
+        self.assertIsNone(result.diff.changes[2].before)
+        self.assertEqual([p.parsed.source.role for p in result.input_parses], [core.SourceRole.BEFORE, core.SourceRole.AFTER])
+        self.assertFalse(hasattr(result, "output"))
+        self.assertEqual(self.host.calls, 1)
+
+    def test_native_diff_failures_retain_origin_and_never_return_partial_changes(self):
+        limits = core.ParseLimits(max_batch_items=2, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+        result = core.diff_native_owners(self.diff_request(["a = (\n", "a = 2\n"]), limits)
+        self.assertFalse(result.ok)
+        self.assertIsNone(result.diff)
+        self.assertEqual(result.input_parses[0].parsed.source.role, core.SourceRole.BEFORE)
+        self.assertFalse(result.input_parses[0].parsed.ok)
+        result = core.diff_native_owners(self.diff_request(["a = 1\n", "import os\n"]), limits)
+        self.assertFalse(result.ok)
+        self.assertIsNone(result.diff)
+        self.assertEqual([r.source_role for r in result.analysis_rejections], [core.SourceRole.AFTER])
+
+    def test_native_diff_rejects_role_substitution_and_cancellation(self):
+        limits = core.ParseLimits(max_batch_items=2, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+        with self.assertRaisesRegex(RuntimeError, "invalid_diff_inputs"):
+            core.diff_native_owners(self.diff_request(["a = 1", "a = 2"], roles=[core.SourceRole.INCOMING, core.SourceRole.CURRENT]), limits)
+        control = core.create_operation_control()
+        control.cancel()
+        with self.assertRaisesRegex(RuntimeError, "execution.cancelled"):
+            core.diff_native_owners_controlled(self.diff_request(["a = 1", "a = 2"]), limits, control)
+        self.assertEqual(self.host.calls, 0)
 
     def test_template_reports_use_public_typed_inputs(self):
         def options(mode):

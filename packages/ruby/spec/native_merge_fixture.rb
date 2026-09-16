@@ -61,8 +61,8 @@ end
 module NativeMergeFixture
   extend self
 
-  def merge_requests(sources, shared_source_id: nil)
-    %w[base ours theirs].zip(sources).map do |role, source|
+  def merge_requests(sources, shared_source_id: nil, roles: %w[base ours theirs])
+    roles.zip(sources).map do |role, source|
       descriptor = StructuredmergeCore::SourceDescriptor.new(
         source_id: shared_source_id || (role == "base" ? "merge-output" : role), role: role, byte_length: source.bytesize,
         sha256: Digest::SHA256.hexdigest(source), encoding: "utf8", bom: source.start_with?("\uFEFF"),
@@ -102,4 +102,3 @@ module NativeMergeFixture
     end
   end
 end
-

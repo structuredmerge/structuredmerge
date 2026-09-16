@@ -181,6 +181,8 @@
 
 - TreeHaver-backed native structural diff orchestration with a YAML/Psych family entry point, validated before/after roles, retained parser and analysis failures, and cancellation-safe result handling.
 
+- Typed YAML/Python native diff requests and results across generated Ruby/Python bindings, retaining request identity, exact source changes, parser evidence and fail-closed cancellation behavior without merged output.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
