@@ -61,7 +61,7 @@ class TypedParserHostTest(unittest.TestCase):
         for role, source in zip([core.SourceRole.BASE, core.SourceRole.OURS, core.SourceRole.THEIRS], sources):
             data = source.encode("utf-8")
             descriptor = native.SourceDescriptor(
-                source_id=str(role), role=role, byte_length=len(data), sha256=hashlib.sha256(data).hexdigest(),
+                source_id="merge-output" if role == core.SourceRole.BASE else str(role), role=role, byte_length=len(data), sha256=hashlib.sha256(data).hexdigest(),
                 encoding=core.SourceEncoding.UTF8, bom=data.startswith(b"\xef\xbb\xbf"),
                 line_endings=native.LineEndings(lf=data.count(b"\n")-data.count(b"\r\n"),
                     crlf=data.count(b"\r\n"), bare_cr=0), final_newline=data.endswith(b"\n"),
@@ -85,15 +85,34 @@ class TypedParserHostTest(unittest.TestCase):
         core.unregister_parser_host("python.libcst")
 
     def test_independent_assignments_preserve_exact_source(self):
-        result = self.merge([
+        sources = [
             "\ufeff# header\r\né = 'one'  # stable\r\nbeta = 2",
             "\ufeff# header\r\né = 'ours'  # stable\r\nbeta = 2",
             "\ufeff# header\r\né = 'one'  # stable\r\nbeta = 3",
-        ])
+        ]
+        result = self.merge(sources)
         self.assertEqual(result.outcome, core.ThreeWayMergeOutcome.CLEAN)
         self.assertEqual(result.output, "\ufeff# header\r\né = 'ours'  # stable\r\nbeta = 3")
         self.assertEqual(self.host.calls, 2)
         self.assertEqual(self.host.received_batch.items[0].source.descriptor.role, core.SourceRole.OUTPUT)
+        by_role = dict(zip([str(role) for role in [core.SourceRole.BASE, core.SourceRole.OURS, core.SourceRole.THEIRS]],
+            [source.encode() for source in sources]))
+        output = result.output.encode()
+        self.assertEqual(result.output_source.sha256, hashlib.sha256(output).hexdigest())
+        self.assertEqual(result.output_source.byte_length, len(output))
+        descriptors = {source.source_id: source for source in result.sources}
+        self.assertNotIn(result.output_source.source_id, descriptors)
+        cursor = 0
+        self.assertTrue(result.source_segments)
+        for segment in result.source_segments:
+            self.assertEqual(segment.output_range.start_byte, cursor)
+            selected = by_role[str(segment.source_role)][segment.source_range.start_byte:segment.source_range.end_byte]
+            rendered = output[segment.output_range.start_byte:segment.output_range.end_byte]
+            self.assertEqual(rendered, selected)
+            self.assertEqual(segment.sha256, hashlib.sha256(rendered).hexdigest())
+            self.assertEqual(descriptors[segment.source_id].role, segment.source_role)
+            cursor = segment.output_range.end_byte
+        self.assertEqual(cursor, len(output))
 
     def test_function_and_class_bodies_merge_as_whole_declarations(self):
         base = "def café():\n    return 1\n\nclass Thing:\n    value = 2\n"
@@ -105,6 +124,8 @@ class TypedParserHostTest(unittest.TestCase):
         result = self.merge(["a = 1\n", "a = 2\n", "a = 3\n"])
         self.assertEqual(result.outcome, core.ThreeWayMergeOutcome.CONFLICT)
         self.assertIsNone(result.output)
+        self.assertIsNone(result.output_source)
+        self.assertEqual(result.source_segments, [])
         self.assertEqual(result.conflicts[0].path, "/a")
         self.assertEqual([item.revision for item in result.conflicts[0].alternatives],
             [core.SourceRevision.BASE, core.SourceRevision.OURS, core.SourceRevision.THEIRS])
@@ -113,6 +134,8 @@ class TypedParserHostTest(unittest.TestCase):
         result = self.merge(["a = 1\n", "a = 2\n", "def broken(:\n"])
         self.assertEqual(result.outcome, core.ThreeWayMergeOutcome.ERROR)
         self.assertIsNone(result.output)
+        self.assertIsNone(result.output_source)
+        self.assertEqual(result.source_segments, [])
         self.assertEqual(result.rejected_parse.parsed.source.role, core.SourceRole.THEIRS)
         self.assertEqual(result.rejected_parse.parsed.diagnostics[0].code, "libcst.syntax")
 

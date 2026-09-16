@@ -133,6 +133,8 @@
 
 - Add an isolated core-only Ruby platform gem gate with explicit contents, ABI-scoped installation, linkage inspection, and real Psych/Rust merge tests in a fresh bundle; publication and source-gem gates remain open.
 
+- Emit and independently verify exact source/output byte partitions from the shared owner renderer, including segment digests and source identities through Ruby and Python bindings; policy-specific preservation claims and dispositions remain in progress.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

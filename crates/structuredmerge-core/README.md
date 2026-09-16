@@ -49,6 +49,13 @@ function/class bodies, conflicts, syntax failure, exact-byte retention, and
 unsupported forms. See [`python-merge`](../python-merge/README.md) for the bounded
 profile and remaining gates. Both operations return `NativeMergeResult`.
 
+Successful native merges now include verified input/output source descriptors
+and typed `RetainedSourceSegment` records for every output byte. Installed Ruby
+and Python tests independently check each cited source slice and SHA-256. See
+the [byte-evidence contract](../ast-merge/BYTE_EVIDENCE.md) for scope: exact output
+partitions are implemented; protected-region dispositions and complete
+policy-specific preservation envelopes remain open.
+
 The complete operation and typed failure/preservation envelopes,
 runtime lifecycle stress tests, the full Ruby artifact matrix, broader
 Python public DTO ergonomics, and registry publication remain unfinished.

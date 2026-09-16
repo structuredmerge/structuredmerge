@@ -1,4 +1,6 @@
+use crate::byte_evidence::{SourceByteSegment, append_source_segment, verify_source_byte_segments};
 use std::collections::{HashMap, HashSet};
+use tree_haver::ByteRange;
 
 use crate::{
     ConflictAlternative, ConflictAlternativeState, Diagnostic, DiagnosticCategory,
@@ -71,6 +73,51 @@ pub fn merge_source_preserving_owners(
     theirs: SourcePreservingOwnerDocument,
     verify: impl FnOnce(&str) -> Result<SourcePreservingOwnerDocument, String>,
 ) -> ThreeWayMergeResult<String> {
+    merge_source_preserving_owners_with_evidence(base, ours, theirs, verify).result
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SourcePreservingMergeEvidence {
+    pub result: ThreeWayMergeResult<String>,
+    pub source_segments: Vec<SourceByteSegment>,
+}
+
+pub fn merge_source_preserving_owners_with_evidence(
+    base: SourcePreservingOwnerDocument,
+    ours: SourcePreservingOwnerDocument,
+    theirs: SourcePreservingOwnerDocument,
+    verify: impl FnOnce(&str) -> Result<SourcePreservingOwnerDocument, String>,
+) -> SourcePreservingMergeEvidence {
+    let mut source_segments = Vec::new();
+    let mut result = merge_owners(&base, &ours, &theirs, verify, &mut source_segments);
+    if let Some(output) = &result.output {
+        let sources = HashMap::from([
+            (SourceRevision::Base, base.source.as_bytes()),
+            (SourceRevision::Ours, ours.source.as_bytes()),
+            (SourceRevision::Theirs, theirs.source.as_bytes()),
+        ]);
+        if let Err(error) =
+            verify_source_byte_segments(output.as_bytes(), &sources, &source_segments)
+        {
+            result = error_result(
+                DiagnosticCategory::ConfigurationError,
+                format!("invalid byte evidence: {error:?}"),
+            );
+        }
+    }
+    if result.outcome != ThreeWayMergeOutcome::Clean {
+        source_segments.clear();
+    }
+    SourcePreservingMergeEvidence { result, source_segments }
+}
+
+fn merge_owners(
+    base: &SourcePreservingOwnerDocument,
+    ours: &SourcePreservingOwnerDocument,
+    theirs: &SourcePreservingOwnerDocument,
+    verify: impl FnOnce(&str) -> Result<SourcePreservingOwnerDocument, String>,
+    segments: &mut Vec<SourceByteSegment>,
+) -> ThreeWayMergeResult<String> {
     for (role, document) in [("base", &base), ("ours", &ours), ("theirs", &theirs)] {
         if let Err(message) = document.validate(role) {
             return error_result(DiagnosticCategory::Ambiguity, message);
@@ -78,19 +125,37 @@ pub fn merge_source_preserving_owners(
     }
 
     if ours.source == theirs.source || base.source == theirs.source {
-        return clean_result(ours.source);
+        let mut output = String::new();
+        append_source_segment(
+            &mut output,
+            segments,
+            &ours.source,
+            SourceRevision::Ours,
+            ByteRange { start_byte: 0, end_byte: ours.source.len() },
+            None,
+        );
+        return clean_result(output);
     }
     if base.source == ours.source {
-        return clean_result(theirs.source);
+        let mut output = String::new();
+        append_source_segment(
+            &mut output,
+            segments,
+            &theirs.source,
+            SourceRevision::Theirs,
+            ByteRange { start_byte: 0, end_byte: theirs.source.len() },
+            None,
+        );
+        return clean_result(output);
     }
 
-    let base_by_id = owners_by_id(&base);
-    let ours_by_id = owners_by_id(&ours);
-    let theirs_by_id = owners_by_id(&theirs);
+    let base_by_id = owners_by_id(base);
+    let ours_by_id = owners_by_id(ours);
+    let theirs_by_id = owners_by_id(theirs);
     let mut selected = HashMap::new();
     let mut conflicts = Vec::new();
 
-    for id in all_owner_ids(&base, &ours, &theirs) {
+    for id in all_owner_ids(base, ours, theirs) {
         let base_owner = base_by_id.get(id.as_str()).copied();
         let ours_owner = ours_by_id.get(id.as_str()).copied();
         let theirs_owner = theirs_by_id.get(id.as_str()).copied();
@@ -174,9 +239,9 @@ pub fn merge_source_preserving_owners(
     let layout_matches = if membership_changed && stable_ids.is_empty() {
         false
     } else if membership_changed {
-        let base_layout = layout_segments_for_ids(&base, &stable_ids);
-        let ours_layout = layout_segments_for_ids(&ours, &stable_ids);
-        let theirs_layout = layout_segments_for_ids(&theirs, &stable_ids);
+        let base_layout = layout_segments_for_ids(base, &stable_ids);
+        let ours_layout = layout_segments_for_ids(ours, &stable_ids);
+        let theirs_layout = layout_segments_for_ids(theirs, &stable_ids);
         base_layout == ours_layout && base_layout == theirs_layout
     } else {
         base.layout_segments() == ours.layout_segments()
@@ -189,7 +254,8 @@ pub fn merge_source_preserving_owners(
         );
     }
 
-    let mut replacements = Vec::new();
+    let mut output = String::new();
+    let mut cursor = 0;
     let mut expected = HashMap::new();
     for baseline_owner in &baseline.owners {
         let revision = selected[baseline_owner.id.as_str()];
@@ -201,19 +267,38 @@ pub fn merge_source_preserving_owners(
             &theirs_by_id,
         );
         expected.insert(baseline_owner.id.as_str(), selected_owner.fingerprint.as_str());
-        if revision != baseline_revision {
-            replacements.push((baseline_owner, selected_owner, revision));
-        }
+        append_source_segment(
+            &mut output,
+            segments,
+            &baseline.source,
+            baseline_revision,
+            ByteRange { start_byte: cursor, end_byte: baseline_owner.start_byte },
+            None,
+        );
+        let selected_source = match revision {
+            SourceRevision::Base => &base.source,
+            SourceRevision::Ours => &ours.source,
+            SourceRevision::Theirs => &theirs.source,
+        };
+        append_source_segment(
+            &mut output,
+            segments,
+            selected_source,
+            revision,
+            ByteRange { start_byte: selected_owner.start_byte, end_byte: selected_owner.end_byte },
+            Some(selected_owner.id.clone()),
+        );
+        cursor = baseline_owner.end_byte;
     }
 
-    replacements.sort_by_key(|(owner, _, _)| std::cmp::Reverse(owner.start_byte));
-    let mut output = baseline.source.clone();
-    for (baseline_owner, selected_owner, revision) in replacements {
-        output.replace_range(
-            baseline_owner.start_byte..baseline_owner.end_byte,
-            source_for_revision(selected_owner, revision, &base, &ours, &theirs),
-        );
-    }
+    append_source_segment(
+        &mut output,
+        segments,
+        &baseline.source,
+        baseline_revision,
+        ByteRange { start_byte: cursor, end_byte: baseline.source.len() },
+        None,
+    );
 
     let rendered = match verify(&output) {
         Ok(document) => document,
@@ -278,21 +363,6 @@ fn owner_for_revision<'a>(
         SourceRevision::Ours => ours[id],
         SourceRevision::Theirs => theirs[id],
     }
-}
-
-fn source_for_revision<'a>(
-    owner: &SourcePreservingOwner,
-    revision: SourceRevision,
-    base: &'a SourcePreservingOwnerDocument,
-    ours: &'a SourcePreservingOwnerDocument,
-    theirs: &'a SourcePreservingOwnerDocument,
-) -> &'a str {
-    let source = match revision {
-        SourceRevision::Base => &base.source,
-        SourceRevision::Ours => &ours.source,
-        SourceRevision::Theirs => &theirs.source,
-    };
-    &source[owner.start_byte..owner.end_byte]
 }
 
 fn layout_segments_for_ids(
@@ -457,6 +527,47 @@ mod tests {
 
         assert_eq!(result.outcome, ThreeWayMergeOutcome::Clean);
         assert_eq!(result.output.as_deref(), Some("ONE\n\nTWO\n"));
+    }
+
+    #[test]
+    fn records_exact_owner_and_gap_origins_and_discards_failed_render_evidence() {
+        let run = |reject: bool| {
+            merge_source_preserving_owners_with_evidence(
+                document("one\n\ntwo\n", "one", "two"),
+                document("ONE\n\ntwo\n", "ONE", "two"),
+                document("one\n\nTWO\n", "one", "TWO"),
+                |source| {
+                    if reject { Err("rejected".into()) } else { Ok(document(source, "ONE", "TWO")) }
+                },
+            )
+        };
+        let clean = run(false);
+        assert_eq!(clean.result.output.as_deref(), Some("ONE\n\nTWO\n"));
+        assert_eq!(clean.source_segments.len(), 4);
+        assert_eq!(clean.source_segments[0].owner_id.as_deref(), Some("left"));
+        assert_eq!(clean.source_segments[1].owner_id, None);
+        assert_eq!(clean.source_segments[2].revision, SourceRevision::Theirs);
+        assert_eq!(clean.source_segments[2].output_range, ByteRange { start_byte: 5, end_byte: 8 });
+        let failed = run(true);
+        assert_eq!(failed.result.outcome, ThreeWayMergeOutcome::Error);
+        assert!(failed.source_segments.is_empty());
+        assert!(failed.result.output.is_none());
+    }
+
+    #[test]
+    fn whole_source_selection_and_empty_outputs_have_complete_partitions() {
+        for text in ["", "\u{feff}é\r\n"] {
+            let doc = || SourcePreservingOwnerDocument { source: text.into(), owners: vec![] };
+            let result = merge_source_preserving_owners_with_evidence(doc(), doc(), doc(), |_| {
+                panic!("already parsed source")
+            });
+            assert_eq!(result.result.output.as_deref(), Some(text));
+            assert_eq!(result.source_segments.len(), usize::from(!text.is_empty()));
+            if !text.is_empty() {
+                assert_eq!(result.source_segments[0].revision, SourceRevision::Ours);
+                assert_eq!(result.source_segments[0].output_range.end_byte, text.len());
+            }
+        }
     }
 
     #[test]

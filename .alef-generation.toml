@@ -11,5 +11,5 @@
 # Do not hand-edit; it is rewritten by `alef generate`/`alef all` on every successful run.
 
 [crates]
-structuredmerge-core = "d550e09586b952ce2cf379fb04152139086ced420e2fc09283aa701759eec472"
+structuredmerge-core = "4b2c713f7f60fe2e851d823c6aedf08aa1ae587ed7fe7a24da0c34e504a7afb8"
 structuredmerge-host-prototype-core = "f0a4e48f9dacdc71a3845cd5ce21bc070382657175ece08e220b9258ebd7f059"

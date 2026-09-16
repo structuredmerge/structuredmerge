@@ -69,7 +69,7 @@ RSpec.describe StructuredmergeCore do
   def merge_requests(sources)
     %w[base ours theirs].zip(sources).map do |role, source|
       descriptor = described_class::SourceDescriptor.new(
-        source_id: role, role: role, byte_length: source.bytesize,
+        source_id: role == "base" ? "merge-output" : role, role: role, byte_length: source.bytesize,
         sha256: Digest::SHA256.hexdigest(source), encoding: "utf8", bom: source.start_with?("\uFEFF"),
         line_endings: described_class::LineEndings.new(
           lf: source.count("\n") - source.scan("\r\n").length,
@@ -94,17 +94,35 @@ RSpec.describe StructuredmergeCore do
   it "merges independent changes in Rust through generated Psych callbacks" do
     host = TypedPsychHost.new
     described_class.register_parser_host(host)
-    result = described_class.merge_yaml_mapping(merge_requests([
+    sources = [
       "\uFEFF# header\r\né: 'one'  # stable\r\nbeta: two",
       "\uFEFF# header\r\né: 'ours'  # stable\r\nbeta: two",
       "\uFEFF# header\r\né: 'one'  # stable\r\nbeta: theirs"
-    ]), merge_limits)
+    ]
+    result = described_class.merge_yaml_mapping(merge_requests(sources), merge_limits)
     expect(result.outcome.to_s).to eq("clean")
     expect(result.output).to eq("\uFEFF# header\r\né: 'ours'  # stable\r\nbeta: theirs")
     expect(result.conflicts).to be_empty
     expect(result.rejected_parse).to be_nil
     expect(host.calls).to eq(2) # input batch and Rust-requested output verification
     expect(host.received_batch.items.first.source.descriptor.role.to_s).to eq("output")
+    by_role = %w[base ours theirs].zip(sources).to_h
+    descriptors = result.sources.to_h { |source| [source.source_id, source] }
+    expect(descriptors).not_to have_key(result.output_source.source_id)
+    expect(result.output_source.sha256).to eq(Digest::SHA256.hexdigest(result.output))
+    expect(result.output_source.byte_length).to eq(result.output.bytesize)
+    cursor = 0
+    expect(result.source_segments).not_to be_empty
+    result.source_segments.each do |segment|
+      expect(segment.output_range.start_byte).to eq(cursor)
+      selected = by_role.fetch(segment.source_role.to_s).byteslice(segment.source_range.start_byte...segment.source_range.end_byte)
+      rendered = result.output.byteslice(segment.output_range.start_byte...segment.output_range.end_byte)
+      expect(rendered).to eq(selected)
+      expect(segment.sha256).to eq(Digest::SHA256.hexdigest(rendered))
+      expect(descriptors.fetch(segment.source_id).role.to_s).to eq(segment.source_role.to_s)
+      cursor = segment.output_range.end_byte
+    end
+    expect(cursor).to eq(result.output.bytesize)
   ensure
     described_class.unregister_parser_host("ruby.typed.psych")
   end
@@ -116,6 +134,8 @@ RSpec.describe StructuredmergeCore do
     ]), merge_limits)
     expect(result.outcome.to_s).to eq("conflict")
     expect(result.output).to be_nil
+    expect(result.output_source).to be_nil
+    expect(result.source_segments).to be_empty
     expect(result.conflicts.length).to eq(1)
     expect(result.conflicts.first.path).to eq("/a")
     expect(result.conflicts.first.alternatives.map { |alternative| alternative.revision.to_s }).to eq(%w[base ours theirs])
@@ -130,6 +150,8 @@ RSpec.describe StructuredmergeCore do
     ]), merge_limits)
     expect(result.outcome.to_s).to eq("error")
     expect(result.output).to be_nil
+    expect(result.output_source).to be_nil
+    expect(result.source_segments).to be_empty
     expect(result.rejected_parse.parsed.source.role.to_s).to eq("ours")
     expect(result.rejected_parse.parsed.diagnostics.first.code).to eq("psych.syntax")
   ensure
