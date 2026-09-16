@@ -107,13 +107,29 @@ RSpec.describe StructuredmergeCore do
     end
     expect { described_class.parse_sources(requests, merge_limits) }.to raise_error(RuntimeError, /parser\.provider_fault:.*native test failure/)
     expect(host.calls).to eq(1)
+    failed = described_class.merge_yaml_mapping(requests, merge_limits)
+    expect(failed.outcome.to_s).to eq("error")
+    expect(failed.input_failure.code).to eq("parser.provider_fault")
+    expect(failed.input_failure.backend_id).to eq("ruby.typed.psych")
+    expect(failed.input_failure.native_message).to include("native test failure")
+    expect(failed.output).to be_nil
+    expect(failed.output_parse).to be_nil
+    expect(failed.input_parses).to be_empty
+    expect(failed.sources).to be_empty
+    expect(host.calls).to eq(2)
     host.define_singleton_method(:parse_batch) do |_request|
       StructuredmergeCore::ParseBatchResult.new(items: [])
     end
     expect { described_class.parse_sources(requests, merge_limits) }.to raise_error(RuntimeError, /parser\.invalid_batch:/)
+    expect(described_class.merge_yaml_mapping(requests, merge_limits).input_failure.code).to eq("parser.invalid_batch")
     described_class.unregister_parser_host("ruby.typed.psych")
     begin
       expect { described_class.parse_sources(requests, merge_limits) }.to raise_error(RuntimeError, /selection\.no_parser:/)
+      failed = described_class.merge_yaml_mapping(requests, merge_limits)
+      expect(failed.input_failure.code).to eq("selection.no_parser")
+      expect(failed.input_failure.selection.requested.backend_id).to eq("ruby.typed.psych")
+      expect(failed.input_failure.selection.selected_backend).to be_nil
+      expect(failed.input_failure.selection.digest).not_to be_empty
     ensure
       described_class.register_parser_host(host)
     end

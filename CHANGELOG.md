@@ -14,6 +14,8 @@
 
 - Return unsupported native analysis as typed error results with role-specific rejection records and all validated input parses, preserving the older internal Rust error entry point.
 
+- Return typed input parser-selection and provider failures from native merge operations while retaining request/resource/cancellation errors and the existing parse_sources exception API.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider

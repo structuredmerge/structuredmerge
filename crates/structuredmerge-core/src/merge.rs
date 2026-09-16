@@ -44,6 +44,8 @@ pub struct NativeMergeResult {
     /// when rendering was not attempted or an already-parsed input was selected.
     pub output_parse: Option<CoreParseResult>,
     pub verification_failure: Option<crate::ParserFailure>,
+    /// Selection/provider failure before a complete validated input parse batch.
+    pub input_failure: Option<crate::ParserFailure>,
     pub analysis_rejections: Vec<NativeAnalysisRejection>,
     pub sources: Vec<crate::SourceDescriptor>,
     pub output_source: Option<crate::SourceDescriptor>,
@@ -127,6 +129,7 @@ fn project_result(
                 policies: result.policies,
                 rejected_parse: None,
                 analysis_rejections: vec![],
+                input_failure: None,
                 output_parse: execution.output_parse.map(CoreParseResult::from),
                 verification_failure: execution.verification_error.map(crate::ParserFailure::from),
                 input_parses: execution
@@ -153,6 +156,7 @@ fn project_result(
                 source_segments: vec![],
                 rejected_parse,
                 analysis_rejections: vec![],
+                input_failure: None,
                 output_parse: None,
                 verification_failure: None,
                 input_parses,
@@ -171,6 +175,7 @@ fn project_result(
                 output_source: None,
                 source_segments: vec![],
                 sources,
+                input_failure: None,
                 input_parses: parses.into_iter().map(CoreParseResult::from).collect(),
                 analysis_rejections: failures
                     .into_iter()
@@ -183,7 +188,36 @@ fn project_result(
                     .collect(),
             })
         }
-        Err(MappingMergeError::Parse(error)) => Err(CoreError::from(error)),
+        Err(MappingMergeError::Parse(error)) => {
+            use tree_haver::service::ServiceError;
+            match &error {
+                ServiceError::Selection(_)
+                | ServiceError::Provider { .. }
+                | ServiceError::ProviderPanic { .. }
+                | ServiceError::InvalidBatch { .. }
+                | ServiceError::InvalidResult { .. }
+                    if CoreError::from(error.clone()).code != "resource.limit" =>
+                {
+                    Ok(NativeMergeResult {
+                        outcome: ast_merge::ThreeWayMergeOutcome::Error,
+                        diagnostics: vec![],
+                        conflicts: vec![],
+                        output: None,
+                        policies: vec![],
+                        rejected_parse: None,
+                        input_parses: vec![],
+                        output_parse: None,
+                        verification_failure: None,
+                        analysis_rejections: vec![],
+                        sources: vec![],
+                        output_source: None,
+                        source_segments: vec![],
+                        input_failure: Some(crate::ParserFailure::from(error)),
+                    })
+                }
+                _ => Err(CoreError::from(error)),
+            }
+        }
         Err(error) => Err(CoreError {
             code: match &error {
                 MappingMergeError::InvalidInputs => "invalid_merge_inputs",
@@ -195,5 +229,50 @@ fn project_result(
             .into(),
             message: format!("{error:?}"),
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tree_haver::{parsed::ParseValidationError, service::ServiceError};
+
+    #[test]
+    fn controls_remain_errors_while_provider_faults_become_evidence() {
+        for (error, code) in [
+            (ServiceError::InvalidRequest, "request.invalid"),
+            (ServiceError::LimitExceeded, "resource.limit"),
+            (ServiceError::Cancelled, "execution.cancelled"),
+            (ServiceError::DeadlineExceeded, "execution.deadline_exceeded"),
+            (
+                ServiceError::InvalidResult {
+                    backend_id: "native".into(),
+                    error: ParseValidationError::LimitExceeded,
+                },
+                "resource.limit",
+            ),
+        ] {
+            assert_eq!(
+                project_result(Err(MappingMergeError::Parse(error))).unwrap_err().code,
+                code
+            );
+        }
+        for (error, code) in [
+            (ServiceError::ProviderPanic { backend_id: "native".into() }, "parser.provider_panic"),
+            (
+                ServiceError::InvalidResult {
+                    backend_id: "native".into(),
+                    error: ParseValidationError::IdentityMismatch,
+                },
+                "parser.invalid_result",
+            ),
+        ] {
+            let result = project_result(Err(MappingMergeError::Parse(error))).unwrap();
+            assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Error);
+            assert_eq!(result.input_failure.unwrap().code, code);
+            assert!(result.output.is_none());
+            assert!(result.sources.is_empty());
+            assert!(result.input_parses.is_empty());
+        }
     }
 }

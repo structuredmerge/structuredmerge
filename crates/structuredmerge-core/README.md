@@ -131,8 +131,13 @@ merge diagnostics. Unsupported input analysis produces an error result with
 semantic roles, and human reasons for each rejected revision. It retains all
 input parses and performs no render. This replaces the preliminary typed
 facade's unsupported-analysis exception; the older internal Rust convenience
-entry point retains its error contract. Input provider-service exceptions still
-need the full portable failure envelope.
+entry point retains its error contract. Input selection/provider failures
+produce an error result with `input_failure`, preserving the candidate report
+or backend/native fault identity without fabricating a complete validated parse
+batch. These results have empty `input_parses` and `sources`; they do not claim
+that no inputs were submitted. Full operation request/source correlation remains
+to be added. Invalid requests/sources, resource limits, and cancellation/deadline
+controls still raise `CoreError`.
 
 `output_parse` separately retains the actual native reparse of rendered bytes,
 including its parser identity, source digest, syntax facts, and diagnostics.
@@ -146,5 +151,5 @@ the stable core code, backend ID, and separate native code/message where
 provided. Source validation and selection failures also have slots for source
 identity and the selection report. No retry or parser substitution occurs.
 These records are not the full Slice 1028 envelope: stage/request references,
-causes, and portable category/origin nesting still need implementation. Input
-service failures currently continue to raise `CoreError`.
+causes, and portable category/origin nesting still need implementation.
+`parse_sources` retains its existing exception-based API for service failures.

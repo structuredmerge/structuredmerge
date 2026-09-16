@@ -123,15 +123,31 @@ class TypedParserHostTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, r"parser\.provider_fault:.*native test failure"):
             core.parse_sources(requests, limits)
         self.assertEqual(self.host.calls, 1)  # no retry or parser substitution
+        failed = core.merge_python_declarations(requests, limits)
+        self.assertEqual(failed.outcome, core.ThreeWayMergeOutcome.ERROR)
+        self.assertEqual(failed.input_failure.code, "parser.provider_fault")
+        self.assertEqual(failed.input_failure.backend_id, "python.libcst")
+        self.assertIn("native test failure", failed.input_failure.native_message)
+        self.assertIsNone(failed.output)
+        self.assertIsNone(failed.output_parse)
+        self.assertEqual(failed.input_parses, [])
+        self.assertEqual(failed.sources, [])
+        self.assertEqual(self.host.calls, 2)
 
         self.host.parse_batch = lambda request: core.ParseBatchResult(items=[])
         with self.assertRaisesRegex(RuntimeError, r"parser\.invalid_batch:"):
             core.parse_sources(requests, limits)
+        self.assertEqual(core.merge_python_declarations(requests, limits).input_failure.code, "parser.invalid_batch")
 
         core.unregister_parser_host("python.libcst")
         try:
             with self.assertRaisesRegex(RuntimeError, r"selection\.no_parser:"):
                 core.parse_sources(requests, limits)
+            failed = core.merge_python_declarations(requests, limits)
+            self.assertEqual(failed.input_failure.code, "selection.no_parser")
+            self.assertEqual(failed.input_failure.selection.requested.backend_id, "python.libcst")
+            self.assertIsNone(failed.input_failure.selection.selected_backend)
+            self.assertTrue(failed.input_failure.selection.digest)
         finally:
             core.register_parser_host(self.host)
 
