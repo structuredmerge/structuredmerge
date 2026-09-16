@@ -4,23 +4,22 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::{
     NodeRole, SourceSpan,
     source::{SourceDescriptor, SourceDocument, SourceRole},
 };
 
-pub type Metadata = BTreeMap<String, Value>;
+pub type Metadata = BTreeMap<String, serde_json::Value>;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct NativeExtension {
     pub schema: String,
     pub namespace: String,
     pub capabilities: Vec<String>,
-    pub payload: Value,
+    pub payload: serde_json::Value,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -29,7 +28,7 @@ pub struct ChildEdge {
     pub index: u64,
     pub field_name: Option<String>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -48,9 +47,9 @@ pub struct ParseNode {
     pub semantic_roles: Vec<String>,
     pub unsupported_features: Vec<String>,
     pub extensions: Vec<NativeExtension>,
-    pub metadata: Metadata,
+    pub metadata: BTreeMap<String, serde_json::Value>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -72,9 +71,9 @@ pub struct ParseDiagnostic {
     pub span: Option<SourceSpan>,
     pub node_id: Option<String>,
     pub blocking: bool,
-    pub metadata: Metadata,
+    pub metadata: BTreeMap<String, serde_json::Value>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -94,9 +93,9 @@ pub struct ParseComment {
     pub node_id: String,
     pub native_kind: String,
     pub attachment_hint: AttachmentHint,
-    pub metadata: Metadata,
+    pub metadata: BTreeMap<String, serde_json::Value>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 /// Parser payload. TreeHaver's service adds validated backend and selection evidence.
@@ -111,9 +110,9 @@ pub struct ParseOutput {
     pub comments: Vec<ParseComment>,
     pub diagnostics: Vec<ParseDiagnostic>,
     pub extensions: Vec<NativeExtension>,
-    pub metadata: Metadata,
+    pub metadata: BTreeMap<String, serde_json::Value>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

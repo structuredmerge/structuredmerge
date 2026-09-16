@@ -125,6 +125,8 @@
 
 - Add a typed native-Psych block-mapping path through TreeHaver into Rust-owned YAML entry analysis and source-preserving three-way merge, with an explicit native integration CI gate; generated host binding integration remains pending.
 
+- Begin generated Ruby and Python structuredmerge-core bindings with typed parser-host batches, TreeHaver dispatch, and native Psych/LibCST callback tests; upstream generator fixes and full installed merge gates remain required before release.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

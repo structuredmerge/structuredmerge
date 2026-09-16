@@ -2,7 +2,21 @@
 //! This crate does not depend on the discarded host-prototype facade.
 //! Validation is not a claim of implemented merge or parser capabilities.
 
+use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, error::Error, fmt};
+
+pub mod host;
+pub use host::*;
+pub use tree_haver::parsed::{
+    AttachmentHint, ChildEdge, Metadata, NativeExtension, ParseComment, ParseDiagnostic, ParseNode,
+    ParseOutput, ParseSeverity,
+};
+pub use tree_haver::service::{
+    ParseOptions, ParseRequest, ParserCandidate, ParserProbeRequest, ParserProbeResult,
+    ParserProviderDescriptor, SelectionReport,
+};
+pub use tree_haver::{ByteRange, NodeRole, SourcePoint, SourceSpan};
+pub use tree_haver::{parsed, service, source};
 
 pub use tree_haver::service::ParserSelection;
 pub use tree_haver::source::{
@@ -12,7 +26,8 @@ pub use tree_haver::source::{
 
 pub const OPERATION_SCHEMA: &str = "structuredmerge.operation-request/v1";
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum OperationKind {
     Analyze,
     Diff2,
@@ -32,7 +47,7 @@ impl OperationKind {
 }
 
 /// Selection stays separate: merge provider identity never substitutes for a parser ID.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ProviderSelection {
     pub provider_id: Option<String>,
     pub family: String,
@@ -40,7 +55,7 @@ pub struct ProviderSelection {
 }
 
 /// Typed request inputs. No argument-position role inference or implicit base.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OperationInputs {
     pub schema: String,
     pub request_id: String,

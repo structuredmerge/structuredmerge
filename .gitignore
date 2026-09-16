@@ -11,3 +11,9 @@ packages/ruby/lib/*.dylib
 packages/ruby/lib/*.so
 packages/ruby/tmp/
 packages/ruby/pkg/
+__pycache__/
+*.so
+*.pyd
+.venv/
+*.egg-info/
+dist/

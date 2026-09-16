@@ -66,4 +66,6 @@ rescue Psych::SyntaxError => error
    }]}
 end
 
-STDOUT.write(JSON.generate(JSON.parse(STDIN.read).map { |request| project(request) }))
+if $PROGRAM_NAME == __FILE__
+  STDOUT.write(JSON.generate(JSON.parse(STDIN.read).map { |request| project(request) }))
+end

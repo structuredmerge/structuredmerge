@@ -17,8 +17,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     parsed::{
-        Metadata, NativeExtension, ParseOutput, ParseValidationError, ParseValidationLimits,
-        ParsedDocument,
+        NativeExtension, ParseOutput, ParseValidationError, ParseValidationLimits, ParsedDocument,
     },
     source::{SourceDocument, SourceError, SourceInput},
 };
@@ -50,7 +49,7 @@ pub struct ParserProviderDescriptor {
     pub capabilities: Vec<String>,
     pub probe_id: String,
     pub priority: i32,
-    pub metadata: Metadata,
+    pub metadata: BTreeMap<String, serde_json::Value>,
     pub extensions: Vec<NativeExtension>,
 }
 
@@ -71,18 +70,18 @@ pub struct ParseRequest {
     pub dialect: Option<String>,
     pub selection: ParserSelection,
     pub options: ParseOptions,
-    pub metadata: Metadata,
+    pub metadata: BTreeMap<String, serde_json::Value>,
     #[serde(flatten)]
-    pub extra: Metadata,
+    pub extra: BTreeMap<String, serde_json::Value>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ParserProbeRequest {
     pub language: String,
     pub dialect: Option<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ParserProbeResult {
     pub available: bool,
     pub loadable: bool,

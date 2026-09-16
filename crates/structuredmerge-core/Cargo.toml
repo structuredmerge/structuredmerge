@@ -9,6 +9,7 @@ repository = "https://github.com/structuredmerge/structuredmerge"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
+serde = { version = "1", features = ["derive"] }
 tree-haver = { version = "0.2.0", path = "../tree-haver" }
 
 [lib]

@@ -19,10 +19,13 @@ owned_paths = [
   "docs/reference/configuration.md",
   "docs/reference/errors.md",
   "docs/reference/types.md",
+  "packages/ruby-core/Rakefile",
+  "packages/ruby-core/structuredmerge_core.gemspec",
   "packages/ruby/Gemfile",
   "packages/ruby/LICENSE",
   "packages/ruby/README.md",
   "packages/ruby/Rakefile",
   "packages/ruby/Steepfile",
+  "packages/ruby/structuredmerge_core.gemspec",
   "packages/ruby/structuredmerge_host_prototype.gemspec",
 ]

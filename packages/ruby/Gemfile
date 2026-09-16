@@ -2,7 +2,7 @@
 
 source "https://rubygems.org"
 
-gemspec
+gemspec name: "structuredmerge-core"
 
 group :development do
   gem "rake-compiler", "~> 1.2"

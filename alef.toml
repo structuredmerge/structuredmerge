@@ -1,12 +1,12 @@
 [workspace]
 alef_version = "0.89.0"
-languages = ["ruby"]
+languages = ["ruby", "python"]
 
 [workspace.ownership]
 user_owned = ["rustfmt.toml"]
 
 [workspace.scaffold]
-description = "Generated Ruby host-provider prototype for StructuredMerge"
+description = "Typed polyglot StructuredMerge kernel"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 repository = "https://github.com/structuredmerge/structuredmerge"
 authors = ["Peter Boling"]
@@ -14,104 +14,56 @@ authors = ["Peter Boling"]
 [workspace.scaffold.cargo.env]
 RUST_MIN_STACK = "16777216"
 
-# ARM Linux builds run on native ARM runners, not cross-compilation hosts.
 [workspace.scaffold.cargo.targets]
 aarch64_unknown_linux_gnu = false
 x86_64_unknown_linux_musl = false
 wasm32_unknown_unknown = false
 
 [[crates]]
-name = "structuredmerge-host-prototype-core"
-sources = ["crates/structuredmerge-host-prototype-core/src/lib.rs"]
-version_from = "crates/structuredmerge-host-prototype-core/Cargo.toml"
-core_import = "structuredmerge_host_prototype_core"
-error_type = "HostPrototypeError"
-error_constructor = "structuredmerge_host_prototype_core::HostPrototypeError::new({msg})"
+name = "structuredmerge-core"
+sources = [
+  "crates/structuredmerge-core/src/lib.rs",
+  "crates/structuredmerge-core/src/host.rs",
+  "crates/tree-haver/src/lib.rs",
+  "crates/tree-haver/src/source.rs",
+  "crates/tree-haver/src/parsed.rs",
+  "crates/tree-haver/src/service.rs",
+]
+version_from = "crates/structuredmerge-core/Cargo.toml"
+core_import = "structuredmerge_core"
+error_type = "CoreError"
+error_constructor = "structuredmerge_core::CoreError::new({msg})"
 
 [crates.ruby]
-gem_name = "structuredmerge_host_prototype"
+gem_name = "structuredmerge-core"
 scaffold_output = "packages/ruby"
 
-[crates.cargo_lints.clippy]
-redundant_locals = "allow"
+[crates.python]
+pip_name = "structuredmerge-core"
+module_name = "_native"
+scaffold_output = "packages/python"
 
 [crates.output]
-ruby = "packages/ruby/ext/structuredmerge_host_prototype_core_rb/src/"
-
-[crates.publish.languages.ruby]
-vendor_mode = "none"
-build_command = "cargo build --release --package structuredmerge-host-prototype-core-rb"
-
-[[crates.trait_bridges]]
-trait_name = "WorkflowHost"
-super_trait = "Plugin"
-type_alias = "WorkflowHost"
-register_fn = "register_workflow_host"
-unregister_fn = "unregister_workflow_host"
-clear_fn = "clear_workflow_hosts"
+ruby = "packages/ruby/ext/structuredmerge_core_rb/src/"
+python = "crates/structuredmerge-core-py/src/"
 
 [[crates.trait_bridges]]
 trait_name = "ParserHost"
-super_trait = "Plugin"
 type_alias = "ParserHost"
-register_fn = "register_parser_host"
-unregister_fn = "unregister_parser_host"
-clear_fn = "clear_parser_hosts"
+param_name = "host"
 
 [crates.include]
 types = [
-  "HostPrototypeError",
-  "HostSourceSegment",
-  "HostBatchRequest",
-  "Plugin",
-  "WorkflowHost",
-  "ParserHost",
+  "CoreError", "ParserHost", "CoreParseResult", "ParseLimits",
+  "ParseBatchRequest", "ParseBatchResult", "ProbeBatchRequest", "ProbeBatchResult",
+  "ParserSelection", "ParserProviderDescriptor", "ParserProbeRequest", "ParserProbeResult",
+  "ParseOptions", "ParseRequest", "ParserCandidate", "SelectionReport",
+  "SourceRole", "SourceEncoding", "LineEndings", "SourceDescriptor", "SourceInput",
+  "ByteRange", "SourcePoint", "SourceSpan", "NodeRole",
+  "NativeExtension", "ChildEdge", "ParseNode", "ParseSeverity", "ParseDiagnostic",
+  "AttachmentHint", "ParseComment", "ParseOutput",
 ]
-functions = [
-  "capability_manifest",
-  "unregister_workflow_host",
-  "clear_workflow_hosts",
-  "execute_identity",
-  "execute_async_identity",
-  "replace_workflow_host",
-  "start_identity_worker",
-  "prepare_identity_worker",
-  "dispatch_identity_worker",
-  "poll_identity_worker",
-  "cancel_identity_worker",
-  "identity_worker_cancelled",
-  "start_host_runtime",
-  "shutdown_host_runtime",
-  "execute_in_process_identity",
-  "execute_typed_identity",
-  "execute_typed_workflow",
-  "execute_detached_identity",
-  "registered_workflow_hosts",
-  "replace_parser_host",
-  "register_tslp_parser_host",
-  "unregister_parser_host",
-  "clear_parser_hosts",
-  "probe_with_parser",
-  "parse_with_parser",
-  "parse_normalized_with_tslp",
-  "parse_json_analysis",
-  "parse_bash_analysis",
-  "merge_bash_three_way",
-  "merge_bash_two_way",
-  "parse_go_analysis",
-  "merge_go_three_way",
-  "merge_go_two_way",
-  "parse_rust_analysis",
-  "merge_rust_three_way",
-  "parse_typescript_analysis",
-  "merge_typescript_two_way",
-  "merge_typescript_three_way",
-  "merge_rust_two_way",
-  "registered_parser_hosts",
-  "merge_json_two_way",
-  "merge_json_three_way",
-  "merge_ast_merge_git_json",
-  "report_ast_crispr_json",
-  "apply_ast_crispr_source_edits_json",
-  "report_ast_template_json",
-]
+functions = ["parse_sources", "register_parser_host", "unregister_parser_host"]
+
+[crates.exclude]
+methods = ["ByteRange.contains_range", "ByteRange.overlaps"]
