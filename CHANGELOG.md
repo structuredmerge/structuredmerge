@@ -256,3 +256,5 @@
 - Reject native merge family analysis that changes verified source bytes or supplies invalid owner ranges before classification.
 
 - Validate embedded native analysis results against request sources and reconstructed Rust family decisions, rejecting inconsistent parser, owner, layout and attachment evidence while preserving compatible fields.
+
+- Regenerate Ruby and Python bindings with Rust enum-key hashing and without invented defaults for required DTOs.

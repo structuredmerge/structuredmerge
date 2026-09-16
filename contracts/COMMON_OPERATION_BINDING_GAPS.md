@@ -24,7 +24,7 @@ Resolved configuration issues during the trial:
   the candidate binding surface. They otherwise pulled closures, source maps and
   registry execution types into generated code.
 
-Remaining observed compilation issues:
+Compilation issues observed in the initial trial (resolved in the local retry below):
 
 - Enum-keyed maps (`SourceRole` to operation source/span) need usable generated
   key equality/hashing and conversion of keys in both directions. Generated
@@ -61,3 +61,40 @@ This is generator-unit evidence, not a successful repeat of the common binding
 compile trial. Generated enum key equality/hashing, required data-enum defaults,
 typed constructors and installed-call gates remain open. The active export set
 is unchanged. The Alef commit remains local; no push or upstream PR was made.
+
+## Compiling common exports and runtime follow-up
+
+Local Alef `5b23c49` adds Rust equality/hashing to Python/Ruby unit-enum wrappers,
+stops deriving defaults for Python structs that lack a core default, and stops
+inventing Ruby data-enum defaults. Together with `ef37145`, both common-export
+native builds now pass. The generator regression run passes 1,796 tests with
+five ignored; PHP tests are excluded because their pinned Rust 1.98.1 toolchain
+installation fails locally. This is not a full Alef test-suite pass.
+
+The candidate Ruby gem passes its existing 25 installed examples and six
+generated fixtures. The candidate Python wheel runs 27 installed tests, with
+one declaration-check error: it treats stub-only `TypedDict` variant declarations
+as runtime exports. That test must distinguish type-only declarations without
+weakening checks for real runtime classes.
+
+Direct probes against the installed candidate wheel establish additional gaps:
+
+- `hash(_native.SourceRole.SOURCE)` raises `TypeError`: Rust `Hash` is not a
+  Python `__hash__` implementation. Fixing Python hashing must preserve equality
+  consistency, including the existing enum/integer equality behavior.
+- Passing an `AnalyzePolicy` DTO to `OperationPolicy(operation="analyze",
+  policy=policy)` raises `TypeError` in `json.dumps`. Generated tuple-variant
+  factories must accept typed payloads rather than requiring a dictionary/JSON
+  workaround. The current generated API has getters, but no such factories.
+
+The candidate export configuration was restored to the previous set through
+Alef. No common installed-call or consumer-adoption gate is closed by these
+builds. Local logs: `common-bindings-verified-{python,ruby}-build.log` and
+`common-bindings-installed-{python,ruby}.log` under kernel `tmp/`. Candidate
+Python environment: `tmp/core-python-artifact-o55deh31/venv`. All Alef changes
+remain local; publication and upstream-only generation remain open.
+
+The restored active exports were regenerated, rebuilt and installed in isolated
+consumers: Python passes 27 tests plus six fixtures; Ruby passes 25 examples plus
+six fixtures. Logs: `tmp/common-restored-{python,ruby}-artifact.log`. These checks
+cover the existing exports, not the excluded common-operation surface.
