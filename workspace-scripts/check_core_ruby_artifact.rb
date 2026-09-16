@@ -88,6 +88,7 @@ env = Bundler.unbundled_env.merge(
   "BUNDLE_PATH" => nil, "RUBYLIB" => nil, "RUBYOPT" => nil,
   "STRUCTUREDMERGE_PSYCH_FACTS" => File.join(consumer, "psych_facts.rb"),
   "STRUCTUREDMERGE_EXPECT_GEM_HOME" => gem_home,
+  "TREE_HAVER_LANGUAGE_PACK_CACHE_DIR" => ENV.fetch("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR", File.join(root, "tmp/typed-tslp-cache")),
 )
 run = lambda do |*command|
   output, status = Open3.capture2e(env, *command, chdir: consumer, unsetenv_others: true)

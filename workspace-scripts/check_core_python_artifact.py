@@ -68,6 +68,7 @@ def main():
         shutil.copyfile(root / "packages/python/tests" / name, consumer / name)
     shutil.copytree(root / "e2e/python/tests", consumer / "generated")
     env = {key: value for key, value in os.environ.items() if key not in ("PYTHONPATH", "PYTHONHOME")}
+    env.setdefault("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR", str(root / "tmp/typed-tslp-cache"))
     subprocess.run([str(python), "-m", "pip", "install", str(wheel), "libcst==1.9.0", "pytest>=7.4"],
         cwd=consumer, env=env, check=True)
     subprocess.run([str(python), "-m", "unittest", "discover", "-s", ".", "-v"],

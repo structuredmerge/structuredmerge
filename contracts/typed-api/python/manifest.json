@@ -1,11 +1,11 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "python",
-  "review_reason": "Initial unreleased typed-core source API baseline: public facade and native declarations including typed common operations; semantic and ABI approval remain separate.",
+  "review_reason": "Add opt-in native language-pack registration and provider-neutral removal; preserve host registration/removal behavior",
   "files": {
-    "structuredmerge_core/__init__.py": "79c1e3eba0a68af0c3cdeb7340f3a8806596fc8fcd18bf61bacf5ea99587c7f5",
-    "structuredmerge_core/_native.pyi": "1dd269e2a0074836fa3f8e82c9f9b47df198bae967ca7ed497ad906c9f78b471",
-    "structuredmerge_core/api.py": "1ac60129e05d82d66bdf304b9a98960ba4fc6313736fd8515341518bb36355c8",
+    "structuredmerge_core/__init__.py": "dbd6816b5953f5b404ab7e07420da011ea08aa363dad07ae4d79b5a516d8b705",
+    "structuredmerge_core/_native.pyi": "b24bbae7ea0c2d20c0dcdf39b26be33a9d085bf5a791ce2d187b2ff3c1e4e42c",
+    "structuredmerge_core/api.py": "23284a0073cb294bf5e68e8ce40036e3a0ec608b1aa87536f28381e6de71ab19",
     "structuredmerge_core/exceptions.py": "25e61ce52e2e192df977a5f2ba7473dd6012e064c4bba38b05c15dc043201a29",
     "structuredmerge_core/options.py": "7de7598c211b0a2847fa9357fb60ddcc9e872f6044bf3f2ca496971e30990d25",
     "structuredmerge_core/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"

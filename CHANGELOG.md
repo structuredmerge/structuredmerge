@@ -227,6 +227,8 @@
 
 - Add an explicitly registered typed Rust TreeHaver language-pack provider with native node/error/comment facts, source validation and bounded projection; generated-core exports and Ruby consumer migration remain pending.
 
+- Expose opt-in Rust language-pack parser registration and provider-neutral removal through both generated structuredmerge-core bindings, with shared TreeHaver lifecycle and installed-artifact parser tests.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

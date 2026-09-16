@@ -16,6 +16,38 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  it "registers the Rust language pack in the typed TreeHaver registry" do
+    provider_id = "ruby.typed.tslp.json"
+    descriptor = described_class.register_language_pack_parser(provider_id, "json")
+    begin
+      expect(descriptor.runtime).to eq("rust")
+      expect(descriptor.languages).to eq(["json"])
+      expect { described_class.register_language_pack_parser(provider_id, "python") }.to raise_error(RuntimeError, /DuplicateId/)
+      request = lambda do |text|
+        source = merge_requests([text], roles: ["source"]).first.source
+        described_class::ParseRequest.new(schema: "structuredmerge.parse-request/v1", request_id: "json",
+          source: source, language: "json", dialect: nil,
+          selection: described_class::ParserSelection.new(backend_id: provider_id, preference: [], required_capabilities: []),
+          options: described_class::ParseOptions.new(comments: true, diagnostics: true, tokens: false, native_extensions: false),
+          metadata: {}, extra: {})
+      end
+      result = described_class.parse_sources([request.call("// note\r\n{\"é\": [true]}")], merge_limits).first
+      expect(result.backend.id).to eq(provider_id)
+      expect(result.selection.selected_backend).to eq(provider_id)
+      expect(result.parsed.ok).to be(true)
+      expect(result.parsed.comments.length).to eq(1)
+      expect(result.parsed.nodes.flat_map(&:children).map(&:field_name)).to include("key")
+      broken = described_class.parse_sources([request.call('{"x":')], merge_limits).first.parsed
+      expect(broken.ok).to be(false)
+      expect(broken.nodes).not_to be_empty
+      expect(broken.nodes.any?(&:has_error)).to be(true)
+      expect(broken.diagnostics.first.blocking).to be(true)
+    ensure
+      described_class.unregister_parser_provider(provider_id)
+    end
+    expect { described_class.parse_sources([request.call("{}")], merge_limits) }.to raise_error(RuntimeError, /selection.no_parser/)
+  end
+
   it "executes typed common operations through the registered native Psych provider" do
     host = TypedPsychHost.new
     described_class.register_parser_host(host)

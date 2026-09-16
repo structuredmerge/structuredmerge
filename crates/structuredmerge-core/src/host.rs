@@ -219,7 +219,27 @@ pub fn register_parser_host(host: Arc<dyn ParserHost>) -> Result<(), CoreError> 
         .map_err(|error| CoreError { code: "registration".into(), message: format!("{error:?}") })
 }
 
-pub fn unregister_parser_host(id: String) -> Result<(), CoreError> {
+/// Opt into a Rust-owned language-pack parser in TreeHaver's shared registry.
+/// Registration does not load a grammar or replace an existing provider. Probe
+/// and parse may load/download grammars under the configured language-pack policy.
+pub fn register_language_pack_parser(
+    id: String,
+    language: String,
+) -> Result<ParserProviderDescriptor, CoreError> {
+    let provider = tree_haver::language_pack_provider::LanguagePackProvider::new(id, language)
+        .map_err(|error| CoreError { code: error.code, message: error.message })?;
+    let descriptor = provider.descriptor().clone();
+    registry().register(Arc::new(provider)).map_err(|error| CoreError {
+        code: "registration".into(),
+        message: format!("{error:?}"),
+    })?;
+    Ok(descriptor)
+}
+
+/// Remove a native or host parser for future operations. Existing snapshots
+/// remain valid. Concurrent registry mutations can cause StaleGeneration;
+/// unknown IDs fail rather than silently succeeding.
+pub fn unregister_parser_provider(id: String) -> Result<(), CoreError> {
     let snapshot = registry()
         .snapshot()
         .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;
@@ -227,6 +247,11 @@ pub fn unregister_parser_host(id: String) -> Result<(), CoreError> {
         .unregister(&id, snapshot.generation())
         .map(|_| ())
         .map_err(|error| CoreError { code: "registration".into(), message: format!("{error:?}") })
+}
+
+/// Compatibility spelling; both parser kinds share the same registry.
+pub fn unregister_parser_host(id: String) -> Result<(), CoreError> {
+    unregister_parser_provider(id)
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

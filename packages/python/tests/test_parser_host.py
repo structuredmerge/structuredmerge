@@ -63,6 +63,38 @@ class LibCSTHost:
 
 
 class TypedParserHostTest(unittest.TestCase):
+    def test_rust_language_pack_uses_typed_parse_and_shared_registry(self):
+        provider_id = "python.typed.tslp.json"
+        descriptor = core.register_language_pack_parser(provider_id, "json")
+        try:
+            self.assertEqual(descriptor.runtime, "rust")
+            self.assertEqual(descriptor.languages, ["json"])
+            with self.assertRaisesRegex(Exception, "DuplicateId"):
+                core.register_language_pack_parser(provider_id, "python")
+            def request(text):
+                source = self.merge_requests([text], roles=[core.SourceRole.SOURCE])[0].source
+                return core.ParseRequest(schema="structuredmerge.parse-request/v1", request_id="json",
+                    source=source, language="json", dialect=None,
+                    selection=core.ParserSelection(backend_id=provider_id, preference=[], required_capabilities=[]),
+                    options=core.ParseOptions(comments=True, diagnostics=True), metadata={}, extra={})
+            limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+            parsed = core.parse_sources([request('// note\r\n{"é": [true]}')], limits)[0]
+            self.assertEqual(parsed.backend.id, provider_id)
+            self.assertEqual(parsed.selection.selected_backend, provider_id)
+            self.assertTrue(parsed.parsed.ok)
+            self.assertEqual(len(parsed.parsed.comments), 1)
+            self.assertTrue(any(edge.field_name == "key" for node in parsed.parsed.nodes for edge in node.children))
+            broken = core.parse_sources([request('{"x":')], limits)[0].parsed
+            self.assertFalse(broken.ok)
+            self.assertTrue(broken.nodes)
+            self.assertTrue(any(node.has_error for node in broken.nodes))
+            self.assertTrue(broken.diagnostics[0].blocking)
+            self.assertEqual(self.host.calls, 0)
+        finally:
+            core.unregister_parser_provider(provider_id)
+        with self.assertRaisesRegex(Exception, "selection.no_parser"):
+            core.parse_sources([request('{}')], limits)
+
     def merge_requests(self, sources, shared_source_id=None, roles=None):
         requests = []
         for role, source in zip(roles or [core.SourceRole.BASE, core.SourceRole.OURS, core.SourceRole.THEIRS], sources):

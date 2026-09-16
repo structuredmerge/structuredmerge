@@ -1,11 +1,11 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "ruby",
-  "review_reason": "Initial unreleased typed-core source API baseline: native DTO policies and canonical records; semantic and ABI approval remain separate.",
+  "review_reason": "Add opt-in native language-pack registration and provider-neutral removal; preserve host registration/removal behavior",
   "files": {
     "lib/structuredmerge_core/native.rb": "1958362029340a5786ed9762f1431dcdbcf0017626d262aede09db17eb2ea32f",
     "lib/structuredmerge_core/version.rb": "6cda1e4772dbebb74e509d2aefe2fcc1a9081782f9dd3f514f00a629c4211125",
     "lib/structuredmerge_core.rb": "defe67340887e4fcfecefc0a68d255fab86768e5c81260916819b636303f5cdf",
-    "sig/types.rbs": "f134ff0bb1a366f2daba867c6c5fb6c664d75b1cb81aea001af9f48d2f6cc3c6"
+    "sig/types.rbs": "1c043922d5a35d60736987dcda3f9f63f101c8e14990e23feb7b71bfa2ad14c5"
   }
 }
