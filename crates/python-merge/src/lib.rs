@@ -1,12 +1,18 @@
 //! Conservative top-level declaration profile. LibCST supplies syntax only.
+use ast_merge::native_analysis::NativeOwnerAnalysis;
 use ast_merge::{SourcePreservingOwner, SourcePreservingOwnerDocument};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use tree_haver::{parsed::ParseNode, service::ParsedResult};
 use unicode_normalization::UnicodeNormalization;
 
 /// Derive identities and whole-statement ownership in Rust. Nested bodies are
 /// opaque exact source, never recursively merged by this initial profile.
 pub fn declaration_owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, String> {
+    declaration_analysis(parsed).map(|analysis| analysis.document)
+}
+
+/// Retain native statement references without deriving identity from node IDs.
+pub fn declaration_analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
     let document = &parsed.document;
     if !document.output().ok || parsed.source.descriptor() != &document.output().source {
         return Err("invalid native parse".into());
@@ -20,6 +26,7 @@ pub fn declaration_owners(parsed: &ParsedResult) -> Result<SourcePreservingOwner
     }
     let mut names = BTreeSet::new();
     let mut owners = Vec::new();
+    let mut owner_node_ids = BTreeMap::new();
     if document.output().nodes.iter().any(|node| !node.unsupported_features.is_empty()) {
         return Err("unsupported native syntax".into());
     }
@@ -91,6 +98,7 @@ pub fn declaration_owners(parsed: &ParsedResult) -> Result<SourcePreservingOwner
         let range = &statement.span.range;
         let bytes = parsed.source.slice(range.clone()).map_err(|_| "invalid statement range")?;
         let path = format!("/{}", identity.replace('~', "~0").replace('/', "~1"));
+        owner_node_ids.insert(path.clone(), vec![statement.id.clone()]);
         owners.push(SourcePreservingOwner {
             id: path.clone(),
             path,
@@ -101,5 +109,10 @@ pub fn declaration_owners(parsed: &ParsedResult) -> Result<SourcePreservingOwner
             end_line: statement.span.end_point.row + 1,
         });
     }
-    Ok(SourcePreservingOwnerDocument { source: source.into(), owners })
+    let analysis = NativeOwnerAnalysis {
+        document: SourcePreservingOwnerDocument { source: source.into(), owners },
+        owner_node_ids,
+    };
+    analysis.validate(parsed)?;
+    Ok(analysis)
 }

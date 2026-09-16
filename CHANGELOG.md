@@ -197,6 +197,8 @@
 
 - Populate common native diff change spans from verified source bytes and digests, preserving UTF-8 byte coordinates and leaving absent revisions without fabricated ranges.
 
+- Retain and validate native parser-node provenance for Rust-owned YAML mapping and Python declaration analysis, rejecting stale sources and missing, duplicate, misordered or out-of-owner node references.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

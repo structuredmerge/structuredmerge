@@ -1,6 +1,7 @@
 //! Rust-owned block-mapping analysis over TreeHaver facts. This initial profile
 //! is not a claim of full YAML, comment-ownership, or operation-envelope parity.
-use std::collections::BTreeSet;
+use ast_merge::native_analysis::NativeOwnerAnalysis;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ast_merge::{SourcePreservingOwner, SourcePreservingOwnerDocument, ThreeWayMergeResult};
 use tree_haver::{
@@ -35,6 +36,11 @@ pub fn diff_mapping_sources(
 /// Entire top-level entries are owners; nested entries are not independently
 /// merged in this first profile. Changed unowned layout fails closed.
 pub fn mapping_owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, String> {
+    mapping_analysis(parsed).map(|analysis| analysis.document)
+}
+
+/// Retain the actual native key/value references used to derive each owner.
+pub fn mapping_analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
     let document = &parsed.document;
     if parsed.source.descriptor() != &document.output().source {
         return Err("parsed tree and source identity differ".into());
@@ -71,6 +77,7 @@ pub fn mapping_owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocu
         return Err("expected mapping key/value pairs".into());
     }
     let mut owners = Vec::new();
+    let mut owner_node_ids = BTreeMap::new();
     let mut names = BTreeSet::new();
     for pair in root.children.chunks_exact(2) {
         if pair[0].field_name.as_deref() != Some("key")
@@ -113,6 +120,7 @@ pub fn mapping_owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocu
             std::str::from_utf8(bytes).map_err(|_| "owner cuts a UTF-8 code point")?.to_owned();
         // JSON Pointer escaping prevents native names from aliasing owner paths.
         let path = format!("/{}", name.replace('~', "~0").replace('/', "~1"));
+        owner_node_ids.insert(path.clone(), vec![key.id.clone(), value.id.clone()]);
         owners.push(SourcePreservingOwner {
             id: path.clone(),
             path,
@@ -123,7 +131,12 @@ pub fn mapping_owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocu
             end_line: value.span.end_point.row + 1,
         });
     }
-    Ok(SourcePreservingOwnerDocument { source: source.to_owned(), owners })
+    let analysis = NativeOwnerAnalysis {
+        document: SourcePreservingOwnerDocument { source: source.to_owned(), owners },
+        owner_node_ids,
+    };
+    analysis.validate(parsed)?;
+    Ok(analysis)
 }
 
 fn native(node: &ParseNode) -> Result<&serde_json::Value, String> {

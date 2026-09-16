@@ -46,3 +46,25 @@ whole-source output reparsing, conflict evidence, diff, malformed/unsupported
 inputs, unsupported requirements, cancellation, deadlines, native output faults,
 source-ID collisions and reserved result-field isolation. It is not an installed
 Ruby/Python artifact test; Python dispatcher coverage remains to be added.
+
+## Analysis prerequisite: native node provenance
+
+`yaml_merge::typed::mapping_analysis` and `python_merge::declaration_analysis`
+retain a shared `NativeOwnerAnalysis`: the existing Rust-owned source document
+and an ordered native-node reference list for each logical owner. YAML entries
+reference the real key and value nodes; no synthetic pair node is attributed to
+Psych. Python declarations reference the actual LibCST statement. Logical
+identity remains family-derived and does not depend on parse-local node IDs.
+
+Validation requires unchanged source bytes, valid unique owners, a matching
+reference catalog, resolvable unique source-ordered node references contained in
+each owner, and exact owner boundaries established by those nodes. Existing
+merge/diff family entry points use this validation before returning owner data.
+These checks establish reference integrity, not semantic correctness of arbitrary
+external ownership decisions; only the Rust family analyzers produce this data.
+
+This is a prerequisite for common `analyze`, not its implementation. Slice 1024
+also requires comment regions, attachment and layout-controller decisions.
+The existing conservative source-gap retention must not be presented as those
+unimplemented decisions. No complete analysis-result envelope or new generated
+analysis API is claimed yet.

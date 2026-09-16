@@ -152,6 +152,69 @@ fn setup() -> (Arc<Psych>, ParserRegistrySnapshot, ExecutionContext) {
 
 #[test]
 #[ignore = "native Ruby/Psych integration gate"]
+fn native_owner_analysis_retains_actual_ordered_key_value_node_references() {
+    let (_, snapshot, context) = setup();
+    let parsed = TreeHaverParseService::default()
+        .parse_batch(
+            requests(["# café\r\né: one\r\nbeta:\r\n  child: two\r\n"; 3]),
+            &snapshot,
+            &context,
+        )
+        .unwrap();
+    let parsed = &parsed[0];
+    let analysis = yaml_merge::typed::mapping_analysis(parsed).unwrap();
+    assert_eq!(analysis.document, yaml_merge::typed::mapping_owners(parsed).unwrap());
+    assert_eq!(analysis.owner_node_ids.len(), 2);
+    for owner in &analysis.document.owners {
+        let ids = &analysis.owner_node_ids[&owner.id];
+        assert_eq!(ids.len(), 2);
+        let key = parsed.document.node(&ids[0]).unwrap();
+        let value = parsed.document.node(&ids[1]).unwrap();
+        assert_eq!(key.kind, "scalar");
+        assert_eq!(key.span.range.start_byte, owner.start_byte);
+        assert_eq!(value.span.range.end_byte, owner.end_byte);
+        assert_eq!(key.parent_id, value.parent_id);
+    }
+    analysis.validate(parsed).unwrap();
+    // Parse-local node IDs are evidence, never the cross-revision match key.
+    assert!(analysis.document.owners.iter().all(|owner| owner.id.starts_with('/')));
+}
+
+#[test]
+#[ignore = "native Ruby/Psych integration gate"]
+fn native_owner_analysis_rejects_stale_or_incomplete_node_provenance() {
+    let (_, snapshot, context) = setup();
+    let parsed = TreeHaverParseService::default()
+        .parse_batch(requests(["a: one\nb: two\n"; 3]), &snapshot, &context)
+        .unwrap();
+    let parsed = &parsed[0];
+    let original = yaml_merge::typed::mapping_analysis(parsed).unwrap();
+    let mut corruptions = vec![];
+    let mut changed = original.clone();
+    changed.document.source.push(' ');
+    corruptions.push(changed);
+    let mut changed = original.clone();
+    changed.owner_node_ids.remove("/a");
+    corruptions.push(changed);
+    for nodes in [
+        vec![],
+        vec!["missing".into()],
+        vec![original.owner_node_ids["/a"][0].clone(); 2],
+        original.owner_node_ids["/a"].iter().rev().cloned().collect(),
+        original.owner_node_ids["/b"].clone(),
+        vec![original.owner_node_ids["/a"][0].clone()],
+    ] {
+        let mut changed = original.clone();
+        changed.owner_node_ids.insert("/a".into(), nodes);
+        corruptions.push(changed);
+    }
+    for changed in corruptions {
+        assert!(changed.validate(parsed).is_err(), "accepted invalid analysis: {changed:?}");
+    }
+}
+
+#[test]
+#[ignore = "native Ruby/Psych integration gate"]
 fn merges_independent_native_mapping_changes_in_rust_preserving_exact_bytes() {
     let (provider, snapshot, context) = setup();
     let result = merge_mapping_sources(

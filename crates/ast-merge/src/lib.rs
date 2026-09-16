@@ -27,6 +27,7 @@ pub use owner_projection::*;
 pub mod diagnostics;
 pub use diagnostics::*;
 pub mod byte_evidence;
+pub mod native_analysis;
 pub mod owner_diff;
 pub mod typed_diff;
 pub mod typed_merge;
