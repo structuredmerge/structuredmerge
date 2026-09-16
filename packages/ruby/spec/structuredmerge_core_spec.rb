@@ -77,6 +77,46 @@ RSpec.describe StructuredmergeCore do
     end
   end
 
+  it "overlaps native callbacks on two Ruby threads without crossing results" do
+    arrivals = Queue.new
+    releases = Queue.new
+    host = TypedPsychHost.new
+    host.define_singleton_method(:parse_batch) do |request|
+      arrivals << true
+      raise "concurrent callback barrier timed out" unless releases.pop(timeout: 10)
+      super(request)
+    end
+    described_class.register_parser_host(host)
+    batches = 2.times.map { |index| merge_requests(["worker: value#{index}\n"] * 3) }
+    limits = merge_limits
+    workers = batches.map do |requests|
+      Thread.new { described_class.parse_sources(requests, limits) }
+    end
+    2.times { expect(arrivals.pop(timeout: 10)).to be(true) }
+    described_class.unregister_parser_host("ruby.typed.psych")
+    replacement = TypedPsychHost.new
+    described_class.register_parser_host(replacement)
+    2.times { releases << true }
+    results = workers.map do |worker|
+      raise "concurrent parse did not complete" unless worker.join(15)
+      worker.value
+    end
+    expect(host.calls).to eq(2)
+    expect(replacement.calls).to eq(0)
+    batches.zip(results).each do |requests, parsed|
+      expect(parsed.length).to eq(3)
+      expect(parsed.map { |result| result.parsed.ok }).to eq([true, true, true])
+      expect(parsed.map { |result| result.parsed.source.sha256 }).to eq(requests.map { |request| request.source.descriptor.sha256 })
+    end
+    described_class.parse_sources(batches.first, limits)
+    expect(replacement.calls).to eq(1)
+    expect(host.calls).to eq(2)
+  ensure
+    2.times { releases << true } if releases
+    workers&.each { |worker| worker.join(15) }
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
   it "declares native profile scope separately from parser availability and default approval" do
     profiles = described_class.native_merge_profiles
     expect(profiles.map(&:family)).to eq(%w[python yaml])

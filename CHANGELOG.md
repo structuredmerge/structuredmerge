@@ -159,6 +159,8 @@
 
 - Verify installed Ruby and Python parser callback retention, GC release, reentrant in-flight unregister, and re-registration lifecycle behavior.
 
+- Verify overlapping installed-binding parser callbacks retain distinct batch results and old provider snapshots across unregister and re-registration.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

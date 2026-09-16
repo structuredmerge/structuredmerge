@@ -2,6 +2,8 @@
 import hashlib
 import gc
 import weakref
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import ast
 import importlib.metadata
 from pathlib import Path
@@ -139,6 +141,46 @@ class TypedParserHostTest(unittest.TestCase):
         self.assertTrue(all(result.parsed.ok for result in core.parse_sources(requests, limits)))
         self.assertEqual(self.host.calls, 1)
         self.assertEqual(host.calls, 1, "future calls must not reach the removed provider")
+
+    def test_two_runtime_threads_overlap_native_callbacks_without_crossing_results(self):
+        core.unregister_parser_host("python.libcst")
+        barrier = threading.Barrier(3, timeout=10)
+        release = threading.Event()
+
+        class OverlappingHost(LibCSTHost):
+            def parse_batch(self, request):
+                barrier.wait()
+                if not release.wait(timeout=10):
+                    raise RuntimeError("concurrent callback release timed out")
+                return super().parse_batch(request)
+
+        host = OverlappingHost()
+        core.register_parser_host(host)
+        limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+        batches = [self.merge_requests([f"worker = {index}\n"] * 3) for index in range(2)]
+        try:
+            with ThreadPoolExecutor(max_workers=2) as workers:
+                pending = [workers.submit(core.parse_sources, requests, limits) for requests in batches]
+                barrier.wait()  # Both callbacks hold the old snapshot now.
+                core.unregister_parser_host("python.libcst")
+                core.register_parser_host(self.host)
+                release.set()
+                results = [future.result(timeout=15) for future in pending]
+            self.assertEqual(host.calls, 2)
+            self.assertEqual(self.host.calls, 0)
+            for requests, parsed in zip(batches, results):
+                self.assertEqual(len(parsed), 3)
+                self.assertTrue(all(result.parsed.ok for result in parsed))
+                self.assertEqual([result.parsed.source.sha256 for result in parsed],
+                    [request.source.descriptor.sha256 for request in requests])
+            core.parse_sources(batches[0], limits)
+            self.assertEqual(self.host.calls, 1)
+            self.assertEqual(host.calls, 2)
+        finally:
+            release.set()
+            barrier.abort()
+            core.unregister_parser_host("python.libcst")
+            core.register_parser_host(self.host)
 
     def test_native_profiles_declare_scope_without_default_approval(self):
         profiles = core.native_merge_profiles()

@@ -13,6 +13,14 @@ not general runtime/threading safety.
   completes its batch. The in-flight parse succeeds using its retained snapshot;
   a subsequent parse fails selection. Registering a new provider with the same
   ID routes subsequent calls to the new instance, not the removed one.
+- Two runtime-created worker threads enter native callbacks and wait behind a
+  bounded barrier. The test requires both callbacks to arrive before either is
+  released, so sequential execution cannot satisfy it. While both calls are
+  paused, the controlling runtime thread unregisters the provider and registers
+  a new instance with the same ID. Pending batches finish on the original
+  instance and retain their distinct source checksums; the next call reaches
+  only the replacement. This tests a controlled unregister/register transition,
+  not an atomic replacement API.
 
 Ruby's generated dispatcher exits asynchronously after the last sender drops.
 The release check permits bounded thread scheduling and full collections before
@@ -25,8 +33,8 @@ checks outside the checkout against installed packages. The existing native
 syntax/error, provider exception, typed transport, and preservation tests remain
 part of those same suites.
 
-Still unproven: concurrent worker execution, arbitrary foreign-thread entry,
-in-flight replacement races, interpreter/VM shutdown, subinterpreters, non-MRI
+Still unproven: arbitrary foreign-thread entry, broad concurrent stress and
+uncontrolled replacement races, interpreter/VM shutdown, subinterpreters, non-MRI
 Ruby, cancellation and late results across the generated boundary, and the full
 supported runtime/platform matrix. Reentrant removal on a callback thread is not
 a substitute for those independent requirements. No lifecycle claim here
