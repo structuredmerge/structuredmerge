@@ -162,3 +162,5 @@
 - Keep the Ruby host transport benchmark identity provider compatible with the workflow-host callback contract.
 
 - Reject unsafe or glob-like Cargo workspace member paths in kettle-rusty discovery.
+
+- Include the complete combined license text in Python wheels and validate wheel contents plus real LibCST/Rust merges in a fresh installed consumer environment.

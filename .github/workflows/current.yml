@@ -20,6 +20,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  typed-core-python-artifact:
+    name: Typed core Python installed artifact (${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.14"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: stable
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install declared wheel build backend
+        run: python -m pip install 'maturin>=1,<2'
+      - name: Verify archive audit rejects invalid artifacts
+        run: python -m unittest discover -s workspace-scripts/tests -v
+      - name: Build checked-in generated core binding
+        run: python -m maturin build --locked --out ../../tmp/core-wheels --profile dev
+        working-directory: packages/python
+      - name: Verify wheel contents and isolated installed native merges
+        run: python workspace-scripts/check_core_python_artifact.py tmp/core-wheels/*.whl
+
   typed-core-ruby-artifact:
     name: Typed core Ruby installed artifact
     runs-on: ubuntu-latest
