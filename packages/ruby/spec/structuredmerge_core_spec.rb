@@ -117,6 +117,40 @@ RSpec.describe StructuredmergeCore do
     described_class.unregister_parser_host("ruby.typed.psych")
   end
 
+  it "rejects expired deadlines and discards late input and verification results" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    requests = merge_requests(["a: one\nb: two\n", "a: ours\nb: two\n", "a: one\nb: theirs\n"])
+    limits = lambda do |millis|
+      described_class::ParseLimits.new(max_batch_items: 3, max_input_bytes: 10000,
+        max_nodes: 1000, max_diagnostics: 20, timeout_millis: millis)
+    end
+    %i[parse_sources merge_yaml_mapping].each do |operation|
+      expect { described_class.public_send(operation, requests, limits.call(0)) }.to raise_error(RuntimeError, /execution\.deadline_exceeded:/)
+    end
+    expect(host.calls).to eq(0)
+    host.define_singleton_method(:parse_batch) do |request|
+      result = super(request)
+      sleep 0.15
+      result
+    end
+    %i[parse_sources merge_yaml_mapping].each do |operation|
+      expect { described_class.public_send(operation, requests, limits.call(100)) }.to raise_error(RuntimeError, /execution\.deadline_exceeded:/)
+    end
+    expect(host.calls).to eq(2)
+    host.define_singleton_method(:parse_batch) do |request|
+      result = super(request)
+      sleep 0.15 if request.items.first.source.descriptor.role.to_s == "output"
+      result
+    end
+    expect { described_class.merge_yaml_mapping(requests, limits.call(100)) }.to raise_error(RuntimeError, /execution\.deadline_exceeded:/)
+    expect(host.calls).to eq(4)
+    host.singleton_class.remove_method(:parse_batch)
+    expect(described_class.merge_yaml_mapping(requests, limits.call(nil)).output).to eq("a: ours\nb: theirs\n")
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
   it "declares native profile scope separately from parser availability and default approval" do
     profiles = described_class.native_merge_profiles
     expect(profiles.map(&:family)).to eq(%w[python yaml])

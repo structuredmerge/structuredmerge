@@ -60,6 +60,7 @@ pub fn merge_yaml_mapping(
     requests: Vec<ParseRequest>,
     limits: ParseLimits,
 ) -> Result<NativeMergeResult, CoreError> {
+    let context = limits.context()?;
     let snapshot = crate::host::registry()
         .snapshot()
         .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;
@@ -70,7 +71,7 @@ pub fn merge_yaml_mapping(
             requests,
             &TreeHaverParseService::default(),
             &snapshot,
-            &limits.context(),
+            &context,
             yaml_merge::typed::mapping_owners,
         ),
     )
@@ -82,6 +83,7 @@ pub fn merge_python_declarations(
     requests: Vec<ParseRequest>,
     limits: ParseLimits,
 ) -> Result<NativeMergeResult, CoreError> {
+    let context = limits.context()?;
     let snapshot = crate::host::registry()
         .snapshot()
         .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;
@@ -92,7 +94,7 @@ pub fn merge_python_declarations(
             requests,
             &TreeHaverParseService::default(),
             &snapshot,
-            &limits.context(),
+            &context,
             python_merge::declaration_owners,
         ),
     )

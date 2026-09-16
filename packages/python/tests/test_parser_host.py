@@ -3,6 +3,7 @@ import hashlib
 import gc
 import weakref
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 import ast
 import importlib.metadata
@@ -181,6 +182,39 @@ class TypedParserHostTest(unittest.TestCase):
             barrier.abort()
             core.unregister_parser_host("python.libcst")
             core.register_parser_host(self.host)
+
+    def test_deadlines_reject_before_dispatch_and_discard_late_native_results(self):
+        requests = self.merge_requests(["a = 1\nb = 2\n", "a = 3\nb = 2\n", "a = 1\nb = 4\n"])
+        def limits(millis):
+            return core.ParseLimits(max_batch_items=3, max_input_bytes=10000,
+                max_nodes=1000, max_diagnostics=20, timeout_millis=millis)
+        for operation in (core.parse_sources, core.merge_python_declarations):
+            with self.assertRaisesRegex(RuntimeError, r"execution\.deadline_exceeded:"):
+                operation(requests, limits(0))
+        self.assertEqual(self.host.calls, 0)
+
+        original = self.host.parse_batch
+        def slow_input(request):
+            result = original(request)
+            time.sleep(0.15)
+            return result
+        self.host.parse_batch = slow_input
+        for operation in (core.parse_sources, core.merge_python_declarations):
+            with self.assertRaisesRegex(RuntimeError, r"execution\.deadline_exceeded:"):
+                operation(requests, limits(100))
+        self.assertEqual(self.host.calls, 2)
+
+        def slow_verification(request):
+            result = original(request)
+            if request.items[0].source.descriptor.role == core.SourceRole.OUTPUT:
+                time.sleep(0.15)
+            return result
+        self.host.parse_batch = slow_verification
+        with self.assertRaisesRegex(RuntimeError, r"execution\.deadline_exceeded:"):
+            core.merge_python_declarations(requests, limits(100))
+        self.assertEqual(self.host.calls, 4)
+        self.host.parse_batch = original
+        self.assertEqual(core.merge_python_declarations(requests, limits(None)).output, "a = 3\nb = 4\n")
 
     def test_native_profiles_declare_scope_without_default_approval(self):
         profiles = core.native_merge_profiles()

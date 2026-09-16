@@ -108,8 +108,23 @@ fn facade_calls_typed_host_batches_through_tree_haver_and_keeps_native_failure()
         max_input_bytes: 100,
         max_nodes: 100,
         max_diagnostics: 100,
+        timeout_millis: None,
     };
     let results = parse_sources(vec![request.clone()], limits.clone()).unwrap();
+    let legacy_limits: ParseLimits = serde_json::from_str(
+        r#"{"max_batch_items":10,"max_input_bytes":100,"max_nodes":100,"max_diagnostics":100}"#,
+    )
+    .unwrap();
+    assert_eq!(legacy_limits, limits);
+    assert_eq!(
+        parse_sources(
+            vec![request.clone()],
+            ParseLimits { timeout_millis: Some(0), ..limits.clone() }
+        )
+        .unwrap_err()
+        .code,
+        "execution.deadline_exceeded"
+    );
     let limited = ParseLimits { max_input_bytes: 0, ..limits.clone() };
     assert_eq!(parse_sources(vec![request.clone()], limited).unwrap_err().code, "resource.limit");
     assert_eq!(parse_sources(vec![], limits.clone()).unwrap_err().code, "request.invalid");

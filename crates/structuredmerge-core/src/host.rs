@@ -9,6 +9,7 @@ use std::{
     fmt,
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{Arc, OnceLock, atomic::AtomicBool},
+    time::{Duration, Instant},
 };
 use tree_haver::service::{
     ExecutionContext, ParseService, ParserProvider, ParserRegistry, ProviderFault, ServiceError,
@@ -250,18 +251,32 @@ pub struct ParseLimits {
     pub max_input_bytes: u64,
     pub max_nodes: usize,
     pub max_diagnostics: usize,
+    /// Monotonic operation budget, including selection and output verification.
+    /// None disables the deadline; zero rejects before any parser callback.
+    /// Callbacks are cooperative: late results are rejected, not preempted.
+    #[serde(default)]
+    pub timeout_millis: Option<u64>,
 }
 
 impl ParseLimits {
-    pub(crate) fn context(self) -> ExecutionContext {
-        ExecutionContext {
+    pub(crate) fn context(self) -> Result<ExecutionContext, CoreError> {
+        let deadline = self
+            .timeout_millis
+            .map(|millis| {
+                Instant::now().checked_add(Duration::from_millis(millis)).ok_or_else(|| CoreError {
+                    code: "request.invalid".into(),
+                    message: "operation timeout exceeds monotonic clock range".into(),
+                })
+            })
+            .transpose()?;
+        Ok(ExecutionContext {
             cancelled: Arc::new(AtomicBool::new(false)),
-            deadline: None,
+            deadline,
             max_batch_items: self.max_batch_items,
             max_input_bytes: self.max_input_bytes,
             max_nodes: self.max_nodes,
             max_diagnostics: self.max_diagnostics,
-        }
+        })
     }
 }
 
@@ -269,10 +284,10 @@ pub fn parse_sources(
     requests: Vec<ParseRequest>,
     limits: ParseLimits,
 ) -> Result<Vec<CoreParseResult>, CoreError> {
+    let context = limits.context()?;
     let snapshot = registry()
         .snapshot()
         .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;
-    let context = limits.context();
     TreeHaverParseService::default()
         .parse_batch(requests, &snapshot, &context)
         .map(|results| results.into_iter().map(CoreParseResult::from).collect())

@@ -161,6 +161,8 @@
 
 - Verify overlapping installed-binding parser callbacks retain distinct batch results and old provider snapshots across unregister and re-registration.
 
+- Expose optional monotonic operation deadlines through typed Ruby and Python parse/merge limits, rejecting late successful input and verification results.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
