@@ -27,6 +27,8 @@ pub use ast_crispr::{
 pub use ast_crispr::{CrisprDestinationReport, CrisprMatchReport, CrisprSelectionReport};
 pub use ast_crispr::{CrisprLimitConstraint, CrisprLimitOperator, CrisprLimitReport};
 pub use structural::*;
+mod templates;
+pub use templates::*;
 mod profiles;
 pub use profiles::{NativeMergeProfile, native_merge_profiles};
 pub use tree_haver::parsed::{

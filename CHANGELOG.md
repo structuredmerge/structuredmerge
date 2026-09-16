@@ -175,6 +175,8 @@
 
 - Expose the historical ast-crispr package boundary as a typed core report while retaining its fixture-compatible serialization and separating metadata from runtime capability claims.
 
+- Typed template options, profile resolution, and read-only directory-plan reports in structuredmerge-core and generated Ruby/Python bindings; template application remains outside this API.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

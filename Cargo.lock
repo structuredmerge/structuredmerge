@@ -1562,6 +1562,7 @@ version = "0.2.0"
 dependencies = [
  "ast-crispr",
  "ast-merge",
+ "ast-template",
  "python-merge",
  "serde",
  "serde_json",

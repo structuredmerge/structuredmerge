@@ -41,7 +41,7 @@
       "disposition": "retain_until_consumer_migration",
       "consumers": ["ruby/gems/ast-template/lib/ast/template/rust_host_provider.rb"],
       "replacement": "Typed options/profile/plan reports from ast-template through structuredmerge-core.",
-      "gap": "Report generation is not template execution or filesystem apply. Preserve Ruby apply behavior and downstream kettle-jem gates."
+      "gap": "Typed options/profile/read-only directory-plan reports are implemented in structuredmerge-core. Ruby adapter normalization and legacy report projection remain open. Report generation is not template execution or filesystem apply. Preserve Ruby apply behavior and downstream kettle-jem gates."
     },
     {
       "id": "parser-services",

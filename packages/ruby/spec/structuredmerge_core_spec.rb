@@ -2,6 +2,8 @@
 
 require_relative "native_merge_fixture"
 require "weakref"
+require "tmpdir"
+require "fileutils"
 
 if (expected_home = ENV["STRUCTUREDMERGE_EXPECT_GEM_HOME"])
   installed = Gem.loaded_specs.fetch("structuredmerge-core").full_gem_path
@@ -13,6 +15,52 @@ end
 
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
+
+  it "plans directory content through the typed API without writing it" do
+    FileUtils.mkdir_p("tmp")
+    Dir.mktmpdir("typed-template-", "tmp") do |root|
+      template = File.join(root, "template")
+      destination = File.join(root, "destination")
+      FileUtils.mkdir_p([template, destination])
+      File.binwrite(File.join(template, "README.md"), "# é\r\n")
+      options = described_class::TemplateSessionOptions.new(mode: "plan", template_root: template, destination_root: destination,
+        context: described_class::TemplateDestinationContext.new(project_name: "widget"), default_strategy: "raw_copy",
+        overrides: [], replacements: {}, allowed_families: nil, config: nil)
+      report = described_class.plan_template_directory(options)
+      expect(report.runner_report.plan_report.summary.create).to eq(1)
+      expect(report.runner_report.preview.result_files.fetch("README.md")).to eq("# é\r\n")
+      expect(Dir.children(destination)).to be_empty
+      expect(File.binread(File.join(template, "README.md"))).to eq("# é\r\n".b)
+    end
+  end
+
+  it "reports typed template options and profiles without applying templates" do
+    options = described_class::TemplateSessionOptions.new(mode: "plan", template_root: "", destination_root: "",
+      context: described_class::TemplateDestinationContext.new(project_name: nil), default_strategy: "merge",
+      overrides: [], replacements: {}, allowed_families: nil, config: nil)
+    report = described_class.report_template_options(options)
+    expect(report.ready).to be(false)
+    expect(report.diagnostics.map(&:reason)).to eq(%w[missing_destination_root missing_template_root])
+    report = described_class.report_template_profile(described_class::TemplateProfileRequest.new(
+      profile_name: "missing", profiles: {}, options: options))
+    expect(report.diagnostics.map(&:reason)).to include("missing_profile")
+    profile = described_class::DirectorySessionProfile.new(mode: "apply",
+      context: described_class::TemplateDestinationContext.new(project_name: "widget"), default_strategy: "raw_copy",
+      overrides: [], replacements: { "NAME" => "widget" }, allowed_families: ["markdown"], config: nil)
+    configured = described_class::TemplateSessionOptions.new(mode: "plan", template_root: "/not-read/templates", destination_root: "/not-read/destination",
+      context: described_class::TemplateDestinationContext.new(project_name: nil), default_strategy: "merge",
+      overrides: [], replacements: {}, allowed_families: nil, config: nil)
+    report = described_class.report_template_profile(described_class::TemplateProfileRequest.new(
+      profile_name: "known", profiles: { "known" => profile }, options: configured))
+    expect(report.ready).to be(true)
+    expect(report.resolved_options.context.project_name).to eq("widget")
+    expect(report.resolved_options.replacements).to eq("NAME" => "widget")
+    expect(report.mode).to eq(:apply)
+    options = described_class::TemplateSessionOptions.new(mode: "apply", template_root: "", destination_root: "",
+      context: described_class::TemplateDestinationContext.new(project_name: nil), default_strategy: "merge",
+      overrides: [], replacements: {}, allowed_families: nil, config: nil)
+    expect { described_class.plan_template_directory(options) }.to raise_error(RuntimeError, /template.request.invalid/)
+  end
 
   it "reports structural operations as typed ordered profiles without selecting source" do
     boundary = described_class.report_structural_boundary

@@ -10,6 +10,7 @@ import importlib.metadata
 from pathlib import Path
 import sys
 import unittest
+import tempfile
 
 import libcst
 import structuredmerge_core as core
@@ -79,6 +80,51 @@ class TypedParserHostTest(unittest.TestCase):
                 options=core.ParseOptions(native_extensions=True), metadata={}, extra={},
             ))
         return requests[::-1]
+
+    def test_template_reports_use_public_typed_inputs(self):
+        def options(mode):
+            return core.TemplateSessionOptions(mode=mode, template_root="", destination_root="",
+                context=core.TemplateDestinationContext(project_name=None), default_strategy=core.TemplateStrategy.MERGE,
+                overrides=[], replacements={}, allowed_families=None, config=None)
+        self.assertIs(core.TemplateDestinationContext, native.TemplateDestinationContext)
+        report = core.report_template_options(options(core.DirectorySessionMode.PLAN))
+        self.assertFalse(report.ready)
+        self.assertEqual([d.reason for d in report.diagnostics],
+                         ["missing_destination_root", "missing_template_root"])
+        report = core.report_template_profile(core.TemplateProfileRequest(
+            profile_name="missing", profiles={}, options=options(core.DirectorySessionMode.PLAN)))
+        self.assertIn("missing_profile", [d.reason for d in report.diagnostics])
+        profile = core.DirectorySessionProfile(mode=core.DirectorySessionMode.APPLY,
+            context=core.TemplateDestinationContext(project_name="widget"), default_strategy=core.TemplateStrategy.RAW_COPY,
+            overrides=[], replacements={"NAME": "widget"}, allowed_families=["markdown"], config=None)
+        configured = core.TemplateSessionOptions(mode=core.DirectorySessionMode.PLAN, template_root="/not-read/templates",
+            destination_root="/not-read/destination", context=core.TemplateDestinationContext(project_name=None),
+            default_strategy=core.TemplateStrategy.MERGE, overrides=[], replacements={}, allowed_families=None, config=None)
+        report = core.report_template_profile(core.TemplateProfileRequest(
+            profile_name="known", profiles={"known": profile}, options=configured))
+        self.assertTrue(report.ready)
+        self.assertEqual(report.resolved_options.context.project_name, "widget")
+        self.assertEqual(report.resolved_options.replacements, {"NAME": "widget"})
+        self.assertEqual(report.mode, core.DirectorySessionMode.APPLY)
+        with self.assertRaisesRegex(RuntimeError, "template.request.invalid"):
+            core.plan_template_directory(options(core.DirectorySessionMode.APPLY))
+
+    def test_template_directory_plan_does_not_write(self):
+        Path("tmp").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="typed-template-", dir="tmp") as root:
+            template, destination = Path(root) / "template", Path(root) / "destination"
+            template.mkdir()
+            destination.mkdir()
+            text = "# é\r\n".encode("utf-8")
+            (template / "README.md").write_bytes(text)
+            report = core.plan_template_directory(core.TemplateSessionOptions(
+                mode=core.DirectorySessionMode.PLAN, template_root=str(template), destination_root=str(destination),
+                context=core.TemplateDestinationContext(project_name="widget"), default_strategy=core.TemplateStrategy.RAW_COPY,
+                overrides=[], replacements={}, allowed_families=None, config=None))
+            self.assertEqual(report.runner_report.plan_report.summary.create, 1)
+            self.assertEqual(report.runner_report.preview.result_files["README.md"].encode("utf-8"), text)
+            self.assertEqual(list(destination.iterdir()), [])
+            self.assertEqual((template / "README.md").read_bytes(), text)
 
     def test_explicit_source_edits_use_rust_without_parser_dispatch(self):
         data = "\ufeffé: one\r\nlast".encode("utf-8")

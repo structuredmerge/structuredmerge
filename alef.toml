@@ -27,6 +27,8 @@ sources = [
   "crates/structuredmerge-core/src/merge.rs",
   "crates/structuredmerge-core/src/edits.rs",
   "crates/structuredmerge-core/src/structural.rs",
+  "crates/structuredmerge-core/src/templates.rs",
+  "crates/ast-template/src/lib.rs",
   "crates/ast-crispr/src/lib.rs",
   "crates/structuredmerge-core/src/profiles.rs",
   "crates/tree-haver/src/lib.rs",
@@ -52,7 +54,7 @@ output = "packages/ruby/sig"
 send_sync_types = ["OperationControl"]
 # Input and result DTOs share these identities; do not shadow them with
 # facade dataclasses that native SourceInput constructors cannot accept.
-reexported_types = ["SourceDescriptor", "LineEndings"]
+reexported_types = ["SourceDescriptor", "LineEndings", "TemplateDestinationContext"]
 pip_name = "structuredmerge-core"
 module_name = "_native"
 scaffold_output = "packages/python"
@@ -71,6 +73,14 @@ param_name = "host"
 
 [crates.include]
 types = [
+  "TemplateSessionOptions", "TemplateSessionRequestReport", "TemplateProfileRequest",
+  "DirectorySessionMode", "DirectorySessionProfile", "SessionDiagnostic", "TemplateSessionPlanReport",
+  "TemplateDestinationContext", "TemplateTokenConfig", "TemplateStrategy", "TemplateStrategyOverride",
+  "TemplateDirectoryRunnerReport", "TemplateDirectoryPlanReport", "TemplateDirectoryPlanReportEntry",
+  "TemplateDirectoryPlanReportSummary", "TemplateDirectoryPlanStatus", "TemplateExecutionAction",
+  "TemplatePreviewResult", "TemplateTreeRunReport", "TemplateTreeRunReportEntry",
+  "TemplateTreeRunReportSummary", "TemplateTreeRunStatus", "TemplateDirectoryApplyReport",
+  "TemplateDirectoryApplyReportEntry", "TemplateDirectoryApplyReportSummary",
   "CrisprBoundaryRelationships", "CrisprBoundaryImplementation", "CrisprBoundaryMetadata", "CrisprBoundaryReport",
   "CrisprLimitOperator", "CrisprLimitConstraint", "CrisprLimitReport", "CrisprLimitRequest",
   "CrisprMatchRequest", "CrisprMatchReport", "CrisprSelectionRequest", "CrisprSelectionReport",
@@ -92,7 +102,7 @@ types = [
   "NativeExtension", "ChildEdge", "ParseNode", "ParseSeverity", "ParseDiagnostic",
   "AttachmentHint", "ParseComment", "ParseOutput",
 ]
-functions = ["report_structural_boundary", "report_structural_limit", "report_structural_match", "report_structural_selection", "report_structural_destination", "report_structural_operations", "apply_explicit_source_edits", "native_merge_profiles", "create_operation_control", "parse_sources", "parse_sources_controlled", "register_parser_host", "unregister_parser_host", "merge_yaml_mapping", "merge_yaml_mapping_controlled", "merge_python_declarations", "merge_python_declarations_controlled"]
+functions = ["report_template_options", "report_template_profile", "plan_template_directory", "report_structural_boundary", "report_structural_limit", "report_structural_match", "report_structural_selection", "report_structural_destination", "report_structural_operations", "apply_explicit_source_edits", "native_merge_profiles", "create_operation_control", "parse_sources", "parse_sources_controlled", "register_parser_host", "unregister_parser_host", "merge_yaml_mapping", "merge_yaml_mapping_controlled", "merge_python_declarations", "merge_python_declarations_controlled"]
 
 [crates.exclude]
 methods = ["ByteRange.contains_range", "ByteRange.overlaps", "OwnedSourceRegion.validate"]
