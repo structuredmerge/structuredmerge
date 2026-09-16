@@ -1,5 +1,5 @@
-//! Real Psych facts through the common Rust operation dispatcher. Explicit
-//! ignored gate: requires Ruby/Psych, not a generated-binding artifact test.
+//! Real Psych/LibCST facts through the common Rust operation dispatcher.
+//! Explicit ignored runtime gates, not generated-binding artifact tests.
 use serde_json::{Value, json};
 use std::{
     io::Write,
@@ -24,12 +24,18 @@ enum Behavior {
     Cancel,
     FailOutput,
 }
-struct Psych {
+#[derive(Clone, Copy)]
+enum Runtime {
+    Ruby,
+    Python,
+}
+struct NativeParser {
     descriptor: ParserProviderDescriptor,
     calls: AtomicUsize,
     behavior: Behavior,
+    runtime: Runtime,
 }
-impl ParserProvider for Psych {
+impl ParserProvider for NativeParser {
     fn descriptor(&self) -> &ParserProviderDescriptor {
         &self.descriptor
     }
@@ -42,7 +48,7 @@ impl ParserProvider for Psych {
         context: &ExecutionContext,
     ) -> Result<Vec<ParseOutput>, ProviderFault> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        let fault = |message: String| ProviderFault { code: "test.psych".into(), message };
+        let fault = |message: String| ProviderFault { code: self.descriptor.id.clone(), message };
         if matches!(self.behavior, Behavior::FailOutput)
             && requests[0].source.descriptor.role == SourceRole::Output
         {
@@ -50,15 +56,25 @@ impl ParserProvider for Psych {
                 "private parser exception that must not become a public message".into(),
             ));
         }
-        let mut child = Command::new(
-            std::env::var("STRUCTUREDMERGE_NATIVE_RUBY").unwrap_or_else(|_| "ruby".into()),
-        )
-        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/../yaml-merge/tests/support/psych_facts.rb"))
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| fault(error.to_string()))?;
+        let (variable, executable, script) = match self.runtime {
+            Runtime::Ruby => (
+                "STRUCTUREDMERGE_NATIVE_RUBY",
+                "ruby",
+                concat!(env!("CARGO_MANIFEST_DIR"), "/../yaml-merge/tests/support/psych_facts.rb"),
+            ),
+            Runtime::Python => (
+                "STRUCTUREDMERGE_NATIVE_PYTHON",
+                "python3",
+                concat!(env!("CARGO_MANIFEST_DIR"), "/../../packages/python/tests/libcst_facts.py"),
+            ),
+        };
+        let mut child = Command::new(std::env::var(variable).unwrap_or_else(|_| executable.into()))
+            .arg(script)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|error| fault(error.to_string()))?;
         child
             .stdin
             .take()
@@ -75,14 +91,24 @@ impl ParserProvider for Psych {
         serde_json::from_slice(&output.stdout).map_err(|error| fault(error.to_string()))
     }
 }
-fn setup(behavior: Behavior) -> (Arc<Psych>, ParserRegistrySnapshot, ExecutionContext) {
-    let provider = Arc::new(Psych {
+fn setup(behavior: Behavior) -> (Arc<NativeParser>, ParserRegistrySnapshot, ExecutionContext) {
+    setup_runtime(Runtime::Ruby, behavior)
+}
+fn setup_runtime(
+    runtime: Runtime,
+    behavior: Behavior,
+) -> (Arc<NativeParser>, ParserRegistrySnapshot, ExecutionContext) {
+    let (id, host, parser, language) = match runtime {
+        Runtime::Ruby => ("test.psych", "ruby", "psych", "yaml"),
+        Runtime::Python => ("test.libcst", "python", "libcst", "python"),
+    };
+    let provider = Arc::new(NativeParser {
         descriptor: serde_json::from_value(json!({
-            "id": "test.psych", "family": "native", "runtime": "ruby", "package": "psych", "package_version": "test-runtime",
-            "parser": "psych", "parser_version": "test-runtime", "grammar": null, "grammar_version": null,
-            "languages": ["yaml"], "dialects": [], "contracts": [PARSE_RESULT_SCHEMA],
-            "capabilities": ["native_extensions", "source_spans"], "probe_id": "test.psych", "priority": 0, "metadata": {}, "extensions": []
-        })).unwrap(), calls: AtomicUsize::new(0), behavior,
+            "id": id, "family": "native", "runtime": host, "package": parser, "package_version": "test-runtime",
+            "parser": parser, "parser_version": "test-runtime", "grammar": null, "grammar_version": null,
+            "languages": [language], "dialects": [], "contracts": [PARSE_RESULT_SCHEMA],
+            "capabilities": ["native_extensions", "source_spans"], "probe_id": id, "priority": 0, "metadata": {}, "extensions": []
+        })).unwrap(), calls: AtomicUsize::new(0), behavior, runtime,
     });
     let registry = ParserRegistry::default();
     registry.register(provider.clone()).unwrap();
@@ -130,9 +156,126 @@ fn request(value: Value) -> ValidatedOperationRequest {
         .validate(4096, |_, _| panic!())
         .unwrap()
 }
+fn python_request(operation: &str, sources: &[&str]) -> ValidatedOperationRequest {
+    let mut value = wire(operation, sources);
+    value["provider_selection"]["provider_id"] = json!("kernel.python");
+    value["provider_selection"]["family"] = json!("python");
+    value["provider_selection"]["profile_id"] = json!("kernel.python.native_declarations.v1");
+    value["parser_selection"]["backend"] = json!("test.libcst");
+    request(value)
+}
 fn code(result: &operation_result::OperationResult) -> &str {
     let DiagnosticRecord::Canonical(diagnostic) = &result.diagnostics[0] else { panic!() };
     &diagnostic.code
+}
+
+#[test]
+#[ignore = "native Python/LibCST common-operation integration gate"]
+fn python_analysis_retains_nfkc_identity_native_statement_and_exact_layout() {
+    let (provider, registry, context) = setup_runtime(Runtime::Python, Behavior::Normal);
+    let input = python_request("analyze", &["\u{feff}# café\r\nK = 'été'\r\nb = 2"]);
+    let result = execute_native_operation(&input, &registry, &context).unwrap();
+    assert!(result.ok, "{:?}", result.diagnostics);
+    let analysis = result.analysis.as_ref().unwrap();
+    assert_eq!(analysis.extra["owners"][0]["logical_identity"], json!(["python", "/K"]));
+    assert_eq!(analysis.extra["owners"][0]["node_ids"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        analysis.extra["layout_gaps"][0]["span"]["range"]["end_byte"],
+        "\u{feff}# café\r\n".len()
+    );
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
+    assert!(result.output.is_none());
+    result.validate_against(&input).unwrap();
+    let mut corrupted = result;
+    corrupted.analysis.as_mut().unwrap().extra.get_mut("owners").unwrap()[0]["match_keys"] =
+        json!(["forged"]);
+    assert!(corrupted.validate_against(&input).is_err());
+}
+
+#[test]
+#[ignore = "native Python/LibCST common-operation integration gate"]
+fn python_diff_classifies_edit_delete_add_with_real_statement_spans() {
+    let (provider, registry, context) = setup_runtime(Runtime::Python, Behavior::Normal);
+    let input = python_request("diff2", &["# café\r\na = 1\r\nb = 2", "# café\r\na = 3\r\nc = 4"]);
+    let result = execute_native_operation(&input, &registry, &context).unwrap();
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(
+        result.changes.iter().map(|c| c.classification.as_str()).collect::<Vec<_>>(),
+        ["edited", "deleted", "added"]
+    );
+    assert_eq!(
+        result.changes[0].source_spans[&SourceRole::After].range.start_byte,
+        "# café\r\n".len()
+    );
+    assert!(!result.changes[1].source_spans.contains_key(&SourceRole::After));
+    assert!(!result.changes[2].source_spans.contains_key(&SourceRole::Before));
+    assert!(result.output.is_none());
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+#[ignore = "native Python/LibCST common-operation integration gate"]
+fn python_merge_composition_and_whole_source_selection_both_reparse_output() {
+    for (sources, expected) in [
+        (
+            [
+                "\u{feff}# café\r\na = 1\r\nb = 2",
+                "\u{feff}# café\r\na = 3\r\nb = 2",
+                "\u{feff}# café\r\na = 1\r\nb = 4",
+            ],
+            "\u{feff}# café\r\na = 3\r\nb = 4",
+        ),
+        (["a = 1", "a = 2", "a = 1"], "a = 2"),
+    ] {
+        let (provider, registry, context) = setup_runtime(Runtime::Python, Behavior::Normal);
+        let result =
+            execute_native_operation(&python_request("merge3", &sources), &registry, &context)
+                .unwrap();
+        assert!(result.ok, "{:?}", result.diagnostics);
+        assert_eq!(result.output.as_deref(), Some(expected));
+        assert_eq!(result.verification.output_reparsed, Some(true));
+        assert_eq!(result.extra["output_parse"]["parsed"]["source"]["role"], "output");
+        assert_eq!(provider.calls.load(Ordering::SeqCst), 2);
+    }
+}
+
+#[test]
+#[ignore = "native Python/LibCST common-operation integration gate"]
+fn python_conflicts_and_failures_keep_real_decisions_and_source_roles() {
+    for (sources, expected) in [
+        (["a = 1", "a = 2", "a = 3"], "merge.edit_edit"),
+        (["anchor = 0\na = 1", "anchor = 0", "anchor = 0\na = 2"], "merge.delete_edit"),
+        (["anchor = 0", "anchor = 0\na = 1", "anchor = 0\na = 2"], "merge.add_add"),
+    ] {
+        let (_, registry, context) = setup_runtime(Runtime::Python, Behavior::Normal);
+        let result =
+            execute_native_operation(&python_request("merge3", &sources), &registry, &context)
+                .unwrap();
+        assert!(!result.ok);
+        assert!(result.output.is_none());
+        assert_eq!(code(&result), expected);
+    }
+    for (source, expected) in [
+        ("a = (", "parse.rejected"),
+        ("import os", "analysis.unsupported"),
+        ("K = 1\nK = 2", "analysis.unsupported"),
+        ("# ownerless", "analysis.unsupported"),
+    ] {
+        let (_, registry, context) = setup_runtime(Runtime::Python, Behavior::Normal);
+        let result =
+            execute_native_operation(&python_request("analyze", &[source]), &registry, &context)
+                .unwrap();
+        assert!(!result.ok);
+        assert_eq!(code(&result), expected);
+        let DiagnosticRecord::Canonical(diagnostic) = &result.diagnostics[0] else { panic!() };
+        assert_eq!(diagnostic.source_refs[0].role, SourceRole::Source);
+    }
+    let (_, registry, context) = setup_runtime(Runtime::Python, Behavior::Cancel);
+    let result =
+        execute_native_operation(&python_request("analyze", &["a = 1"]), &registry, &context)
+            .unwrap();
+    assert_eq!(code(&result), "execution.cancelled");
+    assert!(result.analysis.is_none());
 }
 
 #[test]

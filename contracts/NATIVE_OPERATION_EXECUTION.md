@@ -41,11 +41,25 @@ portable conformance remain open. The entry point does not authorize filesystem
 writes, package publication or default cutover.
 
 The explicit CI gate `cargo test -p structuredmerge-core --test native_operations
---locked -- --ignored` runs real Ruby/Psych subprocesses. It covers composition,
+--locked -- --ignored --skip python_` runs real Ruby/Psych subprocesses. It covers composition,
 whole-source output reparsing, conflict evidence, diff, malformed/unsupported
 inputs, unsupported requirements, cancellation, deadlines, native output faults,
 source-ID collisions and reserved result-field isolation. It is not an installed
-Ruby/Python artifact test; Python dispatcher coverage remains to be added.
+Ruby/Python artifact test.
+
+The Python CI matrix additionally installs LibCST 1.9.0 and runs
+`cargo test -p structuredmerge-core --test native_operations --locked python_ -- --ignored`.
+Local runs may select a prepared interpreter with `STRUCTUREDMERGE_NATIVE_PYTHON`.
+These tests supply real LibCST syntax through TreeHaver and exercise common
+analysis validation, NFKC logical identity, diff spans, composed/whole-source
+merges, output reparsing, conflicts and failures. BOM, CRLF and exact source
+bytes are retained. No Python-side merge, identity or owner decisions are used.
+
+The test-only `libcst_facts.py` shares syntax projection between this subprocess
+gate and installed-binding callbacks. Its subprocess JSON carries parser facts,
+not complete operations; it is not a new public transport or generated binding
+test. The installed-wheel gate still constructs actual generated DTOs and tests
+the existing public binding APIs separately.
 
 ## Native analysis and provenance
 
@@ -110,4 +124,4 @@ line-based blank-run augmenter remains for its existing callers. Native layout
 must not be reconstructed from that augmenter's blank-line counts. Common
 analysis rejects nonempty ownerless layout because document ownership is not
 implemented. Complete comment/token policy support, generic analysis validation,
-Python common-dispatch integration tests and generated analysis exports remain open.
+full runtime/platform coverage and generated analysis exports remain open.

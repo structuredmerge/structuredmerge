@@ -203,6 +203,8 @@
 
 - Execute bounded common analyze requests through TreeHaver and Rust family ownership, retaining native parse references, verified owner/layout evidence and explicit unsupported-policy failures without rendering output.
 
+- Exercise common analyze, diff2 and merge3 execution with real LibCST syntax in the Python CI matrix, sharing the syntax projector with installed-wheel tests and preserving Rust-owned decisions.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

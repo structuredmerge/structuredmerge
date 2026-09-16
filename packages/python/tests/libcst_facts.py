@@ -3,10 +3,10 @@ import bisect
 import json
 import libcst
 from libcst.metadata import MetadataWrapper, ByteSpanPositionProvider
-import structuredmerge_core as core
 
 
-def project(module, data):
+def project_facts(module, data):
+    """Parser facts shared by typed-binding tests and the Rust process gate."""
     # ByteSpanPositionProvider measures UTF-8 codegen, excluding a UTF-8 BOM.
     # Fail closed instead of silently changing coordinates for other encodings.
     data.decode("utf-8-sig")
@@ -20,7 +20,7 @@ def project(module, data):
 
     def point(offset):
         row = bisect.bisect_right(starts, offset) - 1
-        return core.SourcePoint(row=row, column=offset-starts[row])
+        return dict(row=row, column=offset-starts[row])
 
     def visit(node, parent=None):
         node_id = str(len(nodes))
@@ -40,8 +40,8 @@ def project(module, data):
             fields = [("target", node.target)]
         elif isinstance(node, libcst.Name):
             facts["value"] = node.value
-        children = [core.ChildEdge(node_id=visit(child, node_id), index=index,
-            field_name=field, extra={}) for index, (field, child) in enumerate(fields)]
+        children = [dict(node_id=visit(child, node_id), index=index,
+            field_name=field) for index, (field, child) in enumerate(fields)]
         if parent is None:
             start, end = 0, len(data)
         else:
@@ -50,20 +50,64 @@ def project(module, data):
             if end > len(data):
                 raise ValueError("native span exceeds exact source")
         kind = type(node).__name__
-        extensions = [core.NativeExtension(
+        extensions = [dict(
             schema="structuredmerge.extension/python-libcst/v1", namespace="python-libcst",
-            # Alef's Python Value field currently accepts JSON text. Only this
-            # namespaced extension payload is encoded, never the parse batch.
-            capabilities=[], payload=json.dumps(facts), extra={})] if facts else []
-        nodes[int(node_id)] = core.ParseNode(
-            id=node_id, type=kind, native_type=f"libcst.{kind}", role=core.NodeRole.STRUCTURAL,
+            capabilities=[], payload=facts)] if facts else []
+        nodes[int(node_id)] = dict(
+            id=node_id, type=kind, native_type=f"libcst.{kind}", role="structural",
             named=True, missing=False, has_error=False,
-            span=core.SourceSpan(range=core.ByteRange(start_byte=start, end_byte=end),
+            span=dict(range=dict(start_byte=start, end_byte=end),
                 start_point=point(start), end_point=point(end)),
             parent_id=parent, children=children, semantic_roles=[], unsupported_features=[],
-            extensions=extensions, metadata={}, extra={},
+            extensions=extensions, metadata={},
         )
         return node_id
 
     visit(wrapper.module)
     return nodes
+
+
+def project(module, data):
+    """Build the real generated DTOs for installed-binding callback tests."""
+    import structuredmerge_core as core
+
+    nodes = []
+    for fact in project_facts(module, data):
+        fact = dict(fact)
+        span = fact.pop("span")
+        children = [core.ChildEdge(**edge, extra={}) for edge in fact.pop("children")]
+        extensions = [core.NativeExtension(
+            schema=extension["schema"], namespace=extension["namespace"],
+            capabilities=extension["capabilities"], payload=json.dumps(extension["payload"]), extra={}
+        ) for extension in fact.pop("extensions")]
+        fact.pop("role")
+        nodes.append(core.ParseNode(**fact, role=core.NodeRole.STRUCTURAL,
+            span=core.SourceSpan(range=core.ByteRange(**span["range"]),
+                start_point=core.SourcePoint(**span["start_point"]),
+                end_point=core.SourcePoint(**span["end_point"])),
+            children=children, extensions=extensions, extra={}))
+    return nodes
+
+
+def process_request(request):
+    """Test-only parse subprocess protocol, not a public operation transport."""
+    source = request["source"]
+    data = bytes(source["bytes"])
+    nodes, diagnostics = [], []
+    try:
+        module = libcst.parse_module(data)
+        if module.bytes != data:
+            raise ValueError("LibCST changed exact source bytes")
+        nodes = project_facts(module, data)
+    except libcst.ParserSyntaxError as error:
+        diagnostics.append(dict(id="libcst.syntax", severity="error", category="parse_error",
+            code="libcst.syntax", message=str(error), source_role=source["descriptor"]["role"],
+            span=None, node_id=None, blocking=True, metadata={}))
+    return dict(request_id=request["request_id"], source=source["descriptor"], ok=not diagnostics,
+        root_id="0" if nodes else None, nodes=nodes, comments=[], diagnostics=diagnostics,
+        extensions=[], metadata={})
+
+
+if __name__ == "__main__":
+    import sys
+    json.dump([process_request(request) for request in json.load(sys.stdin)], sys.stdout)

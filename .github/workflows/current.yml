@@ -38,8 +38,10 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ matrix.python }}
-      - name: Install declared wheel build backend
-        run: python -m pip install 'maturin>=1,<2'
+      - name: Install declared wheel build backend and native parser
+        run: python -m pip install 'maturin>=1,<2' 'libcst==1.9.0'
+      - name: Verify common operation execution with native LibCST
+        run: cargo test -p structuredmerge-core --test native_operations --locked python_ -- --ignored
       - name: Verify archive audit rejects invalid artifacts
         run: python -m unittest discover -s workspace-scripts/tests -v
       - name: Build checked-in generated core binding
@@ -97,7 +99,7 @@ jobs:
       - name: Verify native Psych facts drive Rust merge decisions
         run: mise exec -- cargo test -p yaml-merge --test typed_psych_merge --locked -- --ignored
       - name: Verify common operation execution with native Psych
-        run: mise exec -- cargo test -p structuredmerge-core --test native_operations --locked -- --ignored
+        run: mise exec -- cargo test -p structuredmerge-core --test native_operations --locked -- --ignored --skip python_
 
   ruby-bindings:
     name: Ruby bindings (${{ matrix.platform }}, Ruby ${{ matrix.ruby }})
