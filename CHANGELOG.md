@@ -185,6 +185,8 @@
 
 - Add typed Rust operation-request normalization with role-keyed sources, operation policies, preserved extensions, verified local content resolution, and shared batch limits.
 
+- Add request-correlated Rust operation-result checks for semantic roles, explicit selection, contradictory outcomes, source evidence, preservation claims, and batch identity.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

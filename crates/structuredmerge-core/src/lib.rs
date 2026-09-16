@@ -22,6 +22,7 @@ pub use ast_merge::owner_diff::{DiffSourceRegion, OwnerChange, OwnerChangeKind, 
 pub use diff::*;
 mod edits;
 pub mod operation;
+pub mod operation_result;
 pub use edits::*;
 mod structural;
 pub use ast_crispr::{CrisprBatchOperationReport, CrisprOperationReport};

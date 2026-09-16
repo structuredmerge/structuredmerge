@@ -44,8 +44,9 @@ binary/multibyte layout, explicit resolver failures, selection separation,
 batch ordering/isolation/limits, and duplicate serialized role keys.
 
 This is a Rust normalization component, not full Slice 1025 conformance.
-The common result envelope, operation execution/registry negotiation,
-portable failure diagnostic projection, cancellation/deadline integration,
+The result-side structural checks are described in
+[OPERATION_RESULT_ENVELOPES.md](OPERATION_RESULT_ENVELOPES.md). Operation
+execution/registry negotiation, portable failure diagnostic projection, cancellation/deadline integration,
 and generated binding/consumer adoption remain open. Existing `OperationInputs`
 is an earlier minimal input validator, not the transport contract. The native
 diff and merge development APIs likewise remain separate until they execute
