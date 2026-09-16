@@ -195,6 +195,8 @@
 
 - Execute explicit native diff2 and merge3 profiles through the common Rust operation contract, retaining parser and decision evidence, verifying selected outputs, and rejecting unsupported requirements without fallback.
 
+- Populate common native diff change spans from verified source bytes and digests, preserving UTF-8 byte coordinates and leaving absent revisions without fabricated ranges.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

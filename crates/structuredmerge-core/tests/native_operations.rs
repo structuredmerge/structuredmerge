@@ -226,6 +226,45 @@ fn diff_has_both_roles_and_preserves_exact_changes_and_layout_without_output() {
 
 #[test]
 #[ignore = "native Ruby/Psych common-operation integration gate"]
+fn diff_spans_use_exact_utf8_bytes_and_do_not_invent_absent_revision_ranges() {
+    let (_, registry, context) = setup(Behavior::Normal);
+    let request = request(wire(
+        "diff2",
+        &["# café\r\na: ancien\r\ngone: oui\r\n", "# café\r\na: été\r\nnew: oui\r\n"],
+    ));
+    let result = execute_native_operation(&request, &registry, &context).unwrap();
+    assert!(result.ok);
+    assert_eq!(result.changes.len(), 3);
+    let edited = &result.changes[0];
+    assert_eq!(edited.classification, "edited");
+    assert_eq!(edited.source_spans.len(), 2);
+    let after = &edited.source_spans[&SourceRole::After];
+    assert_eq!(after.range.start_byte, "# café\r\n".len());
+    assert_eq!((after.start_point.row, after.start_point.column), (1, 0));
+    assert_eq!((after.end_point.row, after.end_point.column), (1, "a: été".len()));
+    for change in &result.changes {
+        for (role, span) in &change.source_spans {
+            let key = if *role == SourceRole::Before { "before" } else { "after" };
+            assert_eq!(
+                serde_json::to_value(&span.range).unwrap(),
+                change.role_states[key]["range"]
+            );
+        }
+    }
+    assert_eq!(result.changes[1].classification, "deleted");
+    assert!(result.changes[1].source_spans.contains_key(&SourceRole::Before));
+    assert!(!result.changes[1].source_spans.contains_key(&SourceRole::After));
+    assert_eq!(result.changes[2].classification, "added");
+    assert!(!result.changes[2].source_spans.contains_key(&SourceRole::Before));
+    assert!(result.changes[2].source_spans.contains_key(&SourceRole::After));
+    result.validate_against(&request).unwrap();
+    let mut corrupt = result;
+    corrupt.changes[0].source_spans.get_mut(&SourceRole::After).unwrap().end_point.column -= 1;
+    assert!(corrupt.validate_against(&request).is_err());
+}
+
+#[test]
+#[ignore = "native Ruby/Psych common-operation integration gate"]
 fn unsupported_operations_policies_and_selection_never_invoke_the_parser() {
     let (provider, registry, context) = setup(Behavior::Normal);
     let mut cases = vec![wire("analyze", &["a: one"]), wire("merge2", &["a: one", "a: two"])];

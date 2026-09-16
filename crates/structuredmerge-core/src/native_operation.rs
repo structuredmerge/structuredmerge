@@ -21,6 +21,36 @@ use tree_haver::service::{
 
 type Analyzer = fn(&ParsedResult) -> Result<SourcePreservingOwnerDocument, String>;
 
+fn diff_span(
+    region: &ast_merge::owner_diff::DiffSourceRegion,
+    request: &ValidatedOperationRequest,
+) -> Result<ResultSpan, CoreError> {
+    let invalid = || CoreError {
+        code: "operation.invalid_evidence".into(),
+        message: "diff source region does not match the validated request".into(),
+    };
+    let input = request.request().sources.get(&region.source_role).ok_or_else(invalid)?;
+    if input.source_id != region.source_id {
+        return Err(invalid());
+    }
+    let document = request.sources().get(&region.source_id).map_err(|_| invalid())?;
+    if document.range_digest(region.range.clone()).map_err(|_| invalid())? != region.sha256 {
+        return Err(invalid());
+    }
+    let start = document.point(region.range.start_byte).map_err(|_| invalid())?;
+    let end = document.point(region.range.end_byte).map_err(|_| invalid())?;
+    Ok(ResultSpan {
+        range: ResultRange {
+            start_byte: region.range.start_byte,
+            end_byte: region.range.end_byte,
+            extra: Metadata::new(),
+        },
+        start_point: ResultPoint { row: start.row, column: start.column, extra: Metadata::new() },
+        end_point: ResultPoint { row: end.row, column: end.column, extra: Metadata::new() },
+        extra: Metadata::new(),
+    })
+}
+
 fn empty_result(request: &ValidatedOperationRequest) -> OperationResult {
     let input = request.request();
     OperationResult {
@@ -380,6 +410,10 @@ pub fn execute_native_operation(
                 result.verification.consumed_source_roles =
                     Some(input.operation.kind().source_roles().to_vec());
                 for change in &execution.diff.changes {
+                    let mut source_spans = std::collections::BTreeMap::new();
+                    for region in [&change.before, &change.after].into_iter().flatten() {
+                        source_spans.insert(region.source_role, diff_span(region, request)?);
+                    }
                     result.changes.push(ResultChange {
                         id: change.id.clone(),
                         classification: match change.kind {
@@ -395,7 +429,7 @@ pub fn execute_native_operation(
                             ("after".into(), serde_json::to_value(&change.after).unwrap()),
                         ]
                         .into(),
-                        source_spans: Default::default(),
+                        source_spans,
                         metadata: Metadata::new(),
                         extra: Metadata::new(),
                     });
@@ -607,4 +641,58 @@ fn reparse_selected_output(
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod span_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn diff_projection_rejects_wrong_identity_digest_and_out_of_bounds_regions() {
+        let text = "a: été\r\n";
+        let digest = crate::source_input(
+            "before".into(),
+            SourceRole::Before,
+            SourceEncoding::Utf8,
+            text.as_bytes().to_vec(),
+        )
+        .unwrap()
+        .descriptor
+        .sha256;
+        let request: crate::operation::OperationRequest = serde_json::from_value(json!({
+            "schema": crate::OPERATION_SCHEMA, "request_id": "span-test", "operation": "diff2",
+            "provider_selection": {"family": "yaml", "required_capabilities": []},
+            "parser_selection": {"preference": [], "required_capabilities": []},
+            "policy": {}, "extensions": [], "metadata": {},
+            "sources": {
+                "before": {"source_id": "before", "role": "before", "content": text,
+                    "encoding": "utf-8", "byte_length": text.len(), "sha256": digest},
+                "after": {"source_id": "after", "role": "after", "content": text,
+                    "encoding": "utf-8", "byte_length": text.len(), "sha256": digest}
+            }
+        }))
+        .unwrap();
+        let request = request.validate(1024, |_, _| panic!()).unwrap();
+        let region = ast_merge::owner_diff::DiffSourceRegion {
+            source_id: "before".into(),
+            source_role: SourceRole::Before,
+            range: crate::ByteRange { start_byte: 0, end_byte: text.len() },
+            sha256: digest,
+        };
+        let span = diff_span(&region, &request).unwrap();
+        assert_eq!((span.end_point.row, span.end_point.column), (1, 0));
+        let mut invalid = region.clone();
+        invalid.source_id = "after".into();
+        assert!(diff_span(&invalid, &request).is_err());
+        invalid = region.clone();
+        invalid.source_role = SourceRole::After;
+        assert!(diff_span(&invalid, &request).is_err());
+        invalid = region.clone();
+        invalid.sha256 = "0".repeat(64);
+        assert!(diff_span(&invalid, &request).is_err());
+        invalid = region;
+        invalid.range.end_byte += 1;
+        assert!(diff_span(&invalid, &request).is_err());
+    }
 }

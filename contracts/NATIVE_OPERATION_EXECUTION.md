@@ -21,7 +21,11 @@ facts and selection evidence. Public parser-service errors use stable codes and
 do not copy native exception messages.
 
 Diff results retain both revision roles, exact owner changes, ordering and layout
-evidence, without merged output. Merge conflicts use executed Rust decisions and
+evidence, without merged output. Each present changed region also supplies a typed
+`source_spans` entry, with source identity and digest checked against the immutable
+request and byte-oriented points computed from it. Absent revisions have no
+invented span; UTF-8 columns count bytes and CRLF retains its original bytes.
+Merge conflicts use executed Rust decisions and
 the canonical conflict projector. Clean merges retain verified source segments
 and actual output parse evidence. Even a whole-source selection receives a fresh
 native parse and owner comparison; reusing an input parse is not called reparsing.
@@ -31,7 +35,7 @@ deadline expiry discards completed output before returning a failure result.
 `exact-source-partition` preservation and structural equivalence refer only to
 the implemented owner profile. They are not proofs of general language semantic
 equivalence. Marker options are preserved but no conflict markers are emitted.
-Complete common change/span projection, native diagnostic projection, provider
+Complete common merge change/span projection, native diagnostic projection, provider
 registry/policy coverage, analyze/merge2, generated binding adoption and full
 portable conformance remain open. The entry point does not authorize filesystem
 writes, package publication or default cutover.
