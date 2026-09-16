@@ -20,6 +20,8 @@ enum Behavior {
     Duplicate,
     WrongSource,
     Cancel,
+    CancelFault,
+    CancelPanic,
 }
 
 struct TestParser {
@@ -82,6 +84,17 @@ impl ParserProvider for TestParser {
             registry.unregister(&self.descriptor.id, generation).unwrap();
         }
         match self.behavior {
+            Behavior::CancelFault => {
+                context.cancelled.store(true, Ordering::Release);
+                return Err(ProviderFault {
+                    code: "test.late_failure".into(),
+                    message: "cancelled callback failed".into(),
+                });
+            }
+            Behavior::CancelPanic => {
+                context.cancelled.store(true, Ordering::Release);
+                panic!("cancelled callback panicked");
+            }
             Behavior::Fault => {
                 return Err(ProviderFault {
                     code: "test.failure".into(),
@@ -413,4 +426,24 @@ fn cancellation_and_deadline_reject_output_without_abandoning_callback() {
         Err(ServiceError::Cancelled)
     ));
     assert_eq!(parser.calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn cancellation_wins_over_faults_and_contained_panics_returned_by_the_callback() {
+    for behavior in [Behavior::CancelFault, Behavior::CancelPanic] {
+        let registry = ParserRegistry::default();
+        let mut parser = TestParser::new("native", 0);
+        parser.behavior = behavior;
+        let parser = Arc::new(parser);
+        registry.register(parser.clone()).unwrap();
+        assert!(matches!(
+            TreeHaverParseService::default().parse_batch(
+                vec![request("a")],
+                &registry.snapshot().unwrap(),
+                &context()
+            ),
+            Err(ServiceError::Cancelled)
+        ));
+        assert_eq!(parser.calls.load(Ordering::SeqCst), 1);
+    }
 }

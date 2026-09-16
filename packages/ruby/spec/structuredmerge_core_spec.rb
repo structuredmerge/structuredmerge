@@ -145,6 +145,15 @@ RSpec.describe StructuredmergeCore do
     end
     expect { described_class.merge_yaml_mapping(requests, limits.call(100)) }.to raise_error(RuntimeError, /execution\.deadline_exceeded:/)
     expect(host.calls).to eq(4)
+    host.define_singleton_method(:parse_batch) do |request|
+      super(request)
+      sleep 0.15
+      raise "native failure after deadline"
+    end
+    %i[parse_sources merge_yaml_mapping].each do |operation|
+      expect { described_class.public_send(operation, requests, limits.call(100)) }.to raise_error(RuntimeError, /execution\.deadline_exceeded:/)
+    end
+    expect(host.calls).to eq(6)
     host.singleton_class.remove_method(:parse_batch)
     expect(described_class.merge_yaml_mapping(requests, limits.call(nil)).output).to eq("a: ours\nb: theirs\n")
   ensure
@@ -196,6 +205,22 @@ RSpec.describe StructuredmergeCore do
     fresh = described_class.create_operation_control
     expect(fresh.is_cancelled).to be(false)
     expect(described_class.merge_yaml_mapping_controlled(requests, limits, fresh).output).to eq("a: ours\nb: theirs\n")
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "does not let a late callback failure override cancellation" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    requests = merge_requests(["a: one\n"] * 3)
+    %i[parse_sources_controlled merge_yaml_mapping_controlled].each do |operation|
+      control = described_class.create_operation_control
+      host.define_singleton_method(:parse_batch) do |_request|
+        control.cancel
+        raise "native failure after cancellation"
+      end
+      expect { described_class.public_send(operation, requests, merge_limits, control) }.to raise_error(RuntimeError, /execution\.cancelled:/)
+    end
   ensure
     described_class.unregister_parser_host("ruby.typed.psych")
   end

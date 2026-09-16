@@ -213,6 +213,15 @@ class TypedParserHostTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, r"execution\.deadline_exceeded:"):
             core.merge_python_declarations(requests, limits(100))
         self.assertEqual(self.host.calls, 4)
+        def late_fault(request):
+            original(request)
+            time.sleep(0.15)
+            raise RuntimeError("native failure after deadline")
+        self.host.parse_batch = late_fault
+        for operation in (core.parse_sources, core.merge_python_declarations):
+            with self.assertRaisesRegex(RuntimeError, r"execution\.deadline_exceeded:"):
+                operation(requests, limits(100))
+        self.assertEqual(self.host.calls, 6)
         self.host.parse_batch = original
         self.assertEqual(core.merge_python_declarations(requests, limits(None)).output, "a = 3\nb = 4\n")
 
@@ -257,6 +266,18 @@ class TypedParserHostTest(unittest.TestCase):
         fresh = core.create_operation_control()
         self.assertFalse(fresh.is_cancelled())
         self.assertEqual(core.merge_python_declarations_controlled(requests, limits, fresh).output, "a = 3\nb = 4\n")
+
+    def test_cancelled_callback_failure_does_not_override_operation_control(self):
+        requests = self.merge_requests(["a = 1\n"] * 3)
+        limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+        for operation in (core.parse_sources_controlled, core.merge_python_declarations_controlled):
+            control = core.create_operation_control()
+            def fail_after_cancel(request):
+                control.cancel()
+                raise RuntimeError("native failure after cancellation")
+            self.host.parse_batch = fail_after_cancel
+            with self.assertRaisesRegex(RuntimeError, r"execution\.cancelled:"):
+                operation(requests, limits, control)
 
     def test_native_profiles_declare_scope_without_default_approval(self):
         profiles = core.native_merge_profiles()

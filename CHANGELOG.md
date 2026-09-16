@@ -204,3 +204,5 @@
 - Reject duplicate source IDs across typed parser batches before probes or parsing, including distinct requests with identical bytes or different merge roles.
 
 - Retain independently validated merge input source descriptors on parser selection and callback failures while withholding incomplete parse results and output.
+
+- Check cancellation and deadlines before classifying native parser callback faults or contained panics, consistently with parser probing.

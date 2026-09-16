@@ -511,12 +511,18 @@ impl ParseService for TreeHaverParseService {
             context.check()?;
             let mut expected: BTreeSet<_> =
                 requests.iter().map(|request| request.request_id.clone()).collect();
-            let outputs = catch_unwind(AssertUnwindSafe(|| {
+            let callback = catch_unwind(AssertUnwindSafe(|| {
                 registration.provider.parse_batch(requests, context)
-            }))
-            .map_err(|_| ServiceError::ProviderPanic { backend_id: backend_id.clone() })?
-            .map_err(|fault| ServiceError::Provider { backend_id: backend_id.clone(), fault })?;
+            }));
+            // Controls apply to every callback completion, including faults and
+            // contained panics, just as they do after provider probing.
             context.check()?;
+            let outputs = callback
+                .map_err(|_| ServiceError::ProviderPanic { backend_id: backend_id.clone() })?
+                .map_err(|fault| ServiceError::Provider {
+                    backend_id: backend_id.clone(),
+                    fault,
+                })?;
             if outputs.len() != expected.len() {
                 return Err(ServiceError::InvalidBatch { backend_id });
             }

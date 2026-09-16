@@ -38,9 +38,11 @@ clock deadline is rejected as `request.invalid`, never treated as unlimited.
 Installed tests cover zero-budget parse/merge calls, successful native input
 results returned after expiry, and successful output-verification parses returned
 after expiry. Late successful results are discarded with
-`execution.deadline_exceeded`, rather than exposing a clean result. A callback
-failure may retain its provider-failure classification before the next deadline
-checkpoint; deadline expiry is not a universal error-precedence override.
+`execution.deadline_exceeded`, rather than exposing a clean result. Every probe
+and parse callback completion checks operation controls before classifying its
+return, including faults and contained Rust panics. A late callback fault cannot
+override cancellation or an expired deadline. Pre-dispatch request validation
+errors retain their existing precedence; this is not universal error masking.
 
 The budget is cooperative, not preemptive. A blocked native callback must return
 before Rust can observe expiry; this API does not guarantee a wall-clock return
@@ -73,8 +75,9 @@ opt-in, the installed cross-thread test correctly fails on PyO3's unsendable
 guard; do not weaken that test or bypass the guard.
 
 Like deadlines, cancellation is observed at Rust checkpoints, not by forcibly
-interrupting native code. A callback fault can be classified before the next
-checkpoint. Cancellation does not shut down the registry or unregister a parser.
+interrupting native code. Callback completion observes cancellation before
+classifying the returned value or error. Cancellation does not shut down the
+registry or unregister a parser.
 
 Run `workspace-scripts/check_core_ruby_artifact.rb` through the Ruby package's
 bundle and `workspace-scripts/check_core_python_artifact.py WHEEL` to execute these
