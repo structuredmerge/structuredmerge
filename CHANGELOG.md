@@ -173,6 +173,8 @@
 
 - Expose typed structural limit constraints and evaluation reports in generated Ruby/Python core APIs, retaining exactly-one defaults, empty conjunctions, and all six comparison operators.
 
+- Expose the historical ast-crispr package boundary as a typed core report while retaining its fixture-compatible serialization and separating metadata from runtime capability claims.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

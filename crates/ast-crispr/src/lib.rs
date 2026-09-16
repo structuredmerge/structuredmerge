@@ -642,57 +642,95 @@ pub fn ast_merge_contract_anchor() -> &'static str {
     std::any::type_name::<ast_merge::StructuredEditCrisprExampleParityReport>()
 }
 
-pub fn boundary_report() -> Value {
-    json!({
-        "package": PACKAGE_NAME,
-        "layer": "structural_edit_tool",
-        "status": "active_thin_package",
-        "base_contract_package": "ast-merge",
-        "relationship": {
-            "ast_merge": [
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CrisprBoundaryRelationships {
+    pub ast_merge: Vec<String>,
+    pub ast_crispr: Vec<String>,
+    pub provider_packages: Vec<String>,
+    pub ast_template: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CrisprBoundaryImplementation {
+    pub language: String,
+    pub package_name: String,
+    #[serde(rename = "import", skip_serializing_if = "Option::is_none")]
+    pub import_path: Option<String>,
+    #[serde(rename = "require", skip_serializing_if = "Option::is_none")]
+    pub require_path: Option<String>,
+    #[serde(rename = "crate", skip_serializing_if = "Option::is_none")]
+    pub crate_name: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CrisprBoundaryMetadata {
+    pub source: String,
+    pub decision: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CrisprBoundaryReport {
+    pub package: String,
+    pub layer: String,
+    pub status: String,
+    pub base_contract_package: String,
+    pub relationship: CrisprBoundaryRelationships,
+    pub implementations: Vec<CrisprBoundaryImplementation>,
+    pub initial_exports: Vec<String>,
+    pub future_exports: Vec<String>,
+    pub metadata: CrisprBoundaryMetadata,
+}
+
+/// Historical package-boundary contract, not runtime capability negotiation.
+pub fn typed_boundary_report() -> CrisprBoundaryReport {
+    let strings = |items: &[&str]| items.iter().map(|value| (*value).to_owned()).collect();
+    CrisprBoundaryReport {
+        package: PACKAGE_NAME.into(),
+        layer: "structural_edit_tool".into(),
+        status: "active_thin_package".into(),
+        base_contract_package: "ast-merge".into(),
+        relationship: CrisprBoundaryRelationships {
+            ast_merge: strings(&[
                 "owns portable structured-edit envelope contracts",
                 "owns transport, report, replay, review, and provider handoff vocabulary",
                 "remains the substrate for provider-neutral fixtures"
-            ],
-            "ast_crispr": [
+            ]),
+            ast_crispr: strings(&[
                 "owns ergonomic structural-edit selectors, profiles, and operation helpers",
                 "wraps ast-merge contracts instead of forking them",
                 "may grow compatibility helpers for old ast-crispr concepts after fixture-backed review"
-            ],
-            "provider_packages": [
+            ]),
+            provider_packages: strings(&[
                 "own parser-specific execution and metadata projection",
                 "may expose provider adapters consumed by ast-crispr",
                 "keep raw parser details behind normalized tree metadata or semantic sidecars"
-            ],
-            "ast_template": [
+            ]),
+            ast_template: strings(&[
                 "orchestrates template and directory workflows",
                 "invokes structural edits through ast-merge or ast-crispr registries/envelopes",
                 "does not own parser-specific selectors"
-            ]
+            ]),
         },
-        "implementations": [
-            {
-                "language": "go",
-                "package_name": "astcrispr",
-                "import": "github.com/structuredmerge/structuredmerge-go/astcrispr"
+        implementations: vec![
+            CrisprBoundaryImplementation {
+                language: "go".into(), package_name: "astcrispr".into(),
+                import_path: Some("github.com/structuredmerge/structuredmerge-go/astcrispr".into()),
+                require_path: None, crate_name: None,
             },
-            {
-                "language": "ruby",
-                "package_name": "ast-crispr",
-                "require": "ast/crispr"
+            CrisprBoundaryImplementation {
+                language: "ruby".into(), package_name: "ast-crispr".into(),
+                require_path: Some("ast/crispr".into()), import_path: None, crate_name: None,
             },
-            {
-                "language": "rust",
-                "package_name": "ast-crispr",
-                "crate": "ast_crispr"
+            CrisprBoundaryImplementation {
+                language: "rust".into(), package_name: "ast-crispr".into(),
+                crate_name: Some("ast_crispr".into()), import_path: None, require_path: None,
             },
-            {
-                "language": "typescript",
-                "package_name": "@structuredmerge/ast-crispr",
-                "import": "@structuredmerge/ast-crispr"
-            }
+            CrisprBoundaryImplementation {
+                language: "typescript".into(), package_name: "@structuredmerge/ast-crispr".into(),
+                import_path: Some("@structuredmerge/ast-crispr".into()), require_path: None, crate_name: None,
+            },
         ],
-        "initial_exports": [
+        initial_exports: strings(&[
             "package identity",
             "boundary report",
             "ast-merge structured-edit contract anchor",
@@ -703,13 +741,17 @@ pub fn boundary_report() -> Value {
             "operation profile helpers",
             "replace/delete/insert/move helpers",
             "batch operation helpers"
-        ],
-        "future_exports": [],
-        "metadata": {
-            "source": "legacy_crispr_reference",
-            "decision": "Keep ast-merge as the base contract layer and revive ast-crispr as a separate thin package in every implementation."
-        }
-    })
+        ]),
+        future_exports: vec![],
+        metadata: CrisprBoundaryMetadata {
+            source: "legacy_crispr_reference".into(),
+            decision: "Keep ast-merge as the base contract layer and revive ast-crispr as a separate thin package in every implementation.".into(),
+        },
+    }
+}
+
+pub fn boundary_report() -> Value {
+    json!(typed_boundary_report())
 }
 
 #[cfg(test)]

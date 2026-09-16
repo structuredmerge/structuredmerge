@@ -20,6 +20,10 @@ mod edits;
 pub use edits::*;
 mod structural;
 pub use ast_crispr::{CrisprBatchOperationReport, CrisprOperationReport};
+pub use ast_crispr::{
+    CrisprBoundaryImplementation, CrisprBoundaryMetadata, CrisprBoundaryRelationships,
+    CrisprBoundaryReport,
+};
 pub use ast_crispr::{CrisprDestinationReport, CrisprMatchReport, CrisprSelectionReport};
 pub use ast_crispr::{CrisprLimitConstraint, CrisprLimitOperator, CrisprLimitReport};
 pub use structural::*;

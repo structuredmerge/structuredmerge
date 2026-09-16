@@ -15,6 +15,11 @@ RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
   it "reports structural operations as typed ordered profiles without selecting source" do
+    boundary = described_class.report_structural_boundary
+    expect(boundary.package).to eq("ast-crispr")
+    expect(boundary.metadata.source).to eq("legacy_crispr_reference")
+    expect(boundary.implementations.map(&:language)).to eq(%w[go ruby rust typescript])
+    expect(boundary.relationship.ast_merge).not_to be_empty
     limit = described_class.report_structural_limit(described_class::CrisprLimitRequest.new(constraints: nil, counts: [0, 1, 2]))
     expect(limit.description).to eq("== 1")
     expect(limit.allowed).to eq([false, true, false])

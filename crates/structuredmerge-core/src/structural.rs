@@ -1,6 +1,12 @@
 //! Structural profile introspection only; no AST selection or source mutation.
 use serde::{Deserialize, Serialize};
 
+/// Historical package responsibilities and coordinates, not supported-runtime
+/// declarations or a capability/default-authority manifest.
+pub fn report_structural_boundary() -> crate::CrisprBoundaryReport {
+    ast_crispr::typed_boundary_report()
+}
+
 /// Describe and evaluate a conjunction of count constraints, not a selector.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CrisprLimitRequest {

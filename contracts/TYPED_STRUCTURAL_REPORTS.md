@@ -36,6 +36,14 @@ logical AND in input order, including contradictory constraints. This evaluates
 counts only; it does not select or count AST nodes. Legacy expression parsing
 uses the same comparison predicates.
 
-Boundary and template/session report contracts remain open, as does
+`report_structural_boundary` returns the historical package-boundary contract
+as typed relationships, implementation coordinates and metadata. Its serialized
+shape remains exactly the existing Slice 916 fixture, including omission of
+irrelevant import/require/crate keys. The listed languages and status are
+historical contract metadata, not runtime availability, supported-platform,
+publication or default-authority claims. Python constructor names escape the
+wire key `crate` as `crate_`; the DTO attribute remains `crate_name`.
+
+Template/session report contracts remain open, as does
 the Ruby ast-crispr consumer cutover. Legacy report regression
 tests remain and pass; the facade does not depend on the legacy host crate.

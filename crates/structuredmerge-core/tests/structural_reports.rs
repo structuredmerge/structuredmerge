@@ -1,6 +1,20 @@
 use structuredmerge_core::{CrisprOperationRequest, report_structural_operations};
 
 #[test]
+fn typed_boundary_preserves_the_historical_fixture_without_null_transport_keys() {
+    let report = structuredmerge_core::report_structural_boundary();
+    assert_eq!(report.package, "ast-crispr");
+    assert_eq!(report.metadata.source, "legacy_crispr_reference");
+    let ruby = report.implementations.iter().find(|item| item.language == "ruby").unwrap();
+    assert_eq!(ruby.require_path.as_deref(), Some("ast/crispr"));
+    assert!(ruby.import_path.is_none());
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/diagnostics/slice-916-ast-crispr-package-boundary/ast-crispr-package-boundary.json"
+    )).unwrap();
+    assert_eq!(serde_json::to_value(report).unwrap(), fixture["boundary"]);
+}
+
+#[test]
 fn typed_limits_preserve_defaults_conjunctions_and_all_comparisons() {
     use structuredmerge_core::*;
     let report_structural_limit = |constraints, counts| {

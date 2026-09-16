@@ -103,6 +103,13 @@ class TypedParserHostTest(unittest.TestCase):
         self.assertEqual(self.host.calls, 0)
 
     def test_structural_operation_reports_are_typed_and_preserve_unknowns(self):
+        boundary = core.report_structural_boundary()
+        self.assertEqual(boundary.package, "ast-crispr")
+        self.assertEqual(boundary.metadata.source, "legacy_crispr_reference")
+        self.assertEqual([item.language for item in boundary.implementations], ["go", "ruby", "rust", "typescript"])
+        self.assertTrue(boundary.relationship.ast_merge)
+        coordinate = core.CrisprBoundaryImplementation(language="rust", package_name="ast-crispr", crate_="ast_crispr")
+        self.assertEqual(coordinate.crate_name, "ast_crispr")
         limit = core.report_structural_limit(core.CrisprLimitRequest(constraints=None, counts=[0, 1, 2]))
         self.assertEqual(limit.description, "== 1")
         self.assertEqual(limit.allowed, [False, True, False])
