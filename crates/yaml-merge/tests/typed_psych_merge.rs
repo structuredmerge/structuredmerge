@@ -470,3 +470,73 @@ fn diff_checks_family_analysis_against_validated_sources() {
     assert_eq!(parses.len(), 2);
     assert_eq!(sources.len(), 2);
 }
+
+#[test]
+#[ignore = "native Ruby/Psych integration gate"]
+fn native_execution_retains_the_actual_owner_classification_decisions() {
+    use ast_merge::OwnerDecisionKind as D;
+    for (sources, expected) in [
+        (
+            ["anchor: kept\na: one\n", "anchor: kept\na: ours\n", "anchor: kept\na: theirs\n"],
+            D::ConflictEditEdit,
+        ),
+        (
+            ["anchor: kept\na: one\n", "anchor: kept\n", "anchor: kept\na: theirs\n"],
+            D::ConflictDeleteModify,
+        ),
+        (
+            ["anchor: kept\n", "anchor: kept\na: ours\n", "anchor: kept\na: theirs\n"],
+            D::ConflictAddAdd,
+        ),
+    ] {
+        let (_, snapshot, context) = setup();
+        let result = ast_merge::typed_merge::merge_native_sources_with_evidence(
+            "yaml",
+            requests(sources),
+            &TreeHaverParseService::default(),
+            &snapshot,
+            &context,
+            yaml_merge::typed::mapping_owners,
+        )
+        .unwrap();
+        let evidence = result.rendered.classification.unwrap();
+        assert!(evidence.whole_source_selection.is_none());
+        let decision =
+            evidence.decisions.iter().find(|decision| decision.conflict_id.is_some()).unwrap();
+        assert_eq!(decision.kind, expected);
+        assert_eq!(
+            decision.conflict_id.as_ref().unwrap(),
+            &result.rendered.result.conflicts[0].conflict_id
+        );
+        assert_eq!(decision.alternatives, result.rendered.result.conflicts[0].alternatives);
+        assert_eq!(result.input_parses.len(), 3);
+        assert!(result.output_parse.is_none());
+        assert!(result.rendered.result.output.is_none());
+    }
+}
+
+#[test]
+#[ignore = "native Ruby/Psych integration gate"]
+fn merge_rejects_family_analysis_that_changes_validated_input_bytes() {
+    fn stale(_: &ParsedResult) -> Result<ast_merge::SourcePreservingOwnerDocument, String> {
+        Ok(ast_merge::SourcePreservingOwnerDocument { source: "stale".into(), owners: vec![] })
+    }
+    let (_, snapshot, context) = setup();
+    let result = ast_merge::typed_merge::merge_native_sources_with_evidence(
+        "yaml",
+        requests(["a: base", "a: ours", "a: theirs"]),
+        &TreeHaverParseService::default(),
+        &snapshot,
+        &context,
+        stale,
+    );
+    let Err(MappingMergeError::AnalysisRejected { failures, parses, sources }) = result else {
+        panic!("expected stale analysis rejection before classification")
+    };
+    assert_eq!(
+        failures.iter().map(|failure| failure.source_role).collect::<Vec<_>>(),
+        vec![SourceRole::Base, SourceRole::Ours, SourceRole::Theirs]
+    );
+    assert_eq!(parses.len(), 3);
+    assert_eq!(sources.len(), 3);
+}

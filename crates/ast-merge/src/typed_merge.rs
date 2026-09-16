@@ -128,7 +128,21 @@ pub fn merge_native_sources_with_evidence(
     for result in &parsed {
         match analyze(result) {
             Ok(document) => {
-                documents.insert(result.source.descriptor().role, document);
+                let checked = if document.source.as_bytes() != result.source.bytes() {
+                    Err("family analysis changed the validated source bytes".into())
+                } else {
+                    document.validate("input")
+                };
+                match checked {
+                    Ok(()) => {
+                        documents.insert(result.source.descriptor().role, document);
+                    }
+                    Err(message) => failures.push(NativeAnalysisFailure {
+                        source_id: result.source.descriptor().source_id.clone(),
+                        source_role: result.source.descriptor().role,
+                        message,
+                    }),
+                }
             }
             Err(message) => failures.push(NativeAnalysisFailure {
                 source_id: result.source.descriptor().source_id.clone(),

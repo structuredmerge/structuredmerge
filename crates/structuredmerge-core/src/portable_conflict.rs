@@ -225,7 +225,7 @@ pub struct ResolutionAuthorization {
     pub resolver: String,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ConflictEvidence {
     pub decisions: BTreeSet<String>,
     pub render_fragments: BTreeSet<String>,

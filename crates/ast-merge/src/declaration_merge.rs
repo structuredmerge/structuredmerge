@@ -1,4 +1,5 @@
 use crate::byte_evidence::{SourceByteSegment, append_source_segment, verify_source_byte_segments};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tree_haver::ByteRange;
 
@@ -80,6 +81,37 @@ pub fn merge_source_preserving_owners(
 pub struct SourcePreservingMergeEvidence {
     pub result: ThreeWayMergeResult<String>,
     pub source_segments: Vec<SourceByteSegment>,
+    pub classification: Option<OwnerMergeClassification>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OwnerDecisionKind {
+    SelectOurs,
+    SelectTheirs,
+    Delete,
+    ConflictEditEdit,
+    ConflictDeleteModify,
+    ConflictAddAdd,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct OwnerDecisionEvidence {
+    pub id: String,
+    pub owner_id: String,
+    pub path: String,
+    pub kind: OwnerDecisionKind,
+    pub alternatives: Vec<ConflictAlternative>,
+    pub conflict_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct OwnerMergeClassification {
+    pub base_equals_ours: bool,
+    pub base_equals_theirs: bool,
+    pub ours_equals_theirs: bool,
+    pub whole_source_selection: Option<SourceRevision>,
+    pub decisions: Vec<OwnerDecisionEvidence>,
 }
 
 pub fn merge_source_preserving_owners_with_evidence(
@@ -89,7 +121,9 @@ pub fn merge_source_preserving_owners_with_evidence(
     verify: impl FnOnce(&str) -> Result<SourcePreservingOwnerDocument, String>,
 ) -> SourcePreservingMergeEvidence {
     let mut source_segments = Vec::new();
-    let mut result = merge_owners(&base, &ours, &theirs, verify, &mut source_segments);
+    let mut classification = None;
+    let mut result =
+        merge_owners(&base, &ours, &theirs, verify, &mut source_segments, &mut classification);
     if let Some(output) = &result.output {
         let sources = HashMap::from([
             (SourceRevision::Base, base.source.as_bytes()),
@@ -108,7 +142,7 @@ pub fn merge_source_preserving_owners_with_evidence(
     if result.outcome != ThreeWayMergeOutcome::Clean {
         source_segments.clear();
     }
-    SourcePreservingMergeEvidence { result, source_segments }
+    SourcePreservingMergeEvidence { result, source_segments, classification }
 }
 
 fn merge_owners(
@@ -117,6 +151,7 @@ fn merge_owners(
     theirs: &SourcePreservingOwnerDocument,
     verify: impl FnOnce(&str) -> Result<SourcePreservingOwnerDocument, String>,
     segments: &mut Vec<SourceByteSegment>,
+    classification: &mut Option<OwnerMergeClassification>,
 ) -> ThreeWayMergeResult<String> {
     for (role, document) in [("base", &base), ("ours", &ours), ("theirs", &theirs)] {
         if let Err(message) = document.validate(role) {
@@ -124,7 +159,17 @@ fn merge_owners(
         }
     }
 
-    if ours.source == theirs.source || base.source == theirs.source {
+    // Evaluate all comparisons, including base, even when equal tips allow a
+    // whole-source selection. Evidence comes from the executed classifier.
+    let evidence = classification.insert(OwnerMergeClassification {
+        base_equals_ours: base.source == ours.source,
+        base_equals_theirs: base.source == theirs.source,
+        ours_equals_theirs: ours.source == theirs.source,
+        whole_source_selection: None,
+        decisions: vec![],
+    });
+    if evidence.ours_equals_theirs || evidence.base_equals_theirs {
+        evidence.whole_source_selection = Some(SourceRevision::Ours);
         let mut output = String::new();
         append_source_segment(
             &mut output,
@@ -136,7 +181,8 @@ fn merge_owners(
         );
         return clean_result(output);
     }
-    if base.source == ours.source {
+    if evidence.base_equals_ours {
+        evidence.whole_source_selection = Some(SourceRevision::Theirs);
         let mut output = String::new();
         append_source_segment(
             &mut output,
@@ -159,56 +205,35 @@ fn merge_owners(
         let base_owner = base_by_id.get(id.as_str()).copied();
         let ours_owner = ours_by_id.get(id.as_str()).copied();
         let theirs_owner = theirs_by_id.get(id.as_str()).copied();
-        match (base_owner, ours_owner, theirs_owner) {
-            (Some(base_owner), Some(ours_owner), Some(theirs_owner)) => {
-                if ours_owner.fingerprint == theirs_owner.fingerprint
-                    || base_owner.fingerprint == theirs_owner.fingerprint
-                {
-                    selected.insert(id, SourceRevision::Ours);
-                } else if base_owner.fingerprint == ours_owner.fingerprint {
-                    selected.insert(id, SourceRevision::Theirs);
-                } else {
-                    conflicts.push(owner_conflict(base_owner, ours_owner, theirs_owner));
-                }
+        let kind = classify_owner(base_owner, ours_owner, theirs_owner);
+        let mut conflict_id = None;
+        match kind {
+            OwnerDecisionKind::SelectOurs => {
+                selected.insert(id.clone(), SourceRevision::Ours);
             }
-            (Some(base_owner), Some(ours_owner), None) => {
-                if base_owner.fingerprint != ours_owner.fingerprint {
-                    conflicts.push(owner_membership_conflict(
-                        Some(base_owner),
-                        Some(ours_owner),
-                        None,
-                    ));
-                }
+            OwnerDecisionKind::SelectTheirs => {
+                selected.insert(id.clone(), SourceRevision::Theirs);
             }
-            (Some(base_owner), None, Some(theirs_owner)) => {
-                if base_owner.fingerprint != theirs_owner.fingerprint {
-                    conflicts.push(owner_membership_conflict(
-                        Some(base_owner),
-                        None,
-                        Some(theirs_owner),
-                    ));
-                }
+            OwnerDecisionKind::Delete => {}
+            _ => {
+                let conflict = owner_membership_conflict(base_owner, ours_owner, theirs_owner);
+                conflict_id = Some(conflict.conflict_id.clone());
+                conflicts.push(conflict);
             }
-            (Some(_), None, None) => {}
-            (None, Some(ours_owner), Some(theirs_owner)) => {
-                if ours_owner.fingerprint == theirs_owner.fingerprint {
-                    selected.insert(id, SourceRevision::Ours);
-                } else {
-                    conflicts.push(owner_membership_conflict(
-                        None,
-                        Some(ours_owner),
-                        Some(theirs_owner),
-                    ));
-                }
-            }
-            (None, Some(_), None) => {
-                selected.insert(id, SourceRevision::Ours);
-            }
-            (None, None, Some(_)) => {
-                selected.insert(id, SourceRevision::Theirs);
-            }
-            (None, None, None) => unreachable!("owner id came from at least one document"),
         }
+        let owner = ours_owner.or(theirs_owner).or(base_owner).expect("owner came from a source");
+        evidence.decisions.push(OwnerDecisionEvidence {
+            id: format!("decision.owner.{}", evidence.decisions.len()),
+            owner_id: id,
+            path: owner.path.clone(),
+            kind,
+            conflict_id,
+            alternatives: vec![
+                owner_alternative_optional(SourceRevision::Base, base_owner),
+                owner_alternative_optional(SourceRevision::Ours, ours_owner),
+                owner_alternative_optional(SourceRevision::Theirs, theirs_owner),
+            ],
+        });
     }
     if !conflicts.is_empty() {
         return conflict_result(conflicts);
@@ -383,12 +408,48 @@ fn layout_segments_for_ids(
     segments
 }
 
-fn owner_conflict(
-    base: &SourcePreservingOwner,
-    ours: &SourcePreservingOwner,
-    theirs: &SourcePreservingOwner,
-) -> MergeConflict {
-    owner_membership_conflict(Some(base), Some(ours), Some(theirs))
+fn classify_owner(
+    base: Option<&SourcePreservingOwner>,
+    ours: Option<&SourcePreservingOwner>,
+    theirs: Option<&SourcePreservingOwner>,
+) -> OwnerDecisionKind {
+    use OwnerDecisionKind as D;
+    match (base, ours, theirs) {
+        (Some(base), Some(ours), Some(theirs)) => {
+            if ours.fingerprint == theirs.fingerprint || base.fingerprint == theirs.fingerprint {
+                D::SelectOurs
+            } else if base.fingerprint == ours.fingerprint {
+                D::SelectTheirs
+            } else {
+                D::ConflictEditEdit
+            }
+        }
+        (Some(base), Some(ours), None) => {
+            if base.fingerprint == ours.fingerprint {
+                D::Delete
+            } else {
+                D::ConflictDeleteModify
+            }
+        }
+        (Some(base), None, Some(theirs)) => {
+            if base.fingerprint == theirs.fingerprint {
+                D::Delete
+            } else {
+                D::ConflictDeleteModify
+            }
+        }
+        (Some(_), None, None) => D::Delete,
+        (None, Some(ours), Some(theirs)) => {
+            if ours.fingerprint == theirs.fingerprint {
+                D::SelectOurs
+            } else {
+                D::ConflictAddAdd
+            }
+        }
+        (None, Some(_), None) => D::SelectOurs,
+        (None, None, Some(_)) => D::SelectTheirs,
+        (None, None, None) => unreachable!("owner id came from at least one document"),
+    }
 }
 
 fn owner_membership_conflict(

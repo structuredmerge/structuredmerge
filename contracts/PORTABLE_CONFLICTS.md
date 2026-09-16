@@ -51,7 +51,9 @@ render-plan provenance and deterministic production IDs remain separate
 requirements. The tests use explicit fixture evidence catalogs, not an
 executing provider.
 
-There is intentionally no automatic legacy-conflict conversion: the old
+Executed Rust owner conflicts now have an evidence-backed projection described
+in [NATIVE_CONFLICT_PROJECTION.md](NATIVE_CONFLICT_PROJECTION.md). There is still
+no automatic arbitrary legacy-conflict conversion: the old
 records lack enough classification, alternative-state and authorization facts
 to fabricate canonical evidence safely. Real native-provider projection,
 common operation dispatch, generated binding/consumer adoption and full

@@ -191,6 +191,8 @@
 
 - Add canonical conflict records with verified source/output regions, ordered alternatives, independently supplied resolution authorization, and request-scoped batch evidence.
 
+- Retain executed Rust owner-classification decisions and project edit/edit, delete/modify, and add/add conflicts into canonical source-verified records.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
@@ -236,3 +238,5 @@
 - Include top-level error diagnostics for native syntax rejection, unsupported analysis, and input parser service failures while retaining detailed typed origin evidence.
 
 - Export Python source descriptors and line-ending DTOs with their native identity so public SourceInput construction works without private-module types.
+
+- Reject native merge family analysis that changes verified source bytes or supplies invalid owner ranges before classification.
