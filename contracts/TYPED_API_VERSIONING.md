@@ -32,6 +32,14 @@ their own compatibility records until their consumers migrate; the legacy
 
 ## ABI evidence
 
+Development representation correction (2026-09-16): Python `SourceDescriptor`,
+`LineEndings`, and dependent `ParseOutput` now expose native DTO classes instead
+of facade dataclass twins. This fixes public nested construction and retains the
+native constructor/field surface, but changes dataclass introspection, equality,
+and class identity; it is not a backwards-compatible dataclass guarantee.
+Installed tests verify public source-edit construction and existing parser
+callbacks. The local Alef fix has not been upstreamed or released.
+
 Ruby binaries are scoped to their Ruby ABI and platform, not one universal
 extension. The artifact gate derives the ABI path and Ruby version bounds from
 the build runtime, checks linkage, and loads the isolated gem. Current local

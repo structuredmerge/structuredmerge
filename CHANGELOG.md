@@ -210,3 +210,5 @@
 - Check cancellation and deadlines before classifying native parser callback faults or contained panics, consistently with parser probing.
 
 - Include top-level error diagnostics for native syntax rejection, unsupported analysis, and input parser service failures while retaining detailed typed origin evidence.
+
+- Export Python source descriptors and line-ending DTOs with their native identity so public SourceInput construction works without private-module types.

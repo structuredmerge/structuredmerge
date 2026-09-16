@@ -48,6 +48,9 @@ output = "packages/ruby/sig"
 
 [crates.python]
 send_sync_types = ["OperationControl"]
+# Input and result DTOs share these identities; do not shadow them with
+# facade dataclasses that native SourceInput constructors cannot accept.
+reexported_types = ["SourceDescriptor", "LineEndings"]
 pip_name = "structuredmerge-core"
 module_name = "_native"
 scaffold_output = "packages/python"

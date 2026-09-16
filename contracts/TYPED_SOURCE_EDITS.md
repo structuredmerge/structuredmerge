@@ -25,9 +25,9 @@ no parser verification, AST-selection authority, cancellation control, render
 provenance report, or filesystem apply semantics. Those remain separate work.
 The Ruby ast-crispr adapter still needs migration and its downstream tests.
 
-Python currently mixes facade option dataclasses and native DTO constructors.
-When constructing `SourceInput`, use `_native.SourceDescriptor` and
-`_native.LineEndings`, as in the installed boundary tests. Passing the facade
-`SourceDescriptor` directly currently fails with a constructor type error.
-This generator interoperability gap must be resolved before stable public API
-approval; the installed test does not claim that facade construction works.
+Python source requests can be constructed entirely through the public package:
+`SourceInput`, `SourceDescriptor`, and `LineEndings` share native DTO identities.
+The Alef configuration explicitly reexports the latter two, and a local generator
+fix makes that setting effective for defaultable input types. The installed
+test verifies public construction and execution; no `_native` constructor is
+required. This remains a development API and depends on the local-only Alef fix.

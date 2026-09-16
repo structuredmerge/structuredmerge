@@ -82,10 +82,12 @@ class TypedParserHostTest(unittest.TestCase):
 
     def test_explicit_source_edits_use_rust_without_parser_dispatch(self):
         data = "\ufeffé: one\r\nlast".encode("utf-8")
-        source = core.SourceInput(descriptor=native.SourceDescriptor(
+        source = core.SourceInput(descriptor=core.SourceDescriptor(
             source_id="edit-source", role=core.SourceRole.SOURCE, byte_length=len(data),
             sha256=hashlib.sha256(data).hexdigest(), encoding=core.SourceEncoding.UTF8,
-            bom=True, line_endings=native.LineEndings(lf=0, crlf=1, bare_cr=0), final_newline=False), bytes=data)
+            bom=True, line_endings=core.LineEndings(lf=0, crlf=1, bare_cr=0), final_newline=False), bytes=data)
+        self.assertIs(core.SourceDescriptor, native.SourceDescriptor)
+        self.assertIs(core.LineEndings, native.LineEndings)
         limits = core.SourceEditLimits(max_input_bytes=100, max_output_bytes=100, max_edits=2)
         request = core.SourceEditRequest(request_id="edit-1", source=source,
             edits=[core.ExplicitSourceEdit(start_byte=7, end_byte=10, replacement="two")])
