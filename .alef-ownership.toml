@@ -20,6 +20,7 @@ owned_paths = [
   "docs/reference/errors.md",
   "docs/reference/types.md",
   "packages/python/LICENSE",
+  "packages/python/structuredmerge_core/_native.pyi",
   "packages/python/structuredmerge_core/py.typed",
   "packages/ruby-core/Rakefile",
   "packages/ruby-core/structuredmerge_core.gemspec",
@@ -28,6 +29,7 @@ owned_paths = [
   "packages/ruby/README.md",
   "packages/ruby/Rakefile",
   "packages/ruby/Steepfile",
+  "packages/ruby/sig/types.rbs",
   "packages/ruby/structuredmerge_core.gemspec",
   "packages/ruby/structuredmerge_host_prototype.gemspec",
 ]

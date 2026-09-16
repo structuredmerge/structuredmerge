@@ -4,6 +4,7 @@
 This is a local runtime gate, not publication approval or the full platform matrix.
 """
 import email.parser
+import ast
 import hashlib
 import json
 import os
@@ -35,6 +36,10 @@ def inspect_wheel(root, wheel):
         for name in names:
             if name.endswith(".dist-info/entry_points.txt") and b"[console_scripts]" in archive.read(name):
                 raise ValueError("binding wheel must not install console scripts")
+        stub = "structuredmerge_core/_native.pyi"
+        if stub not in names or "structuredmerge_core/py.typed" not in names:
+            raise ValueError("wheel must contain native type declarations and py.typed")
+        ast.parse(archive.read(stub).decode("utf-8"))
     return metadata, license_files
 
 

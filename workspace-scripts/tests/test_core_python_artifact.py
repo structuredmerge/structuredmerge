@@ -12,7 +12,7 @@ SPEC.loader.exec_module(ARTIFACT)
 
 
 class ArchiveValidationTest(unittest.TestCase):
-    def check(self, *, license_bytes=None, package="structuredmerge-core", extra=None):
+    def check(self, *, license_bytes=None, package="structuredmerge-core", extra=None, typing_files=True):
         (ROOT / "tmp").mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=ROOT / "tmp", prefix="wheel-audit-test-") as directory:
             wheel = Path(directory) / "test.whl"
@@ -22,6 +22,9 @@ class ArchiveValidationTest(unittest.TestCase):
                     "License-Expression: AGPL-3.0-only OR PolyForm-Small-Business-1.0.0\n")
                 if license_bytes is not None:
                     archive.writestr("core.dist-info/licenses/LICENSE", license_bytes)
+                if typing_files:
+                    archive.writestr("structuredmerge_core/_native.pyi", "def example() -> None: ...\n")
+                    archive.writestr("structuredmerge_core/py.typed", "")
                 for name, data in (extra or {}).items():
                     archive.writestr(name, data)
             return ARTIFACT.inspect_wheel(ROOT, wheel)
@@ -45,6 +48,10 @@ class ArchiveValidationTest(unittest.TestCase):
         metadata, licenses = self.check(license_bytes=(ROOT / "LICENSE").read_bytes())
         self.assertEqual(metadata["Name"], "structuredmerge-core")
         self.assertEqual(licenses, ["core.dist-info/licenses/LICENSE"])
+
+    def test_rejects_missing_type_declarations(self):
+        with self.assertRaisesRegex(ValueError, "native type declarations"):
+            self.check(license_bytes=(ROOT / "LICENSE").read_bytes(), typing_files=False)
 
 
 if __name__ == "__main__":

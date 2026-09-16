@@ -1,5 +1,6 @@
 """Installed-wheel native callbacks and Rust-owned declaration merge tests."""
 import hashlib
+import ast
 import importlib.metadata
 from pathlib import Path
 import sys
@@ -86,6 +87,22 @@ class TypedParserHostTest(unittest.TestCase):
 
     def tearDown(self):
         core.unregister_parser_host("python.libcst")
+
+    def test_installed_native_type_declarations_match_exported_names(self):
+        stub = Path(core.__file__).parent / "_native.pyi"
+        declarations = ast.parse(stub.read_text(encoding="utf-8"))
+        classes = [node for node in declarations.body if isinstance(node, ast.ClassDef)]
+        self.assertTrue(classes)
+        for declaration in classes:
+            exported = getattr(native, declaration.name)
+            for member in declaration.body:
+                if isinstance(member, ast.FunctionDef):
+                    self.assertTrue(hasattr(exported, member.name), f"{declaration.name}.{member.name}")
+                elif isinstance(member, ast.AnnAssign):
+                    self.assertTrue(hasattr(exported, member.target.id), f"{declaration.name}.{member.target.id}")
+        for node in declarations.body:
+            if isinstance(node, ast.FunctionDef):
+                self.assertTrue(callable(getattr(native, node.name)))
 
     def test_portable_service_errors_cross_installed_binding(self):
         requests = self.merge_requests(["a = 1\n"] * 3)

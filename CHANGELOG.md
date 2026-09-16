@@ -143,6 +143,8 @@
 
 - Expose structured parser-service failure evidence for output verification, retaining provider identity and native fault details without returning unverified output.
 
+- Generate Ruby RBS and Python native type declarations from the shared Alef configuration, ship them in isolated artifacts, and validate them in artifact tests.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

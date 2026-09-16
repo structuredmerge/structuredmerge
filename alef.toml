@@ -41,10 +41,16 @@ error_constructor = "structuredmerge_core::CoreError::new({msg})"
 gem_name = "structuredmerge-core"
 scaffold_output = "packages/ruby"
 
+[crates.ruby.stubs]
+output = "packages/ruby/sig"
+
 [crates.python]
 pip_name = "structuredmerge-core"
 module_name = "_native"
 scaffold_output = "packages/python"
+
+[crates.python.stubs]
+output = "packages/python/structuredmerge_core"
 
 [crates.output]
 ruby = "packages/ruby/ext/structuredmerge_core_rb/src/"
