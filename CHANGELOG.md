@@ -183,6 +183,8 @@
 
 - Typed YAML/Python native diff requests and results across generated Ruby/Python bindings, retaining request identity, exact source changes, parser evidence and fail-closed cancellation behavior without merged output.
 
+- Add typed Rust operation-request normalization with role-keyed sources, operation policies, preserved extensions, verified local content resolution, and shared batch limits.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
