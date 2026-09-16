@@ -111,6 +111,14 @@ fn facade_calls_typed_host_batches_through_tree_haver_and_keeps_native_failure()
         timeout_millis: None,
     };
     let results = parse_sources(vec![request.clone()], limits.clone()).unwrap();
+    let control = OperationControl::new();
+    assert!(!control.is_cancelled());
+    control.clone().cancel();
+    assert!(control.is_cancelled());
+    assert_eq!(
+        parse_sources_controlled(vec![request.clone()], limits.clone(), &control).unwrap_err().code,
+        "execution.cancelled"
+    );
     let legacy_limits: ParseLimits = serde_json::from_str(
         r#"{"max_batch_items":10,"max_input_bytes":100,"max_nodes":100,"max_diagnostics":100}"#,
     )

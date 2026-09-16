@@ -47,6 +47,35 @@ before Rust can observe expiry; this API does not guarantee a wall-clock return
 bound, interrupt native code, or expose an explicit cancellation handle. No
 deadline is reset between input parsing and output verification.
 
+## Cooperative cancellation
+
+Create an opaque token with `create_operation_control()`, then pass it to
+`parse_sources_controlled`, `merge_yaml_mapping_controlled`, or
+`merge_python_declarations_controlled`. Call `cancel()` from a runtime thread;
+`is_cancelled()` reports its one-way state. Repeated cancellation is harmless.
+A cancelled token stays cancelled: create a new token for an independent run.
+Sharing a token intentionally cancels every operation using it. Existing entry
+points create a fresh, inaccessible token and retain their previous signatures.
+
+The control wraps a shared Rust atomic flag, not serialized request data, a
+process-wide ID registry, or a host callback. The explicit factory preserves its
+identity across generated facade calls; it is not a defaultable options DTO.
+The generated wrappers retain it through shared ownership without holding a
+mutex over the operation. Installed tests cancel on one runtime thread while
+another is paused inside input parsing or output verification, then release the
+callback and require `execution.cancelled` without a successful result.
+
+Python explicitly opts `OperationControl` into Alef's `send_sync_types`. The
+generated frozen pyclass requires Rust `Send + Sync`; all other opaque handles
+remain thread-confined by default. This requires the local Alef correction and
+does not establish free-threaded Python or subinterpreter support. Without the
+opt-in, the installed cross-thread test correctly fails on PyO3's unsendable
+guard; do not weaken that test or bypass the guard.
+
+Like deadlines, cancellation is observed at Rust checkpoints, not by forcibly
+interrupting native code. A callback fault can be classified before the next
+checkpoint. Cancellation does not shut down the registry or unregister a parser.
+
 Run `workspace-scripts/check_core_ruby_artifact.rb` through the Ruby package's
 bundle and `workspace-scripts/check_core_python_artifact.py WHEEL` to execute these
 checks outside the checkout against installed packages. The existing native
@@ -55,7 +84,7 @@ part of those same suites.
 
 Still unproven: arbitrary foreign-thread entry, broad concurrent stress and
 uncontrolled replacement races, interpreter/VM shutdown, subinterpreters, non-MRI
-Ruby, explicit cancellation and its late results across the generated boundary, and the full
+Ruby, cancellation under arbitrary foreign-thread execution and shutdown, and the full
 supported runtime/platform matrix. Reentrant removal on a callback thread is not
 a substitute for those independent requirements. No lifecycle claim here
 authorizes package publication or default-provider approval.

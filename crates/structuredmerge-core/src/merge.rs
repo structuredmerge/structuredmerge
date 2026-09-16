@@ -60,7 +60,15 @@ pub fn merge_yaml_mapping(
     requests: Vec<ParseRequest>,
     limits: ParseLimits,
 ) -> Result<NativeMergeResult, CoreError> {
-    let context = limits.context()?;
+    merge_yaml_mapping_controlled(requests, limits, &crate::OperationControl::new())
+}
+
+pub fn merge_yaml_mapping_controlled(
+    requests: Vec<ParseRequest>,
+    limits: ParseLimits,
+    control: &crate::OperationControl,
+) -> Result<NativeMergeResult, CoreError> {
+    let context = limits.controlled_context(control)?;
     let snapshot = crate::host::registry()
         .snapshot()
         .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;
@@ -83,7 +91,15 @@ pub fn merge_python_declarations(
     requests: Vec<ParseRequest>,
     limits: ParseLimits,
 ) -> Result<NativeMergeResult, CoreError> {
-    let context = limits.context()?;
+    merge_python_declarations_controlled(requests, limits, &crate::OperationControl::new())
+}
+
+pub fn merge_python_declarations_controlled(
+    requests: Vec<ParseRequest>,
+    limits: ParseLimits,
+    control: &crate::OperationControl,
+) -> Result<NativeMergeResult, CoreError> {
+    let context = limits.controlled_context(control)?;
     let snapshot = crate::host::registry()
         .snapshot()
         .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;

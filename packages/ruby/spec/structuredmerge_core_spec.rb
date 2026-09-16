@@ -151,6 +151,55 @@ RSpec.describe StructuredmergeCore do
     described_class.unregister_parser_host("ruby.typed.psych")
   end
 
+  it "shares cancellation across threads and rejects late input and verification" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    requests = merge_requests(["a: one\nb: two\n", "a: ours\nb: two\n", "a: one\nb: theirs\n"])
+    limits = merge_limits
+    cancelled = described_class.create_operation_control
+    expect(cancelled.is_cancelled).to be(false)
+    2.times { cancelled.cancel }
+    %i[parse_sources_controlled merge_yaml_mapping_controlled].each do |operation|
+      expect { described_class.public_send(operation, requests, limits, cancelled) }.to raise_error(RuntimeError, /execution\.cancelled:/)
+    end
+    expect(host.calls).to eq(0)
+    [[:parse_sources_controlled, false], [:merge_yaml_mapping_controlled, false], [:merge_yaml_mapping_controlled, true]].each do |operation, output_phase|
+      control = described_class.create_operation_control
+      arrivals, releases = Queue.new, Queue.new
+      host.define_singleton_method(:parse_batch) do |request|
+        result = super(request)
+        if (request.items.first.source.descriptor.role.to_s == "output") == output_phase
+          arrivals << true
+          raise "cancellation barrier timed out" unless releases.pop(timeout: 10)
+        end
+        result
+      end
+      worker = Thread.new do
+        described_class.public_send(operation, requests, limits, control)
+      rescue RuntimeError => error
+        error
+      end
+      begin
+        expect(arrivals.pop(timeout: 10)).to be(true)
+        control.cancel
+        expect(control.is_cancelled).to be(true)
+        releases << true
+        expect(worker.join(15)).to eq(worker)
+        expect(worker.value).to be_a(RuntimeError)
+        expect(worker.value.message).to start_with("execution.cancelled:")
+      ensure
+        releases << true
+        worker.join(15)
+        host.singleton_class.remove_method(:parse_batch)
+      end
+    end
+    fresh = described_class.create_operation_control
+    expect(fresh.is_cancelled).to be(false)
+    expect(described_class.merge_yaml_mapping_controlled(requests, limits, fresh).output).to eq("a: ours\nb: theirs\n")
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
   it "declares native profile scope separately from parser availability and default approval" do
     profiles = described_class.native_merge_profiles
     expect(profiles.map(&:family)).to eq(%w[python yaml])

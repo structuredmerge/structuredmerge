@@ -8,7 +8,10 @@ use std::{
     error::Error,
     fmt,
     panic::{AssertUnwindSafe, catch_unwind},
-    sync::{Arc, OnceLock, atomic::AtomicBool},
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 use tree_haver::service::{
@@ -258,7 +261,44 @@ pub struct ParseLimits {
     pub timeout_millis: Option<u64>,
 }
 
+/// Shared, one-way cancellation signal. Clones observe the same state.
+/// Not serializable: a process-local control is not request data.
+#[derive(Clone, Debug)]
+pub struct OperationControl {
+    cancelled: Arc<AtomicBool>,
+}
+
+impl OperationControl {
+    // A control is an identity-bearing capability, not a defaultable options DTO.
+    // Require explicit construction so generated facades preserve its shared state.
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        Self { cancelled: Arc::new(AtomicBool::new(false)) }
+    }
+
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Release);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Acquire)
+    }
+}
+
+pub fn create_operation_control() -> OperationControl {
+    OperationControl::new()
+}
+
 impl ParseLimits {
+    pub(crate) fn controlled_context(
+        self,
+        control: &OperationControl,
+    ) -> Result<ExecutionContext, CoreError> {
+        let mut context = self.context()?;
+        context.cancelled = control.cancelled.clone();
+        Ok(context)
+    }
+
     pub(crate) fn context(self) -> Result<ExecutionContext, CoreError> {
         let deadline = self
             .timeout_millis
@@ -284,7 +324,15 @@ pub fn parse_sources(
     requests: Vec<ParseRequest>,
     limits: ParseLimits,
 ) -> Result<Vec<CoreParseResult>, CoreError> {
-    let context = limits.context()?;
+    parse_sources_controlled(requests, limits, &OperationControl::new())
+}
+
+pub fn parse_sources_controlled(
+    requests: Vec<ParseRequest>,
+    limits: ParseLimits,
+    control: &OperationControl,
+) -> Result<Vec<CoreParseResult>, CoreError> {
+    let context = limits.controlled_context(control)?;
     let snapshot = registry()
         .snapshot()
         .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;

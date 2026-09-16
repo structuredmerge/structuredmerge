@@ -216,6 +216,48 @@ class TypedParserHostTest(unittest.TestCase):
         self.host.parse_batch = original
         self.assertEqual(core.merge_python_declarations(requests, limits(None)).output, "a = 3\nb = 4\n")
 
+    def test_cancellation_is_shared_and_rejects_late_input_and_verification(self):
+        requests = self.merge_requests(["a = 1\nb = 2\n", "a = 3\nb = 2\n", "a = 1\nb = 4\n"])
+        limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+        cancelled = core.create_operation_control()
+        self.assertFalse(cancelled.is_cancelled())
+        cancelled.cancel()
+        cancelled.cancel()
+        for operation in (core.parse_sources_controlled, core.merge_python_declarations_controlled):
+            with self.assertRaisesRegex(RuntimeError, r"execution\.cancelled:"):
+                operation(requests, limits, cancelled)
+        self.assertEqual(self.host.calls, 0)
+        original = self.host.parse_batch
+        for operation, phase in ((core.parse_sources_controlled, "input"),
+                (core.merge_python_declarations_controlled, "input"),
+                (core.merge_python_declarations_controlled, "output")):
+            control = core.create_operation_control()
+            arrived, release = threading.Event(), threading.Event()
+            def paused(request):
+                result = original(request)
+                is_output = request.items[0].source.descriptor.role == core.SourceRole.OUTPUT
+                if is_output == (phase == "output"):
+                    arrived.set()
+                    if not release.wait(timeout=10):
+                        raise RuntimeError("cancellation barrier timed out")
+                return result
+            self.host.parse_batch = paused
+            try:
+                with ThreadPoolExecutor(max_workers=1) as workers:
+                    pending = workers.submit(operation, requests, limits, control)
+                    self.assertTrue(arrived.wait(timeout=10))
+                    control.cancel()
+                    self.assertTrue(control.is_cancelled())
+                    release.set()
+                    with self.assertRaisesRegex(RuntimeError, r"execution\.cancelled:"):
+                        pending.result(timeout=15)
+            finally:
+                release.set()
+                self.host.parse_batch = original
+        fresh = core.create_operation_control()
+        self.assertFalse(fresh.is_cancelled())
+        self.assertEqual(core.merge_python_declarations_controlled(requests, limits, fresh).output, "a = 3\nb = 4\n")
+
     def test_native_profiles_declare_scope_without_default_approval(self):
         profiles = core.native_merge_profiles()
         self.assertEqual([profile.family for profile in profiles], ["python", "yaml"])

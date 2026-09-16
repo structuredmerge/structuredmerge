@@ -163,6 +163,8 @@
 
 - Expose optional monotonic operation deadlines through typed Ruby and Python parse/merge limits, rejecting late successful input and verification results.
 
+- Expose shared one-way operation cancellation controls and controlled parse/native-merge calls through Alef-generated Ruby and Python bindings.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
