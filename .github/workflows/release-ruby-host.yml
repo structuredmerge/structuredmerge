@@ -70,12 +70,12 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
           RUST_TARGET: ${{ matrix.target }}
           CARGO_BUILD_TARGET: ${{ matrix.target }}
-          CARGO_FEATURE_LINK_RUBY: "1"
         run: |
           set -euo pipefail
           mkdir -p dist
           alef publish build --lang ruby
           alef publish package --lang ruby --target "$TARGET" --output dist
+          ruby workspace-scripts/check_ruby_linkage.rb dist
           BUNDLE_GEMFILE=packages/ruby/Gemfile \
             bundle exec ruby workspace-scripts/write_ruby_artifact_manifest.rb dist
           ruby workspace-scripts/measure_ruby_cold_paths.rb dist

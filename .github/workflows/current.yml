@@ -107,6 +107,8 @@ jobs:
           cargo install alef --version "=$(cat workspace-scripts/alef-version)" --locked
       - name: Build platform gem and provenance
         run: mise run ruby-package
+      - name: Check packaged native linkage
+        run: ruby workspace-scripts/check_ruby_linkage.rb dist
       - name: Measure packaged cold paths
         run: mise run ruby-cold-paths
       - name: Install packaged gem in isolation

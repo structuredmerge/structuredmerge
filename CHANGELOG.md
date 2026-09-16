@@ -8,6 +8,8 @@
 
 - Use upstream Alef 0.89.0, preserve generated Ruby API compatibility, include dual-license texts in generated packages, generate platform linker configuration, and track the kernel Cargo dependency lock.
 
+- Build Ruby platform extensions without forced libruby linkage and inspect packaged Linux/macOS libraries before accepting artifacts.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider
