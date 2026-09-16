@@ -51,7 +51,7 @@
       "disposition": "retain_until_consumer_migration",
       "consumers": ["ruby/gems/tree_haver/lib/tree_haver/backends/rust_tslp.rb", "structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb"],
       "replacement": "Typed ParserHost registration, TreeHaver selection and parse_sources; explicit Rust TSLP provider registration and typed normalized results.",
-      "gap": "Native callback slices exist but the legacy normalized TSLP consumer is not migrated. Replace/list/probe/bulk-clear policies need explicit contracts; matching method names are not drop-in compatibility."
+      "gap": "A typed Rust TreeHaver LanguagePackProvider now passes real JSON grammar/service tests, without prototype dependencies. It is not yet exported through structuredmerge-core or consumed by the Ruby normalized TSLP adapter. Replace/list/probe/bulk-clear policies need explicit contracts; matching method names are not drop-in compatibility."
     },
     {
       "id": "capabilities",

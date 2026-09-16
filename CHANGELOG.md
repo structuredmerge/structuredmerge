@@ -225,6 +225,8 @@
 
 - Add explicit Ruby/Python typed API source-review snapshots with a non-mutating CI drift gate and packaged-surface checks; runtime semantic compatibility and platform ABI approval remain separate.
 
+- Add an explicitly registered typed Rust TreeHaver language-pack provider with native node/error/comment facts, source validation and bounded projection; generated-core exports and Ruby consumer migration remain pending.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
