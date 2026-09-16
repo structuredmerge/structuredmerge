@@ -157,6 +157,8 @@
 
 - Run Alef-generated native YAML merge fixtures against the isolated installed core gem using the shared Psych test provider.
 
+- Verify installed Ruby and Python parser callback retention, GC release, reentrant in-flight unregister, and re-registration lifecycle behavior.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

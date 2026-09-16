@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "native_merge_fixture"
+require "weakref"
 
 if (expected_home = ENV["STRUCTUREDMERGE_EXPECT_GEM_HOME"])
   installed = Gem.loaded_specs.fetch("structuredmerge-core").full_gem_path
@@ -12,6 +13,69 @@ end
 
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
+
+  def register_ephemeral_parser
+    host = TypedPsychHost.new
+    reference = WeakRef.new(host)
+    described_class.register_parser_host(host)
+    reference
+  end
+
+  it "retains registered callbacks across GC and releases them after unregister" do
+    12.times do
+      reference = register_ephemeral_parser
+      GC.start
+      GC.compact if GC.respond_to?(:compact)
+      expect(reference.weakref_alive?).to be_truthy
+      result = described_class.merge_yaml_mapping(
+        merge_requests(["a: one\nb: two\n", "a: ours\nb: two\n", "a: one\nb: theirs\n"]), merge_limits)
+      expect(result.output).to eq("a: ours\nb: theirs\n")
+      described_class.unregister_parser_host("ruby.typed.psych")
+      # The generated dispatcher exits asynchronously after its final sender drops.
+      50.times do
+        Thread.pass
+        GC.start
+        break unless reference.weakref_alive?
+      end
+      expect(reference.weakref_alive?).to be_falsey
+      failed = described_class.merge_yaml_mapping(merge_requests(["a: one\n"] * 3), merge_limits)
+      expect(failed.input_failure.code).to eq("selection.no_parser")
+    end
+  ensure
+    begin
+      described_class.unregister_parser_host("ruby.typed.psych")
+    rescue RuntimeError
+      # Already unregistered on the successful path.
+    end
+  end
+
+  it "keeps an in-flight parse alive when its callback unregisters the provider" do
+    host = Class.new(TypedPsychHost) do
+      def parse_batch(request)
+        StructuredmergeCore.unregister_parser_host("ruby.typed.psych")
+        GC.start
+        super
+      end
+    end.new
+    described_class.register_parser_host(host)
+    requests = merge_requests(["a: one\n"] * 3)
+    results = described_class.parse_sources(requests, merge_limits)
+    expect(results.length).to eq(3)
+    expect(results.map { |result| result.parsed.ok }).to eq([true, true, true])
+    expect(host.calls).to eq(1)
+    expect { described_class.parse_sources(requests, merge_limits) }.to raise_error(RuntimeError, /selection\.no_parser:/)
+    replacement = TypedPsychHost.new
+    described_class.register_parser_host(replacement)
+    expect(described_class.parse_sources(requests, merge_limits).map { |result| result.parsed.ok }).to eq([true, true, true])
+    expect(replacement.calls).to eq(1)
+    expect(host.calls).to eq(1)
+  ensure
+    begin
+      described_class.unregister_parser_host("ruby.typed.psych")
+    rescue RuntimeError
+      # Callback removal may have completed before a failed assertion.
+    end
+  end
 
   it "declares native profile scope separately from parser availability and default approval" do
     profiles = described_class.native_merge_profiles

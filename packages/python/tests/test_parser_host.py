@@ -1,5 +1,7 @@
 """Installed-wheel native callbacks and Rust-owned declaration merge tests."""
 import hashlib
+import gc
+import weakref
 import ast
 import importlib.metadata
 from pathlib import Path
@@ -87,6 +89,56 @@ class TypedParserHostTest(unittest.TestCase):
 
     def tearDown(self):
         core.unregister_parser_host("python.libcst")
+
+    def test_registered_callbacks_survive_gc_and_release_after_unregister(self):
+        core.unregister_parser_host("python.libcst")
+        try:
+            for _ in range(12):
+                host = LibCSTHost()
+                reference = weakref.ref(host)
+                core.register_parser_host(host)
+                del host
+                gc.collect()
+                self.assertIsNotNone(reference(), "registry must retain its callback")
+                result = self.merge(["a = 1\nb = 2\n", "a = 3\nb = 2\n", "a = 1\nb = 4\n"])
+                self.assertEqual(result.output, "a = 3\nb = 4\n")
+                core.unregister_parser_host("python.libcst")
+                gc.collect()
+                self.assertIsNone(reference(), "unregister must release the callback")
+                self.assertEqual(self.merge(["a = 1\n"] * 3).input_failure.code, "selection.no_parser")
+        finally:
+            # Restore the setup provider so the ordinary teardown remains valid.
+            try:
+                core.unregister_parser_host("python.libcst")
+            except RuntimeError:
+                pass
+            core.register_parser_host(self.host)
+
+    def test_inflight_parse_survives_callback_unregister_and_allows_reregistration(self):
+        core.unregister_parser_host("python.libcst")
+
+        class UnregisteringHost(LibCSTHost):
+            def parse_batch(self, request):
+                core.unregister_parser_host("python.libcst")
+                gc.collect()
+                return super().parse_batch(request)
+
+        host = UnregisteringHost()
+        core.register_parser_host(host)
+        requests = self.merge_requests(["a = 1\n"] * 3)
+        limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+        try:
+            results = core.parse_sources(requests, limits)
+            self.assertEqual(len(results), 3)
+            self.assertTrue(all(result.parsed.ok for result in results))
+            self.assertEqual(host.calls, 1)
+            with self.assertRaisesRegex(RuntimeError, r"selection\.no_parser:"):
+                core.parse_sources(requests, limits)
+        finally:
+            core.register_parser_host(self.host)
+        self.assertTrue(all(result.parsed.ok for result in core.parse_sources(requests, limits)))
+        self.assertEqual(self.host.calls, 1)
+        self.assertEqual(host.calls, 1, "future calls must not reach the removed provider")
 
     def test_native_profiles_declare_scope_without_default_approval(self):
         profiles = core.native_merge_profiles()
