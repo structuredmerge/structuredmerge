@@ -169,6 +169,8 @@
 
 - Expose typed structural operation-profile batch reports through generated core bindings, sharing ast-crispr classification with the retained JSON report adapter.
 
+- Expose typed match, selection, and destination profile reports through Ruby/Python core bindings, retaining ast-crispr defaults, unknown vocabulary, and optional comment-region values.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

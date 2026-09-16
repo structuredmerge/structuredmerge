@@ -18,7 +18,14 @@ written. Reports cannot establish structural selector equivalence, byte-range
 correctness, parser availability, or filesystem apply behavior. The explicit
 source-edit primitive is separate.
 
-Only operation and batch-operation reports are migrated here. Boundary, limit,
-match, selection, destination, and template/session report contracts remain
-open, as does the Ruby ast-crispr consumer cutover. Legacy report regression
+`report_structural_match`, `report_structural_selection`, and
+`report_structural_destination` likewise accept typed requests and return the
+owning crate's typed reports. Their older JSON methods serialize those same
+reports. Selection and destination preserve the existing empty-string defaults;
+match strings remain literal. Missing comment regions remain `None`/`nil`,
+distinct from an unknown region string. Unknown vocabulary is retained with
+false `known_*` flags, not executed or silently substituted.
+
+Boundary, limit, and template/session report contracts remain open, as does
+the Ruby ast-crispr consumer cutover. Legacy report regression
 tests remain and pass; the facade does not depend on the legacy host crate.

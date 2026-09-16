@@ -31,6 +31,56 @@ pub struct CrisprBatchOperationReport {
 
 pub const PACKAGE_NAME: &str = "ast-crispr";
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CrisprMatchReport {
+    pub start_boundary: String,
+    pub start_boundary_family: String,
+    pub known_start_boundary: bool,
+    pub end_boundary: String,
+    pub end_boundary_family: String,
+    pub known_end_boundary: bool,
+    pub payload_kind: String,
+    pub payload_family: String,
+    pub known_payload_kind: bool,
+    pub comment_anchored: bool,
+    pub trailing_gap_extended: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CrisprSelectionReport {
+    pub owner_scope: String,
+    pub owner_selector: String,
+    pub owner_selector_family: String,
+    pub known_owner_selector: bool,
+    pub selector_kind: String,
+    pub selector_kind_family: String,
+    pub known_selector_kind: bool,
+    pub selection_intent: String,
+    pub selection_intent_family: String,
+    pub known_selection_intent: bool,
+    pub comment_region: Option<String>,
+    pub comment_region_family: String,
+    pub known_comment_region: bool,
+    pub comment_anchored: bool,
+    pub include_trailing_gap: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CrisprDestinationReport {
+    pub resolution_kind: String,
+    pub resolution_family: String,
+    pub known_resolution_kind: bool,
+    pub resolution_source: String,
+    pub resolution_source_family: String,
+    pub known_resolution_source: bool,
+    pub anchor_boundary: String,
+    pub anchor_boundary_family: String,
+    pub known_anchor_boundary: bool,
+    pub used_if_missing: bool,
+    pub append_fallback: bool,
+    pub anchored: bool,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Error {
     pub code: String,
@@ -123,26 +173,30 @@ impl MatchProfile {
         }
     }
 
-    pub fn report(&self) -> Value {
+    pub fn typed_report(&self) -> CrisprMatchReport {
         let (start_family, known_start_boundary) =
             descriptor_family(start_boundary_descriptor(&self.start_boundary));
         let (end_family, known_end_boundary) =
             descriptor_family(end_boundary_descriptor(&self.end_boundary));
         let (payload_family, known_payload_kind) =
             descriptor_family(payload_kind_descriptor(&self.payload_kind));
-        json!({
-            "start_boundary": self.start_boundary,
-            "start_boundary_family": start_family,
-            "known_start_boundary": known_start_boundary,
-            "end_boundary": self.end_boundary,
-            "end_boundary_family": end_family,
-            "known_end_boundary": known_end_boundary,
-            "payload_kind": self.payload_kind,
-            "payload_family": payload_family,
-            "known_payload_kind": known_payload_kind,
-            "comment_anchored": start_family == "comment_anchor" || payload_family == "comment_owned",
-            "trailing_gap_extended": end_family == "gap_extension"
-        })
+        CrisprMatchReport {
+            start_boundary: self.start_boundary.clone(),
+            start_boundary_family: start_family.into(),
+            known_start_boundary,
+            end_boundary: self.end_boundary.clone(),
+            end_boundary_family: end_family.into(),
+            known_end_boundary,
+            payload_kind: self.payload_kind.clone(),
+            payload_family: payload_family.into(),
+            known_payload_kind,
+            comment_anchored: start_family == "comment_anchor" || payload_family == "comment_owned",
+            trailing_gap_extended: end_family == "gap_extension",
+        }
+    }
+
+    pub fn report(&self) -> Value {
+        json!(self.typed_report())
     }
 }
 
@@ -165,7 +219,7 @@ impl SelectionProfile {
         }
     }
 
-    pub fn report(&self) -> Value {
+    pub fn typed_report(&self) -> CrisprSelectionReport {
         let (owner_selector_family, known_owner_selector) =
             descriptor_family(owner_selector_descriptor(&self.owner_selector));
         let (selector_kind_family, known_selector_kind) =
@@ -176,23 +230,29 @@ impl SelectionProfile {
             Some(comment_region) => descriptor_family(comment_region_descriptor(comment_region)),
             None => ("none", false),
         };
-        json!({
-            "owner_scope": self.owner_scope,
-            "owner_selector": self.owner_selector,
-            "owner_selector_family": owner_selector_family,
-            "known_owner_selector": known_owner_selector,
-            "selector_kind": self.selector_kind,
-            "selector_kind_family": selector_kind_family,
-            "known_selector_kind": known_selector_kind,
-            "selection_intent": self.selection_intent,
-            "selection_intent_family": selection_intent_family,
-            "known_selection_intent": known_selection_intent,
-            "comment_region": self.comment_region,
-            "comment_region_family": comment_region_family,
-            "known_comment_region": known_comment_region,
-            "comment_anchored": selector_kind_family == "comment_anchor" || selection_intent_family == "comment" || known_comment_region,
-            "include_trailing_gap": self.include_trailing_gap
-        })
+        CrisprSelectionReport {
+            owner_scope: self.owner_scope.clone(),
+            owner_selector: self.owner_selector.clone(),
+            owner_selector_family: owner_selector_family.into(),
+            known_owner_selector,
+            selector_kind: self.selector_kind.clone(),
+            selector_kind_family: selector_kind_family.into(),
+            known_selector_kind,
+            selection_intent: self.selection_intent.clone(),
+            selection_intent_family: selection_intent_family.into(),
+            known_selection_intent,
+            comment_region: self.comment_region.clone(),
+            comment_region_family: comment_region_family.into(),
+            known_comment_region,
+            comment_anchored: selector_kind_family == "comment_anchor"
+                || selection_intent_family == "comment"
+                || known_comment_region,
+            include_trailing_gap: self.include_trailing_gap,
+        }
+    }
+
+    pub fn report(&self) -> Value {
+        json!(self.typed_report())
     }
 }
 
@@ -211,27 +271,31 @@ impl DestinationProfile {
         }
     }
 
-    pub fn report(&self) -> Value {
+    pub fn typed_report(&self) -> CrisprDestinationReport {
         let (resolution_family, known_resolution_kind) =
             descriptor_family(resolution_kind_descriptor(&self.resolution_kind));
         let (resolution_source_family, known_resolution_source) =
             descriptor_family(resolution_source_descriptor(&self.resolution_source));
         let (anchor_boundary_family, known_anchor_boundary) =
             descriptor_family(anchor_boundary_descriptor(&self.anchor_boundary));
-        json!({
-            "resolution_kind": self.resolution_kind,
-            "resolution_family": resolution_family,
-            "known_resolution_kind": known_resolution_kind,
-            "resolution_source": self.resolution_source,
-            "resolution_source_family": resolution_source_family,
-            "known_resolution_source": known_resolution_source,
-            "anchor_boundary": self.anchor_boundary,
-            "anchor_boundary_family": anchor_boundary_family,
-            "known_anchor_boundary": known_anchor_boundary,
-            "used_if_missing": self.used_if_missing,
-            "append_fallback": self.resolution_kind == "append_fallback",
-            "anchored": resolution_family == "anchored"
-        })
+        CrisprDestinationReport {
+            resolution_kind: self.resolution_kind.clone(),
+            resolution_family: resolution_family.into(),
+            known_resolution_kind,
+            resolution_source: self.resolution_source.clone(),
+            resolution_source_family: resolution_source_family.into(),
+            known_resolution_source,
+            anchor_boundary: self.anchor_boundary.clone(),
+            anchor_boundary_family: anchor_boundary_family.into(),
+            known_anchor_boundary,
+            used_if_missing: self.used_if_missing,
+            append_fallback: self.resolution_kind == "append_fallback",
+            anchored: resolution_family == "anchored",
+        }
+    }
+
+    pub fn report(&self) -> Value {
+        json!(self.typed_report())
     }
 }
 

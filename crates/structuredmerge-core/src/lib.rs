@@ -20,6 +20,7 @@ mod edits;
 pub use edits::*;
 mod structural;
 pub use ast_crispr::{CrisprBatchOperationReport, CrisprOperationReport};
+pub use ast_crispr::{CrisprDestinationReport, CrisprMatchReport, CrisprSelectionReport};
 pub use structural::*;
 mod profiles;
 pub use profiles::{NativeMergeProfile, native_merge_profiles};

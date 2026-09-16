@@ -103,6 +103,19 @@ class TypedParserHostTest(unittest.TestCase):
         self.assertEqual(self.host.calls, 0)
 
     def test_structural_operation_reports_are_typed_and_preserve_unknowns(self):
+        match = core.report_structural_match(core.CrisprMatchRequest(start_boundary="future",
+            end_boundary="owner_end_plus_trailing_gap", payload_kind="comment_owned_body"))
+        self.assertFalse(match.known_start_boundary)
+        self.assertTrue(match.trailing_gap_extended and match.comment_anchored)
+        selection = core.report_structural_selection(core.CrisprSelectionRequest(owner_scope="",
+            owner_selector="", selector_kind="", selection_intent="", comment_region=None,
+            include_trailing_gap=True))
+        self.assertIsNone(selection.comment_region)
+        self.assertEqual(selection.owner_selector, "line_bound_statements")
+        destination = core.report_structural_destination(core.CrisprDestinationRequest(
+            resolution_kind="", resolution_source="future", anchor_boundary="", used_if_missing=True))
+        self.assertTrue(destination.append_fallback and destination.used_if_missing)
+        self.assertFalse(destination.known_resolution_source)
         def request(kind):
             return core.CrisprOperationRequest(operation_kind=kind, source_requirement="required",
                 destination_requirement="none", replacement_source="explicit_text",

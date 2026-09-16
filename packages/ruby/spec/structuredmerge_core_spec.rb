@@ -15,6 +15,21 @@ RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
   it "reports structural operations as typed ordered profiles without selecting source" do
+    match = described_class.report_structural_match(described_class::CrisprMatchRequest.new(
+      start_boundary: "future", end_boundary: "owner_end_plus_trailing_gap", payload_kind: "comment_owned_body"))
+    expect(match.known_start_boundary).to be(false)
+    expect(match.trailing_gap_extended).to be(true)
+    expect(match.comment_anchored).to be(true)
+    selection = described_class.report_structural_selection(described_class::CrisprSelectionRequest.new(
+      owner_scope: "", owner_selector: "", selector_kind: "", selection_intent: "",
+      comment_region: nil, include_trailing_gap: true))
+    expect(selection.comment_region).to be_nil
+    expect(selection.owner_selector).to eq("line_bound_statements")
+    destination = described_class.report_structural_destination(described_class::CrisprDestinationRequest.new(
+      resolution_kind: "", resolution_source: "future", anchor_boundary: "", used_if_missing: true))
+    expect(destination.append_fallback).to be(true)
+    expect(destination.used_if_missing).to be(true)
+    expect(destination.known_resolution_source).to be(false)
     requests = %w[replace future].map do |kind|
       described_class::CrisprOperationRequest.new(operation_kind: kind, source_requirement: "required",
         destination_requirement: "none", replacement_source: "explicit_text",
