@@ -4,8 +4,8 @@
 use crate::{
     ByteRange, NodeRole, SourcePoint, SourceSpan,
     parsed::{
-        AttachmentHint, ChildEdge, ParseComment, ParseDiagnostic, ParseNode, ParseOutput,
-        ParseSeverity,
+        AttachmentHint, ChildEdge, NativeExtension, ParseComment, ParseDiagnostic, ParseNode,
+        ParseOutput, ParseSeverity,
     },
     service::{
         ExecutionContext, PARSE_RESULT_SCHEMA, ParseRequest, ParserProbeRequest, ParserProbeResult,
@@ -20,6 +20,16 @@ pub struct LanguagePackProvider {
 
 fn fault(code: &str, message: impl Into<String>) -> ProviderFault {
     ProviderFault { code: code.into(), message: message.into() }
+}
+
+fn node_flags(payload: serde_json::Value) -> NativeExtension {
+    NativeExtension {
+        schema: "tree-haver.tree-sitter.node/v1".into(),
+        namespace: "tree-sitter".into(),
+        capabilities: vec!["node_flags".into()],
+        payload,
+        extra: Default::default(),
+    }
 }
 
 impl LanguagePackProvider {
@@ -44,13 +54,14 @@ impl LanguagePackProvider {
                 capabilities: vec![
                     "comments".into(),
                     "diagnostics".into(),
+                    "native_extensions".into(),
                     "partial_trees".into(),
                     "source_spans".into(),
                 ],
                 probe_id: id,
                 priority: 0,
                 metadata: Default::default(),
-                extensions: vec![],
+                extensions: vec![node_flags(serde_json::json!({}))],
             },
         })
     }
@@ -64,7 +75,6 @@ impl LanguagePackProvider {
         if request.language != self.descriptor.languages[0]
             || request.dialect.is_some()
             || request.options.tokens
-            || request.options.native_extensions
             || request.source.descriptor.encoding != SourceEncoding::Utf8
         {
             return Err(fault(
@@ -137,7 +147,11 @@ impl LanguagePackProvider {
                 children: vec![],
                 semantic_roles: vec![],
                 unsupported_features: vec![],
-                extensions: vec![],
+                extensions: if request.options.native_extensions {
+                    vec![node_flags(serde_json::json!({"extra": node.is_extra()}))]
+                } else {
+                    vec![]
+                },
                 metadata: Default::default(),
                 extra: Default::default(),
             });

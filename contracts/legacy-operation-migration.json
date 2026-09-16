@@ -48,10 +48,11 @@
     {
       "id": "parser-services",
       "methods": ["register_parser_host", "replace_parser_host", "unregister_parser_host", "clear_parser_hosts", "registered_parser_hosts", "register_tslp_parser_host", "parse_normalized_with_tslp", "parse_with_parser", "probe_with_parser"],
-      "disposition": "retain_until_consumer_migration",
+      "disposition": "local_consumer_migrated",
+      "consumer_revision": "structuredmerge/structuredmerge-ruby@1a13e6484",
       "consumers": ["ruby/gems/tree_haver/lib/tree_haver/backends/rust_tslp.rb", "structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb"],
       "replacement": "Typed ParserHost registration, TreeHaver selection and parse_sources; explicit Rust TSLP provider registration and typed normalized results.",
-      "gap": "The typed Rust TreeHaver LanguagePackProvider is exported through both generated structuredmerge-core bindings and passes installed real JSON parser tests, without prototype dependencies. The Ruby normalized TSLP adapter is not yet migrated; its native extra-node flag and compatibility projection need review. Replace/list/probe/bulk-clear policies need explicit contracts; matching method names are not drop-in compatibility."
+      "gap": "Ruby TreeHaver now registers and parses through typed structuredmerge-core, including a versioned native extra-node flag; its full 90-example suite passes against the installed core gem. Provider identity and diagnostic wording intentionally follow typed results. Hosted/released-package, downstream and full lint/coverage gates remain open. Legacy facade regression specs are retained, not migrated implementations of replace/list/probe/bulk-clear. Those lifecycle methods still need explicit disposition/contracts before facade deletion; matching method names are not drop-in compatibility."
     },
     {
       "id": "capabilities",

@@ -18,9 +18,9 @@ partial tree and blocking diagnostics. Request forwarding fields are nested so
 they cannot shadow output-reserved fields. No JSON-string parse facade or
 host-owned matching/merge decisions are introduced.
 
-The initial provider supports UTF-8, source spans, comments, diagnostics and
-partial trees. Dialect constraints, token requests and native extensions are
-not advertised. TreeHaver validates request/result identities, source bytes,
+The provider supports UTF-8, source spans, comments, diagnostics, partial trees
+and opt-in native extensions. Dialect constraints and token requests are not
+advertised. TreeHaver validates request/result identities, source bytes,
 selection and graph integrity. Projection uses iterative traversal and checks
 node budgets; interruption checks surround native parsing and occur during
 projection. This is not preemptive interruption of an in-progress native parse
@@ -55,9 +55,26 @@ strict Clippy, and 14 artifact/inventory audits pass. Logs:
 `tmp/typed-tslp-{python,ruby}-artifact.log` and
 `tmp/typed-tslp-core-{tests,regression,clippy}.log`.
 
-Still required: Ruby normalized-tree compatibility projection and consumer
-migration. Its legacy `extra?` node surface also needs an explicit native-fact
-mapping; the current typed node DTO does not carry that tree-sitter flag.
-Parser/grammar version reporting is still runtime/unknown rather
+## Native node flags and migrated Ruby consumer
+
+With `native_extensions: true`, each node carries extension schema
+`tree-haver.tree-sitter.node/v1`, namespace `tree-sitter`, capability
+`node_flags`, and payload `{"extra": <native is_extra boolean>}`. The provider
+descriptor advertises this extension with an empty payload. With the option
+disabled, node extensions are empty. This is a syntax fact, not ownership or
+attachment authority. Six Rust language-pack tests now pass, including opt-in
+extra flags on comments and their absence when not requested.
+
+The Ruby TreeHaver `rust_tslp` consumer now registers and parses via the typed
+core, directly adapting DTOs and exact source spans. Its complete 90-example
+suite passes against the installed core artifact, including ten real grammars,
+partial trees, comments, field navigation and Unicode/CRLF. Node `extra?` reads
+the versioned extension; missing/error flags use typed core fields. See the
+Ruby consumer's `spec/TYPED_CORE_MIGRATION.md` for lifecycle and compatibility
+details. Both isolated core artifacts still pass (Ruby 30+12, Python 34+15),
+now asserting extension transport as well. Source API signatures are unchanged.
+
+Still required: remaining consumers, full lifecycle/release gates and exact
+version identity. Parser/grammar version reporting is still runtime/unknown rather
 than an exact grammar-build identity. Cross-platform ABI, full language coverage,
 release/default authority and complete lifecycle contracts remain separate gates.

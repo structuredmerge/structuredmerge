@@ -76,13 +76,17 @@ class TypedParserHostTest(unittest.TestCase):
                 return core.ParseRequest(schema="structuredmerge.parse-request/v1", request_id="json",
                     source=source, language="json", dialect=None,
                     selection=core.ParserSelection(backend_id=provider_id, preference=[], required_capabilities=[]),
-                    options=core.ParseOptions(comments=True, diagnostics=True), metadata={}, extra={})
+                    options=core.ParseOptions(comments=True, diagnostics=True, native_extensions=True), metadata={}, extra={})
             limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
             parsed = core.parse_sources([request('// note\r\n{"é": [true]}')], limits)[0]
             self.assertEqual(parsed.backend.id, provider_id)
             self.assertEqual(parsed.selection.selected_backend, provider_id)
             self.assertTrue(parsed.parsed.ok)
             self.assertEqual(len(parsed.parsed.comments), 1)
+            comment_id = parsed.parsed.comments[0].node_id
+            comment = next(node for node in parsed.parsed.nodes if node.id == comment_id)
+            self.assertEqual(comment.extensions[0].schema, "tree-haver.tree-sitter.node/v1")
+            self.assertEqual(comment.extensions[0].payload, '{"extra":true}')
             self.assertTrue(any(edge.field_name == "key" for node in parsed.parsed.nodes for edge in node.children))
             broken = core.parse_sources([request('{"x":')], limits)[0].parsed
             self.assertFalse(broken.ok)

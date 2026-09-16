@@ -28,7 +28,7 @@ RSpec.describe StructuredmergeCore do
         described_class::ParseRequest.new(schema: "structuredmerge.parse-request/v1", request_id: "json",
           source: source, language: "json", dialect: nil,
           selection: described_class::ParserSelection.new(backend_id: provider_id, preference: [], required_capabilities: []),
-          options: described_class::ParseOptions.new(comments: true, diagnostics: true, tokens: false, native_extensions: false),
+          options: described_class::ParseOptions.new(comments: true, diagnostics: true, tokens: false, native_extensions: true),
           metadata: {}, extra: {})
       end
       result = described_class.parse_sources([request.call("// note\r\n{\"é\": [true]}")], merge_limits).first
@@ -36,6 +36,9 @@ RSpec.describe StructuredmergeCore do
       expect(result.selection.selected_backend).to eq(provider_id)
       expect(result.parsed.ok).to be(true)
       expect(result.parsed.comments.length).to eq(1)
+      comment = result.parsed.nodes.find { |node| node.id == result.parsed.comments.first.node_id }
+      expect(comment.extensions.first.schema).to eq("tree-haver.tree-sitter.node/v1")
+      expect(comment.extensions.first.payload).to eq('{"extra":true}')
       expect(result.parsed.nodes.flat_map(&:children).map(&:field_name)).to include("key")
       broken = described_class.parse_sources([request.call('{"x":')], merge_limits).first.parsed
       expect(broken.ok).to be(false)

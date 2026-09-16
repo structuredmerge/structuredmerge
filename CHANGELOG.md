@@ -229,6 +229,8 @@
 
 - Expose opt-in Rust language-pack parser registration and provider-neutral removal through both generated structuredmerge-core bindings, with shared TreeHaver lifecycle and installed-artifact parser tests.
 
+- Preserve native tree-sitter extra-node flags in an opt-in versioned extension for typed Ruby TreeHaver consumer migration.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

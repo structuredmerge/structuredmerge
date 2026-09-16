@@ -160,3 +160,23 @@ fn comments_are_native_facts_and_forward_fields_cannot_shadow_output() {
     assert!(!output.extra.contains_key("ok"));
     assert_eq!(output.extra["request_extra"]["ok"], false);
 }
+
+#[test]
+#[ignore = "requires language-pack grammar cache/download access"]
+fn native_extra_flag_is_versioned_and_opt_in() {
+    let mut request = request("// note\n{}", "flags");
+    request.options.native_extensions = true;
+    let results = TreeHaverParseService::default()
+        .parse_batch(vec![request.clone()], &registry(), &context())
+        .unwrap();
+    let output = results[0].document.output();
+    let comment = output.nodes.iter().find(|node| node.role == NodeRole::Comment).unwrap();
+    assert_eq!(comment.extensions[0].schema, "tree-haver.tree-sitter.node/v1");
+    assert_eq!(comment.extensions[0].payload["extra"], true);
+    assert_eq!(output.nodes[0].extensions[0].payload["extra"], false);
+    request.options.native_extensions = false;
+    let results = TreeHaverParseService::default()
+        .parse_batch(vec![request], &registry(), &context())
+        .unwrap();
+    assert!(results[0].document.output().nodes.iter().all(|node| node.extensions.is_empty()));
+}
