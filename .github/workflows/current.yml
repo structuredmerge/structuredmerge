@@ -26,11 +26,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Clone sibling fixtures repo
+      - name: Checkout shared fixtures
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: structuredmerge/structuredmerge-fixtures
+          ref: 93276c5a54fe6fb6bd3cc0c44aa63880fc9a0a19
+          path: shared-fixtures
+      - name: Place fixtures beside kernel
         shell: bash
-        run: |
-          set -euo pipefail
-          git clone --depth 1 https://github.com/structuredmerge/structuredmerge-fixtures ../fixtures
+        run: mv shared-fixtures ../fixtures
       - name: Setup mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
       - name: Run checks
@@ -64,10 +68,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout shared fixtures
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: structuredmerge/structuredmerge-fixtures
+          ref: 93276c5a54fe6fb6bd3cc0c44aa63880fc9a0a19
+          path: shared-fixtures
+      - name: Place fixtures beside kernel
+        shell: bash
+        run: mv shared-fixtures ../fixtures
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
-          toolchain: stable
+          toolchain: ${{ runner.os == 'Windows' && 'stable-x86_64-pc-windows-gnu' || 'stable' }}
+      - name: Match RubyInstaller ABI
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo 'RUST_TARGET=x86_64-pc-windows-gnu' >> "$GITHUB_ENV"
+          echo 'CARGO_BUILD_TARGET=x86_64-pc-windows-gnu' >> "$GITHUB_ENV"
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
