@@ -57,12 +57,12 @@ class LibCSTHost:
 
 
 class TypedParserHostTest(unittest.TestCase):
-    def merge_requests(self, sources):
+    def merge_requests(self, sources, shared_source_id=None):
         requests = []
         for role, source in zip([core.SourceRole.BASE, core.SourceRole.OURS, core.SourceRole.THEIRS], sources):
             data = source.encode("utf-8")
             descriptor = native.SourceDescriptor(
-                source_id="merge-output" if role == core.SourceRole.BASE else str(role), role=role, byte_length=len(data), sha256=hashlib.sha256(data).hexdigest(),
+                source_id=shared_source_id or ("merge-output" if role == core.SourceRole.BASE else str(role)), role=role, byte_length=len(data), sha256=hashlib.sha256(data).hexdigest(),
                 encoding=core.SourceEncoding.UTF8, bom=data.startswith(b"\xef\xbb\xbf"),
                 line_endings=native.LineEndings(lf=data.count(b"\n")-data.count(b"\r\n"),
                     crlf=data.count(b"\r\n"), bare_cr=0), final_newline=data.endswith(b"\n"),
@@ -113,6 +113,11 @@ class TypedParserHostTest(unittest.TestCase):
         for operation in (core.parse_sources, core.merge_python_declarations):
             with self.assertRaisesRegex(RuntimeError, r"resource\.limit:"):
                 operation(requests, limited)
+        self.assertEqual(self.host.calls, 0)
+        duplicated = self.merge_requests(["a = 1\n", "a = 2\n", "a = 3\n"], shared_source_id="duplicate")
+        for operation in (core.parse_sources, core.merge_python_declarations):
+            with self.assertRaisesRegex(RuntimeError, r"source\.invalid:"):
+                operation(duplicated, limits)
         self.assertEqual(self.host.calls, 0)
 
         def explode(request):

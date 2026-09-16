@@ -66,10 +66,10 @@ RSpec.describe StructuredmergeCore do
     end
   end
 
-  def merge_requests(sources)
+  def merge_requests(sources, shared_source_id: nil)
     %w[base ours theirs].zip(sources).map do |role, source|
       descriptor = described_class::SourceDescriptor.new(
-        source_id: role == "base" ? "merge-output" : role, role: role, byte_length: source.bytesize,
+        source_id: shared_source_id || (role == "base" ? "merge-output" : role), role: role, byte_length: source.bytesize,
         sha256: Digest::SHA256.hexdigest(source), encoding: "utf8", bom: source.start_with?("\uFEFF"),
         line_endings: described_class::LineEndings.new(
           lf: source.count("\n") - source.scan("\r\n").length,
@@ -99,6 +99,11 @@ RSpec.describe StructuredmergeCore do
     limited = described_class::ParseLimits.new(max_batch_items: 3, max_input_bytes: 0, max_nodes: 1000, max_diagnostics: 20)
     %i[parse_sources merge_yaml_mapping].each do |operation|
       expect { described_class.public_send(operation, requests, limited) }.to raise_error(RuntimeError, /resource\.limit:/)
+    end
+    expect(host.calls).to eq(0)
+    duplicated = merge_requests(["a: one\n", "a: two\n", "a: three\n"], shared_source_id: "duplicate")
+    %i[parse_sources merge_yaml_mapping].each do |operation|
+      expect { described_class.public_send(operation, duplicated, merge_limits) }.to raise_error(RuntimeError, /source\.invalid:/)
     end
     expect(host.calls).to eq(0)
     host.define_singleton_method(:parse_batch) do |_request|

@@ -19,7 +19,7 @@ use crate::{
     parsed::{
         NativeExtension, ParseOutput, ParseValidationError, ParseValidationLimits, ParsedDocument,
     },
-    source::{SourceDocument, SourceError, SourceInput},
+    source::{SourceDocument, SourceError, SourceErrorCode, SourceInput},
 };
 
 pub const PARSE_REQUEST_SCHEMA: &str = "structuredmerge.parse-request/v1";
@@ -475,12 +475,19 @@ impl ParseService for TreeHaverParseService {
             return Err(ServiceError::LimitExceeded);
         }
         let mut sources = BTreeMap::new();
+        let mut source_ids = BTreeSet::new();
         let mut remaining = context.max_input_bytes;
         // Validate the whole batch before the first callback, including probes.
         for request in &requests {
             validate_request(request)?;
             if sources.contains_key(&request.request_id) {
                 return Err(ServiceError::InvalidRequest);
+            }
+            if !source_ids.insert(request.source.descriptor.source_id.clone()) {
+                return Err(ServiceError::Source(SourceError {
+                    code: SourceErrorCode::DuplicateId,
+                    source_id: request.source.descriptor.source_id.clone(),
+                }));
             }
             let source = SourceDocument::validate(request.source.clone(), remaining)
                 .map_err(ServiceError::Source)?;

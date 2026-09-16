@@ -284,6 +284,23 @@ fn invalid_inputs_and_limits_fail_before_any_provider_callback() {
     assert!(
         service.parse_batch(vec![request("same"), request("same")], &snapshot, &context()).is_err()
     );
+    for bytes in [request("first").source.bytes, b"different\n".to_vec()] {
+        let first = request("first");
+        let mut second = request("second");
+        second.source = source_input(
+            first.source.descriptor.source_id.clone(),
+            SourceRole::Source,
+            SourceEncoding::Utf8,
+            bytes,
+        )
+        .unwrap();
+        assert!(matches!(
+            service.parse_batch(vec![first, second], &snapshot, &context()),
+            Err(ServiceError::Source(error))
+                if error.code == tree_haver::source::SourceErrorCode::DuplicateId
+                    && error.source_id == "first"
+        ));
+    }
     let mut limited = context();
     limited.max_batch_items = 1;
     assert!(matches!(

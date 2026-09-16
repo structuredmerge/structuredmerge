@@ -184,3 +184,5 @@
 - Give typed parser and native-merge service failures stable distinct core error codes, including consistent resource-limit classification and preserved provider fault text.
 
 - Retain all validated input source descriptors on typed native syntax rejection and select syntax failures by semantic role before family analysis, independent of request order.
+
+- Reject duplicate source IDs across typed parser batches before probes or parsing, including distinct requests with identical bytes or different merge roles.

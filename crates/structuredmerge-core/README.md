@@ -111,6 +111,12 @@ limits share `resource.limit`. Native provider codes never replace these core
 codes; their text remains in the human-readable message. Do not parse the
 message as a structured contract.
 
+Each parser batch requires unique request IDs and unique source IDs. Distinct
+requests may not reuse one source identity, even for identical bytes or different
+semantic roles. TreeHaver validates this across the whole batch before any
+availability probe or parse callback; duplicate source IDs raise `source.invalid`.
+This matches the immutable source-map identity rule used by operation validation.
+
 This projection is not the complete Slice 1028 diagnostic envelope. Structured
 origin/native-code fields, selection reports on failure, cause references, and
 runtime-specific exception attributes remain to be implemented. Cancellation
