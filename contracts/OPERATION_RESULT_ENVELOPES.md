@@ -47,13 +47,14 @@ that region or ownership. Full render-plan/output provenance verification,
 policy-required property negotiation and delegated-provider compatibility
 remain required.
 
-The diagnostic/conflict records here explicitly accept the Slice 1025
-**migration shape**, including that fixture's historical hyphenated codes.
-They are not the final Slice 1028 portable diagnostic/conflict records. Before
-exposing this API through bindings, canonical projection must preserve origin,
-source alternatives, causality, localization and resolution evidence and emit
-Slice 1028 schemas/codes. No message parsing or blind hyphen replacement is an
-acceptable substitute. No generated binding exports this module yet.
+Diagnostics accept either a whole migration array or a whole canonical Slice
+1028 array, never an implicit mixture. Canonical records are validated within
+the same result envelope; malformed schema-bearing diagnostics cannot fall
+back to migration parsing. See [PORTABLE_DIAGNOSTICS.md](PORTABLE_DIAGNOSTICS.md)
+for ordering, source/cause/subject checks and explicit legacy projection.
+Conflict records still use the Slice 1025 **migration shape**; canonical source
+alternatives, localization and resolution evidence remain required before
+binding adoption. No generated binding exports this module yet.
 
 `tests/operation_results.rs` proves exact round trips for the four successful
 fixture operations and two supplemental outcomes (parse failure and conflict

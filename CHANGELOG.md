@@ -187,6 +187,8 @@
 
 - Add request-correlated Rust operation-result checks for semantic roles, explicit selection, contradictory outcomes, source evidence, preservation claims, and batch identity.
 
+- Add canonical diagnostic records to typed operation results, with causal/source validation, native-origin preservation, strict schema parsing, and explicit legacy-reason migration.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

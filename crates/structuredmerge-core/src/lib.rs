@@ -23,6 +23,7 @@ pub use diff::*;
 mod edits;
 pub mod operation;
 pub mod operation_result;
+pub mod portable_diagnostic;
 pub use edits::*;
 mod structural;
 pub use ast_crispr::{CrisprBatchOperationReport, CrisprOperationReport};

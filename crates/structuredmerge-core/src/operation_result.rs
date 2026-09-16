@@ -1,6 +1,6 @@
 //! Slice 1025 result contract and request-correlated evidence checks.
-//! This accepts the Slice 1025 migration record shape; canonical Slice 1028
-//! diagnostic/conflict projection is a separate, still required integration.
+//! Accepts migration diagnostics or canonical Slice 1028 diagnostics. Conflict
+//! projection to Slice 1028 is a separate, still required integration.
 //! Validation cannot prove that a provider actually ran a semantic algorithm.
 
 use std::{collections::BTreeMap, error::Error, fmt};
@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     ByteRange, Metadata, NativeExtension, OperationKind, SourceRole,
     operation::ValidatedOperationRequest,
+    portable_diagnostic::{DiagnosticRecord, PortableCategory, validate_diagnostics},
 };
 
 pub const OPERATION_RESULT_SCHEMA: &str =
@@ -195,7 +196,7 @@ pub struct OperationResult {
     pub ok: bool,
     pub provider: ResultProvider,
     pub profile: ResultProfile,
-    pub diagnostics: Vec<ResultDiagnostic>,
+    pub diagnostics: Vec<DiagnosticRecord>,
     pub changes: Vec<ResultChange>,
     pub conflicts: Vec<ResultConflict>,
     // Fallback records have family-specific evidence. None is implicitly
@@ -359,7 +360,7 @@ impl OperationResult {
             });
         }
         let unresolved = self.conflicts.iter().any(|conflict| conflict.resolution == "unresolved");
-        let blocking = self.diagnostics.iter().any(|diagnostic| diagnostic.blocking);
+        let blocking = self.diagnostics.iter().any(DiagnosticRecord::blocking);
         if (self.ok && (unresolved || blocking || self.conflicted_output.is_some()))
             || (!self.ok && !unresolved && !blocking)
             || (!self.ok && self.output.is_some())
@@ -465,13 +466,56 @@ impl OperationResult {
                 return Err(E::SelectionMismatch);
             }
         }
-        if !unique_nonempty(self.diagnostics.iter().map(|record| record.id.as_str()))
+        if !unique_nonempty(self.diagnostics.iter().map(DiagnosticRecord::id))
             || !unique_nonempty(self.changes.iter().map(|record| record.id.as_str()))
             || !unique_nonempty(self.conflicts.iter().map(|record| record.id.as_str()))
         {
             return Err(E::InvalidRecord);
         }
-        for diagnostic in &self.diagnostics {
+        let canonical: Vec<_> = self
+            .diagnostics
+            .iter()
+            .filter_map(|record| match record {
+                DiagnosticRecord::Canonical(diagnostic) => Some(diagnostic),
+                DiagnosticRecord::Migration(_) => None,
+            })
+            .collect();
+        if !canonical.is_empty() && canonical.len() != self.diagnostics.len() {
+            return Err(E::InvalidRecord);
+        }
+        if canonical.iter().any(|diagnostic| diagnostic.category == PortableCategory::MergeConflict)
+            && self.conflicts.is_empty()
+        {
+            return Err(E::ContradictoryOutcome);
+        }
+        validate_diagnostics(
+            &canonical,
+            &input.request_id,
+            self.operation,
+            request.sources(),
+            |subject| match subject.kind.as_str() {
+                "conflict" => self.conflicts.iter().any(|conflict| conflict.id == subject.id),
+                "change" => self.changes.iter().any(|change| change.id == subject.id),
+                "structural_path" => {
+                    self.conflicts.iter().any(|conflict| {
+                        conflict.subject_ref.as_ref() == Some(&subject.id)
+                            || conflict.path.as_ref() == Some(&subject.id)
+                    }) || self.changes.iter().any(|change| {
+                        change.subject_ref.as_ref() == Some(&subject.id)
+                            || change.path.as_ref() == Some(&subject.id)
+                    })
+                }
+                "operation" => match self.operation {
+                    OperationKind::Merge3 => subject.id == "merge3.classification",
+                    OperationKind::Merge2 => subject.id == "merge2.classification",
+                    _ => false,
+                },
+                _ => false,
+            },
+        )
+        .map_err(|_| E::InvalidRecord)?;
+        for record in &self.diagnostics {
+            let DiagnosticRecord::Migration(diagnostic) = record else { continue };
             if matches!(
                 diagnostic.category.as_str(),
                 "parse-error" | "parse_error" | "destination_parse_error"
