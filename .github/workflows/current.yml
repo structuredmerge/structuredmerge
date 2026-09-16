@@ -39,6 +39,12 @@ jobs:
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
       - name: Run checks
         run: mise run check
+      - name: Setup Ruby for native parser integration
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+      - name: Verify native Psych facts drive Rust merge decisions
+        run: mise exec -- cargo test -p yaml-merge --test typed_psych_merge --locked -- --ignored
 
   ruby-bindings:
     name: Ruby bindings (${{ matrix.platform }}, Ruby ${{ matrix.ruby }})

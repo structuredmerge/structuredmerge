@@ -9,6 +9,8 @@ use tree_haver::{ParserRequest, parse_normalized_with_language_pack};
 
 pub const PACKAGE_NAME: &str = "yaml-merge";
 
+pub mod typed;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum YamlDialect {
     Yaml,

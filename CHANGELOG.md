@@ -123,6 +123,8 @@
 
 - Add typed TreeHaver parser records, validated source-backed trees, and in-process provider selection with immutable registry snapshots and coarse batch dispatch; retain parser faults without hidden fallback.
 
+- Add a typed native-Psych block-mapping path through TreeHaver into Rust-owned YAML entry analysis and source-preserving three-way merge, with an explicit native integration CI gate; generated host binding integration remains pending.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
