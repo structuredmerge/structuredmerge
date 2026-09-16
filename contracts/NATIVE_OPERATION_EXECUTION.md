@@ -68,3 +68,21 @@ also requires comment regions, attachment and layout-controller decisions.
 The existing conservative source-gap retention must not be presented as those
 unimplemented decisions. No complete analysis-result envelope or new generated
 analysis API is claimed yet.
+
+`NativeOwnerAnalysis::layout_gaps` now exposes the exact byte-gap plan also used
+by the owner renderer. It contains one slot preceding each owner and one suffix,
+including empty slots, with source ranges/digests and neighboring owner IDs.
+The next retained owner controls emission of its preceding slot; the last owner
+controls the suffix. Ownerless sources retain one whole-source slot with no
+invented controller. Existing baseline selection and changed-layout rejection
+remain in force. These emission controllers do not assert semantic comment
+attachment or authorize fallback transfer when an owner is deleted.
+
+`layout_attachments` reuses the existing layout attachment type to reference
+nonempty leading/trailing gaps. Adjacent owners share the same gap ID, but only
+its declared controller emits it. Empty slots have no attachment reference.
+
+This extends the existing layout module with byte-source evidence; the older
+line-based blank-run augmenter remains for its existing callers. Native layout
+must not be reconstructed from that augmenter's blank-line counts. Common
+analysis still needs the remaining attachment contract and policy projection.

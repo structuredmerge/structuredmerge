@@ -199,6 +199,8 @@
 
 - Retain and validate native parser-node provenance for Rust-owned YAML mapping and Python declaration analysis, rejecting stale sources and missing, duplicate, misordered or out-of-owner node references.
 
+- Share exact byte-gap layout evidence between native owner analysis and rendering, retaining source digests and explicit emission controllers without inferring comment attachment or deletion fallback.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

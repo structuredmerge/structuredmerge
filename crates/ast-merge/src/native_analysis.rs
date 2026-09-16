@@ -14,6 +14,34 @@ pub struct NativeOwnerAnalysis {
 }
 
 impl NativeOwnerAnalysis {
+    /// The same byte-gap plan consumed by the owner renderer. This is not
+    /// semantic comment attachment or permission to transfer a deleted gap.
+    pub fn layout_gaps(&self) -> Result<Vec<crate::layout::SourceLayoutGap>, String> {
+        crate::layout::source_layout_gaps(&self.document)
+    }
+
+    /// Adjacency references only: sharing a gap does not give both owners
+    /// emission control. The gap's explicit controller remains authoritative.
+    pub fn layout_attachments(&self) -> Result<Vec<crate::layout::LayoutAttachment>, String> {
+        let gaps = self.layout_gaps()?;
+        Ok(self
+            .document
+            .owners
+            .iter()
+            .enumerate()
+            .map(|(index, owner)| {
+                let nonempty_id = |gap: &crate::layout::SourceLayoutGap| {
+                    (!gap.range.is_empty()).then(|| gap.id.clone())
+                };
+                crate::layout::LayoutAttachment {
+                    owner_id: owner.id.clone(),
+                    leading_gap_id: nonempty_id(&gaps[index]),
+                    trailing_gap_id: nonempty_id(&gaps[index + 1]),
+                }
+            })
+            .collect())
+    }
+
     pub fn validate(&self, parsed: &ParsedResult) -> Result<(), String> {
         if !parsed.document.output().ok
             || parsed.source.descriptor() != &parsed.document.output().source

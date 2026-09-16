@@ -279,10 +279,13 @@ fn merge_owners(
         );
     }
 
+    let gaps = match crate::layout::source_layout_gaps(baseline) {
+        Ok(gaps) => gaps,
+        Err(message) => return error_result(DiagnosticCategory::ConfigurationError, message),
+    };
     let mut output = String::new();
-    let mut cursor = 0;
     let mut expected = HashMap::new();
-    for baseline_owner in &baseline.owners {
+    for (baseline_owner, gap) in baseline.owners.iter().zip(&gaps) {
         let revision = selected[baseline_owner.id.as_str()];
         let selected_owner = owner_for_revision(
             baseline_owner.id.as_str(),
@@ -297,7 +300,7 @@ fn merge_owners(
             segments,
             &baseline.source,
             baseline_revision,
-            ByteRange { start_byte: cursor, end_byte: baseline_owner.start_byte },
+            gap.range.clone(),
             None,
         );
         let selected_source = match revision {
@@ -313,7 +316,6 @@ fn merge_owners(
             ByteRange { start_byte: selected_owner.start_byte, end_byte: selected_owner.end_byte },
             Some(selected_owner.id.clone()),
         );
-        cursor = baseline_owner.end_byte;
     }
 
     append_source_segment(
@@ -321,7 +323,7 @@ fn merge_owners(
         segments,
         &baseline.source,
         baseline_revision,
-        ByteRange { start_byte: cursor, end_byte: baseline.source.len() },
+        gaps.last().expect("source layout includes suffix").range.clone(),
         None,
     );
 
@@ -609,6 +611,17 @@ mod tests {
         assert_eq!(clean.source_segments[1].owner_id, None);
         assert_eq!(clean.source_segments[2].revision, SourceRevision::Theirs);
         assert_eq!(clean.source_segments[2].output_range, ByteRange { start_byte: 5, end_byte: 8 });
+        let baseline = document("ONE\n\ntwo\n", "ONE", "two");
+        let gaps = crate::layout::source_layout_gaps(&baseline).unwrap();
+        let retained_gaps =
+            clean.source_segments.iter().filter(|segment| segment.owner_id.is_none());
+        let planned_gaps: Vec<_> = gaps.iter().filter(|gap| !gap.range.is_empty()).collect();
+        assert_eq!(retained_gaps.clone().count(), planned_gaps.len());
+        for (segment, gap) in retained_gaps.zip(planned_gaps) {
+            assert_eq!(segment.source_range, gap.range);
+            assert_eq!(segment.sha256, gap.source_sha256);
+            assert_eq!(segment.revision, SourceRevision::Ours);
+        }
         let failed = run(true);
         assert_eq!(failed.result.outcome, ThreeWayMergeOutcome::Error);
         assert!(failed.source_segments.is_empty());

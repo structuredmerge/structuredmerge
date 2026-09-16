@@ -176,6 +176,16 @@ fn native_owner_analysis_retains_actual_ordered_key_value_node_references() {
         assert_eq!(key.parent_id, value.parent_id);
     }
     analysis.validate(parsed).unwrap();
+    let gaps = analysis.layout_gaps().unwrap();
+    assert_eq!(gaps.len(), analysis.document.owners.len() + 1);
+    assert_eq!(parsed.source.slice(gaps[0].range.clone()).unwrap(), "# café\r\n".as_bytes());
+    assert_eq!(gaps[0].controller_owner_id.as_deref(), Some("/é"));
+    assert_eq!(gaps[1].controller_owner_id.as_deref(), Some("/beta"));
+    let attachments = analysis.layout_attachments().unwrap();
+    assert_eq!(attachments.len(), 2);
+    assert_eq!(attachments[0].leading_gap_id.as_deref(), Some(gaps[0].id.as_str()));
+    assert_eq!(attachments[0].trailing_gap_id, attachments[1].leading_gap_id);
+    assert_eq!(attachments[1].leading_gap_id.as_deref(), Some(gaps[1].id.as_str()));
     // Parse-local node IDs are evidence, never the cross-revision match key.
     assert!(analysis.document.owners.iter().all(|owner| owner.id.starts_with('/')));
 }
