@@ -293,6 +293,28 @@ RSpec.describe StructuredmergeCore do
     described_class.unregister_parser_host("ruby.typed.psych")
   end
 
+  it "reports unsupported analysis with complete parsed input evidence" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    result = described_class.merge_yaml_mapping(merge_requests(["a: one\n", "- unsupported sequence\n", "a: two\n"]), merge_limits)
+    expect(result.outcome.to_s).to eq("error")
+    expect(result.output).to be_nil
+    expect(result.output_source).to be_nil
+    expect(result.output_parse).to be_nil
+    expect(result.source_segments).to be_empty
+    expect(result.input_parses.length).to eq(3)
+    expect(result.input_parses.all? { |parsed| parsed.parsed.ok }).to be(true)
+    expect(result.analysis_rejections.length).to eq(1)
+    rejection = result.analysis_rejections.first
+    expect(rejection.code).to eq("analysis.unsupported_profile")
+    expect(rejection.source_role.to_s).to eq("ours")
+    expect(rejection.source_id).to eq("ours")
+    expect(rejection.message).not_to be_empty
+    expect(host.calls).to eq(1)
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
   it "fails closed when changed unowned comments cannot be preserved" do
     described_class.register_parser_host(TypedPsychHost.new)
     result = described_class.merge_yaml_mapping(merge_requests([

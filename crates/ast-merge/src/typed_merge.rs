@@ -17,8 +17,23 @@ use tree_haver::{
 pub enum NativeMergeError {
     InvalidInputs,
     Parse(ServiceError),
-    NativeParseRejected { parses: Vec<ParsedResult>, sources: Vec<SourceDescriptor> },
+    NativeParseRejected {
+        parses: Vec<ParsedResult>,
+        sources: Vec<SourceDescriptor>,
+    },
+    AnalysisRejected {
+        failures: Vec<NativeAnalysisFailure>,
+        parses: Vec<ParsedResult>,
+        sources: Vec<SourceDescriptor>,
+    },
     Unsupported(String),
+}
+
+#[derive(Debug)]
+pub struct NativeAnalysisFailure {
+    pub source_id: String,
+    pub source_role: SourceRole,
+    pub message: String,
 }
 
 pub fn merge_native_sources(
@@ -31,6 +46,13 @@ pub fn merge_native_sources(
 ) -> Result<ThreeWayMergeResult<String>, NativeMergeError> {
     merge_native_sources_with_evidence(language, requests, service, snapshot, context, analyze)
         .map(|execution| execution.rendered.result)
+        .map_err(|error| match error {
+            // Preserve the older internal family entry point's error contract.
+            NativeMergeError::AnalysisRejected { failures, .. } => NativeMergeError::Unsupported(
+                failures.into_iter().map(|failure| failure.message).collect::<Vec<_>>().join("; "),
+            ),
+            error => error,
+        })
 }
 
 pub struct NativeMergeExecution {
@@ -74,11 +96,21 @@ pub fn merge_native_sources_with_evidence(
         return Err(NativeMergeError::NativeParseRejected { parses: parsed, sources });
     }
     let mut documents = BTreeMap::new();
+    let mut failures = Vec::new();
     for result in &parsed {
-        documents.insert(
-            result.source.descriptor().role,
-            analyze(result).map_err(NativeMergeError::Unsupported)?,
-        );
+        match analyze(result) {
+            Ok(document) => {
+                documents.insert(result.source.descriptor().role, document);
+            }
+            Err(message) => failures.push(NativeAnalysisFailure {
+                source_id: result.source.descriptor().source_id.clone(),
+                source_role: result.source.descriptor().role,
+                message,
+            }),
+        }
+    }
+    if !failures.is_empty() {
+        return Err(NativeMergeError::AnalysisRejected { failures, parses: parsed, sources });
     }
     let mut output_id = "merge-output".to_owned();
     while sources.iter().any(|source| source.source_id == output_id) {

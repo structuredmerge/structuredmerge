@@ -12,6 +12,8 @@
 
 - Correct benchmark candidate provenance to the kernel repository and provide a runtime-only bundle for the retained Slice 1023 harness without the prototype host gem.
 
+- Return unsupported native analysis as typed error results with role-specific rejection records and all validated input parses, preserving the older internal Rust error entry point.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider

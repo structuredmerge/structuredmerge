@@ -63,7 +63,7 @@ param_name = "host"
 
 [crates.include]
 types = [
-  "NativeMergeResult", "RetainedSourceSegment", "ThreeWayMergeOutcome", "Diagnostic", "DiagnosticCategory",
+  "NativeMergeResult", "NativeAnalysisRejection", "RetainedSourceSegment", "ThreeWayMergeOutcome", "Diagnostic", "DiagnosticCategory",
   "DiagnosticSeverity", "ReviewDiagnosticDetail", "ReviewDiagnosticReason", "ReviewDecisionAction",
   "MergeConflict", "ConflictAlternative", "ConflictAlternativeState", "OwnedSourceRegion",
   "SourceRevision", "PolicyReference", "PolicySurface",

@@ -126,7 +126,12 @@ diagnostics, syntax facts, provider descriptors, and selection snapshot digests,
 on clean, conflicted, rendering-failed, and native-syntax-rejected results.
 `rejected_parse` remains a compatibility shorthand for the first failing input.
 Native warnings and errors belong to each parse result; they are not recoded as
-merge diagnostics. Provider-service and unsupported-analysis exceptions still
+merge diagnostics. Unsupported input analysis produces an error result with
+`analysis_rejections`: stable `analysis.unsupported_profile` codes, source IDs,
+semantic roles, and human reasons for each rejected revision. It retains all
+input parses and performs no render. This replaces the preliminary typed
+facade's unsupported-analysis exception; the older internal Rust convenience
+entry point retains its error contract. Input provider-service exceptions still
 need the full portable failure envelope.
 
 `output_parse` separately retains the actual native reparse of rendered bytes,

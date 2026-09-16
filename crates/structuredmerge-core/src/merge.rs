@@ -18,6 +18,14 @@ pub struct RetainedSourceSegment {
     pub owner_id: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct NativeAnalysisRejection {
+    pub code: String,
+    pub source_id: String,
+    pub source_role: crate::SourceRole,
+    pub message: String,
+}
+
 /// All fields from the shared three-way result are retained without recoding
 /// its conflicts, diagnostics, policies, or output. Native syntax rejection is
 /// separately retained as a typed parse result, including its revision role.
@@ -36,6 +44,7 @@ pub struct NativeMergeResult {
     /// when rendering was not attempted or an already-parsed input was selected.
     pub output_parse: Option<CoreParseResult>,
     pub verification_failure: Option<crate::ParserFailure>,
+    pub analysis_rejections: Vec<NativeAnalysisRejection>,
     pub sources: Vec<crate::SourceDescriptor>,
     pub output_source: Option<crate::SourceDescriptor>,
     pub source_segments: Vec<RetainedSourceSegment>,
@@ -117,6 +126,7 @@ fn project_result(
                 output: result.output,
                 policies: result.policies,
                 rejected_parse: None,
+                analysis_rejections: vec![],
                 output_parse: execution.output_parse.map(CoreParseResult::from),
                 verification_failure: execution.verification_error.map(crate::ParserFailure::from),
                 input_parses: execution
@@ -142,9 +152,35 @@ fn project_result(
                 output_source: None,
                 source_segments: vec![],
                 rejected_parse,
+                analysis_rejections: vec![],
                 output_parse: None,
                 verification_failure: None,
                 input_parses,
+            })
+        }
+        Err(MappingMergeError::AnalysisRejected { failures, parses, sources }) => {
+            Ok(NativeMergeResult {
+                outcome: ast_merge::ThreeWayMergeOutcome::Error,
+                diagnostics: vec![],
+                conflicts: vec![],
+                output: None,
+                policies: vec![],
+                rejected_parse: None,
+                output_parse: None,
+                verification_failure: None,
+                output_source: None,
+                source_segments: vec![],
+                sources,
+                input_parses: parses.into_iter().map(CoreParseResult::from).collect(),
+                analysis_rejections: failures
+                    .into_iter()
+                    .map(|failure| NativeAnalysisRejection {
+                        code: "analysis.unsupported_profile".into(),
+                        source_id: failure.source_id,
+                        source_role: failure.source_role,
+                        message: failure.message,
+                    })
+                    .collect(),
             })
         }
         Err(MappingMergeError::Parse(error)) => Err(CoreError::from(error)),
@@ -154,6 +190,7 @@ fn project_result(
                 MappingMergeError::Unsupported(_) => "unsupported_native_profile",
                 MappingMergeError::Parse(_) => unreachable!(),
                 MappingMergeError::NativeParseRejected { .. } => unreachable!(),
+                MappingMergeError::AnalysisRejected { .. } => unreachable!(),
             }
             .into(),
             message: format!("{error:?}"),

@@ -292,9 +292,23 @@ class TypedParserHostTest(unittest.TestCase):
         for source in ["import os\n", "a = 1; b = 2\n", "a = b = 1\n", "a, b = (1, 2)\n",
                 "a = 1\na = 2\n", "K = 1\nK = 2\n", "@decorator\ndef work():\n    pass\n"]:
             with self.subTest(source=source):
-                with self.assertRaises(RuntimeError) as raised:
-                    self.merge([source]*3)
-                self.assertIn("unsupported_native_profile", str(raised.exception))
+                result = self.merge([source]*3)
+                self.assertEqual(result.outcome, core.ThreeWayMergeOutcome.ERROR)
+                self.assertIsNone(result.output)
+                self.assertIsNone(result.output_parse)
+                self.assertEqual(result.source_segments, [])
+                self.assertEqual(len(result.input_parses), 3)
+                self.assertTrue(all(parsed.parsed.ok for parsed in result.input_parses))
+                self.assertEqual([rejection.source_role for rejection in result.analysis_rejections],
+                    [core.SourceRole.BASE, core.SourceRole.OURS, core.SourceRole.THEIRS])
+                self.assertEqual({rejection.code for rejection in result.analysis_rejections},
+                    {"analysis.unsupported_profile"})
+                self.assertTrue(all(rejection.message for rejection in result.analysis_rejections))
+                self.assertEqual([rejection.source_id for rejection in result.analysis_rejections],
+                    [source.source_id for source in result.sources])
+
+        result = self.merge(["a = 1\n", "import os\n", "a = 2\n"])
+        self.assertEqual([rejection.source_role for rejection in result.analysis_rejections], [core.SourceRole.OURS])
 
     def test_native_batch_and_native_syntax_failure(self):
         host = self.host
