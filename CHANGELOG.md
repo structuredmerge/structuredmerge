@@ -155,6 +155,8 @@
 
 - Exercise native Python merges through generated fixture suites against the installed core wheel, using a test-only LibCST provider adapter.
 
+- Run Alef-generated native YAML merge fixtures against the isolated installed core gem using the shared Psych test provider.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

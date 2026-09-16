@@ -72,6 +72,7 @@ File.write(File.join(consumer, "Gemfile"), <<~GEMFILE)
   gem "rbs", ">= 3.0"
 GEMFILE
 FileUtils.cp(File.join(package_root, "spec/structuredmerge_core_spec.rb"), File.join(consumer, "core_spec.rb"))
+FileUtils.cp(File.join(package_root, "spec/native_merge_fixture.rb"), File.join(consumer, "native_merge_fixture.rb"))
 FileUtils.cp(File.join(root, "crates/yaml-merge/tests/support/psych_facts.rb"), File.join(consumer, "psych_facts.rb"))
 FileUtils.cp_r(File.join(root, "e2e/ruby/spec"), File.join(consumer, "generated"))
 env = Bundler.unbundled_env.merge(

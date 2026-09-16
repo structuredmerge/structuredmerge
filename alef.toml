@@ -100,6 +100,19 @@ result_is_vec = true
 [crates.e2e.call.overrides.python]
 module = "native_merge_fixture"
 
+[crates.e2e.call.overrides.ruby]
+module = "./native_merge_fixture"
+
+[crates.e2e.calls.yaml_native_merge]
+function = "run_yaml_native_merge"
+module = "structuredmerge_core"
+skip_languages = ["python"]
+args = [
+  { name = "base", field = "input.base", type = "string" },
+  { name = "ours", field = "input.ours", type = "string" },
+  { name = "theirs", field = "input.theirs", type = "string" },
+]
+
 [crates.e2e.calls.python_native_merge]
 function = "run_python_native_merge"
 module = "native_merge_fixture"

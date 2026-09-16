@@ -23,8 +23,17 @@ all generated imports. The installed-artifact runner supplies this module; a
 standalone generated Python project currently needs that support too.
 
 The existing hand-authored Psych and LibCST boundary tests remain necessary.
-Ruby intentionally excludes the Python-only merge family. Mapping Psych/YAML
-and the remaining canonical corpus is still an open Phase 4 gate.
+Ruby intentionally excludes the Python-only merge family. Its Psych/YAML family
+covers independent edits, conflicts, syntax failures, unsupported sequences,
+and exact BOM/CRLF/Unicode preservation. The Ruby boundary specs and generated
+suite share `packages/ruby/spec/native_merge_fixture.rb`; the artifact runner
+copies the helper into the consumer directory and the generated suite explicitly
+requires `./native_merge_fixture`, without changing Ruby's load path. The helper
+registers the native provider, calls Rust, and unregisters in
+`ensure`. No expected output or semantic merge logic lives in either helper.
+
+Broader canonical corpus coverage and standalone generated-project support
+packaging remain open Phase 4 work; these suites prove only the stated profiles.
 
 Current generation requires local Alef corrections, including root-array field
 access and preservation of explicit null assertion values. Upstream release reproducibility remains open;
