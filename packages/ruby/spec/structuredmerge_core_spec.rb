@@ -2,7 +2,17 @@
 
 require "structuredmerge_core"
 require "digest"
-require_relative "../../../crates/yaml-merge/tests/support/psych_facts"
+require ENV.fetch("STRUCTUREDMERGE_PSYCH_FACTS") {
+  File.expand_path("../../../crates/yaml-merge/tests/support/psych_facts.rb", __dir__)
+}
+
+if (expected_home = ENV["STRUCTUREDMERGE_EXPECT_GEM_HOME"])
+  installed = Gem.loaded_specs.fetch("structuredmerge-core").full_gem_path
+  raise "core must load from the isolated installed gem" unless installed.start_with?(File.expand_path(expected_home) + File::SEPARATOR)
+  raise "prototype was activated" if Gem.loaded_specs.keys.any? { |name| name.include?("host_prototype") }
+  loaded_native = $LOADED_FEATURES.select { |path| path.include?("structuredmerge_core_rb") }
+  raise "native extension came from outside the installed gem" if loaded_native.empty? || loaded_native.any? { |path| !path.start_with?(installed + File::SEPARATOR) }
+end
 
 RSpec.describe StructuredmergeCore do
   class TypedPsychHost

@@ -50,13 +50,26 @@ unsupported forms. See [`python-merge`](../python-merge/README.md) for the bound
 profile and remaining gates. Both operations return `NativeMergeResult`.
 
 The complete operation and typed failure/preservation envelopes,
-runtime lifecycle stress tests, clean Ruby artifact installation, broader
+runtime lifecycle stress tests, the full Ruby artifact matrix, broader
 Python public DTO ergonomics, and registry publication remain unfinished.
-Legacy Ruby packaging files still coexist with the new package and must be
-removed or isolated before publication; the current gem file glob must not
-ship the inherited prototype files.
+Legacy Ruby packaging files still coexist with the new package. The generated
+source gem's broad glob remains unsafe for publication. The development
+platform-artifact gate stages an explicit core-only file list, includes both
+licenses, scopes the binary to the current Ruby ABI, checks linkage, and runs
+all five Psych/merge examples from an isolated installed gem and fresh bundle:
 
-The next gates include clean Ruby installed-artifact evidence and complete
+```sh
+cd packages/ruby
+bundle exec rake compile
+bundle exec ruby ../../workspace-scripts/check_core_ruby_artifact.rb
+```
+
+The gate leaves its gem, isolated consumer, and digest report in repository
+`tmp/core-ruby-artifact-*`. It neither publishes nor establishes source-gem,
+cross-platform, or upstream-generator reproducibility. CI now defines the
+same Linux/Ruby 4.0 check; hosted execution remains unverified.
+
+The next gates include the full artifact matrix and complete
 operation/preservation contracts for both runtimes. Passing an encoded
 operation through a host-owned merge does not meet that requirement. Existing
 kernel mechanics should be reused; new parallel merge algorithms and

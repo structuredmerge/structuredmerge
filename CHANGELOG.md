@@ -131,6 +131,8 @@
 
 - Add Rust-owned Python declaration merging from native LibCST facts through generated bindings, sharing TreeHaver parse and verification orchestration with YAML; installed-wheel tests cover exact source bytes, conflicts, syntax failures, and fail-closed unsupported syntax.
 
+- Add an isolated core-only Ruby platform gem gate with explicit contents, ABI-scoped installation, linkage inspection, and real Psych/Rust merge tests in a fresh bundle; publication and source-gem gates remain open.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
