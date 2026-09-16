@@ -48,3 +48,16 @@ or a release artifact. Fixes must live in the generator, with regression tests;
 common contracts must not be weakened to fit generated code. Alef changes remain
 local under the maintainer's instruction. Upstream-only generation and release
 readiness are still unmet.
+
+## Local conversion follow-up
+
+Local Alef commit `ef37145` adds named-key conversion for maps with named values
+and element-wise conversion for vectors of string-keyed JSON metadata maps,
+including optional fields. All 102 conversion tests pass, with regressions for
+both directions and the default configuration wrappers. Test-only fixture and
+path-comparison corrections also restore compilation of Alef's library tests.
+
+This is generator-unit evidence, not a successful repeat of the common binding
+compile trial. Generated enum key equality/hashing, required data-enum defaults,
+typed constructors and installed-call gates remain open. The active export set
+is unchanged. The Alef commit remains local; no push or upstream PR was made.
