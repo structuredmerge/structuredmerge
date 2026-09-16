@@ -151,6 +151,8 @@
 
 - Expose scoped native merge profile descriptions and correlate merge results with the invoked profile, explicitly separating experimental support from parser availability and default approval.
 
+- Generate Ruby and Python native-profile conformance tests from shared fixtures and run them against isolated installed core artifacts.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

@@ -82,3 +82,17 @@ functions = ["native_merge_profiles", "parse_sources", "register_parser_host", "
 
 [crates.exclude]
 methods = ["ByteRange.contains_range", "ByteRange.overlaps", "OwnedSourceRegion.validate"]
+
+[crates.e2e]
+fixtures = "../fixtures/polyglot/typed-core"
+output = "e2e"
+languages = ["ruby", "python"]
+
+[crates.e2e.packages.ruby]
+name = "structuredmerge-core"
+
+[crates.e2e.call]
+function = "native_merge_profiles"
+module = "structuredmerge_core"
+returns_result = false
+result_is_vec = true

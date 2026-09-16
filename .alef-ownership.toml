@@ -19,6 +19,7 @@ owned_paths = [
   "docs/reference/configuration.md",
   "docs/reference/errors.md",
   "docs/reference/types.md",
+  "e2e/ruby/Gemfile",
   "packages/python/LICENSE",
   "packages/python/structuredmerge_core/_native.pyi",
   "packages/python/structuredmerge_core/py.typed",

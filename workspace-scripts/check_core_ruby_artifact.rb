@@ -73,6 +73,7 @@ File.write(File.join(consumer, "Gemfile"), <<~GEMFILE)
 GEMFILE
 FileUtils.cp(File.join(package_root, "spec/structuredmerge_core_spec.rb"), File.join(consumer, "core_spec.rb"))
 FileUtils.cp(File.join(root, "crates/yaml-merge/tests/support/psych_facts.rb"), File.join(consumer, "psych_facts.rb"))
+FileUtils.cp_r(File.join(root, "e2e/ruby/spec"), File.join(consumer, "generated"))
 env = Bundler.unbundled_env.merge(
   "GEM_HOME" => gem_home, "GEM_PATH" => gem_home,
   "BUNDLE_GEMFILE" => File.join(consumer, "Gemfile"),
@@ -94,6 +95,7 @@ run.call(RbConfig.ruby, "-S", "bundle", "install", "--jobs", "4")
 run.call(RbConfig.ruby, "-S", "bundle", "exec", "rbs", "-I",
   File.join(gem_home, "gems", spec.full_name, "sig"), "validate")
 run.call(RbConfig.ruby, "-S", "bundle", "exec", "rspec", "core_spec.rb")
+run.call(RbConfig.ruby, "-S", "bundle", "exec", "rspec", "generated")
 report = {
   "artifact" => artifact, "sha256" => Digest::SHA256.file(artifact).hexdigest,
   "package" => spec.name, "version" => spec.version.to_s,
@@ -101,6 +103,7 @@ report = {
   "files" => archive.contents.sort, "installed_merge_tests" => "passed",
   "linkage_check" => "passed",
   "type_declarations" => "validated",
+  "generated_e2e_tests" => "passed",
   "publication_gate" => false, "source_gem_gate" => false,
 }
 File.write(File.join(stage, "report.json"), JSON.pretty_generate(report) + "\n")

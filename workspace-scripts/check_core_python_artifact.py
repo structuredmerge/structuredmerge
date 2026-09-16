@@ -58,16 +58,20 @@ def main():
     consumer.mkdir()
     for name in ("test_parser_host.py", "libcst_facts.py"):
         shutil.copyfile(root / "packages/python/tests" / name, consumer / name)
+    shutil.copytree(root / "e2e/python/tests", consumer / "generated")
     env = {key: value for key, value in os.environ.items() if key not in ("PYTHONPATH", "PYTHONHOME")}
-    subprocess.run([str(python), "-m", "pip", "install", str(wheel), "libcst==1.9.0"],
+    subprocess.run([str(python), "-m", "pip", "install", str(wheel), "libcst==1.9.0", "pytest>=7.4"],
         cwd=consumer, env=env, check=True)
     subprocess.run([str(python), "-m", "unittest", "discover", "-s", ".", "-v"],
+        cwd=consumer, env=env, check=True)
+    subprocess.run([str(python), "-m", "pytest", "generated", "-v"],
         cwd=consumer, env=env, check=True)
     report = {
         "artifact": str(wheel), "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
         "package": metadata["Name"], "version": metadata["Version"],
         "python": sys.version, "libcst": "1.9.0", "license_files": license_files,
         "installed_merge_tests": "passed", "publication_gate": False,
+        "generated_e2e_tests": "passed",
     }
     (stage / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report))
