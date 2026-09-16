@@ -215,6 +215,8 @@
 
 - Add directional byte rendering for explicit Rust family insertion plans, preserving all current bytes and incoming/current provenance with independent byte and output-owner verification; native merge2 integration remains pending.
 
+- Add internal TreeHaver-backed directional merge orchestration with Rust-owned planning, native output verification, explicit incoming/current identities, and cancellation checks; production merge2 facade support remains pending.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

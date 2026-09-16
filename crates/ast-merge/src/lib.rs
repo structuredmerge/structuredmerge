@@ -33,6 +33,7 @@ pub mod owner_diff;
 pub mod owner_merge2;
 pub mod typed_diff;
 pub mod typed_merge;
+pub mod typed_merge2;
 
 pub const PACKAGE_NAME: &str = "ast-merge";
 pub const MERGE_ENGINE_ENVIRONMENT_VARIABLE: &str = "SMORG_MERGE_ENGINE";

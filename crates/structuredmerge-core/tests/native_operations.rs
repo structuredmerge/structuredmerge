@@ -169,6 +169,198 @@ fn code(result: &operation_result::OperationResult) -> &str {
     &diagnostic.code
 }
 
+fn directional_requests(runtime: Runtime, incoming: &str, current: &str) -> Vec<ParseRequest> {
+    let (language, backend) = match runtime {
+        Runtime::Ruby => ("yaml", "test.psych"),
+        Runtime::Python => ("python", "test.libcst"),
+    };
+    [(SourceRole::Incoming, incoming), (SourceRole::Current, current)]
+        .into_iter()
+        .map(|(role, text)| ParseRequest {
+            schema: PARSE_REQUEST_SCHEMA.into(),
+            request_id: format!("directional-{role:?}"),
+            source: source_input(
+                if role == SourceRole::Current {
+                    "merge2-output".into()
+                } else {
+                    "incoming".into()
+                },
+                role,
+                SourceEncoding::Utf8,
+                text.as_bytes().to_vec(),
+            )
+            .unwrap(),
+            language: language.into(),
+            dialect: None,
+            selection: ParserSelection {
+                backend_id: Some(backend.into()),
+                preference: vec![],
+                required_capabilities: vec![],
+            },
+            options: ParseOptions {
+                comments: false,
+                tokens: false,
+                diagnostics: false,
+                native_extensions: true,
+            },
+            metadata: Default::default(),
+            extra: Default::default(),
+        })
+        .collect()
+}
+
+// Explicit unit/integration seam for one tail insertion; not production family
+// placement policy. Native providers cannot supply this Rust planner callback.
+fn directional_tail_plan(
+    incoming: &ast_merge::SourcePreservingOwnerDocument,
+    current: &ast_merge::SourcePreservingOwnerDocument,
+) -> Result<Vec<ast_merge::directional_render::DirectionalInsertion>, String> {
+    let added: Vec<_> =
+        incoming.owners.iter().filter(|o| !current.owners.iter().any(|c| c.id == o.id)).collect();
+    if added.len() != 1 || incoming.owners.last() != added.first().copied() {
+        return Err("test requires one incoming-only tail owner".into());
+    }
+    Ok(vec![ast_merge::directional_render::DirectionalInsertion {
+        owner_id: added[0].id.clone(),
+        before_current_owner_id: None,
+        source_range: ByteRange {
+            start_byte: added[0].start_byte,
+            end_byte: incoming.source.len(),
+        },
+    }])
+}
+
+fn check_directional_runtime(runtime: Runtime) {
+    use ast_merge::typed_merge::NativeMergeError;
+    use ast_merge::typed_merge2::merge_directional_native_sources;
+    type Analyzer = fn(&ParsedResult) -> Result<ast_merge::SourcePreservingOwnerDocument, String>;
+    let (language, incoming, current, expected, analyzer): (_, _, _, _, Analyzer) = match runtime {
+        Runtime::Ruby => (
+            "yaml",
+            "alpha: incoming\nbeta: added\n",
+            "alpha: current\n",
+            "alpha: current\nbeta: added\n",
+            yaml_merge::typed::mapping_owners,
+        ),
+        Runtime::Python => (
+            "python",
+            "alpha = 1\nbeta = 2\n",
+            "alpha = 9\n",
+            "alpha = 9\nbeta = 2\n",
+            python_merge::declaration_owners,
+        ),
+    };
+    for behavior in [Behavior::Normal, Behavior::FailOutput, Behavior::Cancel] {
+        let (parser, snapshot, context) = setup_runtime(runtime, behavior);
+        let mut requests = directional_requests(runtime, incoming, current);
+        requests.reverse(); // Source roles, not incoming request order, control execution.
+        let result = merge_directional_native_sources(
+            language,
+            requests,
+            &TreeHaverParseService::default(),
+            &snapshot,
+            &context,
+            analyzer,
+            directional_tail_plan,
+        );
+        if matches!(behavior, Behavior::Cancel) {
+            assert!(matches!(result, Err(NativeMergeError::Parse(ServiceError::Cancelled))));
+            assert_eq!(parser.calls.load(Ordering::SeqCst), 1);
+            continue;
+        }
+        let result = result.unwrap();
+        assert_eq!(result.input_parses.len(), 2);
+        assert_eq!(parser.calls.load(Ordering::SeqCst), 2);
+        if matches!(behavior, Behavior::FailOutput) {
+            assert!(result.rendered.is_err());
+            assert!(result.verification_error.is_some());
+            assert!(result.output_parse.is_none());
+            continue;
+        }
+        let rendered = result.rendered.unwrap();
+        assert_eq!(rendered.output, expected);
+        assert!(result.verification_error.is_none());
+        let verified = result.output_parse.unwrap();
+        assert_eq!(verified.source.descriptor().role, SourceRole::Output);
+        assert_eq!(verified.source.descriptor().source_id, "merge2-output_");
+        assert_eq!(verified.source.bytes(), expected.as_bytes());
+        assert!(
+            rendered
+                .segments
+                .iter()
+                .all(|s| matches!(s.source_role, SourceRole::Incoming | SourceRole::Current))
+        );
+    }
+    let (parser, snapshot, context) = setup_runtime(runtime, Behavior::Normal);
+    let mut requests = directional_requests(runtime, incoming, current);
+    requests.pop();
+    assert!(matches!(
+        merge_directional_native_sources(
+            language,
+            requests,
+            &TreeHaverParseService::default(),
+            &snapshot,
+            &context,
+            analyzer,
+            directional_tail_plan
+        ),
+        Err(NativeMergeError::InvalidInputs)
+    ));
+    assert_eq!(parser.calls.load(Ordering::SeqCst), 0);
+    let (parser, snapshot, context) = setup_runtime(runtime, Behavior::Normal);
+    let malformed = match runtime {
+        Runtime::Ruby => "alpha: [\n",
+        Runtime::Python => "alpha = (\n",
+    };
+    let failed = merge_directional_native_sources(
+        language,
+        directional_requests(runtime, malformed, current),
+        &TreeHaverParseService::default(),
+        &snapshot,
+        &context,
+        analyzer,
+        directional_tail_plan,
+    );
+    let Err(NativeMergeError::NativeParseRejected { parses, sources }) = failed else {
+        panic!("syntax failure lost")
+    };
+    assert_eq!(sources.len(), 2);
+    assert!(
+        parses
+            .iter()
+            .any(|p| p.source.descriptor().role == SourceRole::Incoming && !p.document.output().ok)
+    );
+    assert_eq!(parser.calls.load(Ordering::SeqCst), 1);
+
+    let (parser, snapshot, context) = setup_runtime(runtime, Behavior::Normal);
+    let failed_plan = merge_directional_native_sources(
+        language,
+        directional_requests(runtime, current, current),
+        &TreeHaverParseService::default(),
+        &snapshot,
+        &context,
+        analyzer,
+        directional_tail_plan,
+    )
+    .unwrap();
+    assert!(failed_plan.rendered.is_err());
+    assert_eq!(failed_plan.input_parses.len(), 2);
+    assert!(failed_plan.output_parse.is_none());
+    assert_eq!(parser.calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+#[ignore = "requires native Ruby/Psych"]
+fn directional_native_psych_orchestration() {
+    check_directional_runtime(Runtime::Ruby);
+}
+
+#[test]
+#[ignore = "requires native Python/LibCST"]
+fn python_directional_native_orchestration() {
+    check_directional_runtime(Runtime::Python);
+}
+
 struct FacadeHost {
     parser: Arc<NativeParser>,
     context: ExecutionContext,
