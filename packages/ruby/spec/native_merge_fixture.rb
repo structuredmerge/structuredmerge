@@ -61,6 +61,32 @@ end
 module NativeMergeFixture
   extend self
 
+  def common_request(operation, texts, policy: nil)
+    roles = {"analyze" => %w[source], "diff2" => %w[before after], "merge2" => %w[incoming current], "merge3" => %w[base ours theirs]}.fetch(operation)
+    sources = roles.zip(texts).to_h do |role, text|
+      [role, StructuredmergeCore::OperationSource.new(source_id: role, role: role,
+        byte_length: text.bytesize, sha256: Digest::SHA256.hexdigest(text), encoding: "utf-8", content: text, extra: {})]
+    end
+    policy ||= case operation
+    when "analyze"
+      StructuredmergeCore::OperationPolicy.from_analyze(StructuredmergeCore::AnalyzePolicy.new(extra: {}))
+    when "diff2"
+      StructuredmergeCore::OperationPolicy.from_diff2(StructuredmergeCore::DiffPolicy.new(extra: {}))
+    when "merge2"
+      StructuredmergeCore::OperationPolicy.from_merge2(StructuredmergeCore::DirectionalMergePolicy.new(
+        directional_merge: "template-into-current", render_policy: "source-preserving", extra: {}))
+    else
+      StructuredmergeCore::OperationPolicy.from_merge3(StructuredmergeCore::ThreeWayMergePolicy.new(
+        render_policy: "source-preserving", fallback_policy: "none", extra: {}))
+    end
+    StructuredmergeCore::OperationRequest.new(schema: "structuredmerge.operation-request/v1", request_id: "typed-common-#{operation}",
+      operation: policy, sources: sources, extensions: [], metadata: {}, extra: {},
+      provider_selection: StructuredmergeCore::MergeProviderSelection.new(provider_id: "kernel.yaml", family: "yaml",
+        profile_id: "kernel.yaml.native_mapping.v1", required_capabilities: [operation], extra: {}),
+      parser_selection: StructuredmergeCore::OperationParserSelection.new(backend: "ruby.typed.psych", preference: [],
+        required_capabilities: [], extra: {}))
+  end
+
   def merge_requests(sources, shared_source_id: nil, roles: %w[base ours theirs])
     roles.zip(sources).map do |role, source|
       descriptor = StructuredmergeCore::SourceDescriptor.new(
@@ -88,6 +114,30 @@ module NativeMergeFixture
 
   def native_merge_profiles
     StructuredmergeCore.native_merge_profiles
+  end
+
+  def run_yaml_common(operation, sources)
+    host = TypedPsychHost.new
+    StructuredmergeCore.register_parser_host(host)
+    begin
+      result = StructuredmergeCore.execute_operation(common_request(operation, sources), merge_limits)
+      raise "common fixture did not call the native parser" unless host.calls.positive?
+      result
+    ensure
+      StructuredmergeCore.unregister_parser_host("ruby.typed.psych")
+    end
+  end
+
+  def run_yaml_common_analyze(source)
+    run_yaml_common("analyze", [source])
+  end
+
+  def run_yaml_common_diff(before, after)
+    run_yaml_common("diff2", [before, after])
+  end
+
+  def run_yaml_common_merge(base, ours, theirs)
+    run_yaml_common("merge3", [base, ours, theirs])
   end
 
   def run_yaml_native_merge(base, ours, theirs)

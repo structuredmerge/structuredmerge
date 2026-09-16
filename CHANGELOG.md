@@ -209,6 +209,8 @@
 
 - Expose the experimental common operation facade and DTOs through Alef; verify typed Python analyze, diff2, and merge3 with installed LibCST callbacks. Ruby typed policy input remains a documented generator gap.
 
+- Add common typed analyze, diff2, and merge3 fixtures for installed Ruby/Psych and Python/LibCST bindings, including syntax rejection, conflicts, and byte preservation.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

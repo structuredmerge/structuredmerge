@@ -16,32 +16,6 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
-  def common_request(operation, texts, policy: nil)
-    roles = {"analyze" => %w[source], "diff2" => %w[before after], "merge2" => %w[incoming current], "merge3" => %w[base ours theirs]}.fetch(operation)
-    sources = roles.zip(texts).to_h do |role, text|
-      [role, described_class::OperationSource.new(source_id: role, role: role,
-        byte_length: text.bytesize, sha256: Digest::SHA256.hexdigest(text), encoding: "utf-8", content: text, extra: {})]
-    end
-    policy ||= case operation
-    when "analyze"
-      described_class::OperationPolicy.from_analyze(described_class::AnalyzePolicy.new(extra: {}))
-    when "diff2"
-      described_class::OperationPolicy.from_diff2(described_class::DiffPolicy.new(extra: {}))
-    when "merge2"
-      described_class::OperationPolicy.from_merge2(described_class::DirectionalMergePolicy.new(
-        directional_merge: "template-into-current", render_policy: "source-preserving", extra: {}))
-    else
-      described_class::OperationPolicy.from_merge3(described_class::ThreeWayMergePolicy.new(
-        render_policy: "source-preserving", fallback_policy: "none", extra: {}))
-    end
-    described_class::OperationRequest.new(schema: "structuredmerge.operation-request/v1", request_id: "typed-common-#{operation}",
-      operation: policy, sources: sources, extensions: [], metadata: {}, extra: {},
-      provider_selection: described_class::MergeProviderSelection.new(provider_id: "kernel.yaml", family: "yaml",
-        profile_id: "kernel.yaml.native_mapping.v1", required_capabilities: [operation], extra: {}),
-      parser_selection: described_class::OperationParserSelection.new(backend: "ruby.typed.psych", preference: [],
-        required_capabilities: [], extra: {}))
-  end
-
   it "executes typed common operations through the registered native Psych provider" do
     host = TypedPsychHost.new
     described_class.register_parser_host(host)

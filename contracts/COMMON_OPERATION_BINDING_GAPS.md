@@ -1,5 +1,28 @@
 # Common-operation binding integration status
 
+## Generated common-operation fixtures (2026-09-16)
+
+The shared typed-core fixture family now adds six common-operation cases per
+native runtime: analyze, syntax rejection, diff2, independent merge3, conflicting
+merge3, and byte preservation (UTF-8 BOM, CRLF, comments, no final newline).
+The single `alef.toml` maps them to typed request adapters. Those adapters only
+register real Psych/LibCST parsers and call `execute_operation`; Rust owns the
+analysis, differences, conflicts, rendering and output verification. Each adapter
+requires a native parser callback, and assertions inspect the returned typed
+result directly. Expected merge bytes reuse the established native fixtures.
+
+Local Alef `92912f3` generated the suites with strict assertion resolution.
+Optional `poly fmt` was unavailable; generated files were not hand edited.
+Installed artifact gates pass: Ruby 29 examples plus 12 generated fixtures;
+Python 32 tests plus 12 generated fixtures. Ruby RBS and linkage checks pass.
+Logs: `structuredmerge/tmp/common-fixtures-{ruby,python}.log`. The gem and wheel
+SHA-256 values are unchanged from the policy-roundtrip evidence below.
+
+This closes the absence of common-facade execution in generated fixture suites,
+not full common-contract conformance. Merge2 execution, additional profiles and
+policies, consumers, platform matrices, upstream-only generation, publication
+and default authority remain open. Alef stays local; no prototype path was added.
+
 ## Typed policy round trips and declaration correction
 
 Local Alef `92912f3` extends native payload enums to eligible tagged policies.

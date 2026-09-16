@@ -170,3 +170,57 @@ args = [
   { name = "ours", field = "input.ours", type = "string" },
   { name = "theirs", field = "input.theirs", type = "string" },
 ]
+
+[crates.e2e.calls.yaml_common_analyze]
+function = "run_yaml_common_analyze"
+module = "structuredmerge_core"
+skip_languages = ["python"]
+args = [
+  { name = "source", field = "input.source", type = "string" },
+]
+
+[crates.e2e.calls.yaml_common_diff]
+function = "run_yaml_common_diff"
+module = "structuredmerge_core"
+skip_languages = ["python"]
+args = [
+  { name = "before", field = "input.before", type = "string" },
+  { name = "after", field = "input.after", type = "string" },
+]
+
+[crates.e2e.calls.yaml_common_merge]
+function = "run_yaml_common_merge"
+module = "structuredmerge_core"
+skip_languages = ["python"]
+args = [
+  { name = "base", field = "input.base", type = "string" },
+  { name = "ours", field = "input.ours", type = "string" },
+  { name = "theirs", field = "input.theirs", type = "string" },
+]
+
+[crates.e2e.calls.python_common_analyze]
+function = "run_python_common_analyze"
+module = "native_merge_fixture"
+skip_languages = ["ruby"]
+args = [
+  { name = "source", field = "input.source", type = "string" },
+]
+
+[crates.e2e.calls.python_common_diff]
+function = "run_python_common_diff"
+module = "native_merge_fixture"
+skip_languages = ["ruby"]
+args = [
+  { name = "before", field = "input.before", type = "string" },
+  { name = "after", field = "input.after", type = "string" },
+]
+
+[crates.e2e.calls.python_common_merge]
+function = "run_python_common_merge"
+module = "native_merge_fixture"
+skip_languages = ["ruby"]
+args = [
+  { name = "base", field = "input.base", type = "string" },
+  { name = "ours", field = "input.ours", type = "string" },
+  { name = "theirs", field = "input.theirs", type = "string" },
+]
