@@ -78,6 +78,53 @@ RSpec.describe StructuredmergeCore do
     described_class.unregister_parser_host("ruby.typed.psych")
   end
 
+  it "preserves canonical record variants and payloads across the installed native boundary" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    result = described_class.execute_operation(common_request("merge3", ["a: one\n", "a: ours\n", "a: theirs\n"]), merge_limits)
+    expect(result.ok).to be(false)
+    expect(result.output).to be_nil
+    record = result.conflicts.fetch(0)
+    expect(record).to be_a(described_class::ConflictRecord)
+    expect(record.migration).to be_nil
+    conflict = record.canonical
+    expect(conflict).to be_a(described_class::PortableConflict)
+    expect(conflict.code).to eq("merge.edit_edit")
+    expect(conflict.roles.map(&:to_s)).to eq(%w[base ours theirs])
+    restored = described_class::ConflictRecord.from_canonical(conflict)
+    expect(restored.canonical.id).to eq(conflict.id)
+    expect(restored.canonical.decision_ids).to eq(conflict.decision_ids)
+    expect(restored.canonical.alternatives.map(&:source_id)).to eq(conflict.alternatives.map(&:source_id))
+    diagnostic = result.diagnostics.fetch(0)
+    expect(diagnostic).to be_a(described_class::DiagnosticRecord)
+    expect(diagnostic.migration).to be_nil
+    expect(diagnostic.canonical.code).to eq("merge.edit_edit")
+    restored_diagnostic = described_class::DiagnosticRecord.from_canonical(diagnostic.canonical)
+    expect(restored_diagnostic.canonical.id).to eq(diagnostic.canonical.id)
+    expect(restored_diagnostic.canonical.blocking).to be(true)
+    legacy = described_class::ResultDiagnostic.new(id: "legacy", severity: "error", category: "unsupported",
+      code: "unsupported", message: "legacy", blocking: true, metadata: {}, extra: {})
+    migration = described_class::DiagnosticRecord.from_migration(legacy)
+    expect(migration.canonical).to be_nil
+    expect(migration.migration.id).to eq("legacy")
+    expect { described_class::DiagnosticRecord.from_canonical(legacy) }.to raise_error(TypeError)
+    expect { described_class::DiagnosticRecord.new }.to raise_error(TypeError)
+    expect { described_class::ConflictRecord.new }.to raise_error(TypeError)
+    legacy_conflict = described_class::ResultConflict.new(id: "legacy-conflict", category: "structural", roles: [],
+      source_regions: [], localized: false, resolution: "unresolved", metadata: {}, extra: {})
+    migration_conflict = described_class::ConflictRecord.from_migration(legacy_conflict)
+    expect(migration_conflict.canonical).to be_nil
+    expect(migration_conflict.migration.id).to eq("legacy-conflict")
+    expect { described_class::ConflictRecord.from_canonical(legacy_conflict) }.to raise_error(TypeError)
+    rejected = described_class.execute_operation(common_request("analyze", ["a: [\n"]), merge_limits)
+    expect(rejected.ok).to be(false)
+    parse_diagnostic = rejected.diagnostics.fetch(0).canonical
+    expect(parse_diagnostic.code).to eq("parse.rejected")
+    expect(parse_diagnostic.source_refs.fetch(0).role.to_s).to eq("source")
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
   def diff_request(sources, roles: %w[before after])
     described_class::NativeDiffRequest.new(request_id: "diff-ruby", profile_id: "kernel.yaml.native_mapping.v1",
       parses: merge_requests(sources, roles: roles))

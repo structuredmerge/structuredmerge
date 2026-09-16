@@ -539,6 +539,50 @@ class TypedParserHostTest(unittest.TestCase):
             core.execute_operation_controlled(request, limits, control)
         self.assertEqual(self.host.calls, 0)
 
+    def test_common_canonical_records_keep_variants_and_typed_payloads(self):
+        limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+        request = self.common_request("merge3", ["a = 1\n", "a = 2\n", "a = 3\n"])
+        result = core.execute_operation(request, limits)
+        self.assertFalse(result.ok)
+        self.assertIsNone(result.output)
+        record = result.conflicts[0]
+        self.assertIsInstance(record, native.ConflictRecord)
+        self.assertIsNone(record.migration)
+        conflict = record.canonical
+        self.assertIsInstance(conflict, native.PortableConflict)
+        self.assertEqual(conflict.code, "merge.edit_edit")
+        self.assertEqual([str(role) for role in conflict.roles], ["base", "ours", "theirs"])
+        restored = native.ConflictRecord.from_canonical(conflict)
+        self.assertEqual(restored.canonical.id, conflict.id)
+        self.assertEqual(restored.canonical.decision_ids, conflict.decision_ids)
+        self.assertEqual([a.source_id for a in restored.canonical.alternatives], [a.source_id for a in conflict.alternatives])
+        diagnostic = result.diagnostics[0]
+        self.assertIsInstance(diagnostic, native.DiagnosticRecord)
+        self.assertIsNone(diagnostic.migration)
+        self.assertEqual(diagnostic.canonical.code, "merge.edit_edit")
+        restored_diagnostic = native.DiagnosticRecord.from_canonical(diagnostic.canonical)
+        self.assertEqual(restored_diagnostic.canonical.id, diagnostic.canonical.id)
+        self.assertTrue(restored_diagnostic.canonical.blocking)
+        legacy = native.ResultDiagnostic(id="legacy", severity="error", category="unsupported", code="unsupported",
+            message="legacy", blocking=True, metadata={}, extra={})
+        migration = native.DiagnosticRecord.from_migration(legacy)
+        self.assertIsNone(migration.canonical)
+        self.assertEqual(migration.migration.id, "legacy")
+        with self.assertRaises(TypeError):
+            native.DiagnosticRecord.from_canonical(legacy)
+        legacy_conflict = native.ResultConflict(id="legacy-conflict", category="structural", roles=[],
+            source_regions=[], localized=False, resolution="unresolved", metadata={}, extra={})
+        migration_conflict = native.ConflictRecord.from_migration(legacy_conflict)
+        self.assertIsNone(migration_conflict.canonical)
+        self.assertEqual(migration_conflict.migration.id, "legacy-conflict")
+        with self.assertRaises(TypeError):
+            native.ConflictRecord.from_canonical(legacy_conflict)
+        rejected = core.execute_operation(self.common_request("analyze", ["a = (\n"]), limits)
+        self.assertFalse(rejected.ok)
+        parse_diagnostic = rejected.diagnostics[0].canonical
+        self.assertEqual(parse_diagnostic.code, "parse.rejected")
+        self.assertEqual(str(parse_diagnostic.source_refs[0].role), "source")
+
     def test_portable_service_errors_cross_installed_binding(self):
         requests = self.merge_requests(["a = 1\n"] * 3)
         limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)

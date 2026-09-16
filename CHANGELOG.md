@@ -262,3 +262,5 @@
 - Regenerate Ruby and Python bindings with Rust enum-key hashing and without invented defaults for required DTOs.
 
 - Accept typed Ruby common-operation policy variants and exercise analyze, diff2, merge3, cancellation and wrong-payload rejection through installed Psych callbacks.
+
+- Return native Ruby canonical/migration conflict and diagnostic record objects with explicit typed factories and readers; add installed Ruby/Python record-boundary regression coverage.

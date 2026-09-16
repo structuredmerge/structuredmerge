@@ -1,5 +1,32 @@
 # Common-operation binding integration status
 
+## Native canonical record boundary
+
+Local Alef `7ba8335` represents eligible untagged, single-named-payload record
+enums as native Ruby objects. `ConflictRecord` and `DiagnosticRecord` now retain
+the actual variant returned by Rust instead of becoming anonymous hashes.
+`from_canonical`/`from_migration` factories and nullable typed payload readers
+match the generated RBS. Implicit allocation and hash-to-variant guessing are
+not supported on this typed path. Other enum shapes retain their existing
+behavior and still need separate verification.
+
+All 134 Magnus generator tests pass. The Ruby native build and isolated gem
+tests pass (28 examples plus six generated fixtures). The unchanged Python wheel
+passes 31 installed tests plus six fixtures. Both runtimes exercise real
+edit/edit conflicts and parse errors, check canonical payload types, source
+identities and decision IDs, round-trip payloads through native variant
+factories, distinguish explicit migration records, and reject wrong payload
+types. This verifies binding-native round trips, not every core conversion or
+domain invariant on caller-created records.
+
+Evidence: `tmp/native-record-ruby-build.log`,
+`tmp/native-record-ruby-artifact.log`, and
+`tmp/native-record-python-final-artifact.log`. Ruby platform gem SHA-256:
+`6cc676236d54daa76df00cffcbf3c2a923ed31ffd499aac80d1580f6866b79a2`.
+The Python wheel SHA remains the value recorded below. Tagged policy output,
+complete record/schema round trips, full conformance, consumer migration,
+platform matrices and upstream-only/release gates remain open.
+
 ## Current status: additive common exports enabled locally
 
 Alef `6849273` generates typed Python tuple-variant factories (`from_analyze`,
