@@ -189,6 +189,8 @@
 
 - Add canonical diagnostic records to typed operation results, with causal/source validation, native-origin preservation, strict schema parsing, and explicit legacy-reason migration.
 
+- Add canonical conflict records with verified source/output regions, ordered alternatives, independently supplied resolution authorization, and request-scoped batch evidence.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

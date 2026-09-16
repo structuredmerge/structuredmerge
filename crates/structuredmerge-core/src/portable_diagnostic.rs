@@ -190,7 +190,7 @@ impl std::fmt::Display for DiagnosticContractError {
 
 impl std::error::Error for DiagnosticContractError {}
 
-fn portable_code(code: &str) -> bool {
+pub(crate) fn portable_code(code: &str) -> bool {
     let segments: Vec<_> = code.split('.').collect();
     segments.len() >= 2
         && segments.iter().all(|segment| {

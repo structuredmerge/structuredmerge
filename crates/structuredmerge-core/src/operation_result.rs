@@ -1,6 +1,5 @@
 //! Slice 1025 result contract and request-correlated evidence checks.
-//! Accepts migration diagnostics or canonical Slice 1028 diagnostics. Conflict
-//! projection to Slice 1028 is a separate, still required integration.
+//! Accepts migration records or canonical Slice 1028 diagnostics and conflicts.
 //! Validation cannot prove that a provider actually ran a semantic algorithm.
 
 use std::{collections::BTreeMap, error::Error, fmt};
@@ -10,6 +9,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     ByteRange, Metadata, NativeExtension, OperationKind, SourceRole,
     operation::ValidatedOperationRequest,
+    portable_conflict::{
+        ConflictEvidence, ConflictRecord, ConflictValidationContext, validate_conflicts,
+    },
     portable_diagnostic::{DiagnosticRecord, PortableCategory, validate_diagnostics},
 };
 
@@ -198,7 +200,7 @@ pub struct OperationResult {
     pub profile: ResultProfile,
     pub diagnostics: Vec<DiagnosticRecord>,
     pub changes: Vec<ResultChange>,
-    pub conflicts: Vec<ResultConflict>,
+    pub conflicts: Vec<ConflictRecord>,
     // Fallback records have family-specific evidence. None is implicitly
     // authorized; a registry-aware executor must validate named alternatives.
     pub fallbacks: Vec<Metadata>,
@@ -257,9 +259,23 @@ pub fn validate_operation_results(
     requests: &[ValidatedOperationRequest],
     results: Vec<OperationResult>,
 ) -> Result<Vec<OperationResult>, ResultContractError> {
+    validate_operation_results_with_evidence(requests, results, &BTreeMap::new())
+}
+
+/// As above, with executor evidence scoped by request ID. Missing evidence is
+/// not borrowed from another batch item or from a conflict's own declarations.
+pub fn validate_operation_results_with_evidence(
+    requests: &[ValidatedOperationRequest],
+    results: Vec<OperationResult>,
+    evidence: &BTreeMap<String, ConflictEvidence>,
+) -> Result<Vec<OperationResult>, ResultContractError> {
     if requests.len() != results.len()
         || !unique_nonempty(requests.iter().map(|request| request.request().request_id.as_str()))
         || !unique_nonempty(results.iter().map(|result| result.request_id.as_str()))
+    {
+        return Err(ResultContractError::IdentityMismatch);
+    }
+    if evidence.keys().any(|id| !requests.iter().any(|request| request.request().request_id == *id))
     {
         return Err(ResultContractError::IdentityMismatch);
     }
@@ -270,7 +286,10 @@ pub fn validate_operation_results(
         let result = pending
             .remove(&request.request().request_id)
             .ok_or(ResultContractError::IdentityMismatch)?;
-        result.validate_against(request)?;
+        result.validate_with_conflict_evidence(
+            request,
+            evidence.get(&request.request().request_id).unwrap_or(&ConflictEvidence::default()),
+        )?;
         ordered.push(result);
     }
     Ok(ordered)
@@ -337,6 +356,16 @@ impl OperationResult {
         &self,
         request: &ValidatedOperationRequest,
     ) -> Result<(), ResultContractError> {
+        self.validate_with_conflict_evidence(request, &ConflictEvidence::default())
+    }
+
+    /// Decision/render references and authorizations must come from the trusted
+    /// executor, not be inferred from this result's own conflict declarations.
+    pub fn validate_with_conflict_evidence(
+        &self,
+        request: &ValidatedOperationRequest,
+        conflict_evidence: &ConflictEvidence,
+    ) -> Result<(), ResultContractError> {
         use ResultContractError as E;
         let input = request.request();
         if self.schema != OPERATION_RESULT_SCHEMA {
@@ -359,7 +388,7 @@ impl OperationResult {
                 E::UnverifiedFallback
             });
         }
-        let unresolved = self.conflicts.iter().any(|conflict| conflict.resolution == "unresolved");
+        let unresolved = self.conflicts.iter().any(ConflictRecord::unresolved);
         let blocking = self.diagnostics.iter().any(DiagnosticRecord::blocking);
         if (self.ok && (unresolved || blocking || self.conflicted_output.is_some()))
             || (!self.ok && !unresolved && !blocking)
@@ -468,7 +497,7 @@ impl OperationResult {
         }
         if !unique_nonempty(self.diagnostics.iter().map(DiagnosticRecord::id))
             || !unique_nonempty(self.changes.iter().map(|record| record.id.as_str()))
-            || !unique_nonempty(self.conflicts.iter().map(|record| record.id.as_str()))
+            || !unique_nonempty(self.conflicts.iter().map(ConflictRecord::id))
         {
             return Err(E::InvalidRecord);
         }
@@ -494,16 +523,14 @@ impl OperationResult {
             self.operation,
             request.sources(),
             |subject| match subject.kind.as_str() {
-                "conflict" => self.conflicts.iter().any(|conflict| conflict.id == subject.id),
+                "conflict" => self.conflicts.iter().any(|conflict| conflict.id() == subject.id),
                 "change" => self.changes.iter().any(|change| change.id == subject.id),
                 "structural_path" => {
-                    self.conflicts.iter().any(|conflict| {
-                        conflict.subject_ref.as_ref() == Some(&subject.id)
-                            || conflict.path.as_ref() == Some(&subject.id)
-                    }) || self.changes.iter().any(|change| {
-                        change.subject_ref.as_ref() == Some(&subject.id)
-                            || change.path.as_ref() == Some(&subject.id)
-                    })
+                    self.conflicts.iter().any(|conflict| conflict.matches_path(&subject.id))
+                        || self.changes.iter().any(|change| {
+                            change.subject_ref.as_ref() == Some(&subject.id)
+                                || change.path.as_ref() == Some(&subject.id)
+                        })
                 }
                 "operation" => match self.operation {
                     OperationKind::Merge3 => subject.id == "merge3.classification",
@@ -556,7 +583,51 @@ impl OperationResult {
                 return Err(E::InvalidRecord);
             }
         }
-        for conflict in &self.conflicts {
+        let canonical_conflicts: Vec<_> = self
+            .conflicts
+            .iter()
+            .filter_map(|conflict| match conflict {
+                ConflictRecord::Canonical(record) => Some(record.as_ref()),
+                ConflictRecord::Migration(_) => None,
+            })
+            .collect();
+        if !canonical_conflicts.is_empty() && canonical_conflicts.len() != self.conflicts.len() {
+            return Err(E::InvalidRecord);
+        }
+        let output = self
+            .output
+            .as_ref()
+            .or(self.conflicted_output.as_ref())
+            .map(|text| {
+                let input = crate::source_input(
+                    "operation-output".into(),
+                    SourceRole::Output,
+                    crate::SourceEncoding::Utf8,
+                    text.as_bytes().to_vec(),
+                )?;
+                crate::SourceDocument::validate(input, text.len() as u64)
+            })
+            .transpose()
+            .map_err(|_| E::InvalidSourceEvidence)?;
+        validate_conflicts(
+            &canonical_conflicts,
+            &ConflictValidationContext {
+                operation: self.operation,
+                result_ok: self.ok,
+                sources: request.sources(),
+                output: output.as_ref(),
+                diagnostic_ids: &self
+                    .diagnostics
+                    .iter()
+                    .map(|record| record.id().to_owned())
+                    .collect(),
+                change_ids: &self.changes.iter().map(|record| record.id.clone()).collect(),
+                evidence: conflict_evidence,
+            },
+        )
+        .map_err(|_| E::InvalidRecord)?;
+        for record in &self.conflicts {
+            let ConflictRecord::Migration(conflict) = record else { continue };
             if !is_merge
                 || conflict.category.is_empty()
                 || (conflict.subject_ref.as_ref().is_none_or(String::is_empty)

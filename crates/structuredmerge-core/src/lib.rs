@@ -23,6 +23,7 @@ pub use diff::*;
 mod edits;
 pub mod operation;
 pub mod operation_result;
+pub mod portable_conflict;
 pub mod portable_diagnostic;
 pub use edits::*;
 mod structural;

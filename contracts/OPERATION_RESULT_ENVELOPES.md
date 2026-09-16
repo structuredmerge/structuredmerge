@@ -52,9 +52,11 @@ Diagnostics accept either a whole migration array or a whole canonical Slice
 the same result envelope; malformed schema-bearing diagnostics cannot fall
 back to migration parsing. See [PORTABLE_DIAGNOSTICS.md](PORTABLE_DIAGNOSTICS.md)
 for ordering, source/cause/subject checks and explicit legacy projection.
-Conflict records still use the Slice 1025 **migration shape**; canonical source
-alternatives, localization and resolution evidence remain required before
-binding adoption. No generated binding exports this module yet.
+Conflicts likewise accept whole migration or canonical arrays. Canonical
+alternative, localization, reference and authorization checks are described in
+[PORTABLE_CONFLICTS.md](PORTABLE_CONFLICTS.md). Trusted executor evidence is
+supplied separately and scoped by request ID for batches; it is never inferred
+from conflict declarations. No generated binding exports this module yet.
 
 `tests/operation_results.rs` proves exact round trips for the four successful
 fixture operations and two supplemental outcomes (parse failure and conflict
