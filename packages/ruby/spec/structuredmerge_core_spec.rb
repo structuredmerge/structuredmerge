@@ -14,6 +14,28 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  it "applies explicit UTF-8 byte edits in Rust without a parser host" do
+    text = "\uFEFFé: one\r\nlast"
+    source = described_class::SourceInput.new(
+      descriptor: described_class::SourceDescriptor.new(
+        source_id: "edit-source", role: "source", byte_length: text.bytesize,
+        sha256: Digest::SHA256.hexdigest(text), encoding: "utf8", bom: true,
+        line_endings: described_class::LineEndings.new(lf: 0, crlf: 1, bare_cr: 0), final_newline: false
+      ), bytes: text.bytes
+    )
+    limits = described_class::SourceEditLimits.new(max_input_bytes: 100, max_output_bytes: 100, max_edits: 2)
+    request = described_class::SourceEditRequest.new(request_id: "edit-1", source: source,
+      edits: [described_class::ExplicitSourceEdit.new(start_byte: 7, end_byte: 10, replacement: "two")])
+    result = described_class.apply_explicit_source_edits(request, limits)
+    expect(result.output).to eq("\uFEFFé: two\r\nlast")
+    expect(result.request_id).to eq("edit-1")
+    expect(result.edit_count).to eq(1)
+    expect(result.source.sha256).to eq(source.descriptor.sha256)
+    invalid = described_class::SourceEditRequest.new(request_id: "invalid", source: source,
+      edits: [described_class::ExplicitSourceEdit.new(start_byte: 4, end_byte: 5, replacement: "x")])
+    expect { described_class.apply_explicit_source_edits(invalid, limits) }.to raise_error(RuntimeError, /source_edit.rejected:/)
+  end
+
   def register_ephemeral_parser
     host = TypedPsychHost.new
     reference = WeakRef.new(host)

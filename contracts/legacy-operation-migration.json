@@ -33,7 +33,7 @@
       "disposition": "retain_until_consumer_migration",
       "consumers": ["ruby/gems/ast-crispr/lib/ast/crispr/rust_host_provider.rb"],
       "replacement": "Typed ast-crispr profile reports and explicit byte-range edit requests/results exported from structuredmerge-core.",
-      "gap": "Reuse ast-crispr and ast-merge source rendering. Explicit edits do not prove structural selection parity; preserve Ruby selection until separately verified."
+      "gap": "apply_explicit_source_edits now provides the typed explicit-edit primitive over ast-merge, verified through installed Ruby/Python artifacts. Ruby consumer migration and typed profile reports remain open. Explicit edits do not prove structural selection parity; preserve Ruby selection until separately verified."
     },
     {
       "id": "template-session",

@@ -16,6 +16,8 @@ pub use ast_merge::{
     ThreeWayMergeOutcome,
 };
 pub use merge::*;
+mod edits;
+pub use edits::*;
 mod profiles;
 pub use profiles::{NativeMergeProfile, native_merge_profiles};
 pub use tree_haver::parsed::{

@@ -80,6 +80,26 @@ class TypedParserHostTest(unittest.TestCase):
             ))
         return requests[::-1]
 
+    def test_explicit_source_edits_use_rust_without_parser_dispatch(self):
+        data = "\ufeffé: one\r\nlast".encode("utf-8")
+        source = core.SourceInput(descriptor=native.SourceDescriptor(
+            source_id="edit-source", role=core.SourceRole.SOURCE, byte_length=len(data),
+            sha256=hashlib.sha256(data).hexdigest(), encoding=core.SourceEncoding.UTF8,
+            bom=True, line_endings=native.LineEndings(lf=0, crlf=1, bare_cr=0), final_newline=False), bytes=data)
+        limits = core.SourceEditLimits(max_input_bytes=100, max_output_bytes=100, max_edits=2)
+        request = core.SourceEditRequest(request_id="edit-1", source=source,
+            edits=[core.ExplicitSourceEdit(start_byte=7, end_byte=10, replacement="two")])
+        result = core.apply_explicit_source_edits(request, limits)
+        self.assertEqual(result.output, "\ufeffé: two\r\nlast")
+        self.assertEqual(result.request_id, "edit-1")
+        self.assertEqual(result.edit_count, 1)
+        self.assertEqual(result.source.sha256, source.descriptor.sha256)
+        invalid = core.SourceEditRequest(request_id="invalid", source=source,
+            edits=[core.ExplicitSourceEdit(start_byte=4, end_byte=5, replacement="x")])
+        with self.assertRaisesRegex(RuntimeError, "source_edit.rejected:"):
+            core.apply_explicit_source_edits(invalid, limits)
+        self.assertEqual(self.host.calls, 0)
+
     def merge(self, sources):
         return core.merge_python_declarations(self.merge_requests(sources), core.ParseLimits(
             max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20))

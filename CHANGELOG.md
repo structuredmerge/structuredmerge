@@ -165,6 +165,8 @@
 
 - Expose shared one-way operation cancellation controls and controlled parse/native-merge calls through Alef-generated Ruby and Python bindings.
 
+- Expose typed explicit UTF-8 source edits through generated Ruby and Python core bindings, validating source identity and bounded output while reusing the shared Rust renderer.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
