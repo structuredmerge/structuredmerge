@@ -17,18 +17,21 @@ RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
   def common_request(operation, texts, policy: nil)
-    roles = {"analyze" => %w[source], "diff2" => %w[before after], "merge3" => %w[base ours theirs]}.fetch(operation)
+    roles = {"analyze" => %w[source], "diff2" => %w[before after], "merge2" => %w[incoming current], "merge3" => %w[base ours theirs]}.fetch(operation)
     sources = roles.zip(texts).to_h do |role, text|
       [role, described_class::OperationSource.new(source_id: role, role: role,
         byte_length: text.bytesize, sha256: Digest::SHA256.hexdigest(text), encoding: "utf-8", content: text, extra: {})]
     end
     policy ||= case operation
     when "analyze"
-      described_class::OperationPolicyAnalyze.new(value: described_class::AnalyzePolicy.new(extra: {}))
+      described_class::OperationPolicy.from_analyze(described_class::AnalyzePolicy.new(extra: {}))
     when "diff2"
-      described_class::OperationPolicyDiff2.new(value: described_class::DiffPolicy.new(extra: {}))
+      described_class::OperationPolicy.from_diff2(described_class::DiffPolicy.new(extra: {}))
+    when "merge2"
+      described_class::OperationPolicy.from_merge2(described_class::DirectionalMergePolicy.new(
+        directional_merge: "template-into-current", render_policy: "source-preserving", extra: {}))
     else
-      described_class::OperationPolicyMerge3.new(value: described_class::ThreeWayMergePolicy.new(
+      described_class::OperationPolicy.from_merge3(described_class::ThreeWayMergePolicy.new(
         render_policy: "source-preserving", fallback_policy: "none", extra: {}))
     end
     described_class::OperationRequest.new(schema: "structuredmerge.operation-request/v1", request_id: "typed-common-#{operation}",
@@ -47,6 +50,9 @@ RSpec.describe StructuredmergeCore do
     cases.each do |operation, texts|
       request = common_request(operation, texts)
       expect(request.sources.length).to eq(texts.length)
+      expect(request.operation).to be_a(described_class::OperationPolicy)
+      expect(request.operation.public_send(operation)).not_to be_nil
+      request = common_request(operation, texts, policy: request.operation)
       result = described_class.execute_operation(request, merge_limits)
       expect(result.ok).to be(true)
       expect(result.request_id).to eq(request.request_id)
@@ -71,11 +77,46 @@ RSpec.describe StructuredmergeCore do
     control.cancel
     expect { described_class.execute_operation_controlled(request, merge_limits, control) }
       .to raise_error(RuntimeError, /execution.cancelled/)
-    bad = described_class::OperationPolicyAnalyze.new(value: described_class::DiffPolicy.new(extra: {}))
-    expect { common_request("analyze", ["a: one\n"], policy: bad) }.to raise_error(TypeError)
+    expect { described_class::OperationPolicy.from_analyze(described_class::DiffPolicy.new(extra: {})) }.to raise_error(TypeError)
     expect(host.calls).to eq(0)
   ensure
     described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "round-trips every policy variant without losing optional values or typed payloads" do
+    extra = {"future" => "[null,false,7]"}
+    policies = {
+      "analyze" => described_class::AnalyzePolicy.new(comments: false, ownership: true, extra: extra),
+      "diff2" => described_class::DiffPolicy.new(equivalence: [], source_preservation_evidence: false, extra: extra),
+      "merge2" => described_class::DirectionalMergePolicy.new(directional_merge: "template-into-current", render_policy: "source-preserving", extra: extra),
+      "merge3" => described_class::ThreeWayMergePolicy.new(render_policy: "source-preserving", labels: {"ours" => "local"}, conflict_marker_size: 9, extra: extra)
+    }
+    policies.each do |name, payload|
+      policy = described_class::OperationPolicy.public_send("from_#{name}", payload)
+      source_count = {"analyze" => 1, "diff2" => 2, "merge2" => 2, "merge3" => 3}.fetch(name)
+      request = common_request(name, Array.new(source_count, "a: one\n"), policy: policy)
+      restored = request.operation
+      expect(restored).to be_a(described_class::OperationPolicy)
+      policies.each_key { |other| expect(restored.public_send(other)).to be_nil unless other == name }
+      value = restored.public_send(name)
+      expect(value).to be_a(payload.class)
+      expect(value.extra).to eq(extra)
+      case name
+      when "analyze"
+        expect(value.comments).to be(false)
+        expect(value.ownership).to be(true)
+        expect(value.tokens).to be_nil
+      when "diff2"
+        expect(value.equivalence).to eq([])
+        expect(value.source_preservation_evidence).to be(false)
+      when "merge2"
+        expect(value.directional_merge).to eq("template-into-current")
+      else
+        expect(value.labels).to eq({"ours" => "local"})
+        expect(value.conflict_marker_size).to eq(9)
+      end
+    end
+    expect { described_class::OperationPolicy.new }.to raise_error(TypeError)
   end
 
   it "preserves canonical record variants and payloads across the installed native boundary" do

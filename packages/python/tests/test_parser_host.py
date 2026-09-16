@@ -481,9 +481,9 @@ class TypedParserHostTest(unittest.TestCase):
             self.assertEqual({role: name}[copy], name)
             self.assertEqual({role: name}[discriminant], name)
 
-    def common_request(self, operation, texts):
+    def common_request(self, operation, texts, policy_override=None):
         roles = {"analyze": ["SOURCE"], "diff2": ["BEFORE", "AFTER"],
-                 "merge3": ["BASE", "OURS", "THEIRS"]}[operation]
+                 "merge2": ["INCOMING", "CURRENT"], "merge3": ["BASE", "OURS", "THEIRS"]}[operation]
         sources = {}
         for role_name, text in zip(roles, texts):
             role = getattr(native.SourceRole, role_name)
@@ -497,13 +497,16 @@ class TypedParserHostTest(unittest.TestCase):
         elif operation == "diff2":
             policy = native.OperationPolicy.from_diff2(native.DiffPolicy(extra={}))
             self.assertIsInstance(policy.diff2, native.DiffPolicy)
+        elif operation == "merge2":
+            policy = native.OperationPolicy.from_merge2(native.DirectionalMergePolicy(
+                directional_merge="template-into-current", render_policy="source-preserving", extra={}))
         else:
             policy = native.OperationPolicy.from_merge3(native.ThreeWayMergePolicy(
                 render_policy="source-preserving", fallback_policy="none", extra={}))
             self.assertIsInstance(policy.merge3, native.ThreeWayMergePolicy)
         return native.OperationRequest(
             schema="structuredmerge.operation-request/v1", request_id="typed-common-" + operation,
-            operation=policy, sources=sources,
+            operation=policy_override if policy_override is not None else policy, sources=sources,
             provider_selection=native.MergeProviderSelection(provider_id="kernel.python", family="python",
                 profile_id="kernel.python.native_declarations.v1", required_capabilities=[operation], extra={}),
             parser_selection=native.OperationParserSelection(backend="python.libcst", preference=[],
@@ -516,6 +519,8 @@ class TypedParserHostTest(unittest.TestCase):
         for operation, texts in cases:
             request = self.common_request(operation, texts)
             self.assertEqual(len(request.sources), len(texts))
+            self.assertIsInstance(request.operation, native.OperationPolicy)
+            request = self.common_request(operation, texts, policy_override=request.operation)
             result = core.execute_operation(request, limits)
             self.assertTrue(result.ok, str(result.diagnostics))
             self.assertEqual(result.request_id, request.request_id)
@@ -537,6 +542,39 @@ class TypedParserHostTest(unittest.TestCase):
         control.cancel()
         with self.assertRaisesRegex(RuntimeError, r"execution\.cancelled:"):
             core.execute_operation_controlled(request, limits, control)
+        self.assertEqual(self.host.calls, 0)
+
+    def test_all_policy_variants_preserve_optional_values_and_typed_payloads(self):
+        extra = {"future": "[null,false,7]"}
+        policies = {
+            "analyze": native.AnalyzePolicy(comments=False, ownership=True, extra=extra),
+            "diff2": native.DiffPolicy(equivalence=[], source_preservation_evidence=False, extra=extra),
+            "merge2": native.DirectionalMergePolicy(directional_merge="template-into-current", render_policy="source-preserving", extra=extra),
+            "merge3": native.ThreeWayMergePolicy(render_policy="source-preserving", labels={"ours": "local"}, conflict_marker_size=9, extra=extra),
+        }
+        for name, payload in policies.items():
+            policy = getattr(native.OperationPolicy, "from_" + name)(payload)
+            count = {"analyze": 1, "diff2": 2, "merge2": 2, "merge3": 3}[name]
+            restored = self.common_request(name, ["a = 1\n"] * count, policy_override=policy).operation
+            self.assertIsInstance(restored, native.OperationPolicy)
+            for other in policies:
+                if other != name:
+                    self.assertIsNone(getattr(restored, other))
+            value = getattr(restored, name)
+            self.assertIsInstance(value, type(payload))
+            self.assertEqual(value.extra, extra)
+            if name == "analyze":
+                self.assertIs(value.comments, False)
+                self.assertIs(value.ownership, True)
+                self.assertIsNone(value.tokens)
+            elif name == "diff2":
+                self.assertEqual(value.equivalence, [])
+                self.assertIs(value.source_preservation_evidence, False)
+            elif name == "merge2":
+                self.assertEqual(value.directional_merge, "template-into-current")
+            else:
+                self.assertEqual(value.labels, {"ours": "local"})
+                self.assertEqual(value.conflict_marker_size, 9)
         self.assertEqual(self.host.calls, 0)
 
     def test_common_canonical_records_keep_variants_and_typed_payloads(self):

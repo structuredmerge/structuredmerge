@@ -1,5 +1,37 @@
 # Common-operation binding integration status
 
+## Typed policy round trips and declaration correction
+
+Local Alef `92912f3` extends native payload enums to eligible tagged policies.
+Ruby `OperationPolicy` is now a native class with `from_analyze`, `from_diff2`,
+`from_merge2`, `from_merge3` and nullable typed readers, matching Python's API.
+Request getters no longer turn the policy into a Hash. This replaces the
+experimental, unreleased Ruby `OperationPolicyAnalyze`-style Data wrappers;
+callers now use the native factories. The generated RBS describes the actual
+class and methods rather than an empty class for a runtime module.
+
+Python stubs no longer invent `type` discriminator dictionaries for untagged
+or externally tagged enums. Explicitly tagged wire-shape helpers remain; this
+does not establish complete wire-schema typing for every enum shape.
+
+Generator checks pass: 134 Magnus tests and 235 PyO3 tests. Both native packages
+build. Installed Ruby checks pass 29 examples plus six fixtures; Python passes
+32 tests plus six fixtures. Every policy factory is exercised through a request
+getter, preserving `false`, nil/None, empty vectors, labels, marker size and
+passive JSON-leaf metadata. Common analyze/diff2/merge3 execution reuses the
+returned policy. This is not evidence that merge2 execution is implemented.
+
+Logs: `tmp/native-policy-roundtrip-{ruby,python}-build.log` and
+`tmp/native-policy-roundtrip-{ruby,python}-artifact.log`. Package SHA-256:
+
+- Ruby: `fff71a0d28d805b972d57f30764594228f045b61efcd7e4a91ef5823a0f7869f`.
+- Python: `28869a73de40c01e4b94006b822a33c30d64fbca656f73c288bd8369a53edd96`.
+
+This supersedes the tagged-policy output gap recorded in earlier stages below.
+Other enum shapes, complete schema/domain round trips, conformance, consumer
+migration, platform matrices, upstream-only generation and release/default
+authority remain open. Alef changes remain local; no publication occurred.
+
 ## Native canonical record boundary
 
 Local Alef `7ba8335` represents eligible untagged, single-named-payload record
