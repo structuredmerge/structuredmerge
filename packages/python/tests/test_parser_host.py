@@ -533,6 +533,26 @@ class TypedParserHostTest(unittest.TestCase):
                 self.assertTrue(result.verification.output_reparsed)
         self.assertEqual(self.host.calls, 4)
 
+    def test_common_merge2_preserves_current_trivia_and_direction(self):
+        limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+        request = self.common_request("merge2", ["a = 1\nb = 2 # new\n", "a = 9 # keep\n# footer"])
+        result = core.execute_operation(request, limits)
+        self.assertTrue(result.ok, str(result.diagnostics))
+        self.assertEqual(result.output, "a = 9 # keep\nb = 2 # new\n# footer")
+        self.assertTrue(result.verification.directional_roles_preserved)
+        self.assertTrue(result.verification.output_reparsed)
+        self.assertIsNone(result.verification.base_participated)
+        self.assertEqual(result.verification.consumed_source_roles, [core.SourceRole.INCOMING, core.SourceRole.CURRENT])
+        self.assertEqual(len(result.changes), 1)
+        self.assertEqual(result.changes[0].path, "/b")
+        reversed_result = core.execute_operation(self.common_request("merge2", ["a = 9\n", "a = 1\nb = 2\n"]), limits)
+        self.assertEqual(reversed_result.output, "a = 1\nb = 2\n")
+        self.assertEqual(self.host.calls, 4)
+        rejected = core.execute_operation(self.common_request("merge2", ["a = 1\nb = 2\nc = 3\n", "c = 30\na = 10\n"]), limits)
+        self.assertFalse(rejected.ok)
+        self.assertIsNone(rejected.output)
+        self.assertEqual(rejected.diagnostics[0].canonical.code, "merge2.plan_unsupported")
+
     def test_common_control_and_factory_type_errors_fail_before_callbacks(self):
         with self.assertRaises(TypeError):
             native.OperationPolicy.from_analyze(native.DiffPolicy(extra={}))

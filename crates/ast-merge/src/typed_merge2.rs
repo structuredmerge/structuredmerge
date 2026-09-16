@@ -22,12 +22,20 @@ pub type DirectionalPlanner = fn(
 ) -> Result<Vec<DirectionalInsertion>, String>;
 
 #[derive(Debug)]
+pub enum DirectionalFailureStage {
+    Planning,
+    Rendering,
+    Verification,
+}
+
+#[derive(Debug)]
 pub struct NativeDirectionalExecution {
     /// Err retains input/output parse evidence but never exposes rejected output.
     pub rendered: Result<DirectionalRender, String>,
     pub input_parses: Vec<ParsedResult>,
     pub output_parse: Option<ParsedResult>,
     pub verification_error: Option<ServiceError>,
+    pub failure_stage: Option<DirectionalFailureStage>,
 }
 
 /// Internal building block, not advertised provider support. The Rust family
@@ -117,6 +125,7 @@ pub fn merge_directional_native_sources(
                 input_parses: parsed,
                 output_parse: None,
                 verification_error: None,
+                failure_stage: Some(DirectionalFailureStage::Planning),
             });
         }
     };
@@ -127,6 +136,7 @@ pub fn merge_directional_native_sources(
     }
     let mut output_parse = None;
     let mut verification_error = None;
+    let mut verification_attempted = false;
     let rendered = render_directional_owners(
         &parsed[incoming].source,
         &documents[incoming],
@@ -134,6 +144,7 @@ pub fn merge_directional_native_sources(
         &documents[current],
         &insertions,
         |output| {
+            verification_attempted = true;
             verification.request_id = format!("{}:verification", verification.request_id);
             verification.source = source_input(
                 output_id,
@@ -168,10 +179,16 @@ pub fn merge_directional_native_sources(
         },
     );
     context.check().map_err(NativeMergeError::Parse)?;
+    let failure_stage = rendered.is_err().then_some(if verification_attempted {
+        DirectionalFailureStage::Verification
+    } else {
+        DirectionalFailureStage::Rendering
+    });
     Ok(NativeDirectionalExecution {
         rendered,
         input_parses: parsed,
         output_parse,
         verification_error,
+        failure_stage,
     })
 }

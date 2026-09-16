@@ -1,5 +1,42 @@
 # Common-operation binding integration status
 
+## Common Python merge2 execution (2026-09-16)
+
+The common `execute_operation` facade now accepts `merge2` for the explicit
+`kernel.python.native_declarations.v1` profile with `template-into-current`,
+source-preserving rendering and no fallback. Rust owns current-preferred whole-
+declaration selection and incoming-only insertion; LibCST supplies syntax/trivia
+facts through TreeHaver. Current bytes remain intact, and successful output is
+reparsed and compared against the selected owners before acceptance.
+
+Common results retain incoming/current participation, exact source/output byte
+segments, independent partition/current-byte preservation checks, native parses,
+owner classification and added-owner changes with incoming spans. No base is
+invented. Unsupported policies fail before callbacks; planning, rendering and
+verification failures have distinct diagnostic codes. Service failures and
+cancellation expose no accepted output. YAML merge2 remains unsupported.
+
+Installed Python checks pass: 33 tests and 15 Alef-generated fixtures, including
+current-preferred insertion with BOM/CRLF/comments, reversed direction and
+ambiguous anchor rejection. The wheel SHA-256 is
+`8d145efda5f5f03bf5f21c1dc5fe8b5da7afff55e49c63cd609180a4cdebb225`.
+All 23 real Psych/LibCST native-operation tests, ast-merge/structuredmerge-core
+default suites and strict core Clippy pass. Logs are
+`structuredmerge/tmp/common-merge2-{native,clippy,rust-tests}.log` and
+`structuredmerge/tmp/common-merge2-python-{build,artifact}.log`.
+
+The rebuilt Ruby gem passes its 29 installed examples, 12 generated fixtures,
+RBS validation and linkage checks as a regression gate (not YAML merge2 support).
+Logs: `structuredmerge/tmp/common-merge2-ruby-{build,artifact}.log`; gem SHA-256:
+`96291c720058b22cc80d2992943f65878faf36808639ebfc06f52ec24b71209e`.
+
+This supersedes earlier claims that every common merge2 request is unsupported.
+It is bounded Python declaration support, not recursive Python/YAML semantics,
+general provider negotiation, consumer migration, platform-matrix completion or
+release/default authority. Generated fixtures came from the owning local Alef
+pipeline; no binding code was hand edited. Alef remains local and no prototype
+host, package publication or default switch was added.
+
 ## Generated common-operation fixtures (2026-09-16)
 
 The shared typed-core fixture family now adds six common-operation cases per

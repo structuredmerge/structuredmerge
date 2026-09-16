@@ -33,6 +33,10 @@ def run_python_common_merge(base, ours, theirs):
     return run_python_common("merge3", [base, ours, theirs])
 
 
+def run_python_common_merge2(incoming, current):
+    return run_python_common("merge2", [incoming, current])
+
+
 def run_python_native_merge(base: str, ours: str, theirs: str):
     host = LibCSTHost()
     core.register_parser_host(host)

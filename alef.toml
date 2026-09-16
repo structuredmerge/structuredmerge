@@ -224,3 +224,12 @@ args = [
   { name = "ours", field = "input.ours", type = "string" },
   { name = "theirs", field = "input.theirs", type = "string" },
 ]
+
+[crates.e2e.calls.python_common_merge2]
+function = "run_python_common_merge2"
+module = "native_merge_fixture"
+skip_languages = ["ruby"]
+args = [
+  { name = "incoming", field = "input.incoming", type = "string" },
+  { name = "current", field = "input.current", type = "string" },
+]

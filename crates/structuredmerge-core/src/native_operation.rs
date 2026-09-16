@@ -318,6 +318,13 @@ pub fn execute_native_operation(
         return finish(result, request, &evidence);
     }
     let supported = match &input.operation {
+        OperationPolicy::Merge2(policy) => {
+            family == "python"
+                && policy.directional_merge == "template-into-current"
+                && policy.render_policy == "source-preserving"
+                && policy.extra.is_empty()
+                && policy.fallback_policy.as_deref().is_none_or(|p| p == "none")
+        }
         OperationPolicy::Analyze(policy) => crate::native_analysis_projection::supports(policy),
         OperationPolicy::Merge3(policy) => {
             policy.render_policy == "source-preserving"
@@ -335,13 +342,12 @@ pub fn execute_native_operation(
                     .as_ref()
                     .is_none_or(|rules| rules.is_empty() || rules == &["exact-source"])
         }
-        _ => false,
     };
     let operation = match input.operation.kind() {
         OperationKind::Analyze => "analyze",
         OperationKind::Merge3 => "merge3",
         OperationKind::Diff2 => "diff2",
-        _ => "unsupported",
+        OperationKind::Merge2 => "merge2",
     };
     if !supported
         || input
@@ -508,6 +514,146 @@ pub fn execute_native_operation(
                 });
             }
             Err(error) => execution_failure(&mut result, error),
+        }
+        return finish(result, request, &evidence);
+    }
+    if input.operation.kind() == OperationKind::Merge2 {
+        use ast_merge::typed_merge2::{DirectionalFailureStage, merge_directional_native_sources};
+        let execution = match merge_directional_native_sources(
+            family,
+            parses,
+            &TreeHaverParseService::default(),
+            snapshot,
+            context,
+            analyzer,
+            python_merge::directional::plan_insertions,
+        ) {
+            Ok(execution) => execution,
+            Err(error) => {
+                execution_failure(&mut result, error);
+                return finish(result, request, &evidence);
+            }
+        };
+        retain_parses(&mut result, &execution.input_parses);
+        result.extra.insert(
+            "output_parse".into(),
+            serde_json::to_value(execution.output_parse.map(CoreParseResult::from)).unwrap(),
+        );
+        match execution.rendered {
+            Ok(rendered) => {
+                result.ok = true;
+                result.output = Some(rendered.output);
+                result.verification.classification_reached = Some(true);
+                result.verification.directional_roles_preserved = Some(true);
+                result.verification.consumed_source_roles =
+                    Some(input.operation.kind().source_roles().to_vec());
+                result.verification.output_reparsed = Some(true);
+                result.verification.structural_equivalence = Some(true);
+                result.verification.preservation = Some(
+                    ["exact-source-partition", "all-current-bytes-retained"]
+                        .into_iter()
+                        .map(|property| PreservationProperty {
+                            property: property.into(),
+                            required: true,
+                            status: "passed".into(),
+                            extra: Metadata::new(),
+                        })
+                        .collect(),
+                );
+                result.verification.retained_source_regions = Some(
+                    rendered
+                        .segments
+                        .iter()
+                        .map(|segment| ResultSourceRegion {
+                            source_id: segment.source_id.clone(),
+                            source_role: segment.source_role,
+                            range: ResultRange {
+                                start_byte: segment.source_range.start_byte,
+                                end_byte: segment.source_range.end_byte,
+                                extra: Metadata::new(),
+                            },
+                            sha256: Some(segment.sha256.clone()),
+                            extra: [(
+                                "output_range".into(),
+                                serde_json::to_value(&segment.output_range).unwrap(),
+                            )]
+                            .into(),
+                        })
+                        .collect(),
+                );
+                for decision in &rendered.classification.decisions {
+                    if decision.action
+                        != ast_merge::owner_merge2::DirectionalOwnerAction::AddIncomingOnly
+                    {
+                        continue;
+                    }
+                    let region = decision.incoming.as_ref().expect("classified incoming addition");
+                    let span = diff_span(
+                        &ast_merge::owner_diff::DiffSourceRegion {
+                            source_id: region.source_id.clone(),
+                            source_role: region.source_role,
+                            range: region.range.clone(),
+                            sha256: region.sha256.clone(),
+                        },
+                        request,
+                    )?;
+                    result.changes.push(ResultChange {
+                        id: format!("change-{}", result.changes.len()),
+                        classification: "added".into(),
+                        subject_ref: Some(decision.owner_id.clone()),
+                        path: Some(decision.path.clone()),
+                        role_states: [
+                            ("incoming".into(), serde_json::to_value(region).unwrap()),
+                            ("current".into(), serde_json::Value::Null),
+                        ]
+                        .into(),
+                        source_spans: [(SourceRole::Incoming, span)].into(),
+                        metadata: Metadata::new(),
+                        extra: Metadata::new(),
+                    });
+                }
+                result.verification.extra.insert(
+                    "owner_classification".into(),
+                    serde_json::to_value(rendered.classification).unwrap(),
+                );
+                result.render_report = [
+                    ("producer".into(), serde_json::json!(provider)),
+                    ("strategy".into(), serde_json::json!("directional-source-plan")),
+                    ("source_segments".into(), serde_json::to_value(rendered.segments).unwrap()),
+                ]
+                .into();
+            }
+            Err(_) => {
+                if let Some(error) = execution.verification_error {
+                    service_failure(&mut result, error);
+                } else {
+                    let (category, code, layer) = match execution.failure_stage {
+                        Some(DirectionalFailureStage::Planning) => (
+                            PortableCategory::UnsupportedFeature,
+                            "merge2.plan_unsupported",
+                            DiagnosticLayer::Analysis,
+                        ),
+                        Some(DirectionalFailureStage::Rendering) => (
+                            PortableCategory::RenderError,
+                            "merge2.render_rejected",
+                            DiagnosticLayer::Renderer,
+                        ),
+                        _ => (
+                            PortableCategory::VerificationError,
+                            "merge2.verification_rejected",
+                            DiagnosticLayer::Verifier,
+                        ),
+                    };
+                    diagnostic(
+                        &mut result,
+                        category,
+                        code,
+                        "directional merge could not prove an accepted output",
+                        layer,
+                        vec![],
+                    );
+                }
+            }
         }
         return finish(result, request, &evidence);
     }

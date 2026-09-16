@@ -366,6 +366,70 @@ fn python_directional_native_orchestration() {
 
 #[test]
 #[ignore = "requires native Python/LibCST"]
+fn python_common_merge2_keeps_direction_and_reports_verified_changes() {
+    let (parser, snapshot, context) = setup_runtime(Runtime::Python, Behavior::Normal);
+    let request = python_request("merge2", &["a = 1\nb = 2 # new\n", "a = 9 # keep\n# footer"]);
+    let result = execute_native_operation(&request, &snapshot, &context).unwrap();
+    assert!(result.ok);
+    assert_eq!(result.output.as_deref(), Some("a = 9 # keep\nb = 2 # new\n# footer"));
+    assert_eq!(result.operation, OperationKind::Merge2);
+    assert_eq!(result.verification.directional_roles_preserved, Some(true));
+    assert_eq!(
+        result.verification.consumed_source_roles,
+        Some(vec![SourceRole::Incoming, SourceRole::Current])
+    );
+    assert_eq!(result.verification.base_participated, None);
+    assert_eq!(result.verification.output_reparsed, Some(true));
+    assert_eq!(result.changes.len(), 1);
+    assert_eq!(
+        result.changes[0].source_spans.keys().copied().collect::<Vec<_>>(),
+        vec![SourceRole::Incoming]
+    );
+    assert_eq!(result.changes[0].path.as_deref(), Some("/b"));
+    assert_eq!(parser.calls.load(Ordering::SeqCst), 2);
+    result.validate_against(&request).unwrap();
+    let reverse = python_request("merge2", &["a = 9 # keep\n", "a = 1\nb = 2\n"]);
+    let result = execute_native_operation(&reverse, &snapshot, &context).unwrap();
+    assert_eq!(result.output.as_deref(), Some("a = 1\nb = 2\n"));
+    assert!(result.changes.is_empty());
+}
+
+#[test]
+#[ignore = "requires native Python/LibCST"]
+fn python_common_merge2_rejects_unsupported_plans_policies_and_failed_verification() {
+    let (_, snapshot, context) = setup_runtime(Runtime::Python, Behavior::Normal);
+    let reordered = python_request("merge2", &["a = 1\nb = 2\nc = 3\n", "c = 30\na = 10\n"]);
+    let result = execute_native_operation(&reordered, &snapshot, &context).unwrap();
+    assert!(!result.ok);
+    assert_eq!(code(&result), "merge2.plan_unsupported");
+    assert!(result.output.is_none());
+    let (parser, snapshot, context) = setup_runtime(Runtime::Python, Behavior::Normal);
+    let mut unsupported = wire("merge2", &["a = 1\n", "a = 2\n"]);
+    unsupported["provider_selection"]["provider_id"] = json!("kernel.python");
+    unsupported["provider_selection"]["family"] = json!("python");
+    unsupported["provider_selection"]["profile_id"] = json!("kernel.python.native_declarations.v1");
+    unsupported["parser_selection"]["backend"] = json!("test.libcst");
+    unsupported["policy"]["directional_merge"] = json!("incoming-wins");
+    let result = execute_native_operation(&request(unsupported), &snapshot, &context).unwrap();
+    assert_eq!(code(&result), "operation.unsupported_requirements");
+    assert_eq!(parser.calls.load(Ordering::SeqCst), 0);
+    let (_, snapshot, context) = setup_runtime(Runtime::Python, Behavior::FailOutput);
+    let result = execute_native_operation(
+        &python_request("merge2", &["a = 1\nb = 2\n", "a = 9\n"]),
+        &snapshot,
+        &context,
+    )
+    .unwrap();
+    assert!(!result.ok);
+    assert!(result.output.is_none());
+    assert!(result.verification.output_reparsed.is_none());
+    assert!(
+        !serde_json::to_string(&result.diagnostics).unwrap().contains("private parser exception")
+    );
+}
+
+#[test]
+#[ignore = "requires native Python/LibCST"]
 fn python_directional_family_placement_preserves_native_trivia() {
     let cases = [
         (

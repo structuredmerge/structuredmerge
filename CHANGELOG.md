@@ -219,6 +219,8 @@
 
 - Add Rust-owned Python directional placement using native whitespace-inclusive LibCST spans, preserving current comments and layout while inserting incoming-only declarations; common merge2 facade integration remains pending.
 
+- Enable common typed merge2 execution for the explicit native Python declaration profile with Rust-owned current-preferred insertion, verified incoming/current provenance, stage-specific failure diagnostics, and installed-binding fixtures.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
