@@ -10,6 +10,8 @@
 
 - Build Ruby platform extensions without forced libruby linkage and inspect packaged Linux/macOS libraries before accepting artifacts.
 
+- Correct benchmark candidate provenance to the kernel repository and provide a runtime-only bundle for the retained Slice 1023 harness without the prototype host gem.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider

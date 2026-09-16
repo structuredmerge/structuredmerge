@@ -1,0 +1,12 @@
+# Runtime-only bundle for the existing Slice 1023 harness, not a new harness.
+# STRUCTUREDMERGE_DEV points to a clean structuredmerge-ruby checkout's gems/.
+source 'https://gem.coop'
+
+gem 'nomono', '~> 1.1', '>= 1.1.5', require: false
+require 'nomono/bundler'
+eval_nomono_gems(
+  gems: %w[ast-merge-git ast-merge tree_haver json-merge],
+  prefix: 'STRUCTUREDMERGE',
+  path_env: 'STRUCTUREDMERGE_DEV',
+  root: %w[src my structuredmerge ruby gems]
+)
