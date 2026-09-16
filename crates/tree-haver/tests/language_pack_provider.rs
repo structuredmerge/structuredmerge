@@ -165,11 +165,17 @@ fn comments_are_native_facts_and_forward_fields_cannot_shadow_output() {
 #[ignore = "requires language-pack grammar cache/download access"]
 fn native_extra_flag_is_versioned_and_opt_in() {
     let mut request = request("// note\n{}", "flags");
+    request.options.comments = false;
     request.options.native_extensions = true;
     let results = TreeHaverParseService::default()
         .parse_batch(vec![request.clone()], &registry(), &context())
         .unwrap();
     let output = results[0].document.output();
+    assert_eq!(
+        output.comments.len(),
+        1,
+        "native comment index is required even without enrichment"
+    );
     let comment = output.nodes.iter().find(|node| node.role == NodeRole::Comment).unwrap();
     assert_eq!(comment.extensions[0].schema, "tree-haver.tree-sitter.node/v1");
     assert_eq!(comment.extensions[0].payload["extra"], true);

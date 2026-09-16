@@ -6,6 +6,7 @@ use ast_merge::{
 use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest};
 
 mod source_preserving;
+pub mod typed;
 pub use source_preserving::{
     json_semantically_equivalent, merge_json_source_preserving, merge_json_three_way,
 };

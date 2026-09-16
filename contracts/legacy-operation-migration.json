@@ -17,7 +17,7 @@
       "disposition": "retain_until_consumer_migration",
       "consumers": ["ruby/gems/ast-merge/lib/ast/merge/rust_host_provider.rb"],
       "replacement": "Typed directional merge2 and base-aware merge3 request/result envelopes calling the existing family kernels.",
-      "gap": "The Python declaration and YAML mapping profiles do not replace these families. Preserve current/incoming direction, dialects, conflicts, diagnostics and source evidence; do not synthesize a base for merge2."
+      "gap": "The JSON engine now accepts typed TreeHaver facts for full nested analysis/merge2/merge3 with mandatory output verification, but it is not yet orchestrated by the common core facade or used by this Ruby consumer. The Ruby adapter still owns diff comparisons. Remaining family engines also need migration. Preserve current/incoming direction, dialects, conflicts, diagnostics and source evidence; do not synthesize a base for merge2."
     },
     {
       "id": "git-driver",

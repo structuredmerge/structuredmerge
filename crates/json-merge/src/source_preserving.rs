@@ -79,23 +79,32 @@ pub(crate) fn parse_document(
             .cloned()
             .unwrap_or_else(|| format!("TreeHaver could not parse {language} source.")));
     }
-    if dialect == JsonDialect::Json && parsed.nodes.iter().any(|node| node.kind == "comment") {
+    document_from_nodes(source, dialect, &parsed.root_id, &parsed.nodes)
+}
+
+pub(crate) fn document_from_nodes(
+    source: &str,
+    dialect: JsonDialect,
+    root_id: &str,
+    parsed_nodes: &[NormalizedTreeNode],
+) -> Result<JsonSyntaxDocument, String> {
+    if dialect == JsonDialect::Json && parsed_nodes.iter().any(|node| node.kind == "comment") {
         return Err("Comments are not supported in strict JSON.".to_string());
     }
     if dialect == JsonDialect::Jsonc {
-        validate_jsonc_nodes(&parsed.nodes)?;
+        validate_jsonc_nodes(parsed_nodes)?;
     }
 
-    let nodes = parsed.nodes.iter().map(|node| (node.id.as_str(), node)).collect::<HashMap<_, _>>();
+    let nodes = parsed_nodes.iter().map(|node| (node.id.as_str(), node)).collect::<HashMap<_, _>>();
     let root = nodes
-        .get(parsed.root_id.as_str())
+        .get(root_id)
         .copied()
         .ok_or_else(|| "TreeHaver normalized parse omitted its root node.".to_string())?;
     let value_node = find_root_value(root, &nodes).ok_or_else(|| {
         "TreeHaver normalized parse did not contain a JSON root value.".to_string()
     })?;
     let root = build_value(value_node, &nodes)?;
-    let comment_augmentation = json_comment_augmentation(source, &root, &parsed.nodes)?;
+    let comment_augmentation = json_comment_augmentation(source, &root, parsed_nodes)?;
     Ok(JsonSyntaxDocument { source: source.to_string(), root, comment_augmentation })
 }
 
@@ -126,6 +135,10 @@ fn validate_jsonc_nodes(nodes: &[NormalizedTreeNode]) -> Result<(), String> {
 
 pub(crate) fn analyze_document(source: &str, dialect: JsonDialect) -> Result<JsonAnalysis, String> {
     let document = parse_document(source, dialect)?;
+    Ok(analyze_syntax(document, dialect))
+}
+
+pub(crate) fn analyze_syntax(document: JsonSyntaxDocument, dialect: JsonDialect) -> JsonAnalysis {
     let root_kind = match document.root.semantic {
         JsonSemanticValue::Object(_) => JsonRootKind::Object,
         JsonSemanticValue::Array(_) => JsonRootKind::Array,
@@ -135,7 +148,7 @@ pub(crate) fn analyze_document(source: &str, dialect: JsonDialect) -> Result<Jso
     collect_owners(&document.root, "", &mut owners);
     owners.sort_by(|left, right| left.path.cmp(&right.path));
 
-    Ok(JsonAnalysis {
+    JsonAnalysis {
         dialect,
         allows_comments: matches!(dialect, JsonDialect::Jsonc | JsonDialect::Json5),
         normalized_source: document.source,
@@ -144,7 +157,7 @@ pub(crate) fn analyze_document(source: &str, dialect: JsonDialect) -> Result<Jso
         comment_regions: document.comment_augmentation.regions,
         layout_gaps: document.comment_augmentation.gaps,
         comment_attachments: document.comment_augmentation.attachments,
-    })
+    }
 }
 
 fn json_comment_augmentation(
@@ -538,6 +551,14 @@ pub fn merge_json_source_preserving(
         Ok(document) => document,
         Err(message) => return two_way_parse_failure(message, true),
     };
+    merge_documents_two_way(template, destination, |output| parse_document(output, dialect))
+}
+
+pub(crate) fn merge_documents_two_way(
+    template: JsonSyntaxDocument,
+    destination: JsonSyntaxDocument,
+    mut verify: impl FnMut(&str) -> Result<JsonSyntaxDocument, String>,
+) -> MergeResult<String> {
     let mut plan = MergePlan::default();
     let expected = merge_template_value(&template.root, &destination.root, "", &mut plan);
     if !plan.conflicts.is_empty() {
@@ -550,7 +571,7 @@ pub fn merge_json_source_preserving(
     }
 
     match render_plan(&destination.source, plan) {
-        Ok(output) => match parse_document(&output, dialect) {
+        Ok(output) => match verify(&output) {
             Ok(rendered) if rendered.root.semantic == expected => MergeResult {
                 ok: true,
                 diagnostics: vec![],
@@ -584,15 +605,33 @@ pub fn merge_json_three_way(
         Ok(document) => document,
         Err(message) => return three_way_parse_failure("theirs", message),
     };
+    merge_documents_three_way(base, ours, theirs, |output| parse_document(output, dialect))
+}
 
-    if ours.root.semantic == theirs.root.semantic {
-        return clean_three_way(ours.source);
-    }
-    if ours.root.semantic == base.root.semantic {
-        return clean_three_way(theirs.source);
-    }
-    if theirs.root.semantic == base.root.semantic {
-        return clean_three_way(ours.source);
+pub(crate) fn merge_documents_three_way(
+    base: JsonSyntaxDocument,
+    ours: JsonSyntaxDocument,
+    theirs: JsonSyntaxDocument,
+    mut verify: impl FnMut(&str) -> Result<JsonSyntaxDocument, String>,
+) -> ThreeWayMergeResult<String> {
+    // Even selected-input/no-op outcomes pass through output verification.
+    let selected = if ours.root.semantic == theirs.root.semantic {
+        Some(&ours)
+    } else if ours.root.semantic == base.root.semantic {
+        Some(&theirs)
+    } else if theirs.root.semantic == base.root.semantic {
+        Some(&ours)
+    } else {
+        None
+    };
+    if let Some(selected) = selected {
+        return match verify(&selected.source) {
+            Ok(rendered) if rendered.root.semantic == selected.root.semantic => {
+                clean_three_way(selected.source.clone())
+            }
+            Ok(_) => three_way_render_failure("selected JSON output changed during verification"),
+            Err(message) => three_way_render_failure(message),
+        };
     }
 
     let mut plan = MergePlan::default();
@@ -611,7 +650,7 @@ pub fn merge_json_three_way(
         Ok(output) => output,
         Err(message) => return three_way_render_failure(message),
     };
-    match parse_document(&output, dialect) {
+    match verify(&output) {
         Ok(rendered) if rendered.root.semantic == expected => clean_three_way(output),
         Ok(_) => {
             three_way_render_failure("source-preserving JSON render changed the planned value")

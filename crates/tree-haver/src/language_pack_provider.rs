@@ -112,7 +112,9 @@ impl LanguagePackProvider {
             let role = crate::tree_sitter_node_role(&node, fragment);
             let start = node.start_position();
             let end = node.end_position();
-            if request.options.comments && role == NodeRole::Comment {
+            // The parse contract requires every native Comment-role node to
+            // have a comment record, even without optional comment enrichment.
+            if role == NodeRole::Comment {
                 comments.push(ParseComment {
                     node_id: id.clone(),
                     native_kind: node.kind(),

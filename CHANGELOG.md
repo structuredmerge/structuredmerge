@@ -231,6 +231,8 @@
 
 - Preserve native tree-sitter extra-node flags in an opt-in versioned extension for typed Ruby TreeHaver consumer migration.
 
+- Allow the existing nested JSON/JSONC/JSON5 merge engine to consume typed TreeHaver facts and caller-supplied output verification, including no-op results; retain native comment indexing without optional enrichment.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
