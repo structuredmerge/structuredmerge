@@ -141,6 +141,8 @@
 
 - Retain native output-verification parse evidence through both bindings, including rejection diagnostics without exposing unverified merged output.
 
+- Expose structured parser-service failure evidence for output verification, retaining provider identity and native fault details without returning unverified output.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

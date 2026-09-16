@@ -135,6 +135,11 @@ An explicit native rejection prevents owner analysis and clean output; its
 parse evidence remains available even though `output`, `output_source`, and
 `source_segments` are absent. `output_parse` is absent when no output reparse
 occurred, including whole-source selection of an already validated input.
-Absence is not a successful verification claim. Callback exceptions and
-malformed verification batches still require structured service-failure
-evidence in the eventual operation envelope.
+Absence is not a successful verification claim. `verification_failure` retains
+callback exceptions and malformed verification results as `ParserFailure`, with
+the stable core code, backend ID, and separate native code/message where
+provided. Source validation and selection failures also have slots for source
+identity and the selection report. No retry or parser substitution occurs.
+These records are not the full Slice 1028 envelope: stage/request references,
+causes, and portable category/origin nesting still need implementation. Input
+service failures currently continue to raise `CoreError`.

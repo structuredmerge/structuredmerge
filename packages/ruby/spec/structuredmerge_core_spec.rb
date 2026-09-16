@@ -195,6 +195,39 @@ RSpec.describe StructuredmergeCore do
     described_class.unregister_parser_host("ruby.typed.psych")
   end
 
+  it "retains structured verification callback faults and invalid batches" do
+    host = TypedPsychHost.new
+    original = host.method(:parse_batch)
+    described_class.register_parser_host(host)
+    {raise: "parser.provider_fault", empty: "parser.invalid_batch"}.each do |mode, code|
+      calls = []
+      host.define_singleton_method(:parse_batch) do |request|
+        next original.call(request) unless request.items.first.source.descriptor.role.to_s == "output"
+        calls << mode
+        raise "verification exploded" if mode == :raise
+        StructuredmergeCore::ParseBatchResult.new(items: [])
+      end
+      result = described_class.merge_yaml_mapping(merge_requests(["a: 1\nb: 2\n", "a: 3\nb: 2\n", "a: 1\nb: 4\n"]), merge_limits)
+      expect(result.outcome.to_s).to eq("error")
+      expect(result.output).to be_nil
+      expect(result.output_source).to be_nil
+      expect(result.output_parse).to be_nil
+      expect(result.source_segments).to be_empty
+      expect(result.input_parses.length).to eq(3)
+      expect(result.verification_failure.code).to eq(code)
+      expect(result.verification_failure.backend_id).to eq("ruby.typed.psych")
+      expect(calls).to eq([mode])
+      if mode == :raise
+        expect(result.verification_failure.native_code).not_to be_empty
+        expect(result.verification_failure.native_message).to include("verification exploded")
+      else
+        expect(result.verification_failure.native_code).to be_nil
+      end
+    end
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
   it "does not fabricate a verification parse for whole-source selection" do
     host = TypedPsychHost.new
     described_class.register_parser_host(host)

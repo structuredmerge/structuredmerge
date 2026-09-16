@@ -17,3 +17,6 @@ tree-haver = { version = "0.2.0", path = "../tree-haver" }
 
 [lib]
 path = "src/lib.rs"
+
+[dev-dependencies]
+serde_json = "1"

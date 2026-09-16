@@ -39,6 +39,7 @@ pub struct NativeMergeExecution {
     pub output_source: Option<SourceDescriptor>,
     pub input_parses: Vec<ParsedResult>,
     pub output_parse: Option<ParsedResult>,
+    pub verification_error: Option<ServiceError>,
 }
 
 pub fn merge_native_sources_with_evidence(
@@ -84,6 +85,7 @@ pub fn merge_native_sources_with_evidence(
         output_id.push('_');
     }
     let mut output_parse = None;
+    let mut verification_error = None;
     let mut verify = |output: &str| -> Result<SourcePreservingOwnerDocument, String> {
         verification.request_id = "merge-verification".into();
         verification.source = source_input(
@@ -93,9 +95,14 @@ pub fn merge_native_sources_with_evidence(
             output.as_bytes().to_vec(),
         )
         .map_err(|error| error.to_string())?;
-        let mut parsed = service
-            .parse_batch(vec![verification.clone()], snapshot, context)
-            .map_err(|error| format!("{error:?}"))?;
+        let mut parsed = match service.parse_batch(vec![verification.clone()], snapshot, context) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                let message = format!("{error:?}");
+                verification_error = Some(error);
+                return Err(message);
+            }
+        };
         if parsed.len() != 1 {
             return Err("expected one verification parse".into());
         }
@@ -136,5 +143,6 @@ pub fn merge_native_sources_with_evidence(
         output_source,
         input_parses: parsed,
         output_parse,
+        verification_error,
     })
 }

@@ -181,6 +181,34 @@ class TypedParserHostTest(unittest.TestCase):
         self.assertFalse(result.output_parse.parsed.ok)
         self.assertEqual(result.output_parse.parsed.diagnostics[0].code, "test.output_rejected")
 
+    def test_verification_service_failures_retain_structured_origin(self):
+        original = self.host.parse_batch
+        for mode, code in [("raise", "parser.provider_fault"), ("empty", "parser.invalid_batch")]:
+            calls = []
+            def fail_output(request):
+                if request.items[0].source.descriptor.role != core.SourceRole.OUTPUT:
+                    return original(request)
+                calls.append(mode)
+                if mode == "raise":
+                    raise ValueError("verification exploded")
+                return core.ParseBatchResult(items=[])
+            self.host.parse_batch = fail_output
+            result = self.merge(["a = 1\nb = 2\n", "a = 3\nb = 2\n", "a = 1\nb = 4\n"])
+            self.assertEqual(result.outcome, core.ThreeWayMergeOutcome.ERROR)
+            self.assertIsNone(result.output)
+            self.assertIsNone(result.output_source)
+            self.assertIsNone(result.output_parse)
+            self.assertEqual(result.source_segments, [])
+            self.assertEqual(len(result.input_parses), 3)
+            self.assertEqual(result.verification_failure.code, code)
+            self.assertEqual(result.verification_failure.backend_id, "python.libcst")
+            self.assertEqual(calls, [mode])
+            if mode == "raise":
+                self.assertTrue(result.verification_failure.native_code)
+                self.assertIn("verification exploded", result.verification_failure.native_message)
+            else:
+                self.assertIsNone(result.verification_failure.native_code)
+
     def test_whole_source_selection_does_not_fabricate_verification_parse(self):
         result = self.merge(["a = 1\n"] * 3)
         self.assertEqual(result.output, "a = 1\n")

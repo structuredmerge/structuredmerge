@@ -61,7 +61,7 @@ types = [
   "DiagnosticSeverity", "ReviewDiagnosticDetail", "ReviewDiagnosticReason", "ReviewDecisionAction",
   "MergeConflict", "ConflictAlternative", "ConflictAlternativeState", "OwnedSourceRegion",
   "SourceRevision", "PolicyReference", "PolicySurface",
-  "CoreError", "ParserHost", "CoreParseResult", "ParseLimits",
+  "CoreError", "ParserFailure", "ParserHost", "CoreParseResult", "ParseLimits",
   "ParseBatchRequest", "ParseBatchResult", "ProbeBatchRequest", "ProbeBatchResult",
   "ParserSelection", "ParserProviderDescriptor", "ParserProbeRequest", "ParserProbeResult",
   "ParseOptions", "ParseRequest", "ParserCandidate", "SelectionReport",

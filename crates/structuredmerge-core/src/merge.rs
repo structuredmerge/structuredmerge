@@ -35,6 +35,7 @@ pub struct NativeMergeResult {
     /// Actual reparse of synthesized output, including native rejection. None
     /// when rendering was not attempted or an already-parsed input was selected.
     pub output_parse: Option<CoreParseResult>,
+    pub verification_failure: Option<crate::ParserFailure>,
     pub sources: Vec<crate::SourceDescriptor>,
     pub output_source: Option<crate::SourceDescriptor>,
     pub source_segments: Vec<RetainedSourceSegment>,
@@ -117,6 +118,7 @@ fn project_result(
                 policies: result.policies,
                 rejected_parse: None,
                 output_parse: execution.output_parse.map(CoreParseResult::from),
+                verification_failure: execution.verification_error.map(crate::ParserFailure::from),
                 input_parses: execution
                     .input_parses
                     .into_iter()
@@ -141,6 +143,7 @@ fn project_result(
                 source_segments: vec![],
                 rejected_parse,
                 output_parse: None,
+                verification_failure: None,
                 input_parses,
             })
         }

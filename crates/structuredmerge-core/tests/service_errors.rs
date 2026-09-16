@@ -81,3 +81,24 @@ fn provider_native_code_cannot_replace_the_portable_code() {
     assert!(error.message.contains("ruby.psych"));
     assert!(error.message.contains("execution.cancelled"));
 }
+
+#[test]
+fn structured_failure_preserves_origin_separately_from_core_classification() {
+    let failure = structuredmerge_core::ParserFailure::from(ServiceError::Provider {
+        backend_id: "native.parser".into(),
+        fault: ProviderFault {
+            code: "execution.cancelled".into(),
+            message: "provider fault".into(),
+        },
+    });
+    assert_eq!(failure.code, "parser.provider_fault");
+    assert_eq!(failure.backend_id.as_deref(), Some("native.parser"));
+    assert_eq!(failure.native_code.as_deref(), Some("execution.cancelled"));
+    assert_eq!(failure.native_message.as_deref(), Some("provider fault"));
+    assert!(failure.selection.is_none());
+    let encoded = serde_json::to_string(&failure).unwrap();
+    assert_eq!(
+        serde_json::from_str::<structuredmerge_core::ParserFailure>(&encoded).unwrap(),
+        failure
+    );
+}

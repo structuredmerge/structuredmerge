@@ -82,6 +82,53 @@ impl From<ServiceError> for CoreError {
     }
 }
 
+/// Structured service-failure evidence. Native codes remain separate from the
+/// stable core code; this is not the complete portable diagnostic envelope.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ParserFailure {
+    pub code: String,
+    pub message: String,
+    pub backend_id: Option<String>,
+    pub native_code: Option<String>,
+    pub native_message: Option<String>,
+    pub source_id: Option<String>,
+    pub selection: Option<SelectionReport>,
+}
+
+impl From<ServiceError> for ParserFailure {
+    fn from(error: ServiceError) -> Self {
+        let core = CoreError::from(error.clone());
+        let mut failure = Self {
+            code: core.code,
+            message: core.message,
+            backend_id: None,
+            native_code: None,
+            native_message: None,
+            source_id: None,
+            selection: None,
+        };
+        match error {
+            ServiceError::Provider { backend_id, fault } => {
+                failure.backend_id = Some(backend_id);
+                failure.native_code = Some(fault.code);
+                failure.native_message = Some(fault.message);
+            }
+            ServiceError::ProviderPanic { backend_id }
+            | ServiceError::InvalidBatch { backend_id }
+            | ServiceError::InvalidResult { backend_id, .. } => {
+                failure.backend_id = Some(backend_id);
+            }
+            ServiceError::Selection(report) => failure.selection = Some(*report),
+            ServiceError::Source(error) => failure.source_id = Some(error.source_id),
+            ServiceError::InvalidRequest
+            | ServiceError::LimitExceeded
+            | ServiceError::Cancelled
+            | ServiceError::DeadlineExceeded => {}
+        }
+        failure
+    }
+}
+
 /// Coarse owned parser calls. Generated wrappers must enforce their runtime's
 /// thread-affinity rules; these Rust bounds alone do not establish host safety.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
