@@ -183,7 +183,24 @@ RSpec.describe StructuredmergeCore do
     expect(result.output_source).to be_nil
     expect(result.source_segments).to be_empty
     expect(result.rejected_parse.parsed.source.role.to_s).to eq("ours")
+    expect(result.sources.map { |source| source.role.to_s }).to eq(%w[base ours theirs])
     expect(result.rejected_parse.parsed.diagnostics.first.code).to eq("psych.syntax")
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "prioritizes native failures before analysis with order-independent source provenance" do
+    described_class.register_parser_host(TypedPsychHost.new)
+    sources = ["- unsupported sequence\n", "a: [\n", "b: [\n"]
+    requests = merge_requests(sources)
+    [requests, requests.reverse].each do |ordered|
+      result = described_class.merge_yaml_mapping(ordered, merge_limits)
+      expect(result.rejected_parse.parsed.source.role.to_s).to eq("ours")
+      expect(result.output).to be_nil
+      expect(result.output_source).to be_nil
+      expect(result.source_segments).to be_empty
+      expect(result.sources.map(&:sha256)).to eq(sources.map { |source| Digest::SHA256.hexdigest(source) })
+    end
   ensure
     described_class.unregister_parser_host("ruby.typed.psych")
   end

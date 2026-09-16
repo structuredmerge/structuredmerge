@@ -166,12 +166,28 @@ class TypedParserHostTest(unittest.TestCase):
 
     def test_native_syntax_failure_retains_failing_role(self):
         result = self.merge(["a = 1\n", "a = 2\n", "def broken(:\n"])
+        self.assertEqual(len(result.sources), 3)
+        self.assertEqual([source.role for source in result.sources],
+            [core.SourceRole.BASE, core.SourceRole.OURS, core.SourceRole.THEIRS])
         self.assertEqual(result.outcome, core.ThreeWayMergeOutcome.ERROR)
         self.assertIsNone(result.output)
         self.assertIsNone(result.output_source)
         self.assertEqual(result.source_segments, [])
         self.assertEqual(result.rejected_parse.parsed.source.role, core.SourceRole.THEIRS)
         self.assertEqual(result.rejected_parse.parsed.diagnostics[0].code, "libcst.syntax")
+
+    def test_native_failure_precedes_analysis_and_is_independent_of_request_order(self):
+        sources = ["import os\n", "def broken(:\n", "class broken(:\n"]
+        requests = self.merge_requests(sources)
+        limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+        for ordered in (requests, requests[::-1]):
+            result = core.merge_python_declarations(ordered, limits)
+            self.assertEqual(result.rejected_parse.parsed.source.role, core.SourceRole.OURS)
+            self.assertIsNone(result.output)
+            self.assertIsNone(result.output_source)
+            self.assertEqual(result.source_segments, [])
+            self.assertEqual([source.sha256 for source in result.sources],
+                [hashlib.sha256(source.encode()).hexdigest() for source in sources])
 
     def test_changed_unowned_comment_layout_fails_closed(self):
         result = self.merge(["# base\na = 1\nb = 2\n", "# edited\na = 3\nb = 2\n", "# base\na = 1\nb = 4\n"])

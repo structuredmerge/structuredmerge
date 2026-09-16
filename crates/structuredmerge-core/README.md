@@ -116,3 +116,10 @@ origin/native-code fields, selection reports on failure, cause references, and
 runtime-specific exception attributes remain to be implemented. Cancellation
 codes here do not imply that the generated API already exposes cancellation
 handles. Registration errors retain their existing separate codes.
+
+Native syntax rejection retains all three validated input source descriptors,
+ordered by semantic role, while leaving output descriptors and segments empty.
+All input syntax outcomes are checked before family analysis; the primary
+rejected parse is selected in base/ours/theirs order, independent of request
+order. The current result still exposes only one `rejected_parse`, not the full
+multi-revision diagnostic collection required by the eventual result envelope.

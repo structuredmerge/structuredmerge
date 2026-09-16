@@ -17,7 +17,7 @@ use tree_haver::{
 pub enum NativeMergeError {
     InvalidInputs,
     Parse(ServiceError),
-    NativeParseRejected(Box<ParsedResult>),
+    NativeParseRejected { parsed: Box<ParsedResult>, sources: Vec<SourceDescriptor> },
     Unsupported(String),
 }
 
@@ -56,20 +56,25 @@ pub fn merge_native_sources_with_evidence(
         return Err(NativeMergeError::InvalidInputs);
     }
     let mut verification = requests[0].clone();
-    let parsed =
+    let mut parsed =
         service.parse_batch(requests, snapshot, context).map_err(NativeMergeError::Parse)?;
     let backend = parsed.first().ok_or(NativeMergeError::InvalidInputs)?.backend.id.clone();
     if parsed.iter().any(|result| result.backend.id != backend) {
         return Err(NativeMergeError::InvalidInputs);
     }
     verification.selection.backend_id = Some(backend);
+    // Failure identity must not depend on request order, and a family-analysis
+    // rejection must not hide native syntax errors in another revision.
+    parsed.sort_by_key(|result| result.source.descriptor().role);
+    let sources: Vec<_> = parsed.iter().map(|result| result.source.descriptor().clone()).collect();
+    if let Some(index) = parsed.iter().position(|result| !result.document.output().ok) {
+        return Err(NativeMergeError::NativeParseRejected {
+            parsed: Box::new(parsed.remove(index)),
+            sources,
+        });
+    }
     let mut documents = BTreeMap::new();
-    let mut sources = Vec::new();
     for result in parsed {
-        if !result.document.output().ok {
-            return Err(NativeMergeError::NativeParseRejected(Box::new(result)));
-        }
-        sources.push(result.source.descriptor().clone());
         documents.insert(
             result.source.descriptor().role,
             analyze(&result).map_err(NativeMergeError::Unsupported)?,
@@ -100,7 +105,6 @@ pub fn merge_native_sources_with_evidence(
         &mut verify,
     );
     context.check().map_err(NativeMergeError::Parse)?;
-    sources.sort_by_key(|source| source.role);
     let output_source = rendered
         .result
         .output

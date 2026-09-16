@@ -115,13 +115,13 @@ fn project_result(
                 source_segments: segments,
             })
         }
-        Err(MappingMergeError::NativeParseRejected(parsed)) => Ok(NativeMergeResult {
+        Err(MappingMergeError::NativeParseRejected { parsed, sources }) => Ok(NativeMergeResult {
             outcome: ast_merge::ThreeWayMergeOutcome::Error,
             diagnostics: vec![],
             conflicts: vec![],
             output: None,
             policies: vec![],
-            sources: vec![],
+            sources,
             output_source: None,
             source_segments: vec![],
             rejected_parse: Some(CoreParseResult {
@@ -137,7 +137,7 @@ fn project_result(
                 MappingMergeError::InvalidInputs => "invalid_merge_inputs",
                 MappingMergeError::Unsupported(_) => "unsupported_native_profile",
                 MappingMergeError::Parse(_) => unreachable!(),
-                MappingMergeError::NativeParseRejected(_) => unreachable!(),
+                MappingMergeError::NativeParseRejected { .. } => unreachable!(),
             }
             .into(),
             message: format!("{error:?}"),

@@ -194,7 +194,8 @@ fn malformed_native_syntax_and_unproven_profiles_fail_closed() {
                     &snapshot,
                     &context
                 ),
-                Err(MappingMergeError::Unsupported(_) | MappingMergeError::NativeParseRejected(_))
+                Err(MappingMergeError::Unsupported(_)
+                    | MappingMergeError::NativeParseRejected { .. })
             ),
             "source: {base:?}"
         );
@@ -231,11 +232,12 @@ fn retains_native_syntax_diagnostics_and_obeys_explicit_selection() {
         &context,
     )
     .unwrap_err();
-    let MappingMergeError::NativeParseRejected(parsed) = error else {
+    let MappingMergeError::NativeParseRejected { parsed, sources } = error else {
         panic!("expected native syntax failure")
     };
     assert_eq!(parsed.document.output().diagnostics[0].code.as_deref(), Some("psych.syntax"));
     assert_eq!(parsed.document.output().source.role, SourceRole::Base);
+    assert_eq!(sources.len(), 3);
     assert_eq!(parsed.selection.selected_backend.as_deref(), Some("test.psych"));
     let mut inputs = requests(["a: one\n", "a: ours\n", "a: theirs\n"]);
     for request in &mut inputs {
