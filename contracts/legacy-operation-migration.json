@@ -1,0 +1,79 @@
+{
+  "schema": "structuredmerge.legacy-operation-migration/v1",
+  "baseline": "contracts/ruby-api-v1.json",
+  "scope": "Disposition of legacy Ruby facade and native module methods; not a typed API baseline or a parity claim.",
+  "groups": [
+    {
+      "id": "family-analysis",
+      "methods": ["parse_json_analysis", "parse_bash_analysis", "parse_go_analysis", "parse_rust_analysis", "parse_typescript_analysis"],
+      "disposition": "retain_until_consumer_migration",
+      "consumers": ["ruby/gems/ast-merge/lib/ast/merge/rust_host_provider.rb", "ruby/gems/json-merge/lib/json/merge/rust_host_provider.rb", "ruby/gems/bash-merge/lib/bash/merge/rust_host_provider.rb", "ruby/gems/go-merge/lib/go/merge/rust_host_provider.rb", "ruby/gems/rust-merge/lib/rust/merge/rust_host_provider.rb", "ruby/gems/typescript-merge/lib/typescript/merge/rust_host_provider.rb"],
+      "replacement": "Typed analyze and diff2 operations in structuredmerge-core, using TreeHaver and Rust-owned family analysis/matching.",
+      "gap": "parse_sources is syntax transport, not analysis. Ruby currently computes diff2 from owner maps; that semantic implementation must move to Rust, not survive in a renamed adapter."
+    },
+    {
+      "id": "family-merges",
+      "methods": ["merge_json_two_way", "merge_json_three_way", "merge_bash_two_way", "merge_bash_three_way", "merge_go_two_way", "merge_go_three_way", "merge_rust_two_way", "merge_rust_three_way", "merge_typescript_two_way", "merge_typescript_three_way"],
+      "disposition": "retain_until_consumer_migration",
+      "consumers": ["ruby/gems/ast-merge/lib/ast/merge/rust_host_provider.rb"],
+      "replacement": "Typed directional merge2 and base-aware merge3 request/result envelopes calling the existing family kernels.",
+      "gap": "The Python declaration and YAML mapping profiles do not replace these families. Preserve current/incoming direction, dialects, conflicts, diagnostics and source evidence; do not synthesize a base for merge2."
+    },
+    {
+      "id": "git-driver",
+      "methods": ["merge_ast_merge_git_json"],
+      "disposition": "retain_until_consumer_migration",
+      "consumers": ["ruby/gems/ast-merge-git/lib/ast/merge/git/rust_host_provider.rb"],
+      "replacement": "Typed Git merge3 report over ast-merge-git and shared core operation results.",
+      "gap": "Retain change classifications, render report, conflicted source and exit-policy evidence. The Ruby adapter advertises all operations but rejects analyze/diff2/merge2: capability correction is required, not invented implementations."
+    },
+    {
+      "id": "structural-editing",
+      "methods": ["report_ast_crispr_json", "apply_ast_crispr_source_edits_json"],
+      "disposition": "retain_until_consumer_migration",
+      "consumers": ["ruby/gems/ast-crispr/lib/ast/crispr/rust_host_provider.rb"],
+      "replacement": "Typed ast-crispr profile reports and explicit byte-range edit requests/results exported from structuredmerge-core.",
+      "gap": "Reuse ast-crispr and ast-merge source rendering. Explicit edits do not prove structural selection parity; preserve Ruby selection until separately verified."
+    },
+    {
+      "id": "template-session",
+      "methods": ["report_ast_template_json"],
+      "disposition": "retain_until_consumer_migration",
+      "consumers": ["ruby/gems/ast-template/lib/ast/template/rust_host_provider.rb"],
+      "replacement": "Typed options/profile/plan reports from ast-template through structuredmerge-core.",
+      "gap": "Report generation is not template execution or filesystem apply. Preserve Ruby apply behavior and downstream kettle-jem gates."
+    },
+    {
+      "id": "parser-services",
+      "methods": ["register_parser_host", "replace_parser_host", "unregister_parser_host", "clear_parser_hosts", "registered_parser_hosts", "register_tslp_parser_host", "parse_normalized_with_tslp", "parse_with_parser", "probe_with_parser"],
+      "disposition": "retain_until_consumer_migration",
+      "consumers": ["ruby/gems/tree_haver/lib/tree_haver/backends/rust_tslp.rb", "structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb"],
+      "replacement": "Typed ParserHost registration, TreeHaver selection and parse_sources; explicit Rust TSLP provider registration and typed normalized results.",
+      "gap": "Native callback slices exist but the legacy normalized TSLP consumer is not migrated. Replace/list/probe/bulk-clear policies need explicit contracts; matching method names are not drop-in compatibility."
+    },
+    {
+      "id": "capabilities",
+      "methods": ["capability_manifest"],
+      "disposition": "retain_until_consumer_migration",
+      "consumers": ["structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb"],
+      "replacement": "Typed capability manifest and provider identity with observable availability, support and default authority.",
+      "gap": "native_merge_profiles is static scope introspection, not registry negotiation or a full manifest."
+    },
+    {
+      "id": "workflow-hosts",
+      "methods": ["register_workflow_host", "replace_workflow_host", "unregister_workflow_host", "clear_workflow_hosts", "registered_workflow_hosts", "execute_typed_workflow"],
+      "disposition": "retain_regression_only",
+      "consumers": ["structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb", "structuredmerge/packages/ruby/lib/structuredmerge_host_prototype/workflow_provider.rb"],
+      "replacement": "Typed WorkflowHost coarse callbacks with explicit host-owned workflow boundaries; Rust retains merge semantics.",
+      "gap": "No typed WorkflowHost currently exported. Retain boundary regressions, not a separately released host product. Consumer discovery beyond the listed local evidence remains open."
+    },
+    {
+      "id": "runtime-identity-probes",
+      "methods": ["execute_identity", "execute_async_identity", "execute_detached_identity", "execute_in_process_identity", "execute_typed_identity", "start_identity_worker", "prepare_identity_worker", "dispatch_identity_worker", "cancel_identity_worker", "identity_worker_cancelled", "poll_identity_worker", "start_host_runtime", "shutdown_host_runtime"],
+      "disposition": "retain_regression_only",
+      "consumers": ["structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb"],
+      "replacement": "Real typed-operation lifecycle tests, OperationControl and generated runtime-affine callback infrastructure; no identity-worker product API by default.",
+      "gap": "Some GC, concurrency, cancellation and deadline cases are migrated. Shutdown, foreign-thread entry and broad stress remain open; do not remove legacy evidence before equivalent coverage."
+    }
+  ]
+}
