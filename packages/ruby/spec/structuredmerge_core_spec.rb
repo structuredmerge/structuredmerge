@@ -134,6 +134,10 @@ RSpec.describe StructuredmergeCore do
     expect(result.output).to eq("\uFEFF# header\r\né: 'ours'  # stable\r\nbeta: theirs")
     expect(result.conflicts).to be_empty
     expect(result.rejected_parse).to be_nil
+    expect(result.input_parses.map { |parsed| parsed.parsed.source.role.to_s }).to eq(%w[base ours theirs])
+    expect(result.input_parses.all? { |parsed| parsed.parsed.ok }).to be(true)
+    expect(result.input_parses.map { |parsed| parsed.selection.selected_backend }.uniq).to eq(["ruby.typed.psych"])
+    expect(result.input_parses.map { |parsed| parsed.selection.digest }.uniq.length).to eq(1)
     expect(host.calls).to eq(2) # input batch and Rust-requested output verification
     expect(host.received_batch.items.first.source.descriptor.role.to_s).to eq("output")
     by_role = %w[base ours theirs].zip(sources).to_h
@@ -200,6 +204,11 @@ RSpec.describe StructuredmergeCore do
       expect(result.output_source).to be_nil
       expect(result.source_segments).to be_empty
       expect(result.sources.map(&:sha256)).to eq(sources.map { |source| Digest::SHA256.hexdigest(source) })
+      expect(result.input_parses.map { |parsed| parsed.parsed.source.sha256 }).to eq(result.sources.map(&:sha256))
+      rejected = result.input_parses.reject { |parsed| parsed.parsed.ok }
+      expect(rejected.map { |parsed| parsed.parsed.source.role.to_s }).to eq(%w[ours theirs])
+      expect(rejected.map { |parsed| parsed.parsed.diagnostics.first.code }).to eq(["psych.syntax", "psych.syntax"])
+      expect(rejected.map { |parsed| parsed.backend.id }.uniq).to eq(["ruby.typed.psych"])
     end
   ensure
     described_class.unregister_parser_host("ruby.typed.psych")

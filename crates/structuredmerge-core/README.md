@@ -121,5 +121,11 @@ Native syntax rejection retains all three validated input source descriptors,
 ordered by semantic role, while leaving output descriptors and segments empty.
 All input syntax outcomes are checked before family analysis; the primary
 rejected parse is selected in base/ours/theirs order, independent of request
-order. The current result still exposes only one `rejected_parse`, not the full
-multi-revision diagnostic collection required by the eventual result envelope.
+order. `input_parses` retains all three validated parse results, including native
+diagnostics, syntax facts, provider descriptors, and selection snapshot digests,
+on clean, conflicted, rendering-failed, and native-syntax-rejected results.
+`rejected_parse` remains a compatibility shorthand for the first failing input.
+Native warnings and errors belong to each parse result; they are not recoded as
+merge diagnostics. Provider-service and unsupported-analysis exceptions still
+need the full portable failure envelope, and output-verification parse details
+are not yet included in this input-only collection.

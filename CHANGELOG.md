@@ -137,6 +137,8 @@
 
 - Emit and independently verify exact source/output byte partitions from the shared owner renderer, including segment digests and source identities through Ruby and Python bindings; policy-specific preservation claims and dispositions remain in progress.
 
+- Expose all validated native input parse results, diagnostics, and parser-selection provenance on typed merge results in both generated bindings.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

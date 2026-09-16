@@ -17,7 +17,7 @@ use tree_haver::{
 pub enum NativeMergeError {
     InvalidInputs,
     Parse(ServiceError),
-    NativeParseRejected { parsed: Box<ParsedResult>, sources: Vec<SourceDescriptor> },
+    NativeParseRejected { parses: Vec<ParsedResult>, sources: Vec<SourceDescriptor> },
     Unsupported(String),
 }
 
@@ -37,6 +37,7 @@ pub struct NativeMergeExecution {
     pub rendered: SourcePreservingMergeEvidence,
     pub sources: Vec<SourceDescriptor>,
     pub output_source: Option<SourceDescriptor>,
+    pub input_parses: Vec<ParsedResult>,
 }
 
 pub fn merge_native_sources_with_evidence(
@@ -67,17 +68,14 @@ pub fn merge_native_sources_with_evidence(
     // rejection must not hide native syntax errors in another revision.
     parsed.sort_by_key(|result| result.source.descriptor().role);
     let sources: Vec<_> = parsed.iter().map(|result| result.source.descriptor().clone()).collect();
-    if let Some(index) = parsed.iter().position(|result| !result.document.output().ok) {
-        return Err(NativeMergeError::NativeParseRejected {
-            parsed: Box::new(parsed.remove(index)),
-            sources,
-        });
+    if parsed.iter().any(|result| !result.document.output().ok) {
+        return Err(NativeMergeError::NativeParseRejected { parses: parsed, sources });
     }
     let mut documents = BTreeMap::new();
-    for result in parsed {
+    for result in &parsed {
         documents.insert(
             result.source.descriptor().role,
-            analyze(&result).map_err(NativeMergeError::Unsupported)?,
+            analyze(result).map_err(NativeMergeError::Unsupported)?,
         );
     }
     let mut output_id = "merge-output".to_owned();
@@ -120,5 +118,5 @@ pub fn merge_native_sources_with_evidence(
             .map_err(|error| NativeMergeError::Unsupported(error.to_string()))
         })
         .transpose()?;
-    Ok(NativeMergeExecution { rendered, sources, output_source })
+    Ok(NativeMergeExecution { rendered, sources, output_source, input_parses: parsed })
 }

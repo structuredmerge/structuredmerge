@@ -153,6 +153,14 @@ fn facade_calls_typed_host_batches_through_tree_haver_and_keeps_native_failure()
     let rejected = merge_yaml_mapping(mapping_requests, limits.clone()).unwrap();
     assert_eq!(rejected.outcome, ThreeWayMergeOutcome::Error);
     assert!(rejected.output.is_none());
+    assert_eq!(rejected.input_parses.len(), 3);
+    assert!(rejected.input_parses.iter().all(|parsed| !parsed.parsed.ok));
+    assert!(
+        rejected
+            .input_parses
+            .iter()
+            .all(|parsed| parsed.parsed.diagnostics[0].code.as_deref() == Some("test.syntax"))
+    );
     assert_eq!(
         rejected.sources.iter().map(|source| source.role).collect::<Vec<_>>(),
         vec![SourceRole::Base, SourceRole::Ours, SourceRole::Theirs]

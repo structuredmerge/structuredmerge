@@ -128,6 +128,11 @@ class TypedParserHostTest(unittest.TestCase):
         self.assertEqual(result.outcome, core.ThreeWayMergeOutcome.CLEAN)
         self.assertEqual(result.output, "\ufeff# header\r\né = 'ours'  # stable\r\nbeta = 3")
         self.assertEqual(self.host.calls, 2)
+        self.assertEqual([parsed.parsed.source.role for parsed in result.input_parses],
+            [core.SourceRole.BASE, core.SourceRole.OURS, core.SourceRole.THEIRS])
+        self.assertTrue(all(parsed.parsed.ok for parsed in result.input_parses))
+        self.assertEqual({parsed.selection.selected_backend for parsed in result.input_parses}, {"python.libcst"})
+        self.assertEqual(len({parsed.selection.digest for parsed in result.input_parses}), 1)
         self.assertEqual(self.host.received_batch.items[0].source.descriptor.role, core.SourceRole.OUTPUT)
         by_role = dict(zip([str(role) for role in [core.SourceRole.BASE, core.SourceRole.OURS, core.SourceRole.THEIRS]],
             [source.encode() for source in sources]))
@@ -188,6 +193,14 @@ class TypedParserHostTest(unittest.TestCase):
             self.assertEqual(result.source_segments, [])
             self.assertEqual([source.sha256 for source in result.sources],
                 [hashlib.sha256(source.encode()).hexdigest() for source in sources])
+            self.assertEqual([parsed.parsed.source.sha256 for parsed in result.input_parses],
+                [source.sha256 for source in result.sources])
+            rejected = [parsed for parsed in result.input_parses if not parsed.parsed.ok]
+            self.assertEqual([parsed.parsed.source.role for parsed in rejected],
+                [core.SourceRole.OURS, core.SourceRole.THEIRS])
+            self.assertEqual([parsed.parsed.diagnostics[0].code for parsed in rejected],
+                ["libcst.syntax", "libcst.syntax"])
+            self.assertEqual({parsed.backend.id for parsed in rejected}, {"python.libcst"})
 
     def test_changed_unowned_comment_layout_fails_closed(self):
         result = self.merge(["# base\na = 1\nb = 2\n", "# edited\na = 3\nb = 2\n", "# base\na = 1\nb = 4\n"])

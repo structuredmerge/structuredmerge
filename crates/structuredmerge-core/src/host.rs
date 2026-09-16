@@ -186,6 +186,17 @@ pub struct CoreParseResult {
     pub parsed: ParseOutput,
 }
 
+impl From<tree_haver::service::ParsedResult> for CoreParseResult {
+    fn from(result: tree_haver::service::ParsedResult) -> Self {
+        Self {
+            schema: result.schema,
+            selection: result.selection,
+            backend: result.backend,
+            parsed: result.document.output().clone(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ParseLimits {
     pub max_batch_items: usize,
@@ -217,16 +228,6 @@ pub fn parse_sources(
     let context = limits.context();
     TreeHaverParseService::default()
         .parse_batch(requests, &snapshot, &context)
-        .map(|results| {
-            results
-                .into_iter()
-                .map(|result| CoreParseResult {
-                    schema: result.schema,
-                    selection: result.selection,
-                    backend: result.backend,
-                    parsed: result.document.output().clone(),
-                })
-                .collect()
-        })
+        .map(|results| results.into_iter().map(CoreParseResult::from).collect())
         .map_err(CoreError::from)
 }

@@ -232,9 +232,10 @@ fn retains_native_syntax_diagnostics_and_obeys_explicit_selection() {
         &context,
     )
     .unwrap_err();
-    let MappingMergeError::NativeParseRejected { parsed, sources } = error else {
+    let MappingMergeError::NativeParseRejected { parses, sources } = error else {
         panic!("expected native syntax failure")
     };
+    let parsed = parses.iter().find(|result| !result.document.output().ok).unwrap();
     assert_eq!(parsed.document.output().diagnostics[0].code.as_deref(), Some("psych.syntax"));
     assert_eq!(parsed.document.output().source.role, SourceRole::Base);
     assert_eq!(sources.len(), 3);

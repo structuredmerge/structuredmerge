@@ -29,6 +29,9 @@ pub struct NativeMergeResult {
     pub output: Option<String>,
     pub policies: Vec<ast_merge::PolicyReference>,
     pub rejected_parse: Option<CoreParseResult>,
+    /// Complete input parse results in semantic role order, including warnings
+    /// and every rejected revision. `rejected_parse` is the primary shorthand.
+    pub input_parses: Vec<CoreParseResult>,
     pub sources: Vec<crate::SourceDescriptor>,
     pub output_source: Option<crate::SourceDescriptor>,
     pub source_segments: Vec<RetainedSourceSegment>,
@@ -110,27 +113,32 @@ fn project_result(
                 output: result.output,
                 policies: result.policies,
                 rejected_parse: None,
+                input_parses: execution
+                    .input_parses
+                    .into_iter()
+                    .map(CoreParseResult::from)
+                    .collect(),
                 sources: execution.sources,
                 output_source: execution.output_source,
                 source_segments: segments,
             })
         }
-        Err(MappingMergeError::NativeParseRejected { parsed, sources }) => Ok(NativeMergeResult {
-            outcome: ast_merge::ThreeWayMergeOutcome::Error,
-            diagnostics: vec![],
-            conflicts: vec![],
-            output: None,
-            policies: vec![],
-            sources,
-            output_source: None,
-            source_segments: vec![],
-            rejected_parse: Some(CoreParseResult {
-                schema: parsed.schema,
-                selection: parsed.selection,
-                backend: parsed.backend,
-                parsed: parsed.document.output().clone(),
-            }),
-        }),
+        Err(MappingMergeError::NativeParseRejected { parses, sources }) => {
+            let input_parses: Vec<_> = parses.into_iter().map(CoreParseResult::from).collect();
+            let rejected_parse = input_parses.iter().find(|result| !result.parsed.ok).cloned();
+            Ok(NativeMergeResult {
+                outcome: ast_merge::ThreeWayMergeOutcome::Error,
+                diagnostics: vec![],
+                conflicts: vec![],
+                output: None,
+                policies: vec![],
+                sources,
+                output_source: None,
+                source_segments: vec![],
+                rejected_parse,
+                input_parses,
+            })
+        }
         Err(MappingMergeError::Parse(error)) => Err(CoreError::from(error)),
         Err(error) => Err(CoreError {
             code: match &error {
