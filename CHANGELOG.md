@@ -275,6 +275,8 @@
 
 - Add typed TypeScript/TSX directional merge2 with current-byte retention, native declaration wrappers and comment ranges, preserved document headers, exact import compatibility and fresh output verification.
 
+- Exercise typed TypeScript and TSX operations, including grammar-specific JSX behavior, through shared Alef-generated tests in isolated installed Ruby/Python core packages.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

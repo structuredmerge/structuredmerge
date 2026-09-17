@@ -86,6 +86,24 @@ empty endpoints, UTF-8/CRLF partitions, rejected placement/dependencies and forg
 ownership before the no-addition shortcut. This is not compilation, import/name
 resolution, directive interpretation or parity with legacy directional precedence.
 
-Shared fixtures, installed bindings and Ruby consumer migration remain next.
+## Shared fixtures and installed bindings
+
+Twenty-eight canonical TypeScript/TSX fixtures now exercise all four operations
+through Alef-generated Ruby/Python tests. Each grammar runs native analysis,
+unsupported-wrapper rejection, owner/import diff, directional current preference,
+document headers, comments, interleaved imports, import mismatch rejection and
+independent/conflicting/unchanged merge3. Additional JSX cases verify TSX analysis
+and merges and TypeScript rejection. Helpers select the requested grammar and
+transport typed requests; they contain no ownership or merge decisions.
+
+Rebuilt isolated Linux x86_64 packages pass: Python 3.14.2 / LibCST 1.9.0 runs 35
+runtime tests and 101 generated cases; Ruby 4.0.6 / ABI 4.0.0 runs 31 runtime tests
+and 98 generated cases. Package contents, reviewed API surfaces, Ruby linkage and
+RBS validation pass. Eight new test files were generated with the local Alef
+bridge; optional `poly fmt` was unavailable, so that formatting gate is not claimed.
+
+Actual Ruby TypeScript-provider migration remains next. These development artifacts
+do not establish source-gem distribution, the full platform matrix or publication
+readiness. No prototype files/logic were added and no Alef changes were pushed.
 Full-language/golden-master/downstream, native compiler provider, platform/ABI,
 publication and default-authority gates remain separate.
