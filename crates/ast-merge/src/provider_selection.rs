@@ -22,6 +22,13 @@ pub struct MergeSelectionRequest {
     pub parser: ParserSelectionRequest,
 }
 
+impl MergeSelectionRequest {
+    /// Validate a complete batch of queries before beginning any probes.
+    pub fn validate(&self) -> Result<(), ServiceError> {
+        validate_request(self)
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct MergeSelectionCandidate {
     pub provider_id: String,
@@ -59,7 +66,7 @@ pub fn negotiate_merge_provider<P: ?Sized + Send + Sync>(
     context: &ExecutionContext,
 ) -> Result<MergeSelectionReport, ServiceError> {
     context.check()?;
-    validate_request(request)?;
+    request.validate()?;
     let mut report = MergeSelectionReport {
         requested: request.clone(),
         provider_generation: providers.generation(),

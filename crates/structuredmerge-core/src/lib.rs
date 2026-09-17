@@ -7,6 +7,8 @@ use std::{collections::BTreeSet, error::Error, fmt};
 
 pub mod host;
 pub use host::*;
+pub mod workflow;
+pub use workflow::*;
 pub mod merge;
 pub use ast_merge;
 pub use ast_merge::{

@@ -98,7 +98,7 @@
       "disposition": "retain_regression_only",
       "consumers": ["structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb", "structuredmerge/packages/ruby/lib/structuredmerge_host_prototype/workflow_provider.rb"],
       "replacement": "Typed WorkflowHost coarse callbacks with explicit host-owned workflow boundaries; Rust retains merge semantics.",
-      "gap": "No typed WorkflowHost currently exported. Retain boundary regressions, not a separately released host product. Consumer discovery beyond the listed local evidence remains open."
+      "gap": "Rust structuredmerge-core now exports a typed WorkflowHost boundary using the ast-merge registry, explicit-provider batch dispatch, TreeHaver-prepared parse facts, bounded requests/results, cancellation and common-result validation. Execution is explicitly host-owned and not default-approved. See contracts/TYPED_WORKFLOW_HOST.md. Ruby/Python Alef exposure, real native consumers, installed runtime gates, host availability, versioned parser profiles, family-default dispatch, delegation and full portable failure/batch envelopes remain open. Retain boundary regressions, not a separately released host product. Consumer discovery beyond the listed local evidence remains open."
     },
     {
       "id": "runtime-identity-probes",

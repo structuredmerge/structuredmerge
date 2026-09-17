@@ -335,6 +335,8 @@
 
 - Add snapshot-bound merge-provider declaration filtering and deterministic ranking through TreeHaver parser negotiation; provider constraints apply conjunctively to both parser observations and dispatch without changing existing explicit kernel profiles.
 
+- Add a Rust typed WorkflowHost batch boundary over the merge registry, with TreeHaver-prepared source facts, explicit host execution ownership, bounded envelopes, cancellation and common-result validation; generated binding exposure and release gates remain pending.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
