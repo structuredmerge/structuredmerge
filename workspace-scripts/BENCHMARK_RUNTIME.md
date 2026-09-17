@@ -91,8 +91,10 @@ python workspace-scripts/check_typed_benchmark_adapter.py
 
 Record the installed wheel digest/report and exact interpreter alongside driver,
 kernel, Ruby, fixtures, bundle-lock and raw result digests. Debug builds establish
-no performance ranking. Initial micro/affected-dev runs are **red**: malformed
-JSON is rejected as a parser error and the retained harness classifies it as a
-reliability failure. Do not relabel this as a conflict or relax the gate to obtain
-a pass. Broader typed/native-provider coverage and disposition of this mismatch
-remain open. This is not a publication or default-driver approval.
+no performance ranking. Expected parser failures use the existing diagnostic
+wire format `typed-core: parse_error: CODE: MESSAGE`. The initial adapter omitted
+the executable prefix, so the retained harness correctly treated its unrecognized
+diagnostic as a reliability failure. Keep the category derived from the typed
+result, never from the fixture or human message; crashes and uncategorized errors
+remain failures. Broader typed/native-provider coverage remains open. This is not
+a publication or default-driver approval.

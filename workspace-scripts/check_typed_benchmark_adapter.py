@@ -51,7 +51,7 @@ class TypedBenchmarkProtocolTest(unittest.TestCase):
             env = dict(os.environ, AST_MERGE_FAMILY="json", AST_MERGE_DIALECT="json")
             result = self.run_driver(["base", "ours", "theirs", "file.json", "7"], cwd=path, env=env)
             self.assertEqual(result.returncode, 2)
-            self.assertIn("parse_error:", result.stderr)
+            self.assertTrue(result.stderr.startswith("typed-core: parse_error:"), result.stderr)
             self.assertEqual((path / "ours").read_bytes(), b'{"x":')
 
     def test_cold_merge2_returns_output_without_modifying_inputs(self):
@@ -65,6 +65,17 @@ class TypedBenchmarkProtocolTest(unittest.TestCase):
             self.assertEqual(json.loads(json.loads(result.stdout)["output"]), {"add": 1, "keep": 2})
             self.assertEqual((path / "current").read_bytes(), b'{"keep":2}\r\n')
             self.assertEqual((path / "incoming").read_bytes(), b'{"add":1}')
+
+    def test_unsupported_family_is_not_relabelled_as_a_parser_rejection(self):
+        request = self.request("merge2", ["{}", "{}"], "unsupported")
+        request["selector"]["family"] = "yaml"
+        process = self.run_driver(["benchmark-provider-session"], input=json.dumps(request) + "\n")
+        self.assertEqual(process.returncode, 0, process.stderr)
+        response = json.loads(process.stdout)
+        self.assertEqual(response["status"], 2)
+        self.assertEqual(response["result"], {})
+        self.assertEqual(response["output_base64"], "")
+        self.assertNotIn("parse_error:", response["stderr"])
 
 
 if __name__ == "__main__":

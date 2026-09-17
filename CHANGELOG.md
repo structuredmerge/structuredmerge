@@ -378,3 +378,5 @@
 - Reject successful typed JSON merge results with forged input parse evidence, unrelated output request IDs, or contradictory output parser-selection records.
 
 - Reject typed JSON diff and merge evidence that mixes registry snapshot generations or digests across input parsing and output verification.
+
+- Emit the retained benchmark diagnostic prefix for typed-core parser rejections, allowing expected malformed-input failures to satisfy the existing negative-input contract without changing the corpus or gate.

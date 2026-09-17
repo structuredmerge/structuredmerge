@@ -108,7 +108,7 @@ def main(args):
     elif output is not None:
         Path(paths[1]).write_bytes(output.encode("utf-8"))
     for item in result["diagnostics"]:
-        print(f"{item['category']}: {item['code']}: {item['message']}", file=sys.stderr)
+        print(f"typed-core: {item['category']}: {item['code']}: {item['message']}", file=sys.stderr)
     return status
 
 
