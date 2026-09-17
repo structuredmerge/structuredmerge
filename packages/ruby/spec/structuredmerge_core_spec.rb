@@ -7,6 +7,7 @@ require "tmpdir"
 require "fileutils"
 require "open3"
 require "rbconfig"
+require "rbs"
 
 if (expected_home = ENV["STRUCTUREDMERGE_EXPECT_GEM_HOME"])
   installed = Gem.loaded_specs.fetch("structuredmerge-core").full_gem_path
@@ -18,6 +19,60 @@ end
 
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
+
+  it "exposes the runtime classes, readers and methods declared by the installed RBS" do
+    signature = File.join(Gem.loaded_specs.fetch("structuredmerge-core").full_gem_path, "sig/types.rbs")
+    namespace = RBS::Parser.parse_signature(File.read(signature)).last.find do |node|
+      node.is_a?(RBS::AST::Declarations::Module) && node.name.to_s == "StructuredmergeCore"
+    end
+    expect(namespace).not_to be_nil
+    aggregate_failures do
+      namespace.members.each do |declaration|
+        case declaration
+        when RBS::AST::Declarations::Class
+          name = declaration.name.name
+          expect(described_class.const_defined?(name, false)).to be(true), "missing runtime class #{name}"
+          next unless described_class.const_defined?(name, false)
+
+          runtime = described_class.const_get(name, false)
+          expect(runtime).to be_a(Class)
+          declaration.members.each do |member|
+            case member
+            when RBS::AST::Members::AttrReader
+              expect(runtime.public_instance_methods).to include(member.name)
+            when RBS::AST::Members::MethodDefinition
+              if member.name == :initialize
+                expect(runtime.singleton_methods).to include(:new)
+              elsif member.kind == :singleton
+                expect(runtime.singleton_methods).to include(member.name)
+              else
+                expect(runtime.public_instance_methods).to include(member.name)
+              end
+            end
+          end
+        when RBS::AST::Members::MethodDefinition
+          expect(described_class.singleton_methods).to include(declaration.name)
+        end
+      end
+    end
+  end
+
+  it "declares source roles as symbol values rather than nonexistent runtime classes" do
+    signature = File.join(Gem.loaded_specs.fetch("structuredmerge-core").full_gem_path, "sig/types.rbs")
+    namespace = RBS::Parser.parse_signature(File.read(signature)).last.first
+    role_alias = namespace.members.find do |node|
+      node.is_a?(RBS::AST::Declarations::TypeAlias) && node.name.name == :enum_SourceRole
+    end
+    expect(role_alias).not_to be_nil
+    expect(role_alias.type).to be_a(RBS::Types::Union)
+    literals = role_alias.type.types.map(&:literal)
+    expect(literals).to contain_exactly(:source, :before, :after, :incoming, :current, :base, :ours, :theirs, :output)
+    roles = merge_requests(["a: 1\n"] * 3).map { |request| request.source.descriptor.role }
+    # The shared fixture deliberately reverses requests to test role-based
+    # routing. This assertion checks the value representation, not batch order.
+    expect(roles).to contain_exactly(:base, :ours, :theirs)
+    expect(described_class.const_defined?(:SourceRole, false)).to be(false)
+  end
 
   it "exits fresh runtimes with registered, retired and cancelled-drained callbacks" do
     script = <<~'RUBY'

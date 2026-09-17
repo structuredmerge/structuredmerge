@@ -1,11 +1,11 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "ruby",
-  "review_reason": "Reviewed additive typed operation profile catalog and declaration DTOs; existing entry points unchanged",
+  "review_reason": "Correct 28 nonexistent unit-enum classes to symbol-union aliases and recursively use those aliases; native runtime behavior is unchanged.",
   "files": {
     "lib/structuredmerge_core/native.rb": "1958362029340a5786ed9762f1431dcdbcf0017626d262aede09db17eb2ea32f",
     "lib/structuredmerge_core/version.rb": "6cda1e4772dbebb74e509d2aefe2fcc1a9081782f9dd3f514f00a629c4211125",
     "lib/structuredmerge_core.rb": "defe67340887e4fcfecefc0a68d255fab86768e5c81260916819b636303f5cdf",
-    "sig/types.rbs": "75c7df22e3662f515d4cbf893abfe1b33d189e93179125569b834e4356319e61"
+    "sig/types.rbs": "a4d8f12ea515a96c78a26bf9c3dc4f767678f75049247703a8772e3eeee81ff7"
   }
 }

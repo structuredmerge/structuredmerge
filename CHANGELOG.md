@@ -408,3 +408,5 @@
 - Stage merge-driver output and reports before replacement so report failures and partial staging writes preserve current bytes; report output-commit uncertainty explicitly.
 
 - Correct generated Python LineEndings and ParseOptions constructor declarations: omission uses Rust defaults, while explicit None is rejected. Audit installed constructor and method signatures through native and public exports.
+
+- Describe Ruby unit-enum values with RBS symbol aliases instead of nonexistent classes, and verify declared classes, readers, methods, and source-role values against isolated installed core artifacts.

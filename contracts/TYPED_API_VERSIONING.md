@@ -74,6 +74,23 @@ their own compatibility records until their consumers migrate; the legacy
 
 ## ABI evidence
 
+Ruby declaration correction (2026-09-17): local Alef `a343a13` replaces 28
+phantom unit-enum classes with `enum_Name` symbol-union aliases and recursively
+uses those aliases in fields and signatures. The case-preserving suffix avoids
+normalization collisions between distinct Rust names. Native runtime behavior is
+unchanged: unit enums are symbols, not instances of Ruby enum classes. Consumers
+of the unreleased RBS names must use the aliases rather than the former class
+names or their nested `value` aliases.
+
+The installed Ruby gate parses the packaged RBS with RBS's parser and checks its
+125 runtime classes, 698 readers, 143 class/instance methods (including native
+constructors), and 31 module functions. It also compares the source-role symbol
+alias to native returned values. Interfaces and type aliases are compile-time
+declarations, not runtime constants. This checks presence and enum representation,
+not complete method arity, annotation equivalence, or every accepted input form
+(including legacy string-to-enum coercions). Upstream-only generation and the
+supported-platform matrix remain open.
+
 Development representation correction (2026-09-16): Python `SourceDescriptor`,
 `LineEndings`, and dependent `ParseOutput` now expose native DTO classes instead
 of facade dataclass twins. This fixes public nested construction and retains the
