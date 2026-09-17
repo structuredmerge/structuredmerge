@@ -233,3 +233,39 @@ args = [
   { name = "incoming", field = "input.incoming", type = "string" },
   { name = "current", field = "input.current", type = "string" },
 ]
+
+[crates.e2e.calls.json_common_analyze]
+function = "run_json_common_analyze"
+module = "native_merge_fixture"
+args = [
+  { name = "dialect", field = "input.dialect", type = "string" },
+  { name = "source", field = "input.source", type = "string" },
+]
+
+[crates.e2e.calls.json_common_diff]
+function = "run_json_common_diff"
+module = "native_merge_fixture"
+args = [
+  { name = "dialect", field = "input.dialect", type = "string" },
+  { name = "before", field = "input.before", type = "string" },
+  { name = "after", field = "input.after", type = "string" },
+]
+
+[crates.e2e.calls.json_common_merge2]
+function = "run_json_common_merge2"
+module = "native_merge_fixture"
+args = [
+  { name = "dialect", field = "input.dialect", type = "string" },
+  { name = "incoming", field = "input.incoming", type = "string" },
+  { name = "current", field = "input.current", type = "string" },
+]
+
+[crates.e2e.calls.json_common_merge3]
+function = "run_json_common_merge3"
+module = "native_merge_fixture"
+args = [
+  { name = "dialect", field = "input.dialect", type = "string" },
+  { name = "base", field = "input.base", type = "string" },
+  { name = "ours", field = "input.ours", type = "string" },
+  { name = "theirs", field = "input.theirs", type = "string" },
+]

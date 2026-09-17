@@ -132,6 +132,38 @@ module NativeMergeFixture
     run_yaml_common("analyze", [source])
   end
 
+  def run_json_common(operation, dialect, sources)
+    provider_id = "ruby.fixture.json"
+    StructuredmergeCore.register_language_pack_parser(provider_id, (dialect == "json") ? "json" : "json5")
+    begin
+      original = common_request(operation, sources)
+      request = StructuredmergeCore::OperationRequest.new(schema: original.schema, request_id: original.request_id,
+        operation: original.operation, sources: original.sources, extensions: [], metadata: {}, extra: {},
+        provider_selection: StructuredmergeCore::MergeProviderSelection.new(provider_id: "kernel.json", family: "json", dialect: dialect,
+          profile_id: "kernel.json.nested.v1", required_capabilities: [operation], extra: {}),
+        parser_selection: StructuredmergeCore::OperationParserSelection.new(backend: provider_id, preference: [], required_capabilities: [], extra: {}))
+      StructuredmergeCore.execute_operation(request, merge_limits)
+    ensure
+      StructuredmergeCore.unregister_parser_provider(provider_id)
+    end
+  end
+
+  def run_json_common_analyze(dialect, source)
+    run_json_common("analyze", dialect, [source])
+  end
+
+  def run_json_common_diff(dialect, before, after)
+    run_json_common("diff2", dialect, [before, after])
+  end
+
+  def run_json_common_merge2(dialect, incoming, current)
+    run_json_common("merge2", dialect, [incoming, current])
+  end
+
+  def run_json_common_merge3(dialect, base, ours, theirs)
+    run_json_common("merge3", dialect, [base, ours, theirs])
+  end
+
   def run_yaml_common_diff(before, after)
     run_yaml_common("diff2", [before, after])
   end

@@ -243,6 +243,8 @@
 
 - Execute common typed JSON analysis with native owner/comment references, exact blank-gap bytes and controllers, explicit unresolved comment retention, and recomputed evidence validation.
 
+- Generate and run shared JSON/JSONC/JSON5 operation fixtures through isolated installed Ruby and Python core bindings.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

@@ -1,4 +1,4 @@
-"""Test-only Alef call adapter: native parsing in Python, all merge logic in Rust.
+"""Test-only Alef call adapter: explicit parser setup, all merge logic in Rust.
 
 Reuse the installed-boundary suite's provider and request builder. No expected
 output, ownership decision, or rendering logic belongs in this adapter.
@@ -23,6 +23,38 @@ def run_python_common(operation, sources):
 
 def run_python_common_analyze(source):
     return run_python_common("analyze", [source])
+
+
+def run_json_common(operation, dialect, sources):
+    provider_id = "python.fixture.json"
+    core.register_language_pack_parser(provider_id, "json" if dialect == "json" else "json5")
+    try:
+        original = TypedParserHostTest().common_request(operation, sources)
+        request = core.OperationRequest(schema=original.schema, request_id=original.request_id,
+            operation=original.operation, sources=original.sources, extensions=[], metadata={}, extra={},
+            provider_selection=core.MergeProviderSelection(provider_id="kernel.json", family="json", dialect=dialect,
+                profile_id="kernel.json.nested.v1", required_capabilities=[operation], extra={}),
+            parser_selection=core.OperationParserSelection(backend=provider_id, preference=[], required_capabilities=[], extra={}))
+        limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+        return core.execute_operation(request, limits)
+    finally:
+        core.unregister_parser_provider(provider_id)
+
+
+def run_json_common_analyze(dialect, source):
+    return run_json_common("analyze", dialect, [source])
+
+
+def run_json_common_diff(dialect, before, after):
+    return run_json_common("diff2", dialect, [before, after])
+
+
+def run_json_common_merge2(dialect, incoming, current):
+    return run_json_common("merge2", dialect, [incoming, current])
+
+
+def run_json_common_merge3(dialect, base, ours, theirs):
+    return run_json_common("merge3", dialect, [base, ours, theirs])
 
 
 def run_python_common_diff(before, after):
