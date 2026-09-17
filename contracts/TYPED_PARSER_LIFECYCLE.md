@@ -53,7 +53,7 @@ loadable, semantically supported for a merge operation or approved as default.
 | `register_tslp_parser_host` | Explicit `register_language_pack_parser`; registration is non-loading. |
 | `unregister_parser_host` | Compatibility spelling of `unregister_parser_provider`, with snapshot retention. |
 | `parse_with_parser`, `parse_normalized_with_tslp` | Typed `parse_sources`, with explicit selection and validated source-bound results; migrated TreeHaver consumer. |
-| `replace_parser_host` | Still unimplemented as an atomic typed operation; remove/re-register must not be advertised as equivalent. |
+| `replace_parser_host` | TreeHaver has generation-checked atomic replacement; core host facade and generated binding exposure remain pending. Remove/re-register is not equivalent. |
 | `registered_parser_hosts` | Typed declaration inventory is exposed in Rust/Ruby/Python; request-specific probes use selection reports, while full merge capability/authority reporting remains pending. |
 | `probe_with_parser` | Source-free typed selection reports expose the same eligibility/probes as dispatch, without a legacy JSON wrapper. |
 | `clear_parser_hosts` | No product need established by the local consumer inventory. Retain legacy regression evidence; prefer explicit removal of owned IDs and require an ownership/concurrency contract before adding process-wide destructive cleanup. |
@@ -61,6 +61,23 @@ loadable, semantically supported for a merge operation or approved as default.
 The inventory names observed local consumers, not an exhaustive external usage
 search. These dispositions do not authorize deleting legacy regression coverage
 or publishing a compatibility host product.
+
+## Atomic replacement primitive
+
+`ParserRegistry::replace(provider, expected_generation)` replaces only an existing
+provider with the same declared ID. It validates and caches the new descriptor
+outside the lock, then checks the observed generation and target ID under one
+write lock. Invalid descriptors, stale generations and unknown IDs leave the
+registration unchanged. Successful replacement advances generation once, with no
+selection gap. Retained snapshots keep the original provider and descriptor.
+
+The retired provider is destroyed after releasing the registry lock. Destructors
+can therefore re-enter the registry. The returned generation identifies the
+replacement's commit point, not a guarantee that no subsequent mutation occurred:
+even retirement callbacks can advance the registry before the caller receives it.
+Tests verify both old/new snapshot dispatch and a retired-provider destructor
+that performs a registry write. This is currently a Rust substrate primitive;
+host-facade/binding contracts and installed runtime validation remain open.
 
 ## Request-specific selection reports
 

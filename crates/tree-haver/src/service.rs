@@ -211,6 +211,36 @@ impl ParserRegistry {
         Ok(generation)
     }
 
+    /// Atomically replace an existing ID at the caller's observed generation.
+    /// Descriptor callbacks and retired-provider destruction run outside locks;
+    /// existing snapshots keep their original provider and cached identity.
+    pub fn replace(
+        &self,
+        provider: Arc<dyn ParserProvider>,
+        expected_generation: u64,
+    ) -> Result<u64, RegistrationError> {
+        let descriptor = catch_unwind(AssertUnwindSafe(|| provider.descriptor().clone()))
+            .map_err(|_| RegistrationError::ProviderPanic)?;
+        validate_descriptor(&descriptor)?;
+        let (retired, generation) = {
+            let mut state = self.state.write().map_err(|_| RegistrationError::Poisoned)?;
+            if state.generation != expected_generation {
+                return Err(RegistrationError::StaleGeneration);
+            }
+            if !state.entries.contains_key(&descriptor.id) {
+                return Err(RegistrationError::UnknownId);
+            }
+            let generation =
+                state.generation.checked_add(1).ok_or(RegistrationError::GenerationExhausted)?;
+            let retired =
+                state.entries.insert(descriptor.id.clone(), Registration { descriptor, provider });
+            state.generation = generation;
+            (retired, generation)
+        };
+        drop(retired);
+        Ok(generation)
+    }
+
     /// Removal changes future snapshots only; provider destruction runs unlocked.
     pub fn unregister(&self, id: &str, expected_generation: u64) -> Result<u64, RegistrationError> {
         let (removed, generation) = {

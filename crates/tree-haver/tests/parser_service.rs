@@ -246,6 +246,113 @@ fn context() -> ExecutionContext {
 }
 
 #[test]
+fn atomic_replacement_is_generation_checked_and_preserves_old_snapshots() {
+    let registry = ParserRegistry::default();
+    let old = Arc::new(TestParser::new("replaceable", 0));
+    let old_weak = Arc::downgrade(&old);
+    registry.register(old.clone()).unwrap();
+    drop(old);
+    let snapshot = registry.snapshot().unwrap();
+    let baseline = snapshot.inventory();
+    let mut replacement = TestParser::new("replaceable", 10);
+    replacement.descriptor.parser_version = "2".into();
+    let replacement = Arc::new(replacement);
+    assert_eq!(
+        registry.replace(replacement.clone(), baseline.generation - 1),
+        Err(RegistrationError::StaleGeneration)
+    );
+    assert_eq!(registry.snapshot().unwrap().inventory(), baseline);
+    assert_eq!(
+        registry.replace(Arc::new(TestParser::new("unknown", 0)), baseline.generation),
+        Err(RegistrationError::UnknownId)
+    );
+    let mut invalid = TestParser::new("replaceable", 0);
+    invalid.descriptor.languages.clear();
+    assert_eq!(
+        registry.replace(Arc::new(invalid), baseline.generation),
+        Err(RegistrationError::InvalidDescriptor)
+    );
+    assert_eq!(registry.snapshot().unwrap().inventory(), baseline);
+
+    assert_eq!(
+        registry.replace(replacement.clone(), baseline.generation).unwrap(),
+        baseline.generation + 1
+    );
+    let current = registry.snapshot().unwrap();
+    assert_eq!(current.inventory().providers.len(), 1);
+    assert_eq!(current.inventory().providers[0].parser_version, "2");
+    assert_eq!(snapshot.inventory(), baseline);
+    let service = TreeHaverParseService::default();
+    let old_result = service.parse_batch(vec![request("old")], &snapshot, &context()).unwrap();
+    let new_result = service.parse_batch(vec![request("new")], &current, &context()).unwrap();
+    assert_eq!(old_result[0].backend.parser_version, "1");
+    assert_eq!(new_result[0].backend.parser_version, "2");
+    assert_eq!(replacement.calls.load(Ordering::SeqCst), 1);
+    assert!(old_weak.upgrade().is_some());
+    drop(snapshot);
+    assert!(old_weak.upgrade().is_none());
+    assert_eq!(
+        registry.replace(replacement, baseline.generation),
+        Err(RegistrationError::StaleGeneration)
+    );
+}
+
+#[test]
+fn replacement_releases_retired_provider_outside_the_registry_lock() {
+    struct Retired {
+        inner: TestParser,
+        registry: Arc<ParserRegistry>,
+    }
+    impl ParserProvider for Retired {
+        fn descriptor(&self) -> &ParserProviderDescriptor {
+            self.inner.descriptor()
+        }
+        fn probe(&self, request: &ParserProbeRequest) -> Result<ParserProbeResult, ProviderFault> {
+            self.inner.probe(request)
+        }
+        fn parse_batch(
+            &self,
+            requests: Vec<ParseRequest>,
+            context: &ExecutionContext,
+        ) -> Result<Vec<ParseOutput>, ProviderFault> {
+            self.inner.parse_batch(requests, context)
+        }
+    }
+    impl Drop for Retired {
+        fn drop(&mut self) {
+            // This write would deadlock if replacement dropped the old provider
+            // while holding its registry write lock.
+            self.registry.register(Arc::new(TestParser::new("retirement-observed", 0))).unwrap();
+        }
+    }
+    let registry = Arc::new(ParserRegistry::default());
+    let generation = registry
+        .register(Arc::new(Retired {
+            inner: TestParser::new("replaceable", 0),
+            registry: registry.clone(),
+        }))
+        .unwrap();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let worker_registry = registry.clone();
+    let worker = std::thread::spawn(move || {
+        let result =
+            worker_registry.replace(Arc::new(TestParser::new("replaceable", 1)), generation);
+        sender.send(result).unwrap();
+    });
+    assert_eq!(
+        receiver.recv_timeout(std::time::Duration::from_secs(10)).unwrap().unwrap(),
+        generation + 1
+    );
+    worker.join().unwrap();
+    let inventory = registry.snapshot().unwrap().inventory();
+    assert_eq!(inventory.generation, generation + 2);
+    assert_eq!(
+        inventory.providers.iter().map(|provider| provider.id.as_str()).collect::<Vec<_>>(),
+        ["replaceable", "retirement-observed"]
+    );
+}
+
+#[test]
 fn source_free_selection_reports_match_dispatch_without_parsing() {
     let registry = ParserRegistry::default();
     let available = Arc::new(TestParser::new("available", 0));

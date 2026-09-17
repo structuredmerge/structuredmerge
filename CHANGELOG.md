@@ -289,6 +289,8 @@
 
 - Expose source-free parser selection reports through Rust and generated Ruby/Python APIs, sharing dispatch eligibility/probing and preserving unavailable, unprobed, rejection, and cancellation states without parsing or granting merge authority.
 
+- Add generation-checked atomic parser replacement to TreeHaver, preserving in-flight snapshots and releasing retired providers outside registry locks.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
