@@ -89,7 +89,24 @@ empty endpoints, no-op import differences and unsupported placement/dependencies
 These are structural/source guarantees, not Rust compilation or semantic name
 resolution guarantees, nor a claim of parity with legacy directional precedence.
 
-Shared fixtures, installed Ruby/Python artifacts and actual
-Ruby consumer migration remain next. Source API checks are not artifact tests.
+## Shared fixtures and installed bindings
+
+Fifteen canonical `polyglot/typed-core/rust_*.json` fixtures exercise all four
+operations through Alef-generated Ruby/Python suites. They cover native analysis,
+rejected attributes, owner/use diff, current-preferred insertion, module/owner docs,
+empty/use-only endpoints, interleaved imports, mismatched-use rejection, independent
+merge3, ordinary conflicts, unchanged output and membership guards including a
+base-equals-side shortcut. Helpers only construct typed requests and manage the
+existing parser registry; host code makes no merge decisions.
+
+Rebuilt isolated development packages pass on Linux x86_64: Python 3.14.2 (35
+runtime tests and 73 generated cases, LibCST 1.9.0), Ruby 4.0.6 / ABI 4.0.0 (31
+runtime tests and 70 generated cases). Package contents, reviewed API surfaces,
+Ruby linkage and RBS validation pass. The local Alef bridge generated eight new
+test files; optional `poly fmt` was unavailable, so that formatting gate is not
+claimed. No Alef changes were pushed and no core package was published.
+
+Actual Ruby Rust-provider migration remains next. Installed development artifacts
+do not establish source-gem distribution or the complete platform/ABI matrix.
 Full language/golden-master/downstream authority, native parser promotion,
 publication and default approval remain separate gates.

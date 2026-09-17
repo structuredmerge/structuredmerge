@@ -314,6 +314,38 @@ args = [
   { name = "theirs", field = "input.theirs", type = "string" },
 ]
 
+[crates.e2e.calls.rust_common_analyze]
+function = "run_rust_common_analyze"
+module = "native_merge_fixture"
+args = [
+  { name = "source", field = "input.source", type = "string" },
+]
+
+[crates.e2e.calls.rust_common_diff]
+function = "run_rust_common_diff"
+module = "native_merge_fixture"
+args = [
+  { name = "before", field = "input.before", type = "string" },
+  { name = "after", field = "input.after", type = "string" },
+]
+
+[crates.e2e.calls.rust_common_merge2]
+function = "run_rust_common_merge2"
+module = "native_merge_fixture"
+args = [
+  { name = "incoming", field = "input.incoming", type = "string" },
+  { name = "current", field = "input.current", type = "string" },
+]
+
+[crates.e2e.calls.rust_common_merge3]
+function = "run_rust_common_merge3"
+module = "native_merge_fixture"
+args = [
+  { name = "base", field = "input.base", type = "string" },
+  { name = "ours", field = "input.ours", type = "string" },
+  { name = "theirs", field = "input.theirs", type = "string" },
+]
+
 [crates.e2e.calls.go_common_analyze]
 function = "run_go_common_analyze"
 module = "native_merge_fixture"

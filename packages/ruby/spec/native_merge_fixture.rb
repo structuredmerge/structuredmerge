@@ -134,7 +134,7 @@ module NativeMergeFixture
 
   def run_json_common(operation, dialect, sources, git_options = nil, family = "json")
     provider_id = "ruby.fixture.#{family}"
-    StructuredmergeCore.register_language_pack_parser(provider_id, %w[bash go].include?(family) ? family : ((dialect == "json") ? "json" : "json5"))
+    StructuredmergeCore.register_language_pack_parser(provider_id, %w[bash go rust].include?(family) ? family : ((dialect == "json") ? "json" : "json5"))
     begin
       original = common_request(operation, sources)
       policy = if git_options
@@ -145,8 +145,8 @@ module NativeMergeFixture
       end
       request = StructuredmergeCore::OperationRequest.new(schema: original.schema, request_id: original.request_id,
         operation: policy, sources: original.sources, extensions: [], metadata: {}, extra: {},
-        provider_selection: StructuredmergeCore::MergeProviderSelection.new(provider_id: %w[bash go].include?(family) ? "kernel.#{family}" : (git_options ? "kernel.git.json" : "kernel.json"), family: family, dialect: dialect,
-          profile_id: %w[bash go].include?(family) ? "kernel.#{family}.owners.v1" : (git_options ? "kernel.git.json.v1" : "kernel.json.nested.v1"), required_capabilities: [operation], extra: {}),
+        provider_selection: StructuredmergeCore::MergeProviderSelection.new(provider_id: %w[bash go rust].include?(family) ? "kernel.#{family}" : (git_options ? "kernel.git.json" : "kernel.json"), family: family, dialect: dialect,
+          profile_id: %w[bash go rust].include?(family) ? "kernel.#{family}.owners.v1" : (git_options ? "kernel.git.json.v1" : "kernel.json.nested.v1"), required_capabilities: [operation], extra: {}),
         parser_selection: StructuredmergeCore::OperationParserSelection.new(backend: provider_id, preference: [], required_capabilities: [], extra: {}))
       StructuredmergeCore.execute_operation(request, merge_limits)
     ensure
@@ -172,6 +172,22 @@ module NativeMergeFixture
 
   def run_git_common_merge3(dialect, base, ours, theirs, marker_size, ours_label)
     run_json_common("merge3", dialect, [base, ours, theirs], [marker_size, ours_label])
+  end
+
+  def run_rust_common_analyze(source)
+    run_json_common("analyze", "rust", [source], nil, "rust")
+  end
+
+  def run_rust_common_diff(before, after)
+    run_json_common("diff2", "rust", [before, after], nil, "rust")
+  end
+
+  def run_rust_common_merge2(incoming, current)
+    run_json_common("merge2", "rust", [incoming, current], nil, "rust")
+  end
+
+  def run_rust_common_merge3(base, ours, theirs)
+    run_json_common("merge3", "rust", [base, ours, theirs], nil, "rust")
   end
 
   def run_go_common_analyze(source)

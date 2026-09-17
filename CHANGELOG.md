@@ -267,6 +267,8 @@
 
 - Add current-preferred typed Rust merge2 with native declaration/comment ranges, module documentation preservation, exact use-declaration compatibility, and verified source retention.
 
+- Exercise all four typed Rust operations through shared Alef-generated Ruby/Python fixtures and isolated installed core-package tests.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
