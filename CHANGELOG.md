@@ -394,3 +394,5 @@
 - Validate successful native merge source partitions against input and output bytes, require preservation claims, and reject inconsistent retained-source projections.
 
 - Derive the typed Rust release dependency closure from Cargo metadata, validate it in CI and before release commands, and provide a side-effect-free release inventory listing.
+
+- Reject missing merge-driver option values and unknown required promotion statuses before output writes, preserving current files on malformed CLI and attribute policies.

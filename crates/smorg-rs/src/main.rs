@@ -470,6 +470,22 @@ fn parse_merge_driver_options(
 
     let mut index = 0;
     while index < args.len() {
+        if matches!(
+            args[index].as_str(),
+            "--ancestor"
+                | "--current"
+                | "--other"
+                | "--path-name"
+                | "--output"
+                | "--report"
+                | "--profile"
+                | "--require-profile-status"
+                | "--fallback"
+        ) && args.get(index + 1).is_none_or(|value| value.is_empty() || value.starts_with("--"))
+        {
+            let _ = writeln!(stderr, "merge-driver option {:?} requires a value", args[index]);
+            return None;
+        }
         match args[index].as_str() {
             "--ancestor" => {
                 index += 1;
@@ -572,7 +588,11 @@ fn report_and_enforce_profile(
     let minimum_profile_status = match require_status {
         Some("recommended") => ProfilePromotionStatus::Recommended,
         Some("default") => ProfilePromotionStatus::Default,
-        Some(_) | None => ProfilePromotionStatus::Available,
+        Some("available") | None => ProfilePromotionStatus::Available,
+        Some(value) => {
+            let _ = writeln!(stderr, "unsupported required profile status {value:?}");
+            return EXIT_USER_ERROR;
+        }
     };
     let requirement = ProfileSelectionRequirement {
         profile_id: profile_id.to_string(),

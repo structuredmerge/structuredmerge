@@ -141,7 +141,8 @@ return 2, reserving 1 for actual typed conflicts. Inspect raw diagnostics as wel
 as the official report: an early broken launch returning 1 was classified as the
 expected YAML conflict by the older harness and is not valid execution evidence.
 The corrected harness requires a complete marker region or the categorized
-`EXECUTABLE: merge_conflict: CODE: MESSAGE` diagnostic before accepting exit 1
+`EXECUTABLE: merge_conflict: MESSAGE` diagnostic (with an optional separate code)
+before accepting exit 1
 as a conflict. Unexplained startup failures now remain reliability errors; pin
 the harness revision when comparing reports produced before and after this fix.
 
