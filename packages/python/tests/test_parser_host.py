@@ -21,6 +21,79 @@ from libcst_facts import LibCSTHost
 
 
 class TypedParserHostTest(unittest.TestCase):
+    def test_capability_manifest_separates_support_probes_and_authority(self):
+        limits = core.ParseLimits(max_batch_items=4, max_input_bytes=0, max_nodes=0, max_diagnostics=0)
+        def query(profile="kernel.python.native_declarations.v1", backend="python.libcst"):
+            return core.CapabilityQuery(profile_id=profile, operation=core.OperationKind.MERGE3,
+                dialect=None, parser_selection=core.ParserSelection(backend_id=backend,
+                    preference=[], required_capabilities=[]))
+        probes = []
+        original = self.host.probe_batch
+        def probe(request):
+            probes.append(request)
+            return original(request)
+        self.host.probe_batch = probe
+        inventory = core.capability_manifest([], limits)
+        self.assertIsInstance(inventory, core.CapabilityManifest)
+        self.assertEqual(inventory.schema, "structuredmerge.typed-capability-manifest/v1")
+        self.assertEqual(len(inventory.profiles.profiles), 8)
+        self.assertEqual(probes, [])
+        with self.assertRaisesRegex(RuntimeError, "capability.unknown_profile"):
+            core.capability_manifest([query(), query("unknown")], limits)
+        self.assertEqual(probes, [])
+        unsupported = core.CapabilityQuery(profile_id="kernel.git.json.v1", operation=core.OperationKind.ANALYZE,
+            dialect=None, parser_selection=query().parser_selection)
+        observations = core.capability_manifest([unsupported, query(), query(backend="missing")], limits).observations
+        self.assertFalse(observations[0].operation_declared)
+        self.assertIsNone(observations[0].parser_report)
+        self.assertIsNone(observations[0].parser_eligible)
+        self.assertTrue(observations[1].parser_eligible)
+        self.assertEqual(observations[1].parser_report.selected_backend, "python.libcst")
+        self.assertTrue(observations[1].parser_request.options.native_extensions)
+        self.assertFalse(observations[2].parser_eligible)
+        self.assertTrue(all(not item.approved_as_default for item in observations))
+        self.assertEqual(self.host.calls, 0)
+        control = core.create_operation_control()
+        control.cancel()
+        with self.assertRaisesRegex(RuntimeError, "execution.cancelled"):
+            core.capability_manifest_controlled([], limits, control)
+        with self.assertRaisesRegex(RuntimeError, "resource.limit"):
+            core.capability_manifest([query()] * 5, limits)
+        def faulty_probe(request):
+            raise RuntimeError("injected capability probe failure")
+        self.host.probe_batch = faulty_probe
+        fault = core.capability_manifest([query()], limits).observations[0]
+        self.assertFalse(fault.parser_eligible)
+        self.assertTrue(fault.parser_report.candidates[0].probe_fault)
+        self.assertFalse(fault.approved_as_default)
+
+    def test_capability_manifest_retains_snapshot_across_probe_retirement(self):
+        limits = core.ParseLimits(max_batch_items=2, max_input_bytes=0, max_nodes=0, max_diagnostics=0)
+        query = core.CapabilityQuery(profile_id="kernel.python.native_declarations.v1",
+            operation=core.OperationKind.MERGE3, dialect=None,
+            parser_selection=core.ParserSelection(backend_id="python.libcst", preference=[], required_capabilities=[]))
+        original = self.host.probe_batch
+        probes = []
+        def retire(request):
+            if not probes:
+                core.unregister_parser_host("python.libcst")
+            probes.append(request)
+            return original(request)
+        self.host.probe_batch = retire
+        try:
+            manifest = core.capability_manifest([query, query], limits)
+            self.assertEqual(len(probes), 2)
+            for item in manifest.observations:
+                self.assertTrue(item.parser_eligible)
+                self.assertEqual(item.parser_report.generation, manifest.parsers.generation)
+                self.assertEqual(item.parser_report.digest, manifest.parsers.descriptor_digest)
+            self.assertFalse(core.parser_registry_inventory().providers)
+            self.assertEqual(self.host.calls, 0)
+        finally:
+            self.host.probe_batch = original
+            if probes:
+                core.register_parser_host(self.host)
+
     def test_installed_runtime_exits_after_registered_retired_and_drained_callbacks(self):
         script = textwrap.dedent('''
             import gc, sys, threading

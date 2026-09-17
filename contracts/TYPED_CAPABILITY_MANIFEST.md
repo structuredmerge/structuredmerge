@@ -4,7 +4,9 @@ The Rust facade's `capability_manifest(queries, limits)` composes operation
 declarations, parser inventory, and explicitly requested parser observations.
 Its schema is `structuredmerge.typed-capability-manifest/v1`; it is not the old
 prototype's JSON-string manifest and does not preserve its production claims.
-Ruby/Python export and installed-consumer validation remain pending.
+Alef exports the three DTOs and both manifest entry points in Ruby and Python.
+Installed Linux Ruby 4.0.6/Psych and CPython 3.14.2/LibCST tests exercise the
+generated bindings; this is not the complete supported-platform matrix.
 
 An empty query list returns all eight implemented common-operation profile
 declarations and a parser inventory without probing. Nonempty queries name a
@@ -49,5 +51,10 @@ Tests in `crates/structuredmerge-core/tests/capabilities.rs` cover non-loading
 inventory, invalid-batch preflight, unsupported combinations, parser-language
 mapping/options, reentrant removal with snapshot consistency, unavailable/faulted
 selection, serialization, resource limits, cancellation, and deadlines. Existing
-common-operation tests guard the shared option refactor. Binding exposure and
-cross-runtime tests are the next integration step, not established by Rust tests.
+common-operation tests guard the shared option refactor. Installed binding tests
+also check typed results, non-probing inventory, invalid/unsupported queries,
+missing parsers, callback faults, limits, cancellation and in-probe retirement
+with snapshot identity preserved. They assert zero parse calls. The independent
+API-baseline and runtime-declaration checks include the new surface. No registry
+installation, default-authority decision, or upstream generator approval follows
+from these local artifacts.

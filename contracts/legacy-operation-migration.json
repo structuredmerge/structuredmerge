@@ -90,7 +90,7 @@
       "disposition": "retain_until_consumer_migration",
       "consumers": ["structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb"],
       "replacement": "Typed capability manifest and provider identity with observable availability, support and default authority.",
-      "gap": "operation_profile_catalog declares all eight common-operation profiles through Rust and generated Ruby/Python bindings. Rust capability_manifest now composes these declarations with a single registry snapshot and explicitly requested parser eligibility observations; operation/dialect support, probe evidence and default authority remain separate. Empty queries do not probe. See contracts/TYPED_CAPABILITY_MANIFEST.md. Ruby/Python manifest exposure, installed-consumer verification and consumer migration remain open; parser eligibility is not source-specific merge support or default approval."
+      "gap": "operation_profile_catalog declares all eight common-operation profiles through Rust and generated Ruby/Python bindings. Typed capability_manifest composes these declarations with one registry snapshot and explicitly requested parser eligibility observations; operation/dialect support, probe evidence and default authority remain separate. Installed Ruby 4.0.6/Psych and Python 3.14.2/LibCST artifacts pass manifest tests, including empty non-probing queries, faults, limits, cancellation and reentrant host retirement. See contracts/TYPED_CAPABILITY_MANIFEST.md. Wider platform/consumer integration remains open; parser eligibility is not source-specific merge support or default approval."
     },
     {
       "id": "workflow-hosts",

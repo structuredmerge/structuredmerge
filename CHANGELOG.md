@@ -327,6 +327,8 @@
 
 - Add a typed Rust capability manifest that separates profile scope, snapshot-bound parser eligibility observations, and explicit default authority without parsing or merging source.
 
+- Expose typed capability manifests in generated Ruby/Python bindings with installed-runtime tests for declarations, eligibility, probe faults, limits, cancellation and snapshot retention during host retirement.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

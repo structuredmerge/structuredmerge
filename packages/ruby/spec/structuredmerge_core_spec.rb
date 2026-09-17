@@ -20,6 +20,80 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  it "separates capability declarations, parser eligibility and default approval" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    query = lambda do |profile = "kernel.yaml.native_mapping.v1", operation = :merge3, backend = "ruby.typed.psych"|
+      described_class::CapabilityQuery.new(profile_id: profile, operation: operation, dialect: nil,
+        parser_selection: described_class::ParserSelection.new(backend_id: backend, preference: [], required_capabilities: []))
+    end
+    probes = []
+    original = host.method(:probe_batch)
+    host.define_singleton_method(:probe_batch) do |request|
+      probes << request
+      original.call(request)
+    end
+    inventory = described_class.capability_manifest([], merge_limits)
+    expect(inventory).to be_a(described_class::CapabilityManifest)
+    expect(inventory.schema).to eq("structuredmerge.typed-capability-manifest/v1")
+    expect(inventory.profiles.profiles.length).to eq(8)
+    expect(probes).to be_empty
+    expect { described_class.capability_manifest([query.call, query.call("unknown")], merge_limits) }.to raise_error(RuntimeError, /capability.unknown_profile/)
+    expect(probes).to be_empty
+    observations = described_class.capability_manifest([
+      query.call("kernel.yaml.native_mapping.v1", :merge2), query.call,
+      query.call("kernel.yaml.native_mapping.v1", :merge3, "missing")
+    ], merge_limits).observations
+    expect(observations[0].operation_declared).to be(false)
+    expect(observations[0].parser_report).to be_nil
+    expect(observations[0].parser_eligible).to be_nil
+    expect(observations[1].parser_eligible).to be(true)
+    expect(observations[1].parser_report.selected_backend).to eq("ruby.typed.psych")
+    expect(observations[1].parser_request.options.native_extensions).to be(true)
+    expect(observations[2].parser_eligible).to be(false)
+    expect(observations.map(&:approved_as_default)).to eq([false, false, false])
+    expect(host.calls).to eq(0)
+    control = described_class.create_operation_control
+    control.cancel
+    expect { described_class.capability_manifest_controlled([], merge_limits, control) }.to raise_error(RuntimeError, /execution.cancelled/)
+    expect { described_class.capability_manifest([query.call] * (merge_limits.max_batch_items + 1), merge_limits) }.to raise_error(RuntimeError, /resource.limit/)
+    host.define_singleton_method(:probe_batch) { |_request| raise "injected capability probe failure" }
+    fault = described_class.capability_manifest([query.call], merge_limits).observations.first
+    expect(fault.parser_eligible).to be(false)
+    expect(fault.parser_report.candidates.first.probe_fault).not_to be_nil
+    expect(fault.approved_as_default).to be(false)
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "retains capability snapshot identity when a probe retires its host" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    query = described_class::CapabilityQuery.new(profile_id: "kernel.yaml.native_mapping.v1",
+      operation: :merge3, dialect: nil, parser_selection: described_class::ParserSelection.new(
+        backend_id: "ruby.typed.psych", preference: [], required_capabilities: []))
+    probes = []
+    original = host.method(:probe_batch)
+    host.define_singleton_method(:probe_batch) do |request|
+      StructuredmergeCore.unregister_parser_host("ruby.typed.psych") if probes.empty?
+      probes << request
+      original.call(request)
+    end
+    manifest = described_class.capability_manifest([query, query], merge_limits)
+    expect(probes.length).to eq(2)
+    manifest.observations.each do |item|
+      expect(item.parser_eligible).to be(true)
+      expect(item.parser_report.generation).to eq(manifest.parsers.generation)
+      expect(item.parser_report.digest).to eq(manifest.parsers.descriptor_digest)
+    end
+    expect(described_class.parser_registry_inventory.providers).to be_empty
+    expect(host.calls).to eq(0)
+  ensure
+    if described_class.parser_registry_inventory.providers.any? { |provider| provider.id == "ruby.typed.psych" }
+      described_class.unregister_parser_host("ruby.typed.psych")
+    end
+  end
+
   it "exposes the runtime classes, readers and methods declared by the installed RBS" do
     signature = File.join(Gem.loaded_specs.fetch("structuredmerge-core").full_gem_path, "sig/types.rbs")
     namespace = RBS::Parser.parse_signature(File.read(signature)).last.find do |node|
