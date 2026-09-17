@@ -412,3 +412,5 @@
 - Correct generated Python LineEndings and ParseOptions constructor declarations: omission uses Rust defaults, while explicit None is rejected. Audit installed constructor and method signatures through native and public exports.
 
 - Describe Ruby unit-enum values with RBS symbol aliases instead of nonexistent classes, and verify declared classes, readers, methods, and source-role values against isolated installed core artifacts.
+
+- Declare frozen API review snapshots and retained legacy regression sources outside active Alef generation ownership, preserving independent API drift checks.
