@@ -169,6 +169,47 @@ fn code(result: &operation_result::OperationResult) -> &str {
     &diagnostic.code
 }
 
+fn assert_native_partition_rejects_tampering(
+    result: &OperationResult,
+    request: &ValidatedOperationRequest,
+) {
+    for mutation in 0..10 {
+        let mut forged = result.clone();
+        match mutation {
+            0 => {
+                forged.render_report.insert("source_segments".into(), json!([]));
+            }
+            1 => {
+                forged.render_report.get_mut("source_segments").unwrap()[0]["sha256"] =
+                    json!("0".repeat(64))
+            }
+            2 => {
+                forged.render_report.get_mut("source_segments").unwrap()[0]["output_range"]["start_byte"] =
+                    json!(1)
+            }
+            3 => forged.verification.retained_source_regions = Some(vec![]),
+            4 => forged.verification.preservation = Some(vec![]),
+            5 => {
+                forged.verification.retained_source_regions.as_mut().unwrap()[0]
+                    .extra
+                    .insert("output_range".into(), json!({"start_byte": 1, "end_byte": 1}));
+            }
+            6 => {
+                forged.verification.retained_source_regions.as_mut().unwrap()[0].source_role =
+                    SourceRole::Output
+            }
+            7 => forged.verification.preservation.as_mut().unwrap()[0].required = false,
+            8 => {
+                forged.render_report.insert("strategy".into(), json!("forged"));
+            }
+            _ => {
+                forged.render_report.insert("producer".into(), json!("forged"));
+            }
+        }
+        assert!(forged.validate_against(request).is_err(), "partition mutation {mutation}");
+    }
+}
+
 fn directional_requests(runtime: Runtime, incoming: &str, current: &str) -> Vec<ParseRequest> {
     let (language, backend) = match runtime {
         Runtime::Ruby => ("yaml", "test.psych"),
@@ -372,6 +413,7 @@ fn python_common_merge2_keeps_direction_and_reports_verified_changes() {
     let result = execute_native_operation(&request, &snapshot, &context).unwrap();
     assert!(result.ok);
     assert_eq!(result.output.as_deref(), Some("a = 9 # keep\nb = 2 # new\n# footer"));
+    assert_native_partition_rejects_tampering(&result, &request);
     assert_eq!(result.operation, OperationKind::Merge2);
     assert_eq!(result.verification.directional_roles_preserved, Some(true));
     assert_eq!(
@@ -697,6 +739,7 @@ fn common_merge_executes_rust_composition_with_real_reparse_and_exact_evidence()
     let result = execute_native_operation(&request, &registry, &context).unwrap();
     assert!(result.ok);
     assert_eq!(result.output.as_deref(), Some("# header\r\na: ours\r\nb: theirs"));
+    assert_native_partition_rejects_tampering(&result, &request);
     assert_eq!(result.verification.base_participated, Some(true));
     assert_eq!(result.verification.output_reparsed, Some(true));
     assert_eq!(provider.calls.load(Ordering::SeqCst), 2);

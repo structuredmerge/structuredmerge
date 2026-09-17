@@ -384,3 +384,5 @@
 - Emit the retained benchmark diagnostic prefix for typed-core parser rejections, allowing expected malformed-input failures to satisfy the existing negative-input contract without changing the corpus or gate.
 
 - Validate successful common native merge parse evidence against input/output bytes, selected candidates and one registry snapshot, rejecting forged or missing output parse records.
+
+- Validate successful native merge source partitions against input and output bytes, require preservation claims, and reject inconsistent retained-source projections.
