@@ -40,6 +40,16 @@ are not manufactured by this diagnostic-only conversion.
 
 ## Evidence and remaining work
 
+Common-operation parser-service projection classifies all three typed resource
+limit variants (execution limit, source limit, and parsed-result limit) as
+`resource_limit` with code `resource.limit`. Invalid source descriptors remain
+`invalid_request`; invalid parser identities remain `internal_error`. A provider
+fault whose opaque native code happens to be `resource.limit` is still
+`internal_error` / `parser.provider_fault`, with that claim retained only in
+`origin.native_code`. The projection does not copy native exception text into
+the diagnostic. Rust record-validation tests cover these distinctions; installed
+Psych/LibCST tests exercise parsed-result limits through the common operations.
+
 Tests round-trip and validate every diagnostic in the Slice 1028 fixture,
 including native parser failure, its causal classification failure, unresolved
 conflict and resolved conflict audit diagnostics. Adversarial cases cover

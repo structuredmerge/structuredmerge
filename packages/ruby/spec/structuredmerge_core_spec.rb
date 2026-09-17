@@ -450,6 +450,29 @@ RSpec.describe StructuredmergeCore do
     described_class.unregister_parser_host("ruby.typed.psych")
   end
 
+  it "classifies parser result limits as resource limits in common operation diagnostics" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    limits = described_class::ParseLimits.new(max_batch_items: 3, max_input_bytes: 10000,
+      max_nodes: 1, max_diagnostics: 20)
+    {"analyze" => 1, "diff2" => 2, "merge3" => 3}.each do |operation, count|
+      result = described_class.execute_operation(common_request(operation, Array.new(count, "a: one\nb: two\n")), limits)
+      expect(result.ok).to be(false)
+      expect(result.output).to be_nil
+      expect(result.analysis).to be_nil
+      expect(result.verification.classification_reached).to be(false)
+      expect(result.diagnostics.length).to eq(1)
+      diagnostic = result.diagnostics.first.canonical
+      expect(diagnostic.code).to eq("resource.limit")
+      expect(diagnostic.category).to eq(:resource_limit)
+      expect(diagnostic.blocking).to be(true)
+      expect(diagnostic.origin.backend_id).to eq("ruby.typed.psych")
+    end
+    expect(host.calls).to eq(3)
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
   it "rejects wrong typed policy payloads and cancelled common operations before callbacks" do
     host = TypedPsychHost.new
     described_class.register_parser_host(host)

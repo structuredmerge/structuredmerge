@@ -426,3 +426,5 @@
 - Correct generated Python struct constructor enum annotations and verify explicit enum inputs, optional None, and rejection of implicit string/int coercion in installed artifacts.
 
 - Generated Python capability assertions compare profile identifiers and parser-language strings exactly rather than case-folding indexed fields.
+
+- Common-operation diagnostics classify source and parser-result resource limits consistently as resource_limit, while preserving opaque provider-native error codes and failure evidence.

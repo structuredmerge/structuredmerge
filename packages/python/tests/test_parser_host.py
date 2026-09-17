@@ -955,6 +955,24 @@ class TypedParserHostTest(unittest.TestCase):
                 self.assertTrue(result.verification.output_reparsed)
         self.assertEqual(self.host.calls, 4)
 
+    def test_common_parser_result_limits_have_resource_limit_diagnostics(self):
+        limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1, max_diagnostics=20)
+        for operation, count in [("analyze", 1), ("diff2", 2), ("merge2", 2), ("merge3", 3)]:
+            with self.subTest(operation=operation):
+                request = self.common_request(operation, ["a = 1\nb = 2\n"] * count)
+                result = core.execute_operation(request, limits)
+                self.assertFalse(result.ok)
+                self.assertIsNone(result.output)
+                self.assertIsNone(result.analysis)
+                self.assertFalse(result.verification.classification_reached)
+                self.assertEqual(len(result.diagnostics), 1)
+                diagnostic = result.diagnostics[0].canonical
+                self.assertEqual(diagnostic.code, "resource.limit")
+                self.assertEqual(str(diagnostic.category), "resource_limit")
+                self.assertTrue(diagnostic.blocking)
+                self.assertEqual(diagnostic.origin.backend_id, "python.libcst")
+        self.assertEqual(self.host.calls, 4)
+
     def test_common_merge2_preserves_current_trivia_and_direction(self):
         limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
         request = self.common_request("merge2", ["a = 1\nb = 2 # new\n", "a = 9 # keep\n# footer"])

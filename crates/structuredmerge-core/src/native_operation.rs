@@ -138,7 +138,15 @@ pub(crate) fn service_failure(result: &mut OperationResult, error: ServiceError)
     let category = match &error {
         ServiceError::Cancelled => PortableCategory::Cancelled,
         ServiceError::DeadlineExceeded => PortableCategory::DeadlineExceeded,
-        ServiceError::LimitExceeded => PortableCategory::ResourceLimit,
+        ServiceError::LimitExceeded
+        | ServiceError::Source(crate::source::SourceError {
+            code: crate::source::SourceErrorCode::LimitExceeded,
+            ..
+        })
+        | ServiceError::InvalidResult {
+            error: crate::parsed::ParseValidationError::LimitExceeded,
+            ..
+        } => PortableCategory::ResourceLimit,
         ServiceError::Selection(_) => PortableCategory::SelectionError,
         ServiceError::Source(_) | ServiceError::InvalidRequest => PortableCategory::InvalidRequest,
         _ => PortableCategory::InternalError,
@@ -958,6 +966,93 @@ fn reparse_selected_output(
 mod span_tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn service_failure_diagnostics_distinguish_limits_from_invalid_input_and_native_claims() {
+        use crate::parsed::ParseValidationError;
+        use crate::source::{SourceError, SourceErrorCode};
+        use tree_haver::service::ProviderFault;
+
+        let source =
+            crate::source_input("source".into(), SourceRole::Source, SourceEncoding::Utf8, vec![])
+                .unwrap();
+        let request: crate::OperationRequest = serde_json::from_value(json!({
+            "schema": crate::OPERATION_SCHEMA, "request_id": "service-failure",
+            "operation": "analyze",
+            "provider_selection": {"family": "yaml", "required_capabilities": []},
+            "parser_selection": {"preference": [], "required_capabilities": []},
+            "policy": {}, "extensions": [], "metadata": {},
+            "sources": {"source": {"source_id": "source", "role": "source",
+                "content": "", "encoding": "utf-8", "byte_length": 0,
+                "sha256": source.descriptor.sha256}}
+        }))
+        .unwrap();
+        let request = request.validate(1024, |_, _| panic!()).unwrap();
+        let cases = [
+            (ServiceError::LimitExceeded, PortableCategory::ResourceLimit, "resource.limit"),
+            (
+                ServiceError::Source(SourceError {
+                    code: SourceErrorCode::LimitExceeded,
+                    source_id: "source".into(),
+                }),
+                PortableCategory::ResourceLimit,
+                "resource.limit",
+            ),
+            (
+                ServiceError::InvalidResult {
+                    backend_id: "native".into(),
+                    error: ParseValidationError::LimitExceeded,
+                },
+                PortableCategory::ResourceLimit,
+                "resource.limit",
+            ),
+            (
+                ServiceError::Source(SourceError {
+                    code: SourceErrorCode::DescriptorMismatch,
+                    source_id: "source".into(),
+                }),
+                PortableCategory::InvalidRequest,
+                "source.invalid",
+            ),
+            (
+                ServiceError::InvalidResult {
+                    backend_id: "native".into(),
+                    error: ParseValidationError::IdentityMismatch,
+                },
+                PortableCategory::InternalError,
+                "parser.invalid_result",
+            ),
+            (
+                ServiceError::Provider {
+                    backend_id: "native".into(),
+                    fault: ProviderFault {
+                        code: "resource.limit".into(),
+                        message: "secret native source text".into(),
+                    },
+                },
+                PortableCategory::InternalError,
+                "parser.provider_fault",
+            ),
+        ];
+        for (error, category, code) in cases {
+            let failure = crate::ParserFailure::from(error.clone());
+            let mut result = empty_result(&request);
+            service_failure(&mut result, error);
+            assert!(!result.ok);
+            assert!(result.output.is_none());
+            let [DiagnosticRecord::Canonical(record)] = result.diagnostics.as_slice() else {
+                panic!("expected one canonical diagnostic");
+            };
+            assert_eq!(record.category, category);
+            assert_eq!(record.code, code);
+            assert_eq!(record.origin.backend_id, failure.backend_id);
+            assert_eq!(record.origin.native_code, failure.native_code);
+            assert!(record.blocking);
+            assert_eq!(record.severity, DiagnosticSeverity::Error);
+            assert!(!serde_json::to_string(record).unwrap().contains("secret native source text"));
+            result.validate_against(&request).unwrap();
+        }
+    }
 
     #[test]
     fn diff_projection_rejects_wrong_identity_digest_and_out_of_bounds_regions() {
