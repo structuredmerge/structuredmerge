@@ -119,16 +119,16 @@ structuredmerge-zip-merge = "0.1"
 
 ## Command
 
-The Rust implementation ships the implementation-specific `smorg-rs` command.
-Use that name in git configuration unless a package manager or local install has
-provided a `smorg` symlink.
-
-Package-manager formulas may expose the selected implementation as `smorg`.
-For a local user-created symlink:
+Rust crate `smorg` ships the kernel executable `smorg` and the compatibility alias
+`smorg-rs`. Both execute the same kernel commands; no symlink is required. For a
+local development build:
 
 ```sh
-ln -s "$(command -v smorg-rs)" ~/.local/bin/smorg
+cargo build -p smorg --locked
+target/debug/smorg --help
 ```
+
+Existing opt-in Git configurations may continue to use the compatibility alias:
 
 ```sh
 git config merge.smorg-rs.driver 'smorg-rs merge-driver %O %A %B %P'
@@ -136,6 +136,11 @@ git config diff.smorg-rs.command 'smorg-rs diff-driver'
 smorg-rs conflicts diff path/to/file-with-conflicts.go
 smorg-rs languages --gitattributes
 ```
+
+This naming change does not approve a default Git-driver switch or establish
+registry/platform release readiness. External subcommand dispatch is not yet
+implemented. The source directory remains `crates/smorg-rs` while path-based
+benchmark mappings and consumers migrate.
 
 `merge-driver` updates Git's `%A` file by default, or writes to `--output` when
 used outside git. `diff-driver` accepts both the two-argument local form and the

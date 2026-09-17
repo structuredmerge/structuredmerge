@@ -3,7 +3,7 @@
   "adapter": {
     "adapter_id": "rust-candidate.smorg-rs",
     "implementation": "rust",
-    "package": "smorg-rs",
+    "package": "smorg",
     "package_version": "0.2.0",
     "source": {
       "repository": "structuredmerge/structuredmerge"

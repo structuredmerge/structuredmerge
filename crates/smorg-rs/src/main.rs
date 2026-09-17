@@ -144,6 +144,8 @@ fn run(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
 }
 
 fn print_usage(out: &mut dyn Write) {
+    let _ = writeln!(out, "smorg: StructuredMerge kernel CLI (compatibility alias: smorg-rs)");
+    let _ = writeln!(out, "Both executable names accept the commands below.");
     let _ = writeln!(out, "usage: smorg-rs benchmark-provider-session");
     let _ = writeln!(out, "       smorg-rs benchmark-provider-merge2 INCOMING CURRENT PATH");
     let _ = writeln!(out, "       smorg-rs benchmark-provider-diff BEFORE AFTER PATH");

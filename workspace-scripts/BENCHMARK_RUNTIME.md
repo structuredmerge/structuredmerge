@@ -16,7 +16,7 @@ cp workspace-scripts/benchmark-runtime.gemfile tmp/benchmark-runtime/Gemfile
 export BUNDLE_GEMFILE="$PWD/tmp/benchmark-runtime/Gemfile"
 export STRUCTUREDMERGE_DEV=/absolute/path/to/clean/structuredmerge-ruby/gems
 bundle install
-cargo build -p smorg-rs --locked
+cargo build -p smorg --locked
 mkdir -p "$STRUCTUREDMERGE_DEV/ast-merge-git/tmp"
 bundle exec ast-merge-git benchmark run \
   --corpus ../fixtures/diagnostics/slice-1023-local-paired-benchmark/corpus.json \

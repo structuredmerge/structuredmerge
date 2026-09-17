@@ -18,6 +18,8 @@
 
 - Record ast-crispr and ast-template consumers as migrated on local Ruby main after revalidating their typed adapters against the current installed core gem; remaining release and downstream gates stay explicit.
 
+- Rename the kernel CLI crate to smorg and ship the smorg executable alongside the retained smorg-rs compatibility alias; existing Git-driver defaults remain unchanged.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider

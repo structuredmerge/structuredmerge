@@ -1,11 +1,11 @@
 [package]
-name = "smorg-rs"
+name = "smorg"
 version = "0.2.0"
 repository = "https://github.com/structuredmerge/structuredmerge"
 homepage = "https://structuredmerge.org"
 authors = ["Peter H. Boling"]
 edition = "2024"
-description = "Implementation-specific StructuredMerge command for Rust"
+description = "StructuredMerge kernel command-line interface"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
@@ -30,6 +30,11 @@ yaml-merge = { version = "0.2.0", path = "../yaml-merge" }
 [dev-dependencies]
 tempfile = "3"
 
+[[bin]]
+name = "smorg"
+path = "src/main.rs"
+
+# Retained while existing Git configurations and benchmark consumers migrate.
 [[bin]]
 name = "smorg-rs"
 path = "src/main.rs"
