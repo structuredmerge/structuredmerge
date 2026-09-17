@@ -283,6 +283,8 @@
 
 - Document and verify typed parser snapshot retention during in-flight removal, same-ID re-registration, cancellation, and retired-host release without recreating a prototype registry API.
 
+- Expose a typed, non-loading parser registry inventory in Rust with cached provider declarations, snapshot generation and descriptor digest, without conflating registration with availability or default authority.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

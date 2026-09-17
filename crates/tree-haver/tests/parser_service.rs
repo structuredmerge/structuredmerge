@@ -64,6 +64,62 @@ impl TestParser {
     }
 }
 
+#[test]
+fn registry_inventory_is_owned_non_loading_ordered_and_snapshot_bound() {
+    let registry = ParserRegistry::default();
+    let empty = registry.snapshot().unwrap().inventory();
+    assert_eq!(empty.schema, PARSER_REGISTRY_INVENTORY_SCHEMA);
+    assert_eq!(empty.generation, 0);
+    assert!(empty.providers.is_empty());
+
+    let mut unavailable = TestParser::new("a-unavailable", 1);
+    unavailable.available = false;
+    let unavailable = Arc::new(unavailable);
+    let available = Arc::new(TestParser::new("z-available", 2));
+    registry.register(available.clone()).unwrap();
+    registry.register(unavailable.clone()).unwrap();
+    let snapshot = registry.snapshot().unwrap();
+    let inventory = snapshot.inventory();
+    assert_eq!(inventory.generation, 2);
+    assert_eq!(inventory.descriptor_digest, snapshot.digest());
+    assert_eq!(
+        inventory.providers.iter().map(|provider| provider.id.as_str()).collect::<Vec<_>>(),
+        ["a-unavailable", "z-available"]
+    );
+    // Registration is reported even for an unavailable parser, without asserting
+    // its availability or executing a potentially loading probe.
+    for provider in [&unavailable, &available] {
+        assert_eq!(provider.probes.load(Ordering::SeqCst), 0);
+        assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+    }
+    let mut caller_copy = inventory.clone();
+    caller_copy.providers[0].capabilities.clear();
+    caller_copy.providers.reverse();
+    assert_eq!(snapshot.inventory(), inventory);
+    assert_eq!(registry.snapshot().unwrap().inventory(), inventory);
+    let encoded = serde_json::to_string(&inventory).unwrap();
+    assert_eq!(serde_json::from_str::<ParserRegistryInventory>(&encoded).unwrap(), inventory);
+
+    let reverse = ParserRegistry::default();
+    reverse.register(unavailable.clone()).unwrap();
+    reverse.register(available.clone()).unwrap();
+    assert_eq!(reverse.snapshot().unwrap().inventory(), inventory);
+
+    registry.unregister("a-unavailable", inventory.generation).unwrap();
+    let removed = registry.snapshot().unwrap().inventory();
+    assert_eq!(removed.generation, 3);
+    assert_ne!(removed.descriptor_digest, inventory.descriptor_digest);
+    assert_eq!(removed.providers.len(), 1);
+    assert_eq!(snapshot.inventory(), inventory);
+    registry.register(unavailable.clone()).unwrap();
+    let restored = registry.snapshot().unwrap().inventory();
+    assert_eq!(restored.generation, 4);
+    assert_eq!(restored.descriptor_digest, inventory.descriptor_digest);
+    assert_eq!(restored.providers, inventory.providers);
+    assert_eq!(unavailable.probes.load(Ordering::SeqCst), 0);
+    assert_eq!(available.probes.load(Ordering::SeqCst), 0);
+}
+
 impl ParserProvider for TestParser {
     fn descriptor(&self) -> &ParserProviderDescriptor {
         &self.descriptor

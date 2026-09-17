@@ -206,6 +206,16 @@ pub(crate) fn registry() -> &'static ParserRegistry {
     PARSERS.get_or_init(ParserRegistry::default)
 }
 
+/// Observe registered parser declarations without loading or probing providers.
+/// This is not an availability report, merge capability manifest or authority grant.
+pub fn parser_registry_inventory() -> Result<tree_haver::service::ParserRegistryInventory, CoreError>
+{
+    registry()
+        .snapshot()
+        .map(|snapshot| snapshot.inventory())
+        .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })
+}
+
 pub fn register_parser_host(host: Arc<dyn ParserHost>) -> Result<(), CoreError> {
     // No registry lock spans a host callback. TreeHaver caches the descriptor.
     let descriptor =

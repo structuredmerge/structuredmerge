@@ -30,6 +30,21 @@ open. No public API was added to reproduce the abandoned prototype.
 
 ## Legacy operation disposition
 
+Rust callers can now use `parser_registry_inventory()` on the core, or
+`ParserRegistrySnapshot::inventory()` on a retained TreeHaver snapshot. The owned
+`structuredmerge.parser-registry-inventory/v1` record contains the generation,
+descriptor digest and cached descriptors ordered by provider ID. It does not
+invoke descriptor, probe or parse callbacks; changing a returned record cannot
+mutate the registry. The digest identifies declarations, not provider code or
+availability. Removing and re-registering identical declarations restores the
+digest but advances the generation. Generations are local to a registry instance,
+not globally unique identities or timestamps.
+
+This initial inventory is Rust-only. Generated binding exposure, installed
+consumer tests, request-specific availability and the complete capability/authority
+manifest remain unfinished. Never infer that a listed parser is available,
+loadable, semantically supported for a merge operation or approved as default.
+
 | Legacy operation | Typed direction and remaining work |
 | --- | --- |
 | `register_parser_host` | Typed `ParserHost` descriptor/probe/parse batches in the existing registry. |
@@ -37,7 +52,7 @@ open. No public API was added to reproduce the abandoned prototype.
 | `unregister_parser_host` | Compatibility spelling of `unregister_parser_provider`, with snapshot retention. |
 | `parse_with_parser`, `parse_normalized_with_tslp` | Typed `parse_sources`, with explicit selection and validated source-bound results; migrated TreeHaver consumer. |
 | `replace_parser_host` | Still unimplemented as an atomic typed operation; remove/re-register must not be advertised as equivalent. |
-| `registered_parser_hosts` | Still pending typed registry/capability observability; static merge profile introspection is not a substitute. |
+| `registered_parser_hosts` | Rust-only typed declaration inventory exists; generated binding exposure and full capability observability remain pending. |
 | `probe_with_parser` | Typed service selection already probes internally; explicit public observability remains part of the capability contract, not a legacy JSON wrapper. |
 | `clear_parser_hosts` | No product need established by the local consumer inventory. Retain legacy regression evidence; prefer explicit removal of owned IDs and require an ownership/concurrency contract before adding process-wide destructive cleanup. |
 

@@ -220,6 +220,12 @@ fn facade_calls_typed_host_batches_through_tree_haver_and_keeps_native_failure()
     let _scenario = REGISTRY_TEST.lock().unwrap();
     let host = Arc::new(Host { calls: AtomicUsize::new(0), descriptions: AtomicUsize::new(0) });
     register_parser_host(host.clone()).unwrap();
+    let inventory = parser_registry_inventory().unwrap();
+    assert_eq!(inventory.schema, service::PARSER_REGISTRY_INVENTORY_SCHEMA);
+    assert_eq!(inventory.providers.len(), 1);
+    assert_eq!(inventory.providers[0].id, "core-test");
+    assert_eq!(host.descriptions.load(Ordering::SeqCst), 1);
+    assert_eq!(host.calls.load(Ordering::SeqCst), 0);
     let request = ParseRequest {
         schema: service::PARSE_REQUEST_SCHEMA.into(),
         request_id: "request".into(),
@@ -337,6 +343,10 @@ fn facade_calls_typed_host_batches_through_tree_haver_and_keeps_native_failure()
     assert_eq!(parsed.parsed.diagnostics[0].code.as_deref(), Some("test.syntax"));
     assert_eq!(host.calls.load(Ordering::SeqCst), 2);
     unregister_parser_host("core-test".into()).unwrap();
+    let removed = parser_registry_inventory().unwrap();
+    assert!(removed.providers.is_empty());
+    assert!(removed.generation > inventory.generation);
+    assert_eq!(inventory.providers[0].id, "core-test");
     assert_eq!(parse_sources(vec![request], limits).unwrap_err().code, "selection.no_parser");
     assert_eq!(host.calls.load(Ordering::SeqCst), 2);
 }

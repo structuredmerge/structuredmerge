@@ -24,6 +24,7 @@ use crate::{
 
 pub const PARSE_REQUEST_SCHEMA: &str = "structuredmerge.parse-request/v1";
 pub const PARSE_RESULT_SCHEMA: &str = "structuredmerge.parse-result/v1";
+pub const PARSER_REGISTRY_INVENTORY_SCHEMA: &str = "structuredmerge.parser-registry-inventory/v1";
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ParserSelection {
@@ -150,6 +151,17 @@ pub struct ParserRegistrySnapshot {
     digest: String,
 }
 
+/// Owned, non-loading registry observations. Descriptors are declarations, not
+/// successful availability probes, semantic support evidence or default approval.
+/// The generation is meaningful only within the originating registry instance.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ParserRegistryInventory {
+    pub schema: String,
+    pub generation: u64,
+    pub descriptor_digest: String,
+    pub providers: Vec<ParserProviderDescriptor>,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RegistrationError {
     InvalidDescriptor,
@@ -211,6 +223,18 @@ impl ParserRegistry {
 }
 
 impl ParserRegistrySnapshot {
+    /// Return cached descriptors in provider-ID order without invoking providers.
+    /// The caller owns the result; modifying it cannot change this snapshot or
+    /// future selection. Taking an inventory never loads/probes a grammar.
+    pub fn inventory(&self) -> ParserRegistryInventory {
+        ParserRegistryInventory {
+            schema: PARSER_REGISTRY_INVENTORY_SCHEMA.into(),
+            generation: self.state.generation,
+            descriptor_digest: self.digest.clone(),
+            providers: self.state.entries.values().map(|entry| entry.descriptor.clone()).collect(),
+        }
+    }
+
     pub fn generation(&self) -> u64 {
         self.state.generation
     }

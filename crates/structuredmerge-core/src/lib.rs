@@ -58,7 +58,7 @@ pub use tree_haver::parsed::{
 };
 pub use tree_haver::service::{
     ParseOptions, ParseRequest, ParserCandidate, ParserProbeRequest, ParserProbeResult,
-    ParserProviderDescriptor, SelectionReport,
+    ParserProviderDescriptor, ParserRegistryInventory, SelectionReport,
 };
 pub use tree_haver::{ByteRange, NodeRole, SourcePoint, SourceSpan};
 pub use tree_haver::{parsed, service, source};
