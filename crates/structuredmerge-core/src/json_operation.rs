@@ -18,7 +18,16 @@ pub(crate) fn validate_render(
     request: &ValidatedOperationRequest,
 ) -> Result<(), ResultContractError> {
     use ResultContractError::InvalidSourceEvidence as Invalid;
-    if result.profile.profile_id.as_deref() != Some(crate::profiles::JSON_NESTED) || !result.ok {
+    let git = request.request().provider_selection.profile_id.as_deref()
+        == Some(crate::profiles::GIT_JSON);
+    if git {
+        crate::git_operation::validate(result, request)?;
+    }
+    if !matches!(
+        result.profile.profile_id.as_deref(),
+        Some(crate::profiles::JSON_NESTED | crate::profiles::GIT_JSON)
+    ) || !result.ok
+    {
         return Ok(());
     }
     if result.operation == OperationKind::Diff2 {
@@ -109,6 +118,9 @@ pub(crate) fn execute(
     let mut result = empty_result(request);
     let evidence = ConflictEvidence::default();
     let input = request.request();
+    let git = input.provider_selection.profile_id.as_deref() == Some(crate::profiles::GIT_JSON);
+    let provider = if git { "kernel.git.json" } else { "kernel.json" };
+    let git_options = if git { crate::git_operation::options(&input.operation).ok() } else { None };
     let finish = |result| finalize(result, request, &evidence, context);
     let dialect = match input.provider_selection.dialect.as_deref().unwrap_or("json") {
         "json" => json_merge::JsonDialect::Json,
@@ -127,10 +139,13 @@ pub(crate) fn execute(
         }
     };
     let operation = match &input.operation {
-        OperationPolicy::Analyze(policy) if crate::json_analysis::supports(policy) => "analyze",
-        OperationPolicy::Diff2(policy) if crate::json_diff::supports(policy) => "diff2",
+        OperationPolicy::Analyze(policy) if !git && crate::json_analysis::supports(policy) => {
+            "analyze"
+        }
+        OperationPolicy::Diff2(policy) if !git && crate::json_diff::supports(policy) => "diff2",
         OperationPolicy::Merge2(policy)
-            if policy.directional_merge == "template-into-current"
+            if !git
+                && policy.directional_merge == "template-into-current"
                 && policy.render_policy == "source-preserving"
                 && policy.extra.is_empty()
                 && policy.fallback_policy.as_deref().is_none_or(|p| p == "none") =>
@@ -139,8 +154,8 @@ pub(crate) fn execute(
         }
         OperationPolicy::Merge3(policy)
             if policy.render_policy == "source-preserving"
-                && policy.labels.is_none()
-                && policy.conflict_marker_size.is_none()
+                && ((!git && policy.labels.is_none() && policy.conflict_marker_size.is_none())
+                    || (git && git_options.is_some()))
                 && policy.extra.is_empty()
                 && policy.fallback_policy.as_deref().is_none_or(|p| p == "none") =>
         {
@@ -149,7 +164,7 @@ pub(crate) fn execute(
         _ => "unsupported",
     };
     if operation == "unsupported"
-        || input.provider_selection.provider_id.as_deref().is_some_and(|id| id != "kernel.json")
+        || input.provider_selection.provider_id.as_deref().is_some_and(|id| id != provider)
         || input.provider_selection.family.as_deref().is_some_and(|family| family != "json")
         || !input.provider_selection.extra.is_empty()
         || input.parser_selection.profile_id.is_some()
@@ -172,9 +187,10 @@ pub(crate) fn execute(
         );
         return finish(result);
     }
-    result.provider.provider_id = Some("kernel.json".into());
+    result.provider.provider_id = Some(provider.into());
     result.provider.family = Some("json".into());
-    result.profile.profile_id = Some(crate::profiles::JSON_NESTED.into());
+    result.profile.profile_id =
+        Some(if git { crate::profiles::GIT_JSON } else { crate::profiles::JSON_NESTED }.into());
     let language = if dialect == json_merge::JsonDialect::Json { "json" } else { "json5" };
     let roles = input.operation.kind().source_roles();
     let mut requests = vec![];
@@ -313,7 +329,26 @@ pub(crate) fn execute(
             }
         }
     };
-    let execution = if operation == "merge2" {
+    let mut git_render = None;
+    let execution = if let Some(options) = git_options {
+        ast_merge_git::typed::merge3(
+            &parses[0],
+            &parses[1],
+            &parses[2],
+            dialect,
+            &options,
+            &mut verify,
+        )
+        .map(|execution| {
+            git_render = Some((execution.conflict_render, execution.conflict_render_error));
+            (
+                execution.merge.result.output,
+                execution.merge.result.diagnostics,
+                execution.merge.result.conflicts,
+                execution.merge.render,
+            )
+        })
+    } else if operation == "merge2" {
         json_merge::typed::merge2_with_evidence(&parses[0], &parses[1], dialect, &mut verify).map(
             |execution| {
                 (execution.result.output, execution.result.diagnostics, vec![], execution.render)
@@ -366,6 +401,9 @@ pub(crate) fn execute(
         return finish(result);
     }
     if !conflicts.is_empty() {
+        if let Some((render, error)) = git_render {
+            crate::git_operation::project_render(&mut result, render, error);
+        }
         for conflict in conflicts {
             project_conflict(&mut result, request, conflict)?;
         }
@@ -429,7 +467,7 @@ pub(crate) fn execute(
     finish(result)
 }
 
-fn project_conflict(
+pub(crate) fn project_conflict(
     result: &mut OperationResult,
     request: &ValidatedOperationRequest,
     native: ast_merge::MergeConflict,

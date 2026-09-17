@@ -247,6 +247,8 @@
 
 - Add Rust typed Git merge3 rendering over validated TreeHaver inputs, retaining verified clean edits and replayable conflict-marker provenance with explicit review-artifact limitations.
 
+- Expose an explicit typed Git JSON merge3 profile through the common operation facade, validating marker options and replaying canonical conflict classifications and rendering evidence without prototype transport.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

@@ -1563,6 +1563,7 @@ version = "0.2.0"
 dependencies = [
  "ast-crispr",
  "ast-merge",
+ "ast-merge-git",
  "ast-template",
  "json-merge",
  "python-merge",

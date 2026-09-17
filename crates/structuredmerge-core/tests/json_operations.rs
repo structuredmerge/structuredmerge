@@ -58,6 +58,117 @@ fn run(request: OperationRequest) -> (OperationResult, ValidatedOperationRequest
     (result, validated)
 }
 
+fn git_request(dialect: &str, texts: &[&str]) -> OperationRequest {
+    let mut input = request("merge3", dialect, texts);
+    input.provider_selection.provider_id = Some("kernel.git.json".into());
+    input.provider_selection.profile_id = Some("kernel.git.json.v1".into());
+    input
+}
+
+#[test]
+fn common_git_profile_has_verified_clean_output_for_all_json_dialects() {
+    for (dialect, texts) in [
+        ("json", ["{\"x\":0,\"y\":0}", "{\"x\":1,\"y\":0}", "{\"x\":0,\"y\":2}"]),
+        ("jsonc", ["{/*c*/\"x\":0,\"y\":0}", "{/*c*/\"x\":1,\"y\":0}", "{/*c*/\"x\":0,\"y\":2}"]),
+        ("json5", ["{x:0,y:0}", "{x:1,y:0}", "{x:0,y:2}"]),
+    ] {
+        let (result, validated) = run(git_request(dialect, &texts));
+        assert!(result.ok, "{:?}", result.diagnostics);
+        assert_eq!(result.provider.provider_id.as_deref(), Some("kernel.git.json"));
+        assert_eq!(result.verification.output_reparsed, Some(true));
+        assert_eq!(result.verification.base_participated, Some(true));
+        assert!(result.output.as_ref().unwrap().contains('2'));
+        let mut tampered = result.clone();
+        tampered.output.as_mut().unwrap().push(' ');
+        assert!(tampered.validate_against(&validated).is_err());
+    }
+}
+
+#[test]
+fn common_git_conflict_evidence_rejects_tampering_and_retains_unknown_fields() {
+    let mut input = git_request("json", &["{\n\"x\":0\n}\n", "{\n\"x\":1\n}\n", "{\n\"x\":2\n}\n"]);
+    let OperationPolicy::Merge3(policy) = &mut input.operation else { panic!() };
+    policy.conflict_marker_size = Some(9);
+    policy.labels = Some([("ours".into(), "local-é".into())].into());
+    let (result, validated) = run(input);
+    assert!(!result.ok);
+    assert!(result.output.is_none());
+    assert_eq!(result.conflicts.len(), 1);
+    assert!(result.conflicted_output.as_ref().unwrap().contains("<<<<<<<<< local-é"));
+    assert_eq!(result.verification.output_reparsed, None);
+    assert_eq!(result.render_report["outside_conflicts"], "ours-not-partially-merged");
+    for mutation in ["bytes", "source", "provenance", "classification", "reparse", "omission"] {
+        let mut changed = serde_json::to_value(&result).unwrap();
+        match mutation {
+            "bytes" => changed["conflicted_output"] = json!("wrong"),
+            "source" => {
+                changed["render_report"]["evidence"]["sources"][0]["sha256"] = json!("0".repeat(64))
+            }
+            "provenance" => {
+                changed["render_report"]["evidence"]["rendered"]["line_records"][0]["original_line"] =
+                    json!(999)
+            }
+            "classification" => {
+                changed["conflicts"][0]["classification"]["native_conflict"]["category"] =
+                    json!("fabricated")
+            }
+            "reparse" => changed["verification"]["output_reparsed"] = json!(true),
+            _ => {
+                changed["render_report"] = json!({});
+                changed.as_object_mut().unwrap().remove("conflicted_output");
+            }
+        }
+        let changed: OperationResult = serde_json::from_value(changed).unwrap();
+        assert!(changed.validate_against(&validated).is_err(), "{mutation}");
+    }
+    let mut compatible = result.clone();
+    compatible.render_report.insert("future_passive_fact".into(), json!({"a":1}));
+    compatible.validate_against(&validated).unwrap();
+}
+
+#[test]
+fn common_git_unrenderable_conflicts_remain_unresolved_without_output() {
+    for texts in [
+        ["{\"x\":0}", "{}", "{\"x\":2}"],
+        ["{\"x\":0,\"y\":0}", "{\"x\":1,\"y\":1}", "{\"x\":2,\"y\":2}"],
+    ] {
+        let (result, _) = run(git_request("json", &texts));
+        assert!(!result.ok);
+        assert!(!result.conflicts.is_empty());
+        assert!(result.output.is_none() && result.conflicted_output.is_none());
+        assert_eq!(result.render_report["strategy"], "git-unrendered-conflict");
+        assert!(result.render_report["render_error"].is_string());
+    }
+}
+
+#[test]
+fn common_git_rejects_unsupported_operations_options_and_parser_failures() {
+    for operation in ["analyze", "diff2", "merge2"] {
+        let mut input = request(operation, "json", &["{}", "{}"]);
+        input.provider_selection.provider_id = Some("kernel.git.json".into());
+        input.provider_selection.profile_id = Some("kernel.git.json.v1".into());
+        let (result, _) = run(input);
+        assert!(!result.ok);
+        assert!(result.conflicted_output.is_none());
+    }
+    for policy in [
+        json!({"render_policy":"source-preserving","labels":{"unknown":"x"}}),
+        json!({"render_policy":"source-preserving","labels":{"ours":"x\ny"}}),
+        json!({"render_policy":"source-preserving","conflict_marker_size":1025}),
+        json!({"render_policy":"source-preserving","fallback_policy":"text"}),
+    ] {
+        let input = git_request("json", &["{}", "{}", "{}"]);
+        let mut value = serde_json::to_value(input).unwrap();
+        value["policy"] = policy;
+        let (result, _) = run(serde_json::from_value(value).unwrap());
+        assert!(!result.ok);
+        assert!(result.render_report.is_empty());
+    }
+    let (result, _) = run(git_request("json", &["{}", "{", "{}"]));
+    assert!(!result.ok);
+    assert!(result.conflicts.is_empty());
+}
+
 #[test]
 fn common_json_analysis_has_resolvable_owners_comments_layout_and_native_evidence() {
     let (result, _) = run(request(
@@ -471,6 +582,15 @@ fn exported_facade_routes_json_and_honors_cancellation() {
         );
         assert!(execute_operation(request, limits.clone()).unwrap().ok);
     }
+    let mut request = git_request("json", &["{\"x\":0}", "{\"x\":1}", "{\"x\":2}"]);
+    request.parser_selection.backend = Some("json.common.api".into());
+    assert_eq!(
+        execute_operation_controlled(request.clone(), limits.clone(), &control).unwrap_err().code,
+        "execution.cancelled"
+    );
+    let result = execute_operation(request, limits).unwrap();
+    assert!(!result.ok);
+    assert!(result.conflicted_output.unwrap().contains("<<<<<<< ours"));
     unregister_parser_provider("json.common.api".into()).unwrap();
 }
 

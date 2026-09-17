@@ -271,9 +271,10 @@ pub fn execute_native_operation(
     snapshot: &ParserRegistrySnapshot,
     context: &ExecutionContext,
 ) -> Result<OperationResult, CoreError> {
-    if request.request().provider_selection.profile_id.as_deref()
-        == Some(crate::profiles::JSON_NESTED)
-    {
+    if matches!(
+        request.request().provider_selection.profile_id.as_deref(),
+        Some(crate::profiles::JSON_NESTED | crate::profiles::GIT_JSON)
+    ) {
         return crate::json_operation::execute(request, snapshot, context);
     }
     let finish = |result, request, evidence| finalize(result, request, evidence, context);

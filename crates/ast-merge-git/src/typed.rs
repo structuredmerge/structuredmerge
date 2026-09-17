@@ -24,7 +24,7 @@ impl Default for ConflictRenderOptions {
 }
 
 impl ConflictRenderOptions {
-    fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         // Bound caller-controlled marker allocation and reject label injection.
         // These are protocol limits, not source classification heuristics.
         if !(1..=1024).contains(&self.marker_size) {
