@@ -72,8 +72,8 @@ regions receive exact input-byte digests; absent alternatives remain absent.
 Unavailable native locality is not upgraded to exact locality. No fabricated
 decision IDs, resolutions, markers or conflicted output are introduced.
 
-Next: consumer parity review and actual Ruby family/Git consumer migration.
-Those adapters' prototype calls and Ruby-owned diff decisions remain open. No
+Next: broader consumer parity review, Git and remaining family migration.
+The Ruby JSON adapter's local cutover is recorded below. No
 public core API signature, parser default or publication authority changed.
 
 ## Common exact-source diff2
@@ -185,7 +185,7 @@ owners, dialects, exact comment and gap evidence, unresolved comments, explicit
 enrichment, native extensions, shared-gap fallback, malformed/duplicate-key input, tampering and
 unsupported policies; cancellation also covers analysis. Consumer parity,
 broader analysis-policy conformance remain
-open. No Ruby family adapter has been declared migrated by these core changes.
+open. The subsequent Ruby JSON cutover is recorded below.
 
 ## Installed diff2 verification (2026-09-17)
 
@@ -234,6 +234,36 @@ unavailable, so no formatter gate is claimed.
 Logs: `tmp/json-shared-fixtures-{generation,bindings,python,ruby,audits,reproducibility}.log`.
 Actual Ruby family/Git consumer migration, Ruby golden-master authority review,
 broader policy/downstream/platform and publication gates remain open.
+
+## Ruby JSON consumer cutover (2026-09-17)
+
+Local Ruby main `19bddc684` moves the opt-in `rust.json` provider to typed common
+operations. The compatibility class no longer inherits the prototype adapter;
+it uses TreeHaver's existing typed parser registration lifecycle, explicit source
+roles/digests and the JSON kernel profile. No Ruby-owned diff comparison or
+source-text location lookup remains on this path. Unknown requirements fail
+closed. JSON Pointer paths replace non-unique member-name identities; root and
+document-summary subjects remain visible rather than discarded for compatibility.
+
+The adapter projects generated read-only records into deterministic portable Ruby
+values, retaining complete core evidence, native conflicts, canonical records,
+diagnostics and exact render verification. It does not invoke executable handles
+or transport opaque whole-operation JSON. UTF-8 binary strings are accepted
+without transcoding or mutating caller data. No default backend changes.
+
+The complete JSON suite passes through `kettle-test`: 93 examples against the
+installed core gem (SHA-256 `d5d11261c7954780bb2975e744b60483ea6cb73a39eed845733d5a7476c97ea2`).
+Native comparisons cover all three dialects and exact/independent/conflicting
+merge3 outcomes. Incorrect negative-backend tags were removed from those parity
+tests so they actually execute with Rust present. Repeated-fragment locations,
+directionality, malformed input, conflict evidence, constraint rejection and
+deterministic portable serialization also pass. Logs:
+`tmp/json-ruby-consumer-{bundle,focused,parity,full}.log`.
+
+The artifact test bundle requires the core; released-package CI remains separate.
+Tool-managed locks were left local. This is local consumer integration, not broad
+golden-master authority, hosted/downstream/lint/coverage or release approval. Git
+and the Bash/Go/Rust/TypeScript consumers remain on the migration inventory.
 
 ## Installed verification (2026-09-17)
 
