@@ -113,3 +113,25 @@ syntax, anchors and framing. Each successful case checks exact source-segment by
 and complete ordered retention of current. A separate engine test rejects forged
 owner documents even on the no-additions fast path. Installed binding fixtures and
 actual Ruby migration are still required before marking this consumer migrated.
+
+## Shared installed binding verification (2026-09-17)
+
+Fixtures `15a154a` adds twelve shared cases for all four common operations:
+native owner analysis and rejection, owner/header diffs, current preference,
+comment/package-only insertion, rejected imports, independent/conflicting/no-op
+merge3 and the Go-specific ownership guard. The guard asserts its canonical code,
+whole-document scope, base participation and absence of invented owner decisions.
+Alef generates four files per language. Test helpers select the Go profile and
+register parsers but contain no merge or ownership decisions.
+
+Fresh isolated Linux artifacts pass: Python 35 runtime plus 58 generated cases;
+Ruby 31 runtime plus 55 generated cases. Each executes the same twelve Go cases.
+Ruby linkage, RBS validation, reviewed API baselines and all 14 audits pass.
+Wheel SHA-256: `dd4184dfd9004d92726fb51e2694409c10d3879af065a0f35704f73873b57676`.
+Platform gem SHA-256: `0dab85ad633170fabe61688efbc8837c8ca97ff134a6da56c9f7483b41176c43`.
+Logs: `tmp/go-shared-{generation,python-build,ruby-build,python-artifact,ruby-artifact,audits}.log`.
+Optional poly formatting is unavailable; no formatter gate is claimed.
+
+Actual Ruby Go consumer migration remains next. These checks do not prove source-
+gem, multiplatform, hosted/downstream or full-language authority. No default,
+publication or Alef-upstream gate is changed by local installed-artifact success.
