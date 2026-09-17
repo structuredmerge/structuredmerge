@@ -1,11 +1,11 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "ruby",
-  "review_reason": "Add source-free ParserSelectionRequest and shared-selector report functions, including explicit cancellation; report eligibility is not parse success or merge/default authority.",
+  "review_reason": "Add typed atomic replace_parser_host(host, expected_generation) returning the commit generation; stale updates fail and old snapshots retain callbacks.",
   "files": {
     "lib/structuredmerge_core/native.rb": "1958362029340a5786ed9762f1431dcdbcf0017626d262aede09db17eb2ea32f",
     "lib/structuredmerge_core/version.rb": "6cda1e4772dbebb74e509d2aefe2fcc1a9081782f9dd3f514f00a629c4211125",
     "lib/structuredmerge_core.rb": "defe67340887e4fcfecefc0a68d255fab86768e5c81260916819b636303f5cdf",
-    "sig/types.rbs": "678f2cf2a9d215b2347b47e5d5e6fa62a9c103d9699fd717454086bdccefdc8e"
+    "sig/types.rbs": "d681f49e04e3b6610c5121a302eb3661b0177ab04b453ea3bb848bd81592ecf6"
   }
 }

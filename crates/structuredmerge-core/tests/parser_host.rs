@@ -58,11 +58,13 @@ impl ParserHost for LifecycleHost {
 #[test]
 fn removal_and_reregistration_do_not_retarget_or_release_an_inflight_host() {
     let _scenario = REGISTRY_TEST.lock().unwrap();
-    exercise_inflight_retirement(false);
-    exercise_inflight_retirement(true);
+    for atomic in [false, true] {
+        exercise_inflight_retirement(false, atomic);
+        exercise_inflight_retirement(true, atomic);
+    }
 }
 
-fn exercise_inflight_retirement(cancel_old: bool) {
+fn exercise_inflight_retirement(cancel_old: bool, atomic: bool) {
     let (entered_tx, entered_rx) = mpsc::channel();
     let (resume_tx, resume_rx) = mpsc::channel();
     let old = Arc::new(LifecycleHost {
@@ -113,19 +115,27 @@ fn exercise_inflight_retirement(cancel_old: bool) {
 
     // Mutation while the callback is blocked must not wait for it. The old
     // operation owns a snapshot; future selection observes removal immediately.
-    unregister_parser_provider("core-test.lifecycle".into()).unwrap();
-    assert!(retained.upgrade().is_some());
-    assert_eq!(
-        parse_sources(vec![request.clone()], limits.clone()).unwrap_err().code,
-        "selection.no_parser"
-    );
+    let generation = parser_registry_inventory().unwrap().generation;
+    if !atomic {
+        unregister_parser_provider("core-test.lifecycle".into()).unwrap();
+        assert!(retained.upgrade().is_some());
+        assert_eq!(
+            parse_sources(vec![request.clone()], limits.clone()).unwrap_err().code,
+            "selection.no_parser"
+        );
+    }
     let new = Arc::new(LifecycleHost {
         inner: Host { calls: AtomicUsize::new(0), descriptions: AtomicUsize::new(0) },
         revision: "new",
         entered: None,
         resume: None,
     });
-    register_parser_host(new.clone()).unwrap();
+    if atomic {
+        assert_eq!(replace_parser_host(new.clone(), generation).unwrap(), generation + 1);
+        assert!(retained.upgrade().is_some());
+    } else {
+        register_parser_host(new.clone()).unwrap();
+    }
     if cancel_old {
         control.cancel();
     }

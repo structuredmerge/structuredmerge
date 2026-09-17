@@ -17,6 +17,38 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  it "atomically replaces an in-flight parser and rejects stale generations" do
+    replacement = TypedPsychHost.new
+    original = TypedPsychHost.new
+    described_class.register_parser_host(original)
+    generation = described_class.parser_registry_inventory.generation
+    expect { described_class.replace_parser_host(replacement, nil) }.to raise_error(TypeError)
+    expect { described_class.replace_parser_host(replacement, generation - 1) }.to raise_error(RuntimeError, /StaleGeneration/)
+    expect(described_class.parser_registry_inventory.generation).to eq(generation)
+    original.define_singleton_method(:parse_batch) do |request|
+      committed = StructuredmergeCore.replace_parser_host(replacement, generation)
+      raise "unexpected generation" unless committed == generation + 1
+      super(request)
+    end
+    requests = [merge_requests(["a: one\n"] * 3).first]
+    first = described_class.parse_sources(requests, merge_limits)
+    expect(first.first.parsed.ok).to be(true)
+    expect(original.calls).to eq(1)
+    expect(replacement.calls).to eq(0)
+    second = described_class.parse_sources(requests, merge_limits)
+    expect(second.first.parsed.ok).to be(true)
+    expect(original.calls).to eq(1)
+    expect(replacement.calls).to eq(1)
+    expect { described_class.replace_parser_host(original, generation) }.to raise_error(RuntimeError, /StaleGeneration/)
+    described_class.unregister_parser_host("ruby.typed.psych")
+    latest = described_class.parser_registry_inventory.generation
+    expect { described_class.replace_parser_host(replacement, latest) }.to raise_error(RuntimeError, /UnknownId/)
+  ensure
+    if described_class.parser_registry_inventory.providers.any? { |provider| provider.id == "ruby.typed.psych" }
+      described_class.unregister_parser_host("ruby.typed.psych")
+    end
+  end
+
   it "reports request-specific parser eligibility without parsing source" do
     host = TypedPsychHost.new
     described_class.register_parser_host(host)

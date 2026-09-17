@@ -291,6 +291,8 @@
 
 - Add generation-checked atomic parser replacement to TreeHaver, preserving in-flight snapshots and releasing retired providers outside registry locks.
 
+- Expose generation-checked atomic ParserHost replacement through Rust and generated Ruby/Python bindings, preserving in-flight snapshots and rejecting stale or unknown registrations.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

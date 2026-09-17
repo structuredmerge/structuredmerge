@@ -53,7 +53,7 @@ loadable, semantically supported for a merge operation or approved as default.
 | `register_tslp_parser_host` | Explicit `register_language_pack_parser`; registration is non-loading. |
 | `unregister_parser_host` | Compatibility spelling of `unregister_parser_provider`, with snapshot retention. |
 | `parse_with_parser`, `parse_normalized_with_tslp` | Typed `parse_sources`, with explicit selection and validated source-bound results; migrated TreeHaver consumer. |
-| `replace_parser_host` | TreeHaver has generation-checked atomic replacement; core host facade and generated binding exposure remain pending. Remove/re-register is not equivalent. |
+| `replace_parser_host` | Typed Rust/Ruby/Python replacement requires the observed generation and returns its commit generation. Remove/re-register and the older signature are not equivalent. |
 | `registered_parser_hosts` | Typed declaration inventory is exposed in Rust/Ruby/Python; request-specific probes use selection reports, while full merge capability/authority reporting remains pending. |
 | `probe_with_parser` | Source-free typed selection reports expose the same eligibility/probes as dispatch, without a legacy JSON wrapper. |
 | `clear_parser_hosts` | No product need established by the local consumer inventory. Retain legacy regression evidence; prefer explicit removal of owned IDs and require an ownership/concurrency contract before adding process-wide destructive cleanup. |
@@ -76,8 +76,23 @@ can therefore re-enter the registry. The returned generation identifies the
 replacement's commit point, not a guarantee that no subsequent mutation occurred:
 even retirement callbacks can advance the registry before the caller receives it.
 Tests verify both old/new snapshot dispatch and a retired-provider destructor
-that performs a registry write. This is currently a Rust substrate primitive;
-host-facade/binding contracts and installed runtime validation remain open.
+that performs a registry write.
+
+The core's `replace_parser_host(host, expected_generation)` exposes this primitive
+through Rust and generated Ruby/Python bindings. Use the generation from a recent
+registry inventory/selection report; do not silently retry stale updates against
+a newly observed generation without reconsidering the intended replacement.
+Descriptor callbacks run outside registry locks and can fail before mutation.
+The existing native or host registration named by that descriptor must exist.
+The generation number is required, not nullable. The return value is the commit
+generation, with the re-entrant-mutation caveat above.
+
+Installed binding tests replace a provider from inside its active parse callback,
+verify the old operation completes through the old host, and verify the next call
+uses the replacement. They also assert stale/unknown-ID errors and rejection of
+nil/None generations. Rust lifecycle tests additionally cover cancellation while
+the replaced callback remains outstanding. These tests do not establish full
+runtime shutdown or arbitrary foreign-thread entry guarantees.
 
 ## Request-specific selection reports
 

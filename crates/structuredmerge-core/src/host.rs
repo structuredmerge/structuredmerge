@@ -215,16 +215,32 @@ pub fn parser_registry_inventory() -> Result<crate::ParserRegistryInventory, Cor
         .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })
 }
 
-pub fn register_parser_host(host: Arc<dyn ParserHost>) -> Result<(), CoreError> {
+fn describe_host(host: Arc<dyn ParserHost>) -> Result<HostParser, CoreError> {
     // No registry lock spans a host callback. TreeHaver caches the descriptor.
     let descriptor =
         catch_unwind(AssertUnwindSafe(|| host.descriptor())).map_err(|_| CoreError {
             code: "registration_panic".into(),
             message: "parser descriptor panicked".into(),
         })??;
+    Ok(HostParser { descriptor, host })
+}
+
+pub fn register_parser_host(host: Arc<dyn ParserHost>) -> Result<(), CoreError> {
     registry()
-        .register(Arc::new(HostParser { descriptor, host }))
+        .register(Arc::new(describe_host(host)?))
         .map(|_| ())
+        .map_err(|error| CoreError { code: "registration".into(), message: format!("{error:?}") })
+}
+
+/// Atomically replace the host's existing provider ID at an observed generation.
+/// Old snapshots retain their provider. The returned generation identifies the
+/// replacement commit point; later/re-entrant mutations may advance it again.
+pub fn replace_parser_host(
+    host: Arc<dyn ParserHost>,
+    expected_generation: u64,
+) -> Result<u64, CoreError> {
+    registry()
+        .replace(Arc::new(describe_host(host)?), expected_generation)
         .map_err(|error| CoreError { code: "registration".into(), message: format!("{error:?}") })
 }
 

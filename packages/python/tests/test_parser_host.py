@@ -64,6 +64,38 @@ class LibCSTHost:
 
 
 class TypedParserHostTest(unittest.TestCase):
+    def test_atomic_replacement_during_callback_preserves_old_operation(self):
+        replacement = LibCSTHost()
+        generation = core.parser_registry_inventory().generation
+        with self.assertRaises(TypeError):
+            core.replace_parser_host(replacement, None)
+        with self.assertRaisesRegex(RuntimeError, "StaleGeneration"):
+            core.replace_parser_host(replacement, generation - 1)
+        self.assertEqual(core.parser_registry_inventory().generation, generation)
+        original_parse = self.host.parse_batch
+
+        def replace_during_parse(request):
+            self.assertEqual(core.replace_parser_host(replacement, generation), generation + 1)
+            return original_parse(request)
+
+        self.host.parse_batch = replace_during_parse
+        requests = self.merge_requests(["a = 1\n"] * 3)[:1]
+        limits = core.ParseLimits(max_batch_items=1, max_input_bytes=1000, max_nodes=100, max_diagnostics=20)
+        self.assertTrue(core.parse_sources(requests, limits)[0].parsed.ok)
+        self.assertEqual(self.host.calls, 1)
+        self.assertEqual(replacement.calls, 0)
+        self.assertTrue(core.parse_sources(requests, limits)[0].parsed.ok)
+        self.assertEqual(self.host.calls, 1)
+        self.assertEqual(replacement.calls, 1)
+        with self.assertRaisesRegex(RuntimeError, "StaleGeneration"):
+            core.replace_parser_host(self.host, generation)
+        core.unregister_parser_host("python.libcst")
+        try:
+            with self.assertRaisesRegex(RuntimeError, "UnknownId"):
+                core.replace_parser_host(replacement, core.parser_registry_inventory().generation)
+        finally:
+            core.register_parser_host(self.host)
+
     def test_selection_report_probes_without_parsing_source(self):
         def query(backend, comments=False):
             return core.ParserSelectionRequest(language="python", dialect=None,
