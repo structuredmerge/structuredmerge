@@ -7,6 +7,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 import ast
+import inspect
 from pathlib import Path
 import sys
 import unittest
@@ -689,6 +690,34 @@ class TypedParserHostTest(unittest.TestCase):
         for node in declarations.body:
             if isinstance(node, ast.FunctionDef):
                 self.assertTrue(callable(getattr(native, node.name)))
+
+    def test_installed_function_signatures_match_native_declarations(self):
+        declarations = ast.parse((Path(core.__file__).parent / "_native.pyi").read_text(encoding="utf-8"))
+        functions = [node for node in declarations.body if isinstance(node, ast.FunctionDef)]
+        self.assertTrue(functions)
+        for declaration in functions:
+            with self.subTest(function=declaration.name):
+                args = declaration.args
+                positional = args.posonlyargs + args.args
+                defaults = [inspect.Parameter.empty] * (len(positional) - len(args.defaults))
+                defaults += [ast.literal_eval(value) for value in args.defaults]
+                expected = []
+                for index, (argument, default) in enumerate(zip(positional, defaults)):
+                    kind = (inspect.Parameter.POSITIONAL_ONLY if index < len(args.posonlyargs)
+                            else inspect.Parameter.POSITIONAL_OR_KEYWORD)
+                    expected.append((argument.arg, kind, default))
+                if args.vararg:
+                    expected.append((args.vararg.arg, inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.empty))
+                for argument, default in zip(args.kwonlyargs, args.kw_defaults):
+                    expected.append((argument.arg, inspect.Parameter.KEYWORD_ONLY,
+                                     inspect.Parameter.empty if default is None else ast.literal_eval(default)))
+                if args.kwarg:
+                    expected.append((args.kwarg.arg, inspect.Parameter.VAR_KEYWORD, inspect.Parameter.empty))
+                for module in (native, core):
+                    signature = inspect.signature(getattr(module, declaration.name))
+                    actual = [(parameter.name, parameter.kind, parameter.default)
+                              for parameter in signature.parameters.values()]
+                    self.assertEqual(actual, expected, f"{module.__name__}.{declaration.name}")
 
     def test_native_source_roles_are_hashable_and_agree_with_integer_equality(self):
         roles = ["SOURCE", "BEFORE", "AFTER", "INCOMING", "CURRENT", "BASE", "OURS", "THEIRS", "OUTPUT"]

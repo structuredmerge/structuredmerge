@@ -47,8 +47,12 @@ Regenerate with `alef stubs` after changing the Rust facade or selection config.
 Review declaration diffs with the implementation change. Do not edit generated
 declarations to hide a generator defect. Artifact tests validate the installed
 Ruby declarations and compare Python stub names/members against the installed
-native extension. Those checks do not yet prove complete signature equivalence,
-Python facade parity, or semantic compatibility.
+native extension. The Python installed gate also compares every top-level
+function's parameter names, order, positional/keyword modes, and default values
+against both the installed native module and public facade using runtime
+signature introspection. Local Linux CPython 3.14.2 evidence covers all 31
+declared functions. It does not yet prove constructor/method signatures, type
+annotation equivalence, unlisted export coverage, or semantic compatibility.
 
 Removing operations, fields, accepted inputs or enum values; changing argument
 order, required fields, error codes or semantics; and narrowing support require

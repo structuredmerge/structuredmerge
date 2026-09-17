@@ -319,6 +319,8 @@
 
 - Prepare an allowlisted typed Ruby source archive through Alef in an isolated committed snapshot, recording provenance without claiming installation or publication readiness.
 
+- Verify installed Python typed-core function parameter signatures and defaults against generated declarations through both native and public facade exports.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
