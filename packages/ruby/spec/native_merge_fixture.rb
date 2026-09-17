@@ -61,7 +61,7 @@ end
 module NativeMergeFixture
   extend self
 
-  def common_request(operation, texts, policy: nil)
+  def common_request(operation, texts, policy: nil, request_id: "typed-common-#{operation}")
     roles = {"analyze" => %w[source], "diff2" => %w[before after], "merge2" => %w[incoming current], "merge3" => %w[base ours theirs]}.fetch(operation)
     sources = roles.zip(texts).to_h do |role, text|
       [role, StructuredmergeCore::OperationSource.new(source_id: role, role: role,
@@ -79,7 +79,7 @@ module NativeMergeFixture
       StructuredmergeCore::OperationPolicy.from_merge3(StructuredmergeCore::ThreeWayMergePolicy.new(
         render_policy: "source-preserving", fallback_policy: "none", extra: {}))
     end
-    StructuredmergeCore::OperationRequest.new(schema: "structuredmerge.operation-request/v1", request_id: "typed-common-#{operation}",
+    StructuredmergeCore::OperationRequest.new(schema: "structuredmerge.operation-request/v1", request_id: request_id,
       operation: policy, sources: sources, extensions: [], metadata: {}, extra: {},
       provider_selection: StructuredmergeCore::MergeProviderSelection.new(provider_id: "kernel.yaml", family: "yaml",
         profile_id: "kernel.yaml.native_mapping.v1", required_capabilities: [operation], extra: {}),

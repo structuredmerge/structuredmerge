@@ -1,0 +1,22 @@
+{
+  "schema_version": "structuredmerge.benchmark.adapter-descriptor/v1",
+  "adapter": {
+    "adapter_id": "typed-core.ruby.psych",
+    "implementation": "rust-via-ruby",
+    "package": "structuredmerge-core",
+    "package_version": "0.2.0",
+    "source": {"repository": "structuredmerge/structuredmerge"}
+  },
+  "source_root": ".",
+  "provider": {
+    "merge_provider": {"provider_id": "kernel.yaml", "package": "structuredmerge-core", "profile": "kernel.yaml.native_mapping.v1"},
+    "parser_provider": {"provider_id": "ruby.typed.psych", "backend_family": "native", "selection_mode": "explicit", "boundary": "installed Ruby binding / conformance Psych callback"}
+  },
+  "supports": {
+    "operations": ["merge3"],
+    "families": ["yaml"],
+    "dialects": ["yaml"],
+    "combinations": [{"family": "yaml", "operations": ["merge3"], "dialects": ["yaml"]}]
+  },
+  "environment": {"binding_runtime": "ruby", "semantic_runtime": "rust", "publication_gate": false}
+}

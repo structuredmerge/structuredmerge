@@ -112,3 +112,39 @@ diagnostic as a reliability failure. Keep the category derived from the typed
 result, never from the fixture or human message; crashes and uncategorized errors
 remain failures. Broader typed/native-provider coverage remains open. This is not
 a publication or default-driver approval.
+
+## Installed Ruby/Psych adapter
+
+`workspace-scripts/typed_ruby_benchmark` launches a separate Ruby interpreter and
+`typed_ruby_benchmark.rb` against the installed artifact, using the existing
+Psych conformance callback. Merge decisions stay in Rust. This adapter advertises
+only YAML merge3 (`kernel.yaml.native_mapping.v1`); no YAML merge2 or other family
+is delegated to a legacy implementation. It imports the conformance helper, not
+benchmark input/oracle data, and is not a production native-layer package.
+
+Build and verify the current Ruby artifact with `check_core_ruby_artifact.rb`.
+For the benchmark command above, set `STRUCTUREDMERGE_BENCHMARK_GEM_HOME` to that
+report's sibling `gems/` directory and `STRUCTUREDMERGE_BENCHMARK_RUBY` to the exact
+absolute `RbConfig.ruby` used to build it. Use:
+
+```sh
+--driver "$PWD/workspace-scripts/typed_ruby_benchmark" \
+--adapter-descriptor typed-ruby-benchmark-adapter.json
+```
+
+The launcher removes parent Bundler startup hooks (including `BUNDLER_SETUP`),
+then sets the isolated gem home/path. No checkout load-path injection is allowed.
+With those same environment variables, run
+`python workspace-scripts/check_typed_ruby_benchmark.py`; this includes poisoned
+parent-Bundler variables and missing-gem failure tests. Setup/runtime failures
+return 2, reserving 1 for actual typed conflicts. Inspect raw diagnostics as well
+as the official report: an early broken launch returning 1 was classified as the
+expected YAML conflict by the harness and is not valid execution evidence.
+
+Include actual adapter, descriptor and conformance-helper changed paths for dev.
+The current micro corpus has no YAML merge3 sentinel, so all 16 cases are
+unsupported by this narrow adapter. Dev includes one YAML delete/modify conflict;
+its passing result is not broad native merge effectiveness evidence. Preserve the
+existing Python adapter runs for the other supported families. Record the Ruby,
+Psych, gem, launcher, driver and helper revisions/digests with raw reports; no
+speed ranking, publication or default-authority decision follows from this gate.

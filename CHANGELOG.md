@@ -315,6 +315,8 @@
 
 - Exercise LibCST-backed Python merge2 and merge3 through the installed typed-core benchmark adapter, reusing the conformance parser projection without a prototype package.
 
+- Add an isolated installed Ruby/Psych typed benchmark adapter with explicit YAML merge3 scope, startup isolation, and transport regression checks.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

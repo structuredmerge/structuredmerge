@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# The benchmark harness has its own bundle. Run the candidate in the explicitly
+# supplied installed-artifact environment, never that bundle or checkout lib/.
+: "${STRUCTUREDMERGE_BENCHMARK_GEM_HOME:?installed artifact gem home is required}"
+: "${STRUCTUREDMERGE_BENCHMARK_RUBY:?artifact Ruby interpreter is required}"
+exec env -u RUBYOPT -u RUBYLIB -u RUBYGEMS_GEMDEPS \
+  -u BUNDLE_GEMFILE -u BUNDLE_BIN_PATH -u BUNDLE_LOCKFILE \
+  -u BUNDLER_SETUP -u BUNDLER_VERSION \
+  GEM_HOME="$STRUCTUREDMERGE_BENCHMARK_GEM_HOME" \
+  GEM_PATH="$STRUCTUREDMERGE_BENCHMARK_GEM_HOME" \
+  "$STRUCTUREDMERGE_BENCHMARK_RUBY" "$(dirname "$0")/typed_ruby_benchmark.rb" "$@"
