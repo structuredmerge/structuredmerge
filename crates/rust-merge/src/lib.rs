@@ -15,6 +15,8 @@ use tree_haver::{
 
 pub const PACKAGE_NAME: &str = "rust-merge";
 
+pub mod typed;
+
 const RUST_SOURCE_PRESERVING_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
     NamedOwnerKind { node_kind: "const_item", path_kind: "const" },
     NamedOwnerKind { node_kind: "enum_item", path_kind: "enum" },
@@ -388,20 +390,19 @@ fn parse_source_preserving_rust(source: &str) -> Result<SourcePreservingOwnerDoc
     if !parsed.source_fragments_available {
         return Err("Rust parser did not retain source fragments".to_string());
     }
-    project_named_top_level_owners(
-        source,
-        &parsed.root_id,
-        &parsed.nodes,
-        NamedOwnerProjectionPolicy {
-            family: "Rust",
-            owner_kinds: RUST_SOURCE_PRESERVING_OWNER_KINDS,
-            ignored_kinds: &["use_declaration"],
-            wrapper_kinds: &[],
-            name_fields: &["name"],
-            fallback_name_kinds: &["identifier", "type_identifier"],
-            accept_any_named_kind: false,
-        },
-    )
+    project_named_top_level_owners(source, &parsed.root_id, &parsed.nodes, owner_policy())
+}
+
+fn owner_policy() -> NamedOwnerProjectionPolicy<'static> {
+    NamedOwnerProjectionPolicy {
+        family: "Rust",
+        owner_kinds: RUST_SOURCE_PRESERVING_OWNER_KINDS,
+        ignored_kinds: &["use_declaration"],
+        wrapper_kinds: &[],
+        name_fields: &["name"],
+        fallback_name_kinds: &["identifier", "type_identifier"],
+        accept_any_named_kind: false,
+    }
 }
 
 fn supported_analysis_declaration(kind: &str) -> bool {

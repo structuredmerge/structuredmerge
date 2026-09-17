@@ -1,5 +1,5 @@
-//! Existing conservative Go function ownership over validated TreeHaver facts.
-//! Package/import bytes remain unowned layout, not newly supported merge owners.
+//! Existing conservative Rust declaration ownership over validated TreeHaver facts.
+//! Use-declaration bytes remain unowned layout, not newly supported merge owners.
 use ast_merge::{
     SourcePreservingMergeEvidence, SourcePreservingOwnerDocument,
     native_analysis::NativeOwnerAnalysis,
@@ -7,11 +7,11 @@ use ast_merge::{
 use tree_haver::service::ParsedResult;
 
 pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
-    if !parsed.backend.languages.iter().any(|language| language == "go") {
-        return Err("Go analysis requires a Go parser".into());
+    if !parsed.backend.languages.iter().any(|language| language == "rust") {
+        return Err("Rust analysis requires a Rust parser".into());
     }
     let nodes = parsed.normalized_nodes()?;
-    let root = parsed.document.output().root_id.as_deref().ok_or("Go parse omitted its root")?;
+    let root = parsed.document.output().root_id.as_deref().ok_or("Rust parse omitted its root")?;
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
     let analysis =
         ast_merge::project_named_top_level_analysis(source, root, &nodes, super::owner_policy())?;
@@ -29,7 +29,7 @@ pub fn membership_conflict(
     ours: &SourcePreservingOwnerDocument,
     theirs: &SourcePreservingOwnerDocument,
 ) -> Option<ast_merge::ThreeWayMergeResult<String>> {
-    super::go_membership_change_with_owner_edit(base, ours, theirs)
+    super::rust_membership_change_with_owner_edit(base, ours, theirs)
         .then(super::conservative_membership_conflict)
 }
 
@@ -49,14 +49,14 @@ pub fn merge_documents(
     ast_merge::merge_source_preserving_owners_with_evidence(base, ours, theirs, verify)
 }
 
-pub type GoMergeExecution = ast_merge::typed_merge::ParsedOwnerMergeExecution;
+pub type RustMergeExecution = ast_merge::typed_merge::ParsedOwnerMergeExecution;
 
 pub fn merge3(
     base: &ParsedResult,
     ours: &ParsedResult,
     theirs: &ParsedResult,
     parse_output: impl FnMut(&str) -> Result<ParsedResult, String>,
-) -> Result<GoMergeExecution, String> {
+) -> Result<RustMergeExecution, String> {
     ast_merge::typed_merge::merge_parsed_sources(
         base,
         ours,

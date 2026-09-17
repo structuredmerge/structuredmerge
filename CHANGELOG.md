@@ -261,6 +261,8 @@
 
 - Add current-preferred typed Go directional function insertion with native comment ranges, exact current-source retention and fresh output verification; reject mismatched package/import declarations for additions instead of silently dropping dependencies.
 
+- Add typed Rust declaration analysis and guarded three-way merge over validated TreeHaver facts, sharing fresh output verification with typed Go execution while preserving each family ownership policy.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

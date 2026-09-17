@@ -257,3 +257,88 @@ pub fn merge_native_sources_with_engine(
         verification_error,
     })
 }
+
+#[derive(Clone, Debug)]
+pub struct ParsedOwnerMergeExecution {
+    pub evidence: SourcePreservingMergeEvidence,
+    /// Only a clean result has a fresh parse bound to the exact output bytes.
+    pub output_parse: Option<ParsedResult>,
+}
+
+fn verified_document(
+    parsed: &ParsedResult,
+    text: &str,
+    ours: &ParsedResult,
+    input_ids: &std::collections::HashSet<&String>,
+    analyze: fn(&ParsedResult) -> Result<SourcePreservingOwnerDocument, String>,
+) -> Result<SourcePreservingOwnerDocument, String> {
+    if parsed.source.descriptor().role != SourceRole::Output
+        || input_ids.contains(&parsed.source.descriptor().source_id)
+        || parsed.source.bytes() != text.as_bytes()
+        || parsed.backend != ours.backend
+    {
+        return Err(
+            "Native output verification changed source bytes, identity or selected parser".into()
+        );
+    }
+    let document = analyze(parsed)?;
+    if document.source.as_bytes() != parsed.source.bytes() {
+        return Err("native output analysis changed source bytes".into());
+    }
+    document.validate("output")?;
+    Ok(document)
+}
+
+/// Execute a Rust family engine over already validated parse results. Hosts may
+/// supply fresh output parsing, never family ownership or merge decisions.
+pub fn merge_parsed_sources(
+    base: &ParsedResult,
+    ours: &ParsedResult,
+    theirs: &ParsedResult,
+    engine: NativeOwnerEngine,
+    mut parse_output: impl FnMut(&str) -> Result<ParsedResult, String>,
+) -> Result<ParsedOwnerMergeExecution, String> {
+    let mut ids = std::collections::HashSet::new();
+    for (parsed, role) in [base, ours, theirs].into_iter().zip([
+        SourceRole::Base,
+        SourceRole::Ours,
+        SourceRole::Theirs,
+    ]) {
+        if parsed.source.descriptor().role != role
+            || !ids.insert(&parsed.source.descriptor().source_id)
+            || parsed.backend != ours.backend
+        {
+            return Err("Native merge requires distinct base/ours/theirs identities and one selected parser".into());
+        }
+    }
+    let [base_document, ours_document, theirs_document] =
+        [(engine.analyze)(base)?, (engine.analyze)(ours)?, (engine.analyze)(theirs)?];
+    for (parsed, document) in
+        [base, ours, theirs].into_iter().zip([&base_document, &ours_document, &theirs_document])
+    {
+        if document.source.as_bytes() != parsed.source.bytes() {
+            return Err("native input analysis changed source bytes".into());
+        }
+        document.validate("input")?;
+    }
+    let mut output_parse = None;
+    let mut verify = |text: &str| {
+        let parsed = parse_output(text)?;
+        let document = verified_document(&parsed, text, ours, &ids, engine.analyze)?;
+        output_parse = Some(parsed);
+        Ok(document)
+    };
+    let evidence = (engine.merge)(base_document, ours_document, theirs_document, &mut verify);
+    if evidence.result.outcome == crate::ThreeWayMergeOutcome::Clean {
+        let text = evidence.result.output.as_deref().ok_or("clean native merge omitted output")?;
+        // Whole-source selections/no-ops bypass the legacy renderer callback.
+        if output_parse.is_none() {
+            let parsed = parse_output(text)?;
+            verified_document(&parsed, text, ours, &ids, engine.analyze)?;
+            output_parse = Some(parsed);
+        }
+    } else {
+        output_parse = None;
+    }
+    Ok(ParsedOwnerMergeExecution { evidence, output_parse })
+}
