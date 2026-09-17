@@ -263,6 +263,8 @@
 
 - Add typed Rust declaration analysis and guarded three-way merge over validated TreeHaver facts, sharing fresh output verification with typed Go execution while preserving each family ownership policy.
 
+- Expose typed Rust declaration analysis, exact-source diff2 and guarded source-preserving merge3 through the common kernel API, with source-bound canonical membership conflicts and verified output reparsing.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

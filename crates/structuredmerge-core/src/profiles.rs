@@ -7,6 +7,7 @@ pub(crate) const JSON_NESTED: &str = "kernel.json.nested.v1";
 pub(crate) const GIT_JSON: &str = "kernel.git.json.v1";
 pub(crate) const BASH_OWNERS: &str = "kernel.bash.owners.v1";
 pub(crate) const GO_OWNERS: &str = "kernel.go.owners.v1";
+pub(crate) const RUST_OWNERS: &str = "kernel.rust.owners.v1";
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct NativeMergeProfile {

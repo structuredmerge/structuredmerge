@@ -34,8 +34,34 @@ including a base-equals-side shortcut, unsupported constructs and mixed parser/
 role inputs, output identity/bytes/backend mismatch and verification service
 failure. Go's typed regressions protect behavior during shared-helper extraction.
 
-This foundation is not common Rust operation support or a migrated consumer.
-Common analyze/diff2/merge2/merge3, canonical Rust-guard conflicts, shared fixtures,
-installed Ruby/Python artifacts and actual Ruby consumer migration remain next.
+## Common operations
+
+`kernel.rust.owners.v1` selects `kernel.rust` for analyze, diff2 and merge3.
+Selection accepts only the Rust family and absent/Rust dialect. Unsupported
+selectors, policies, marker options and merge2 fail closed. Parsing uses the
+existing TreeHaver registry; no host prototype or alternate registry is involved.
+
+Analysis retains native references and revalidates embedded owner claims. Diff2
+reports exact whole-owner changes plus a complete-source summary when bytes
+change, including unowned use/comment layout. These overlapping summaries are
+not an edit script. Merge3 preserves the family engine's decisions and requires
+fresh output verification, including unchanged and whole-source selections.
+
+The common conflict projector shares transport validation between Go and Rust,
+but calls each family's own membership predicate on source-bound native facts.
+The Rust guard produces `rust.membership_with_owner_edit`, with verified full
+source alternatives and a whole-document subject. It fabricates no owner,
+decision ID or output localization. Common classification/base participation is
+true for this family decision; generic `owner_classification` remains null.
+Messages/categories alone cannot establish this evidence. General foreign-parser
+authentication and full semantic validation remain separate gates.
+
+Seven common Rust tests cover facade selection/cancellation, analysis tampering,
+owner/use/comment diff, native merge3 parity and fresh output parsing, guarded
+addition/deletion and shortcut cases, unsupported syntax/policies/merge2, and
+forged guard evidence. Existing Go tests cover the shared projector regression.
+
+Directional merge2, shared fixtures, installed Ruby/Python artifacts and actual
+Ruby consumer migration remain next. Source API checks are not artifact tests.
 Full language/golden-master/downstream authority, native parser promotion,
 publication and default approval remain separate gates.

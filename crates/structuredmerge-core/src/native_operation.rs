@@ -285,37 +285,39 @@ pub fn execute_native_operation(
         return finish(result, request, &evidence);
     }
     let input = request.request();
-    let (family, provider, analyzer): (&str, &str, Analyzer) =
-        match input.provider_selection.profile_id.as_deref() {
-            Some(crate::profiles::YAML_MAPPING) => {
-                ("yaml", "kernel.yaml", yaml_merge::typed::mapping_owners)
-            }
-            Some(crate::profiles::PYTHON_DECLARATIONS) => {
-                ("python", "kernel.python", python_merge::declaration_owners)
-            }
-            Some(crate::profiles::BASH_OWNERS) => {
-                ("bash", "kernel.bash", bash_merge::typed::owners)
-            }
-            Some(crate::profiles::GO_OWNERS) => ("go", "kernel.go", go_merge::typed::owners),
-            _ => {
-                diagnostic(
-                    &mut result,
-                    PortableCategory::UnsupportedFeature,
-                    "selection.unsupported_profile",
-                    "an explicit implemented native profile is required",
-                    DiagnosticLayer::Registry,
-                    vec![],
-                );
-                return finish(result, request, &evidence);
-            }
-        };
+    let (family, provider, analyzer): (&str, &str, Analyzer) = match input
+        .provider_selection
+        .profile_id
+        .as_deref()
+    {
+        Some(crate::profiles::YAML_MAPPING) => {
+            ("yaml", "kernel.yaml", yaml_merge::typed::mapping_owners)
+        }
+        Some(crate::profiles::PYTHON_DECLARATIONS) => {
+            ("python", "kernel.python", python_merge::declaration_owners)
+        }
+        Some(crate::profiles::BASH_OWNERS) => ("bash", "kernel.bash", bash_merge::typed::owners),
+        Some(crate::profiles::GO_OWNERS) => ("go", "kernel.go", go_merge::typed::owners),
+        Some(crate::profiles::RUST_OWNERS) => ("rust", "kernel.rust", rust_merge::typed::owners),
+        _ => {
+            diagnostic(
+                &mut result,
+                PortableCategory::UnsupportedFeature,
+                "selection.unsupported_profile",
+                "an explicit implemented native profile is required",
+                DiagnosticLayer::Registry,
+                vec![],
+            );
+            return finish(result, request, &evidence);
+        }
+    };
     if input.provider_selection.provider_id.as_deref().is_some_and(|id| id != provider)
         || input.provider_selection.family.as_deref().is_some_and(|name| name != family)
         || input
             .provider_selection
             .dialect
             .as_deref()
-            .is_some_and(|dialect| !matches!(family, "bash" | "go") || dialect != family)
+            .is_some_and(|dialect| !matches!(family, "bash" | "go" | "rust") || dialect != family)
         || !input.provider_selection.extra.is_empty()
         || input.parser_selection.profile_id.is_some()
         || input.parser_selection.language_version.is_some()
@@ -347,7 +349,7 @@ pub fn execute_native_operation(
         OperationPolicy::Analyze(policy) => crate::native_analysis_projection::supports(policy),
         OperationPolicy::Merge3(policy) => {
             policy.render_policy == "source-preserving"
-                && (!matches!(family, "bash" | "go")
+                && (!matches!(family, "bash" | "go" | "rust")
                     || (policy.labels.is_none() && policy.conflict_marker_size.is_none()))
                 && policy.extra.is_empty()
                 && policy.fallback_policy.as_deref().is_none_or(|policy| policy == "none")
@@ -457,6 +459,7 @@ pub fn execute_native_operation(
             "python" => python_merge::declaration_analysis(&parsed[0]),
             "bash" => bash_merge::typed::analysis(&parsed[0]),
             "go" => go_merge::typed::analysis(&parsed[0]),
+            "rust" => rust_merge::typed::analysis(&parsed[0]),
             _ => unreachable!("profile already selected"),
         }
         .and_then(|analysis| {
@@ -526,9 +529,9 @@ pub fn execute_native_operation(
                     });
                 }
                 // Exact owner comparisons alone omit comments/layout changes.
-                // Bash/Go common profiles include a complete-byte summary too;
+                // Bash/Go/Rust profiles include a complete-byte summary too;
                 // it overlaps owner changes and is not an executable edit.
-                if matches!(family, "bash" | "go")
+                if matches!(family, "bash" | "go" | "rust")
                     && execution.input_parses[0].source.bytes()
                         != execution.input_parses[1].source.bytes()
                 {
@@ -718,7 +721,7 @@ pub fn execute_native_operation(
         }
         return finish(result, request, &evidence);
     }
-    let executed = if family == "go" {
+    let executed = if matches!(family, "go" | "rust") {
         ast_merge::typed_merge::merge_native_sources_with_engine(
             family,
             parses.clone(),
@@ -727,7 +730,11 @@ pub fn execute_native_operation(
             context,
             ast_merge::typed_merge::NativeOwnerEngine {
                 analyze: analyzer,
-                merge: go_merge::typed::merge_documents,
+                merge: if family == "rust" {
+                    rust_merge::typed::merge_documents
+                } else {
+                    go_merge::typed::merge_documents
+                },
             },
         )
     } else {
@@ -775,7 +782,7 @@ pub fn execute_native_operation(
                 .collect();
             result.diagnostics =
                 projection.diagnostics.into_iter().map(DiagnosticRecord::Canonical).collect();
-            if family == "go" && !classified {
+            if matches!(family, "go" | "rust") && !classified {
                 // The family guard classified an ownership conflict, but did
                 // not run the generic owner classifier (owner_classification
                 // remains null). The common contract counts either decision.

@@ -1569,6 +1569,7 @@ dependencies = [
  "go-merge",
  "json-merge",
  "python-merge",
+ "rust-merge",
  "serde",
  "serde_json",
  "tree-haver",

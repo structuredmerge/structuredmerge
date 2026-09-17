@@ -26,6 +26,7 @@ pub(crate) fn validate_embedded(
         Some(crate::profiles::PYTHON_DECLARATIONS) => ("python", "kernel.python"),
         Some(crate::profiles::BASH_OWNERS) => ("bash", "kernel.bash"),
         Some(crate::profiles::GO_OWNERS) => ("go", "kernel.go"),
+        Some(crate::profiles::RUST_OWNERS) => ("rust", "kernel.rust"),
         _ => return Ok(()), // Other profiles need their own analysis validator.
     };
     let analysis = result.analysis.as_ref().ok_or(Invalid)?;
@@ -41,7 +42,7 @@ pub(crate) fn validate_embedded(
             .provider_selection
             .dialect
             .as_deref()
-            .is_some_and(|dialect| !matches!(family, "bash" | "go") || dialect != family)
+            .is_some_and(|dialect| !matches!(family, "bash" | "go" | "rust") || dialect != family)
         || !request.request().provider_selection.extra.is_empty()
         || request
             .request()
@@ -126,6 +127,7 @@ pub(crate) fn validate_embedded(
         "python" => python_merge::declaration_analysis(&parsed),
         "bash" => bash_merge::typed::analysis(&parsed),
         "go" => go_merge::typed::analysis(&parsed),
+        "rust" => rust_merge::typed::analysis(&parsed),
         _ => unreachable!(),
     }
     .map_err(|_| Invalid)?;
@@ -244,7 +246,7 @@ pub(crate) fn project(
     analysis.validate(parsed)?;
     // Bash retains native comments in the embedded parse and exact layout gaps.
     // This exact-owner profile does not request semantic comment attachment.
-    if !matches!(family, "bash" | "go") && !parsed.document.output().comments.is_empty() {
+    if !matches!(family, "bash" | "go" | "rust") && !parsed.document.output().comments.is_empty() {
         return Err("native comment attachment requires another analysis policy".into());
     }
     let mut owners = vec![];

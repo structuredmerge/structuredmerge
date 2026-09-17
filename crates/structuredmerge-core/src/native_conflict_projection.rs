@@ -69,8 +69,10 @@ pub fn project_native_merge_conflicts(
             return Err(E::Source);
         }
     }
-    if provider_id == "kernel.go" && execution.rendered.classification.is_none() {
-        return project_go_membership_guard(execution, request, provider_id);
+    if matches!(provider_id, "kernel.go" | "kernel.rust")
+        && execution.rendered.classification.is_none()
+    {
+        return project_membership_guard(execution, request, provider_id);
     }
     let classification = execution.rendered.classification.as_ref().ok_or(E::Classification)?;
     if classification.whole_source_selection.is_some() {
@@ -249,18 +251,36 @@ pub fn project_native_merge_conflicts(
     Ok(projected)
 }
 
-/// The Go ownership guard precedes generic classification. Recompute its actual
+/// Family ownership guards precede generic classification. Recompute the actual
 /// family predicate from source-bound native facts; never infer it from a legacy
 /// message/category, invent owner decisions, or pretend to localize an owner.
-fn project_go_membership_guard(
+fn project_membership_guard(
     execution: &NativeMergeExecution,
     request: &ValidatedOperationRequest,
     provider: &str,
 ) -> Result<NativeConflictProjection, ConflictProjectionError> {
     use ConflictProjectionError as E;
+    type Document = ast_merge::SourcePreservingOwnerDocument;
+    type Analyzer = fn(&tree_haver::service::ParsedResult) -> Result<Document, String>;
+    type Guard =
+        fn(&Document, &Document, &Document) -> Option<ast_merge::ThreeWayMergeResult<String>>;
+    let (profile, code, analyze, guard) = match provider {
+        "kernel.go" => (
+            crate::profiles::GO_OWNERS,
+            "go.membership_with_owner_edit",
+            go_merge::typed::owners as Analyzer,
+            go_merge::typed::membership_conflict as Guard,
+        ),
+        "kernel.rust" => (
+            crate::profiles::RUST_OWNERS,
+            "rust.membership_with_owner_edit",
+            rust_merge::typed::owners as Analyzer,
+            rust_merge::typed::membership_conflict as Guard,
+        ),
+        _ => return Err(E::Provider),
+    };
     let roles = [SourceRole::Base, SourceRole::Ours, SourceRole::Theirs];
-    if request.request().provider_selection.profile_id.as_deref()
-        != Some(crate::profiles::GO_OWNERS)
+    if request.request().provider_selection.profile_id.as_deref() != Some(profile)
         || execution.input_parses.len() != 3
         || execution.output_parse.is_some()
         || execution.output_source.is_some()
@@ -280,7 +300,7 @@ fn project_go_membership_guard(
         {
             return Err(E::Source);
         }
-        documents.push(go_merge::typed::owners(parsed).map_err(|_| E::Classification)?);
+        documents.push(analyze(parsed).map_err(|_| E::Classification)?);
         alternatives.push(ConflictSourceAlternative {
             role,
             state: AlternativeState::Present,
@@ -305,16 +325,13 @@ fn project_go_membership_guard(
             extra: Metadata::new(),
         });
     }
-    let expected =
-        go_merge::typed::membership_conflict(&documents[0], &documents[1], &documents[2])
-            .ok_or(E::Classification)?;
+    let expected = guard(&documents[0], &documents[1], &documents[2]).ok_or(E::Classification)?;
     if execution.rendered.result != expected {
         return Err(E::Classification);
     }
     let actual = &expected.conflicts[0];
     let id = actual.conflict_id.clone();
     let diagnostic_id = format!("diagnostic.{id}");
-    let code = "go.membership_with_owner_edit";
     let diagnostic = PortableDiagnostic {
         schema: DIAGNOSTIC_SCHEMA.into(),
         id: diagnostic_id.clone(),
