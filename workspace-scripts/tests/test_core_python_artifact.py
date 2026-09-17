@@ -14,6 +14,30 @@ SPEC.loader.exec_module(ARTIFACT)
 
 
 class WorkspaceLifecycleTest(unittest.TestCase):
+    def test_generated_app_has_local_support_and_separate_artifact_evidence(self):
+        (ROOT / "tmp").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=ROOT / "tmp", prefix="artifact-app-test-") as directory:
+            stage = Path(directory)
+            wheel = stage / "test.whl"
+            wheel.write_bytes(b"test artifact")
+            with patch.object(ARTIFACT.venv.EnvBuilder, "create"), \
+                    patch.object(ARTIFACT.subprocess, "run") as run, \
+                    patch.dict(ARTIFACT.os.environ, {"PYTHONPATH": "/unwanted/checkout"}):
+                ARTIFACT.run_checks(ROOT, wheel, {"Name": "structuredmerge-core", "Version": "0.2.0"}, [], stage)
+            app = stage / "consumer/test_app"
+            for name in ("test_parser_host.py", "libcst_facts.py", "native_merge_fixture.py"):
+                self.assertEqual((app / name).read_bytes(), (ROOT / "packages/python/tests" / name).read_bytes())
+            self.assertEqual((app / "pyproject.toml").read_bytes(),
+                             (ROOT / "test_apps/python/pyproject.toml").read_bytes())
+            call = run.call_args_list[-1]
+            self.assertEqual(call.args[0][-4:], ["-m", "pytest", "tests", "-v"])
+            self.assertEqual(call.kwargs["cwd"], app)
+            self.assertTrue(call.kwargs["check"])
+            self.assertNotIn("PYTHONPATH", call.kwargs["env"])
+            report = json.loads((stage / "report.json").read_text())
+            self.assertEqual(report["registry_install"], "not_run")
+            self.assertFalse(report["publication_gate"])
+
     def test_main_failure_records_error_and_cleans_partial_install(self):
         (ROOT / "tmp").mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=ROOT / "tmp", prefix="artifact-main-test-") as directory:

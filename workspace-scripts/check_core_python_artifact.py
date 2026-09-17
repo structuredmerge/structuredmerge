@@ -114,20 +114,31 @@ def run_checks(root, wheel, metadata, license_files, stage):
     for name in ("test_parser_host.py", "libcst_facts.py", "native_merge_fixture.py"):
         shutil.copyfile(root / "packages/python/tests" / name, consumer / name)
     shutil.copytree(root / "e2e/python/tests", consumer / "generated")
+    test_app = consumer / "test_app"
+    shutil.copytree(root / "test_apps/python", test_app)
+    # Test-only provider support travels with the isolated app, never through a
+    # source-checkout PYTHONPATH or as production merge semantics in the binding.
+    for name in ("test_parser_host.py", "libcst_facts.py", "native_merge_fixture.py"):
+        shutil.copyfile(root / "packages/python/tests" / name, test_app / name)
     env = {key: value for key, value in os.environ.items() if key not in ("PYTHONPATH", "PYTHONHOME")}
     env.setdefault("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR", str(root / "tmp/typed-tslp-cache"))
-    subprocess.run([str(python), "-m", "pip", "install", "--no-cache-dir", str(wheel), "libcst==1.9.0", "pytest>=7.4"],
+    subprocess.run([str(python), "-m", "pip", "install", "--no-cache-dir", str(wheel), "libcst==1.9.0", "pytest>=7.4",
+                    "pytest-asyncio>=0.23", "pytest-timeout>=2.1"],
         cwd=consumer, env=env, check=True)
     subprocess.run([str(python), "-m", "unittest", "discover", "-s", ".", "-v"],
         cwd=consumer, env=env, check=True)
     subprocess.run([str(python), "-m", "pytest", "generated", "-v"],
         cwd=consumer, env=env, check=True)
+    subprocess.run([str(python), "-m", "pytest", "tests", "-v"],
+        cwd=test_app, env=env, check=True)
     report = {
         "artifact": str(wheel), "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
         "package": metadata["Name"], "version": metadata["Version"],
         "python": sys.version, "libcst": "1.9.0", "license_files": license_files,
         "installed_merge_tests": "passed", "publication_gate": False,
         "generated_e2e_tests": "passed",
+        "generated_test_app": "passed with local wheel and copied native-provider support",
+        "registry_install": "not_run",
         "api_review_baseline": "python source surface matched",
     }
     (stage / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

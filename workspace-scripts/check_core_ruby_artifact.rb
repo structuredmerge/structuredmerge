@@ -99,6 +99,7 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
       "api_review_baseline" => "ruby source surface matched",
       "mode" => "package-only", "installed_merge_tests" => "not_run",
       "generated_e2e_tests" => "not_run", "type_declarations" => "not_validated",
+      "generated_test_app" => "not_run", "registry_install" => "not_run",
       "publication_gate" => false, "source_gem_gate" => false,
     }
     File.open(destination, File::WRONLY | File::CREAT | File::EXCL, 0o644) do |file|
@@ -124,6 +125,11 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
   FileUtils.cp(File.join(package_root, "spec/native_merge_fixture.rb"), File.join(consumer, "native_merge_fixture.rb"))
   FileUtils.cp(File.join(root, "crates/yaml-merge/tests/support/psych_facts.rb"), File.join(consumer, "psych_facts.rb"))
   FileUtils.cp_r(File.join(root, "e2e/ruby/spec"), File.join(consumer, "generated"))
+  test_app = File.join(consumer, "test_app")
+  FileUtils.cp_r(File.join(root, "test_apps/ruby"), test_app)
+  # Generated native fixtures need their test-only provider beside the app.
+  # Keep the binding installed in GEM_HOME; never add checkout load paths.
+  FileUtils.cp(File.join(consumer, "native_merge_fixture.rb"), File.join(test_app, "native_merge_fixture.rb"))
   env = Bundler.unbundled_env.merge(
     "GEM_HOME" => gem_home, "GEM_PATH" => gem_home,
     "BUNDLE_GEMFILE" => File.join(consumer, "Gemfile"),
@@ -134,8 +140,8 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
     "STRUCTUREDMERGE_EXPECT_GEM_HOME" => gem_home,
     "TREE_HAVER_LANGUAGE_PACK_CACHE_DIR" => ENV.fetch("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR", File.join(root, "tmp/typed-tslp-cache")),
   )
-  run = lambda do |*command|
-    output, status = Open3.capture2e(env, *command, chdir: consumer, unsetenv_others: true)
+  run = lambda do |*command, directory: consumer|
+    output, status = Open3.capture2e(env, *command, chdir: directory, unsetenv_others: true)
     puts output
     raise "artifact gate failed: #{command.first(3).join(' ')}" unless status.success?
   end
@@ -147,6 +153,7 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
     File.join(gem_home, "gems", spec.full_name, "sig"), "validate")
   run.call(RbConfig.ruby, "-S", "bundle", "exec", "rspec", "core_spec.rb")
   run.call(RbConfig.ruby, "-S", "bundle", "exec", "rspec", "generated")
+  run.call(RbConfig.ruby, "-S", "bundle", "exec", "rspec", "spec", directory: test_app)
   report = {
     "artifact" => artifact, "sha256" => Digest::SHA256.file(artifact).hexdigest,
     "package" => spec.name, "version" => spec.version.to_s,
@@ -156,6 +163,8 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
     "type_declarations" => "validated",
     "api_review_baseline" => "ruby source surface matched",
     "generated_e2e_tests" => "passed",
+    "generated_test_app" => "passed with local gem and copied native-provider support",
+    "registry_install" => "not_run",
     "publication_gate" => false, "source_gem_gate" => false,
   }
   File.write(File.join(stage, "report.json"), JSON.pretty_generate(report) + "\n")

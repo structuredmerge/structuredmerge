@@ -32,8 +32,21 @@ requires `./native_merge_fixture`, without changing Ruby's load path. The helper
 registers the native provider, calls Rust, and unregisters in
 `ensure`. No expected output or semantic merge logic lives in either helper.
 
-Broader canonical corpus coverage and standalone generated-project support
-packaging remain open Phase 4 work; these suites prove only the stated profiles.
+The installed-artifact runners also stage `test_apps/python` and `test_apps/ruby`
+outside the source tree, supply the same test-only native-provider helpers, and
+execute their generated tests against the local installed wheel/gem. Python uses
+the generated pytest configuration; Ruby uses the isolated artifact runner's
+bundle (including its RBS checks), not the test app's registry dependency install.
+These checks are explicitly pre-publication: `registry_install` remains
+`not_run` in their reports. They neither install the test apps' published core
+dependency from a registry nor prove that the apps run without helper staging.
+
+Broader canonical corpus coverage and independently installable generated-project
+support packaging remain open Phase 4 work; these suites prove only the stated
+profiles. Run the ordinary `workspace-scripts/check_core_python_artifact.py
+WHEEL_OR_DIRECTORY` and `workspace-scripts/check_core_ruby_artifact.rb` gates to
+exercise both generated layouts. Their temporary consumers and installed
+environments are removed on exit; small evidence reports remain under `tmp/`.
 
 Current generation requires local Alef corrections, including root-array field
 access and preservation of explicit null assertion values. Upstream release reproducibility remains open;

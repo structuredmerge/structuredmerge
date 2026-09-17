@@ -323,6 +323,8 @@
 
 - Generate Python package documentation and Ruby/Python typed-core consumer test applications.
 
+- Exercise generated Ruby and Python test applications with staged native-provider support in isolated pre-publication artifact gates; report registry installation separately.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
