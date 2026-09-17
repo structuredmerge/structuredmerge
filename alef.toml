@@ -168,6 +168,19 @@ module = "native_merge_fixture"
 [crates.e2e.call.overrides.ruby]
 module = "./native_merge_fixture"
 
+[crates.e2e.calls.capability_manifest]
+function = "run_capability_manifest"
+module = "native_merge_fixture"
+args = [
+  { name = "profile", field = "input.profile", type = "string" },
+  { name = "operation", field = "input.operation", type = "string" },
+  { name = "dialect", field = "input.dialect", type = "string" },
+]
+
+[crates.e2e.calls.capability_inventory]
+function = "run_capability_inventory"
+module = "native_merge_fixture"
+
 [crates.e2e.calls.yaml_native_merge]
 function = "run_yaml_native_merge"
 module = "structuredmerge_core"

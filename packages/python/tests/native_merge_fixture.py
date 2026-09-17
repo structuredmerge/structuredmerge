@@ -8,6 +8,19 @@ from structuredmerge_core import native_merge_profiles
 from test_parser_host import LibCSTHost, TypedParserHostTest
 
 
+def run_capability_manifest(profile, operation, dialect):
+    query = core.CapabilityQuery(profile_id=profile, operation=core.OperationKind(operation),
+        dialect=dialect or None, parser_selection=core.ParserSelection(
+            backend_id="conformance.missing.parser", preference=[], required_capabilities=[]))
+    limits = core.ParseLimits(max_batch_items=1, max_input_bytes=0, max_nodes=0, max_diagnostics=0)
+    return core.capability_manifest([query], limits)
+
+
+def run_capability_inventory():
+    limits = core.ParseLimits(max_batch_items=0, max_input_bytes=0, max_nodes=0, max_diagnostics=0)
+    return core.capability_manifest([], limits)
+
+
 def run_python_common(operation, sources):
     host = LibCSTHost()
     core.register_parser_host(host)

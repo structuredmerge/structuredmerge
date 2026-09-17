@@ -59,6 +59,19 @@ class TypedPsychHost
 end
 
 module NativeMergeFixture
+  def run_capability_manifest(profile, operation, dialect)
+    query = StructuredmergeCore::CapabilityQuery.new(profile_id: profile, operation: operation.to_sym,
+      dialect: dialect.empty? ? nil : dialect, parser_selection: StructuredmergeCore::ParserSelection.new(
+        backend_id: "conformance.missing.parser", preference: [], required_capabilities: []))
+    limits = StructuredmergeCore::ParseLimits.new(max_batch_items: 1, max_input_bytes: 0, max_nodes: 0, max_diagnostics: 0)
+    StructuredmergeCore.capability_manifest([query], limits)
+  end
+
+  def run_capability_inventory
+    limits = StructuredmergeCore::ParseLimits.new(max_batch_items: 0, max_input_bytes: 0, max_nodes: 0, max_diagnostics: 0)
+    StructuredmergeCore.capability_manifest([], limits)
+  end
+
   extend self
 
   def common_request(operation, texts, policy: nil, request_id: "typed-common-#{operation}")

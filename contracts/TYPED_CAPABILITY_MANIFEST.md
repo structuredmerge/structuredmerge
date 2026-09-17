@@ -58,3 +58,9 @@ with snapshot identity preserved. They assert zero parse calls. The independent
 API-baseline and runtime-declaration checks include the new surface. No registry
 installation, default-authority decision, or upstream generator approval follows
 from these local artifacts.
+
+Shared-fixture integration found an outstanding Python declaration mismatch:
+`CapabilityQuery.operation` advertises `OperationKind | str`, but the installed
+constructor rejects a bare string. The fixture adapter explicitly constructs
+`OperationKind` from the fixture value. This preserves typed requests but does
+not resolve the generator's overly broad accepted-input annotation.

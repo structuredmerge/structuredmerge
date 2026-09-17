@@ -11,6 +11,19 @@ without sibling source paths. The typed-core jobs in `current.yml` invoke these
 same checks. Python uses pytest for generated tests in addition to unittest for
 the existing boundary tests; Ruby uses the core artifact's standalone RSpec suite.
 
+Twelve shared capability fixtures now cover all eight profile declarations with
+an explicitly missing parser backend, undeclared operations/dialects, and empty
+inventories. Helpers only construct typed queries and call the kernel; expected
+outcomes live in the shared fixtures. They do not register providers or execute
+merge logic. Successful/faulted native probes and snapshot retirement remain in
+the installed boundary suites. This observation contract does not replace the
+spec's full Slice 1026 workflow-provider negotiation requirements.
+
+Current Alef output compares some nested Python string fields case-insensitively;
+Ruby comparisons are exact. Boolean/null eligibility and authority assertions
+are exact in both targets. Do not treat these Python identifier assertions as
+proof of case-sensitive wire identity; generator classification needs follow-up.
+
 The profile fixture checks native profile IDs, Rust execution ownership, and
 experimental/default-approval flags. The Python native-merge family additionally
 executes LibCST callbacks and Rust merge decisions for independent edits, conflicts,

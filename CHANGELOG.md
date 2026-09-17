@@ -329,6 +329,8 @@
 
 - Expose typed capability manifests in generated Ruby/Python bindings with installed-runtime tests for declarations, eligibility, probe faults, limits, cancellation and snapshot retention during host retirement.
 
+- Run shared capability manifest and inventory fixtures through Alef-generated Ruby/Python e2e and test-app suites.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
