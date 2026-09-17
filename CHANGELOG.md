@@ -370,3 +370,5 @@
 - Render absent conflict alternatives as empty review sides, append explicitly placed review blocks for deleted ours owners, preserve source bytes, and count marker positions by actual newlines; enable the canonical delete/edit Git case.
 
 - Regenerate the typed Ruby core dispatcher with bounded interrupt-aware waits so an idle registered parser does not hang Ruby 3.2 interpreter shutdown.
+
+- Build the retained historical Ruby regression extension explicitly before checkout tests; keep this test-only step separate from typed-core artifact production and publication.

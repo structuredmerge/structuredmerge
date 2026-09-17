@@ -63,6 +63,13 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         commands = "\n".join(step.get("run", "") for step in legacy["steps"])
         self.assertIn("bundle exec rake spec", commands)
         self.assertIn("check_ruby_api.rb", commands)
+        build = next(i for i, step in enumerate(legacy["steps"])
+                     if "build_legacy_ruby_regression.rb" in step.get("run", ""))
+        tests = next(i for i, step in enumerate(legacy["steps"])
+                     if step.get("run") == "bundle exec rake spec")
+        self.assertLess(build, tests)
+        for name in ("typed-core-ruby-artifact", "ruby-package"):
+            self.assertNotIn("build_legacy_ruby_regression.rb", json.dumps(self.jobs[name]))
 
     def test_retired_publication_is_removed_but_regression_sources_remain(self):
         self.assertFalse((self.root / ".github/workflows/release-ruby-host.yml").exists())

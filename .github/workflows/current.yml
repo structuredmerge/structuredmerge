@@ -275,7 +275,10 @@ jobs:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
           working-directory: packages/ruby
-      - name: Test generated Ruby bindings
+      - name: Build retained legacy regression boundary (not a package)
+        run: bundle exec ruby ../../workspace-scripts/build_legacy_ruby_regression.rb
+        working-directory: packages/ruby
+      - name: Test core and retained checkout regressions
         run: bundle exec rake spec
         working-directory: packages/ruby
       - name: Verify Ruby API and native ABI contract
