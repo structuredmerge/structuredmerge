@@ -665,6 +665,7 @@ impl OperationResult {
             check_region(region, request, true)?;
         }
         crate::json_operation::validate_render(self, request)?;
+        crate::native_output_validation::validate(self, request)?;
         Ok(())
     }
 }

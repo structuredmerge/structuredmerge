@@ -8,6 +8,11 @@ host-prototype facade.
 
 The checks cover:
 
+- Successful common native merges revalidate input and output parse trees against
+  the actual source/output bytes. Input roles/counts, unique output source identity,
+  selected-candidate availability and registry generation/digest consistency must
+  agree. Output parser identity must match an executed input parser. These checks
+  do not independently reconstruct native merge plans or authenticate a provider.
 - Schema, request/operation correlation, explicit provider/profile selection,
   and explicit parser identity and selection mode.
 - Exact consumed roles for classified outcomes, merge2 directionality, and

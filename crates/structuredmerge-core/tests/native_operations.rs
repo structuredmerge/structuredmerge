@@ -711,6 +711,48 @@ fn common_merge_executes_rust_composition_with_real_reparse_and_exact_evidence()
 
 #[test]
 #[ignore = "native Ruby/Psych common-operation integration gate"]
+fn native_merge_result_rejects_forged_output_parse_bytes_and_snapshot() {
+    let (_, registry, context) = setup(Behavior::Normal);
+    let request = request(wire("merge3", &["a: one\n", "a: two\n", "a: one\n"]));
+    let result = execute_native_operation(&request, &registry, &context).unwrap();
+    assert!(result.ok);
+    for mutation in 0..7 {
+        let mut forged = result.clone();
+        match mutation {
+            0 => {
+                forged.extra.get_mut("output_parse").unwrap()["parsed"]["source"]["sha256"] =
+                    json!("0".repeat(64))
+            }
+            1 => {
+                forged.extra.get_mut("output_parse").unwrap()["parsed"]["source"]["role"] =
+                    json!("ours")
+            }
+            2 => {
+                forged.extra.get_mut("output_parse").unwrap()["selection"]["digest"] =
+                    json!("0".repeat(64))
+            }
+            3 => {
+                forged.extra.remove("output_parse");
+            }
+            4 => {
+                forged.extra.get_mut("input_parses").unwrap()[0]["parsed"]["source"]["sha256"] =
+                    json!("0".repeat(64));
+            }
+            5 => {
+                forged.extra.get_mut("output_parse").unwrap()["selection"]["candidates"] =
+                    json!([]);
+            }
+            _ => {
+                forged.extra.get_mut("input_parses").unwrap()[1]["selection"]["digest"] =
+                    json!("0".repeat(64));
+            }
+        }
+        assert!(forged.validate_against(&request).is_err(), "mutation {mutation}");
+    }
+}
+
+#[test]
+#[ignore = "native Ruby/Psych common-operation integration gate"]
 fn whole_source_selection_is_actually_reparsed_not_reported_as_a_reparse_by_assumption() {
     let (provider, registry, context) = setup(Behavior::Normal);
     let mut input = wire("merge3", &["a: one\n", "a: two\n", "a: one\n"]);

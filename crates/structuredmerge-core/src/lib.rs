@@ -28,6 +28,7 @@ mod json_operation;
 mod native_analysis_projection;
 pub mod native_conflict_projection;
 pub mod native_operation;
+mod native_output_validation;
 pub mod operation;
 pub mod operation_result;
 mod operations;
