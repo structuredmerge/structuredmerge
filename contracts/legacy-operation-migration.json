@@ -22,20 +22,29 @@
       "gap": "The opt-in Ruby adapter no longer depends on the prototype or computes diffs in Ruby. Installed-artifact tests pass all 13 provider cases and the 463-example Bash suite (two existing removal-mode pending cases), JSON regressions and real Git Bash selection. Current-preferred merge2 intentionally replaces fake-base template selection. Kernel owner identities/spans and complete typed records replace legacy analysis shapes. Neutral Git framing is accepted, custom marker requests rejected. Full-language/golden-master authority, downstream, hosted/released-package and lint/coverage gates remain open; native defaults and legacy regression evidence remain unchanged."
     },
     {
+      "id": "go-family",
+      "methods": ["parse_go_analysis", "merge_go_two_way", "merge_go_three_way"],
+      "disposition": "local_consumer_migrated",
+      "consumer_revision": "structuredmerge/structuredmerge-ruby@5044107bd",
+      "consumers": ["ruby/gems/go-merge/lib/go/merge/rust_host_provider.rb"],
+      "replacement": "Typed common Go analyze/diff2/merge2/merge3 with TreeHaver parser registration and Rust-owned decisions, source evidence and canonical ownership-guard conflicts.",
+      "gap": "The opt-in Go adapter no longer inherits the prototype or computes diff decisions in Ruby. All 57 Go examples (including 16 focused provider cases), Bash/JSON regressions and real Git Go paths pass against the installed core gem. Current-preferred merge2 intentionally differs from native Ruby incoming preference; both outcomes remain asserted. Kernel identities/spans replace legacy host-rendered signatures. A formerly inert reorder test now actually reorders declarations. Full-language authority, broader golden-master/downstream, hosted/released-package and full lint/coverage gates remain open; native defaults are unchanged."
+    },
+    {
       "id": "family-analysis",
-      "methods": ["parse_go_analysis", "parse_rust_analysis", "parse_typescript_analysis"],
+      "methods": ["parse_rust_analysis", "parse_typescript_analysis"],
       "disposition": "retain_until_consumer_migration",
-      "consumers": ["ruby/gems/ast-merge/lib/ast/merge/rust_host_provider.rb", "ruby/gems/go-merge/lib/go/merge/rust_host_provider.rb", "ruby/gems/rust-merge/lib/rust/merge/rust_host_provider.rb", "ruby/gems/typescript-merge/lib/typescript/merge/rust_host_provider.rb"],
+      "consumers": ["ruby/gems/ast-merge/lib/ast/merge/rust_host_provider.rb", "ruby/gems/rust-merge/lib/rust/merge/rust_host_provider.rb", "ruby/gems/typescript-merge/lib/typescript/merge/rust_host_provider.rb"],
       "replacement": "Typed analyze and diff2 operations in structuredmerge-core, using TreeHaver and Rust-owned family analysis/matching.",
-      "gap": "JSON and Bash have migrated separately. Remaining family adapters still compute diff2 from owner maps and must move those decisions into Rust. parse_sources alone is syntax transport, not analysis."
+      "gap": "JSON, Bash and Go have migrated separately. Remaining family adapters still compute diff2 from owner maps and must move those decisions into Rust. parse_sources alone is syntax transport, not analysis."
     },
     {
       "id": "family-merges",
-      "methods": ["merge_go_two_way", "merge_go_three_way", "merge_rust_two_way", "merge_rust_three_way", "merge_typescript_two_way", "merge_typescript_three_way"],
+      "methods": ["merge_rust_two_way", "merge_rust_three_way", "merge_typescript_two_way", "merge_typescript_three_way"],
       "disposition": "retain_until_consumer_migration",
       "consumers": ["ruby/gems/ast-merge/lib/ast/merge/rust_host_provider.rb"],
       "replacement": "Typed directional merge2 and base-aware merge3 request/result envelopes calling the existing family kernels.",
-      "gap": "JSON and Bash have migrated separately. Remaining family engines and their Ruby adapters still need typed orchestration and parity review. Preserve current/incoming direction, dialects, conflicts, diagnostics and source evidence; do not synthesize a base for merge2 or invent unsupported operations."
+      "gap": "JSON, Bash and Go have migrated separately. Remaining family engines and their Ruby adapters still need typed orchestration and parity review. Preserve current/incoming direction, dialects, conflicts, diagnostics and source evidence; do not synthesize a base for merge2 or invent unsupported operations."
     },
     {
       "id": "git-driver",

@@ -135,3 +135,29 @@ Optional poly formatting is unavailable; no formatter gate is claimed.
 Actual Ruby Go consumer migration remains next. These checks do not prove source-
 gem, multiplatform, hosted/downstream or full-language authority. No default,
 publication or Alef-upstream gate is changed by local installed-artifact success.
+
+## Local Ruby consumer migration (2026-09-17)
+
+Ruby `5044107bd` migrates opt-in `rust.go` to the shared typed transport, selecting
+this profile with family-specific parser/identity hooks. It no longer inherits the
+prototype adapter or computes diff decisions in Ruby. Full canonical conflicts,
+native spans and verification remain portable values. Current-preferred merge2
+intentionally differs from the native Ruby incoming-preferred operation; tests
+assert both outcomes rather than claim equivalence. The native default is unchanged.
+Neutral Git framing is accepted; custom markers/labels remain unsupported.
+
+Against the installed gem above, all 57 Go examples pass, including 16 focused
+provider cases. A reorder test previously used literal single-quoted newline
+escapes, leaving its inputs unchanged; it now actually reorders functions and
+passes native/typed comparison. Tests cover directional comments/import rejection,
+UTF-8 byte spans, whole-document guard evidence, trivia diffs, deterministic no-op
+output and unsupported selectors. No prototype gem is loaded.
+
+Bash regression: 463 examples, no failures, two existing removal-mode pending
+cases. JSON: 93 examples, no failures. Git: 98 examples, no failures, four pending
+Rust/TypeScript cases. Real Go clean/conflict driver paths execute; provider conflict
+evidence is checked before interpreting Git exit status. API baselines and 14 audits
+pass. Logs: `tmp/go-ruby-{full,focused-final}.log`,
+`tmp/go-{bash-merge,json-merge}-regression.log`, `tmp/go-git-regression.log` and
+`tmp/go-consumer-audits.log`. Full-language/golden-master authority, downstream,
+hosted/released-package and full lint/coverage gates remain open.
