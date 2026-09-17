@@ -1759,16 +1759,7 @@ mod tests {
         }
         let fixture = read_git_driver_json_fixture();
         let cases = fixture["cases"].as_array().expect("fixture cases should be an array");
-        let pending_conflict_rendering = cases
-            .iter()
-            .filter(|case| case["case_id"] == "delete-edit-conflict")
-            .map(|case| case["case_id"].as_str().unwrap_or_default())
-            .collect::<Vec<_>>();
-        assert_eq!(pending_conflict_rendering, ["delete-edit-conflict"]);
         for case in cases {
-            if case["case_id"] == "delete-edit-conflict" {
-                continue;
-            }
             let dir = TestDir::new();
             run_git(&dir.path, &["init"]);
             run_git(&dir.path, &["config", "user.email", "smorg-rs@example.invalid"]);

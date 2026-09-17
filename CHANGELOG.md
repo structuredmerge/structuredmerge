@@ -358,3 +358,5 @@
 - Return native Ruby canonical/migration conflict and diagnostic record objects with explicit typed factories and readers; add installed Ruby/Python record-boundary regression coverage.
 
 - Preserve typed Ruby OperationPolicy values on request getters using native from_* factories; replace experimental Data variants, verify all four policy payload round trips, and remove invented Python wire discriminators.
+
+- Render absent conflict alternatives as empty review sides, append explicitly placed review blocks for deleted ours owners, preserve source bytes, and count marker positions by actual newlines; enable the canonical delete/edit Git case.

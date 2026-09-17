@@ -128,17 +128,28 @@ fn common_git_conflict_evidence_rejects_tampering_and_retains_unknown_fields() {
 
 #[test]
 fn common_git_unrenderable_conflicts_remain_unresolved_without_output() {
-    for texts in [
-        ["{\"x\":0}", "{}", "{\"x\":2}"],
-        ["{\"x\":0,\"y\":0}", "{\"x\":1,\"y\":1}", "{\"x\":2,\"y\":2}"],
-    ] {
-        let (result, _) = run(git_request("json", &texts));
-        assert!(!result.ok);
-        assert!(!result.conflicts.is_empty());
-        assert!(result.output.is_none() && result.conflicted_output.is_none());
-        assert_eq!(result.render_report["strategy"], "git-unrendered-conflict");
-        assert!(result.render_report["render_error"].is_string());
-    }
+    let texts = ["{\"x\":0,\"y\":0}", "{\"x\":1,\"y\":1}", "{\"x\":2,\"y\":2}"];
+    let (result, _) = run(git_request("json", &texts));
+    assert!(!result.ok);
+    assert!(!result.conflicts.is_empty());
+    assert!(result.output.is_none() && result.conflicted_output.is_none());
+    assert_eq!(result.render_report["strategy"], "git-unrendered-conflict");
+    assert!(result.render_report["render_error"].is_string());
+}
+
+#[test]
+fn common_git_deleted_owner_has_explicit_review_placement_not_merged_output() {
+    let (result, _) = run(git_request("json", &["{\"x\":0}", "{}", "{\"x\":2}"]));
+    assert!(!result.ok);
+    assert_eq!(result.conflicts.len(), 1);
+    assert!(result.output.is_none());
+    assert_eq!(
+        result.conflicted_output.as_deref(),
+        Some("{}\n<<<<<<< ours\n||||||| base\n{\"x\":0}\n=======\n{\"x\":2}\n>>>>>>> theirs\n")
+    );
+    assert_eq!(result.render_report["strategy"], "git-absent-owner-conflict-review");
+    assert!(result.render_report["render_error"].is_null());
+    assert_eq!(result.verification.output_reparsed, None);
 }
 
 #[test]

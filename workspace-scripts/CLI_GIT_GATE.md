@@ -21,9 +21,8 @@ report remain under kernel `tmp/installed-cli-git-*`. Global/system Git config a
 inherited Git environment overrides are excluded; no user Git configuration or
 repository is changed. All validation remains active under Python optimization.
 
-Current known failure: the delete/edit conflict returns status 1 but has no review
-markers when ours has deleted the owner. The localized renderer requires present
-regions for every side. This gate deliberately fails until that rendering contract
-is implemented; it does not weaken the fixture or count preservation of ours as
-conformance. Other unsupported CLI families, full portable CLI conformance,
+Delete/edit conflicts must include review markers, not merely preserve ours.
+An absent ours owner is represented by an empty side in an appended review block;
+the original ours bytes remain outside that block. The report distinguishes this
+placement from an owned-region conflict. Other unsupported CLI families, full portable CLI conformance,
 platform installation, registry distribution and default approval remain separate.

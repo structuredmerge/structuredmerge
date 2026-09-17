@@ -242,7 +242,13 @@ impl SourceRenderPlan {
             match fragment {
                 RenderFragment::Source(source) => {
                     let content = self.source_content(source)?;
-                    if index + 1 < self.fragments.len() && !content.ends_with('\n') {
+                    let explicit_boundary = matches!(self.fragments.get(index + 1),
+                        Some(RenderFragment::Synthesized(next))
+                            if next.content == "\n" && next.reason == "conflict_line_boundary");
+                    if index + 1 < self.fragments.len()
+                        && !content.ends_with('\n')
+                        && !explicit_boundary
+                    {
                         return Err(SourceRenderError::new(
                             "every non-final fragment must end at a line boundary",
                         ));
@@ -319,50 +325,90 @@ pub fn localized_conflict_render_plan(
         .map(|conflict| {
             Ok((
                 conflict,
-                required_conflict_region(conflict, SourceRevision::Base)?,
-                required_conflict_region(conflict, SourceRevision::Ours)?,
-                required_conflict_region(conflict, SourceRevision::Theirs)?,
+                conflict_region(conflict, SourceRevision::Base)?,
+                conflict_region(conflict, SourceRevision::Ours)?,
+                conflict_region(conflict, SourceRevision::Theirs)?,
             ))
         })
         .collect::<Result<Vec<_>, SourceRenderError>>()?;
-    localized.sort_by_key(|(_, _, ours, _)| (ours.start_line, ours.end_line));
+    localized.sort_by_key(|(_, _, ours, _)| {
+        ours.map_or((ours_line_count + 1, ours_line_count), |region| {
+            (region.start_line, region.end_line)
+        })
+    });
 
     let mut fragments = Vec::new();
     let mut next_ours_line = 1;
     for (conflict, base, ours, theirs) in localized {
-        if ours.start_line < next_ours_line {
+        if base.is_none() && ours.is_none() && theirs.is_none() {
+            return Err(SourceRenderError::new("conflict has no present alternative"));
+        }
+        // A deleted ours owner has no insertion anchor. Append an explicit empty-
+        // ours review block, retaining ours verbatim, rather than inventing a span.
+        let (start_line, end_line) = ours
+            .map_or((ours_line_count + 1, ours_line_count), |region| {
+                (region.start_line, region.end_line)
+            });
+        if start_line < next_ours_line {
             return Err(SourceRenderError::new(format!(
                 "conflict {} overlaps a prior ours-owned line region",
                 conflict.conflict_id
             )));
         }
-        if ours.end_line > ours_line_count {
+        if end_line > ours_line_count {
             return Err(SourceRenderError::new(format!(
                 "conflict {} exceeds the ours source line count",
                 conflict.conflict_id
             )));
         }
-        if next_ours_line < ours.start_line {
+        if next_ours_line < start_line {
             fragments.push(RenderFragment::Source(SourceFragment {
                 revision: SourceRevision::Ours,
                 start_line: next_ours_line,
-                end_line: ours.start_line - 1,
+                end_line: start_line - 1,
                 metadata: HashMap::new(),
             }));
+            if ours.is_none()
+                && !source_for_revision(&sources, SourceRevision::Ours)?.ends_with('\n')
+            {
+                fragments.push(RenderFragment::Synthesized(SynthesizedFragment {
+                    content: "\n".into(),
+                    reason: "conflict_line_boundary".into(),
+                    producer: "ast-merge".into(),
+                    metadata: HashMap::new(),
+                }));
+            }
         }
         fragments.push(RenderFragment::Conflict(ConflictFragment {
             conflict_id: conflict.conflict_id.clone(),
-            base: source_conflict_side(&sources, SourceRevision::Base, base)?,
-            ours: source_conflict_side(&sources, SourceRevision::Ours, ours)?,
-            theirs: source_conflict_side(&sources, SourceRevision::Theirs, theirs)?,
+            base: base
+                .map(|region| source_conflict_side(&sources, SourceRevision::Base, region))
+                .transpose()?
+                .unwrap_or_default(),
+            ours: ours
+                .map(|region| source_conflict_side(&sources, SourceRevision::Ours, region))
+                .transpose()?
+                .unwrap_or_default(),
+            theirs: theirs
+                .map(|region| source_conflict_side(&sources, SourceRevision::Theirs, region))
+                .transpose()?
+                .unwrap_or_default(),
             labels: ConflictLabels::default(),
             marker_size,
             metadata: HashMap::from([
                 ("category".to_string(), serde_json::json!(conflict.category)),
                 ("path".to_string(), serde_json::json!(conflict.path)),
+                (
+                    "placement".to_string(),
+                    serde_json::json!(if ours.is_some() {
+                        "ours_owned_region"
+                    } else {
+                        "end_of_ours_absent_owner"
+                    }),
+                ),
             ]),
         }));
-        next_ours_line = ours.end_line + 1;
+        next_ours_line = end_line + 1;
     }
     if next_ours_line <= ours_line_count {
         fragments.push(RenderFragment::Source(SourceFragment {
@@ -384,10 +430,10 @@ fn source_for_revision(
     })
 }
 
-fn required_conflict_region(
+fn conflict_region(
     conflict: &crate::MergeConflict,
     revision: SourceRevision,
-) -> Result<&OwnedSourceRegion, SourceRenderError> {
+) -> Result<Option<&OwnedSourceRegion>, SourceRenderError> {
     let alternatives = conflict
         .alternatives
         .iter()
@@ -400,6 +446,9 @@ fn required_conflict_region(
         )));
     }
     let alternative = alternatives[0];
+    if alternative.state == ConflictAlternativeState::Absent && alternative.regions.is_empty() {
+        return Ok(None);
+    }
     if alternative.state != ConflictAlternativeState::Present || alternative.regions.len() != 1 {
         return Err(SourceRenderError::new(format!(
             "conflict {} does not have one present {revision:?} source region",
@@ -408,7 +457,7 @@ fn required_conflict_region(
     }
     let region = &alternative.regions[0];
     region.validate()?;
-    Ok(region)
+    Ok(Some(region))
 }
 
 fn source_conflict_side(
@@ -448,6 +497,7 @@ fn source_conflict_side(
 struct SourcePlanRenderer<'a> {
     plan: &'a SourceRenderPlan,
     content: String,
+    next_line: usize,
     line_records: Vec<RenderLineRecord>,
     synthesized_fragments: Vec<SynthesizedFragmentRecord>,
     conflicts: Vec<RenderedConflictRecord>,
@@ -459,6 +509,7 @@ impl<'a> SourcePlanRenderer<'a> {
         Self {
             plan,
             content: String::new(),
+            next_line: 1,
             line_records: Vec::new(),
             synthesized_fragments: Vec::new(),
             conflicts: Vec::new(),
@@ -486,6 +537,7 @@ impl<'a> SourcePlanRenderer<'a> {
         let content = self.plan.source_content(fragment)?;
         let first_output_line = self.next_output_line();
         self.content.push_str(&content);
+        self.next_line += content.bytes().filter(|byte| *byte == b'\n').count();
         for (index, _) in source_lines(&content).iter().enumerate() {
             self.line_records.push(RenderLineRecord {
                 output_line: first_output_line + index,
@@ -516,6 +568,7 @@ impl<'a> SourcePlanRenderer<'a> {
     ) {
         let first_output_line = self.next_output_line();
         self.content.push_str(&fragment.content);
+        self.next_line += fragment.content.bytes().filter(|byte| *byte == b'\n').count();
         for (index, _) in source_lines(&fragment.content).iter().enumerate() {
             self.line_records.push(RenderLineRecord {
                 output_line: first_output_line + index,
@@ -556,7 +609,7 @@ impl<'a> SourcePlanRenderer<'a> {
         self.conflicts.push(RenderedConflictRecord {
             conflict_id: fragment.conflict_id.clone(),
             output_start_line,
-            output_end_line: self.line_records.len(),
+            output_end_line: self.next_output_line() - 1,
             metadata: fragment.metadata.clone(),
         });
         Ok(())
@@ -606,7 +659,7 @@ impl<'a> SourcePlanRenderer<'a> {
     }
 
     fn next_output_line(&self) -> usize {
-        self.line_records.len() + 1
+        self.next_line
     }
 
     fn finish(self) -> SourceRenderResult {
@@ -900,6 +953,95 @@ mod tests {
             localized_conflict_render_plan(sources(), &[complete("first"), complete("second")], 7)
                 .unwrap_err();
         assert!(error.message().contains("overlaps"));
+    }
+
+    #[test]
+    fn absent_ours_is_an_empty_review_side_not_an_invented_source_region() {
+        for ours in ["", "retained 🦀", "retained\r\n"] {
+            let mut inputs = sources();
+            inputs.insert(SourceRevision::Ours, ours.into());
+            let conflict = crate::MergeConflict {
+                conflict_id: "deleted".into(),
+                category: "delete_modify".into(),
+                path: "/shared".into(),
+                fallback_scope: "/shared".into(),
+                message: "deleted".into(),
+                alternatives: vec![
+                    alternative(SourceRevision::Base, 6, 13, 2, 2),
+                    ConflictAlternative {
+                        revision: SourceRevision::Ours,
+                        state: ConflictAlternativeState::Absent,
+                        regions: vec![],
+                    },
+                    alternative(SourceRevision::Theirs, 6, 13, 2, 2),
+                ],
+            };
+            let result = render_source_plan(
+                &localized_conflict_render_plan(inputs, &[conflict], 9).unwrap(),
+            )
+            .unwrap();
+            let prefix = if ours.is_empty() || ours.ends_with('\n') {
+                ours.to_string()
+            } else {
+                format!("{ours}\n")
+            };
+            assert!(
+                result.content.starts_with(&format!("{prefix}<<<<<<<<< ours\n||||||||| base\n"))
+            );
+            assert_eq!(result.conflicts[0].metadata["placement"], "end_of_ours_absent_owner");
+            assert!(
+                !result
+                    .line_records
+                    .iter()
+                    .any(|line| line.conflict_side == Some(SourceRevision::Ours)
+                        && line.fragment_kind == RenderFragmentKind::Source)
+            );
+            assert_eq!(
+                result
+                    .synthesized_fragments
+                    .iter()
+                    .filter(|item| item.reason == "conflict_line_boundary")
+                    .count(),
+                usize::from(!ours.is_empty() && !ours.ends_with('\n'))
+            );
+        }
+    }
+
+    #[test]
+    fn absent_base_or_theirs_renders_empty_side_but_invalid_absence_fails() {
+        for missing in [SourceRevision::Base, SourceRevision::Theirs] {
+            let mut conflict = crate::MergeConflict {
+                conflict_id: "missing-side".into(),
+                category: "content".into(),
+                path: "/shared".into(),
+                fallback_scope: "/shared".into(),
+                message: "missing".into(),
+                alternatives: vec![
+                    alternative(SourceRevision::Base, 6, 13, 2, 2),
+                    alternative(SourceRevision::Ours, 11, 18, 2, 2),
+                    alternative(SourceRevision::Theirs, 6, 13, 2, 2),
+                ],
+            };
+            let side =
+                conflict.alternatives.iter_mut().find(|side| side.revision == missing).unwrap();
+            side.state = ConflictAlternativeState::Absent;
+            // Absence must not conceal contradictory source regions.
+            assert!(localized_conflict_render_plan(sources(), &[conflict.clone()], 7).is_err());
+            conflict
+                .alternatives
+                .iter_mut()
+                .find(|side| side.revision == missing)
+                .unwrap()
+                .regions
+                .clear();
+            let result = render_source_plan(
+                &localized_conflict_render_plan(sources(), &[conflict], 7).unwrap(),
+            )
+            .unwrap();
+            assert!(result.content.starts_with("alpha ours\n<<<<<<< ours\nshared\n"));
+            assert!(!result.line_records.iter().any(|line| line.conflict_side == Some(missing)
+                && line.fragment_kind == RenderFragmentKind::Source));
+        }
     }
 
     #[test]

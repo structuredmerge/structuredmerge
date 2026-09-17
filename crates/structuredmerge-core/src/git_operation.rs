@@ -34,10 +34,18 @@ pub(crate) fn project_render(
     render: Option<ConflictRenderEvidence>,
     error: Option<String>,
 ) {
+    let appended = render.as_ref().is_some_and(|evidence| {
+        evidence.rendered.conflicts.iter().any(|conflict| {
+            conflict.metadata.get("placement")
+                == Some(&serde_json::json!("end_of_ours_absent_owner"))
+        })
+    });
     result.render_report = [
         (
             "strategy".into(),
-            serde_json::json!(if render.is_some() {
+            serde_json::json!(if appended {
+                "git-absent-owner-conflict-review"
+            } else if render.is_some() {
                 "git-localized-conflict-review"
             } else {
                 "git-unrendered-conflict"

@@ -211,7 +211,22 @@ pub fn merge3_json(request: &Merge3Request) -> Merge3Response {
             }
             let (conflicted_source, strategy, reparse) = match rendered {
                 Ok(source) => {
-                    (Some(source), "owned_region_conflict_markers".to_string(), Some(false))
+                    let appended = result.conflicts.iter().any(|conflict| {
+                        conflict.alternatives.iter().any(|alternative| {
+                            alternative.revision == SourceRevision::Ours
+                                && alternative.state == ConflictAlternativeState::Absent
+                        })
+                    });
+                    (
+                        Some(source),
+                        if appended {
+                            "absent_owner_review_markers"
+                        } else {
+                            "owned_region_conflict_markers"
+                        }
+                        .to_string(),
+                        Some(false),
+                    )
                 }
                 Err(_) => (None, "unrendered_structural_conflict".to_string(), None),
             };

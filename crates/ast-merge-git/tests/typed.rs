@@ -179,7 +179,7 @@ fn overlapping_conflict_lines_fail_closed_without_whole_file_markers() {
 }
 
 #[test]
-fn absent_alternatives_remain_unrendered_without_inventing_source_regions() {
+fn absent_alternatives_render_empty_review_sides_without_inventing_source_regions() {
     let parser = Parser::new("json");
     let [base, ours, theirs] = parser.inputs(["{\"x\":0}", "{}", "{\"x\":2}"]);
     let result =
@@ -189,8 +189,26 @@ fn absent_alternatives_remain_unrendered_without_inventing_source_regions() {
         .unwrap();
     assert_eq!(result.merge.result.outcome, ThreeWayMergeOutcome::Conflict);
     assert!(!result.merge.result.conflicts.is_empty());
-    assert!(result.conflict_render.is_none());
-    assert!(result.conflict_render_error.is_some());
+    let evidence = result.conflict_render.unwrap();
+    assert!(evidence.rendered.content.starts_with("{}\n<<<<<<< ours\n||||||| base\n"));
+    assert_eq!(evidence.rendered.conflicts[0].metadata["placement"], "end_of_ours_absent_owner");
+    assert_eq!(evidence.rendered.conflicts[0].output_start_line, 2);
+    assert_eq!(
+        evidence.rendered.conflicts[0].output_end_line,
+        evidence.rendered.content.lines().count()
+    );
+    assert!(
+        !evidence
+            .rendered
+            .line_records
+            .iter()
+            .any(|line| line.conflict_side == Some(ast_merge::SourceRevision::Ours)
+                && line.fragment_kind == ast_merge::RenderFragmentKind::Source)
+    );
+    evidence
+        .validate([&base, &ours, &theirs], &result.merge.result.conflicts, &Default::default())
+        .unwrap();
+    assert!(result.conflict_render_error.is_none());
     assert!(result.merge.result.output.is_none());
 }
 
@@ -212,6 +230,37 @@ fn missing_final_newlines_are_recorded_as_synthesized_boundaries() {
             .filter(|fragment| fragment.reason == "conflict_line_boundary")
             .count(),
         3
+    );
+    evidence
+        .validate([&base, &ours, &theirs], &result.merge.result.conflicts, &Default::default())
+        .unwrap();
+}
+
+#[test]
+fn multiple_deleted_owners_have_distinct_appended_review_blocks() {
+    let parser = Parser::new("json");
+    let [base, ours, theirs] = parser.inputs(["{\"x\":0,\"y\":0}", "{}", "{\"x\":1,\"y\":2}"]);
+    let result =
+        typed::merge3(&base, &ours, &theirs, JsonDialect::Json, &Default::default(), |_| {
+            panic!("no merged output parse")
+        })
+        .unwrap();
+    assert_eq!(result.merge.result.conflicts.len(), 2);
+    assert!(result.merge.result.output.is_none());
+    let evidence = result.conflict_render.unwrap();
+    assert!(evidence.rendered.content.starts_with("{}\n<<<<<<< ours\n||||||| base\n"));
+    assert_eq!(evidence.rendered.conflicts.len(), 2);
+    assert_ne!(
+        evidence.rendered.conflicts[0].conflict_id,
+        evidence.rendered.conflicts[1].conflict_id
+    );
+    assert!(
+        evidence.rendered.conflicts[0].output_end_line
+            < evidence.rendered.conflicts[1].output_start_line
+    );
+    assert_eq!(
+        evidence.rendered.conflicts[1].output_end_line,
+        evidence.rendered.content.lines().count()
     );
     evidence
         .validate([&base, &ours, &theirs], &result.merge.result.conflicts, &Default::default())
