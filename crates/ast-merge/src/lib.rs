@@ -7,6 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 pub mod portable_benchmark_contract;
+pub mod provider_registry;
 pub use portable_benchmark_contract::*;
 pub mod matching;
 pub use matching::*;

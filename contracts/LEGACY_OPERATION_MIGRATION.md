@@ -75,8 +75,13 @@ Start removing concrete consumer blockers: expose typed explicit source-edit
 requests/results over the existing Rust source renderer, followed by typed
 profile/session reports. Keep structural selection and filesystem apply native
 until separately proven. In parallel with that sequence, complete the common
-operation envelope and Rust-owned analyze/diff2/merge2/merge3 family adapters;
-do not introduce another provider registry or JSON-string core facade.
+operation envelope and Rust-owned analyze/diff2/merge2/merge3 family adapters.
+The `ast-merge::provider_registry` foundation now owns merge-behavior
+registrations and immutable executor snapshots, as required by Slice 1026;
+TreeHaver still owns the separate parser registry. Connect future typed
+`WorkflowHost` dispatch to these two boundaries, not a third registry or a
+JSON-string core facade. The registry foundation is not negotiation, dispatch,
+default approval, or evidence that host-owned semantics moved to Rust.
 
 Migrate a consumer only after its exact behavior and installed artifact are
 verified. Retain legacy regression code while it is useful, but do not make its

@@ -331,6 +331,8 @@
 
 - Run shared capability manifest and inventory fixtures through Alef-generated Ruby/Python e2e and test-app suites.
 
+- Add the ast-merge merge-provider registry foundation with explicit workflow/backend declarations, bounded metadata, stable snapshot digests, and generation-checked replacement and retirement; registration alone grants no selection or default authority.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
