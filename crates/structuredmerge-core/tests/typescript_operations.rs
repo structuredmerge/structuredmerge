@@ -175,9 +175,8 @@ fn jsx_requires_tsx_and_selects_tsx_for_output_reparse() {
 }
 
 #[test]
-fn unsupported_policies_dialects_and_merge2_fail_closed() {
+fn unsupported_policies_and_dialects_fail_closed() {
     for dialect in ["typescript", "tsx"] {
-        assert!(!run(request(dialect, "merge2", &[OURS, BASE])).0.ok);
         for source in ["export const v = 1;\n", "const a = 1, b = 2;\n", "function f( {"] {
             assert!(!run(request(dialect, "analyze", &[source])).0.ok);
         }
@@ -208,7 +207,7 @@ fn exported_facade_honors_dialect_selection_and_cancellation() {
     for dialect in ["typescript", "tsx"] {
         let id = format!("{dialect}.facade");
         register_language_pack_parser(id.clone(), dialect.into()).unwrap();
-        for operation in ["analyze", "diff2", "merge3"] {
+        for operation in ["analyze", "diff2", "merge2", "merge3"] {
             let mut input = request(dialect, operation, &[BASE; 3]);
             input.parser_selection.backend = Some(id.clone());
             assert_eq!(
@@ -222,5 +221,118 @@ fn exported_facade_honors_dialect_selection_and_cancellation() {
             assert!(!execute_operation(input, limits.clone()).unwrap().ok);
         }
         unregister_parser_provider(id).unwrap();
+    }
+}
+
+#[test]
+fn directional_merges_preserve_current_headers_wrappers_and_native_trivia() {
+    for dialect in ["typescript", "tsx"] {
+        for (incoming, current, expected) in [
+            (
+                "function f() { incoming(); }\nfunction g() {}\n",
+                "function f() { current(); }\n",
+                "function f() { current(); }\nfunction g() {}\n",
+            ),
+            (
+                "// incoming header\nexport function added() {}\nfunction f() {}\n",
+                "// @ts-nocheck\nfunction f() {}\n// footer\n",
+                "// @ts-nocheck\nexport function added() {}\nfunction f() {}\n// footer\n",
+            ),
+            (
+                "import { x } from 'x';\n/** é new */\nexport class Added {}\n",
+                "// module\nimport { x } from 'x';\n// footer\n",
+                "// module\nimport { x } from 'x';\n/** é new */\nexport class Added {}\n// footer\n",
+            ),
+            (
+                "function f() {}\nimport { x } from 'x';\n// added\nconst added = 1;\n",
+                "import { x } from 'x';\nfunction f() {} // inline\n// footer\n",
+                "import { x } from 'x';\nfunction f() {} // inline\n// added\nconst added = 1;\n// footer\n",
+            ),
+            (
+                "export class C {}\nenum E { A }\nexport function f() {}\ndeclare function signature(): void;\ninterface I {}\ndeclare namespace N {}\ntype T = string;\nconst v = 1;\n",
+                "",
+                "export class C {}\nenum E { A }\nexport function f() {}\ndeclare function signature(): void;\ninterface I {}\ndeclare namespace N {}\ntype T = string;\nconst v = 1;\n",
+            ),
+            (
+                "function added() {}\n",
+                "// current module\n",
+                "// current module\nfunction added() {}\n",
+            ),
+            ("", "// no newline", "// no newline"),
+            (
+                "import { x } from 'incoming';\nfunction f() {}\n",
+                "import { x } from 'current';\nfunction f() { current(); }",
+                "import { x } from 'current';\nfunction f() { current(); }",
+            ),
+            (
+                "function f() {}\r\n// é\r\nfunction g() {}\r\n",
+                "function f() {}\r\n",
+                "function f() {}\r\n// é\r\nfunction g() {}\r\n",
+            ),
+        ] {
+            let (result, _) = run(request(dialect, "merge2", &[incoming, current]));
+            assert!(
+                result.ok,
+                "{dialect}: {incoming:?} into {current:?}: {:?}",
+                result.diagnostics
+            );
+            assert_eq!(result.output.as_deref(), Some(expected));
+            assert_eq!(result.verification.output_reparsed, Some(true));
+            assert_eq!(result.verification.directional_roles_preserved, Some(true));
+            assert_eq!(result.verification.base_participated, None);
+            let mut retained_current = vec![];
+            for region in result.verification.retained_source_regions.unwrap() {
+                let source =
+                    if region.source_role == SourceRole::Incoming { incoming } else { current };
+                let range = &region.extra["output_range"];
+                assert_eq!(
+                    &source.as_bytes()[region.range.start_byte..region.range.end_byte],
+                    &expected.as_bytes()[range["start_byte"].as_u64().unwrap() as usize
+                        ..range["end_byte"].as_u64().unwrap() as usize]
+                );
+                if region.source_role == SourceRole::Current {
+                    retained_current.extend_from_slice(
+                        &current.as_bytes()[region.range.start_byte..region.range.end_byte],
+                    );
+                }
+            }
+            assert_eq!(retained_current, current.as_bytes());
+        }
+    }
+    let incoming = "function View() { return <div/>; }\n";
+    let (result, _) = run(request("tsx", "merge2", &[incoming, ""]));
+    assert!(result.ok);
+    assert_eq!(result.output.as_deref(), Some(incoming));
+    assert_eq!(result.verification.output_reparsed, Some(true));
+    assert!(!run(request("typescript", "merge2", &[incoming, ""])).0.ok);
+}
+
+#[test]
+fn directional_merges_reject_unproven_imports_wrappers_and_placement() {
+    for dialect in ["typescript", "tsx"] {
+        for (incoming, current) in [
+            (
+                "import { x } from 'x';\nfunction added() {}\n",
+                "import { x } from 'y';\nfunction f() {}\n",
+            ),
+            ("import { x } from 'x';\nfunction added() {}\n", "function f() {}\n"),
+            (
+                "function b() {}\nfunction added() {}\nfunction a() {}\n",
+                "function a() {}\nfunction b() {}\n",
+            ),
+            ("function f() {} function g() {}\n", "function f() {}\n"),
+            ("function f() {}\nfunction g() {}", "function f() {}\n"),
+            ("function f() {}\nfunction g() {}\n", "function f() {}"),
+            ("function f() {}\n", "// header without newline"),
+            ("export const a = 1;\n", ""),
+            ("const a = 1, b = 2;\n", ""),
+            ("'use strict';\nfunction f() {}\n", ""),
+            ("function f() {}\nfunction f() {}\n", "function f() {}\n"),
+        ] {
+            let (result, _) = run(request(dialect, "merge2", &[incoming, current]));
+            assert!(!result.ok, "{dialect}: {incoming:?} into {current:?}");
+            assert!(result.output.is_none());
+            assert_ne!(result.verification.output_reparsed, Some(true));
+        }
     }
 }

@@ -273,6 +273,8 @@
 
 - Expose typed TypeScript/TSX analysis, diff2 and verified merge3 through the common kernel API with explicit grammar selection and dialect-bound analysis validation.
 
+- Add typed TypeScript/TSX directional merge2 with current-byte retention, native declaration wrappers and comment ranges, preserved document headers, exact import compatibility and fresh output verification.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

@@ -137,6 +137,37 @@ fn analysis_retains_supported_owner_kinds_and_complete_wrapper_spans() {
 }
 
 #[test]
+fn directional_noop_revalidates_native_ownership_and_parser_language() {
+    let parser = Parser::new("typescript");
+    let incoming = parser.parse(BASE, SourceRole::Incoming);
+    let current = parser.parse(OURS, SourceRole::Current);
+    let mut incoming_owners = typescript_merge::directional::owners(&incoming).unwrap();
+    let current_owners = typescript_merge::directional::owners(&current).unwrap();
+    assert!(
+        typescript_merge::directional::plan_insertions(
+            &incoming,
+            &incoming_owners,
+            &current,
+            &current_owners
+        )
+        .unwrap()
+        .is_empty()
+    );
+    incoming_owners.owners[0].fingerprint.push_str(" forged");
+    assert!(
+        typescript_merge::directional::plan_insertions(
+            &incoming,
+            &incoming_owners,
+            &current,
+            &current_owners
+        )
+        .is_err()
+    );
+    let wrong = Parser::new("rust").parse("fn f() {}\n", SourceRole::Incoming);
+    assert!(typescript_merge::directional::owners(&wrong).is_err());
+}
+
+#[test]
 fn typed_merges_match_legacy_typescript_and_tsx_decisions() {
     for (language, dialect) in
         [("typescript", TypeScriptDialect::TypeScript), ("tsx", TypeScriptDialect::Tsx)]

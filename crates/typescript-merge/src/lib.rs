@@ -13,6 +13,7 @@ use tree_haver::{
 
 pub const PACKAGE_NAME: &str = "typescript-merge";
 
+pub mod directional;
 pub mod typed;
 
 const TYPESCRIPT_DECLARATION_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
