@@ -45,3 +45,11 @@ Keep source packaging, isolated native compilation, installed runtime tests,
 reproducible upstream generation, and publication as distinct gates. Do not
 hand-edit generated manifests or publish placeholder/prototype packages to
 work around these gaps. This inventory is a prerequisite, not source-gem approval.
+
+The separate `prepare_core_ruby_source.rb` helper now exercises Alef's default
+registry preparation in an isolated committed snapshot and creates an allowlisted
+source archive. The binding manifest's external path is removed by Alef, not a
+hand edit. A real local installation reached Cargo but failed to resolve the
+unpublished facade in the crates.io index. This resolves the preparation/file
+selection gap for that development archive, not registry resolution, compilation,
+installed conformance, reproducibility or release readiness.

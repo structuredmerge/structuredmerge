@@ -12,6 +12,36 @@ The default command builds an allowlisted platform gem, installs it into an
 isolated consumer and runs runtime/generated tests, linkage and RBS validation.
 It does not publish or establish source-gem or other-platform compatibility.
 
+## Source archive preparation (not installation approval)
+
+The separate source helper prepares **committed HEAD**, not dirty source files,
+in a fresh kernel `tmp/` snapshot. It invokes Alef's registry preparation and
+builds an explicitly allowlisted source gem with no prototype files or binaries.
+The worktree's generated manifests remain untouched:
+
+```sh
+ruby workspace-scripts/prepare_core_ruby_source.rb \
+  --alef /absolute/path/to/alef \
+  --output tmp/new-core-source-export
+```
+
+Preparation requires Git, tar, Ruby and Python >=3.11 (TOML audit). The output
+directory must not already exist. The report records the source commit, executable
+digest and version output for Alef, artifact and per-file digests, and explicit
+`not_run` states for registry resolution, installation and runtime tests. It
+always leaves upstream-generation verification and publication approval false.
+This helper is not a publishing command and does not claim source-build parity.
+
+The local 2026-09-17 prepared archive reached the native Cargo build during a real
+isolated Ruby installation, then failed because crates.io could not resolve
+`structuredmerge-core`. Publish no package merely to unblock this check: the
+20-crate typed publication inventory and all upstream-generation/release gates
+must be satisfied first. See `contracts/TYPED_RELEASE_INVENTORY.md`. Once those
+prerequisites are met, rerun source installation and the full installed tests;
+successful preparation alone is not enough.
+
+## Installed binary artifact gates
+
 The `typed-core-ruby-artifact` CI matrix runs that full installed gate on Linux
 x86_64 (Ruby 3.2 and 4.0), Linux ARM64, macOS ARM64/x86_64 and Windows UCRT
 (Ruby 4.0). Windows builds select the GNU target to match RubyInstaller.

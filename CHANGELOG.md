@@ -317,6 +317,8 @@
 
 - Add an isolated installed Ruby/Psych typed benchmark adapter with explicit YAML merge3 scope, startup isolation, and transport regression checks.
 
+- Prepare an allowlisted typed Ruby source archive through Alef in an isolated committed snapshot, recording provenance without claiming installation or publication readiness.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
