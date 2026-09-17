@@ -14,6 +14,7 @@ use tree_haver::{
 
 pub const PACKAGE_NAME: &str = "bash-merge";
 
+pub mod directional;
 pub mod typed;
 
 const BASH_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[

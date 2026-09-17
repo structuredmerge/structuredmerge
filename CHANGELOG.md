@@ -253,6 +253,8 @@
 
 - Expose explicit common Bash owner analysis, exact-source diff2 and merge3 operations with native owner references, retained layout evidence and complete-byte diff summaries; unsupported policies fail closed.
 
+- Implement typed directional Bash merge2 with current-preferred ownership, native-comment-aware insertion ranges, exact current-byte retention and fresh output verification; reject ambiguous placement instead of fabricating a three-way base.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

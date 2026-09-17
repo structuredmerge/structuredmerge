@@ -18,7 +18,22 @@ pub fn analysis(
     let nodes = parsed.normalized_nodes()?;
     let root = parsed.document.output().root_id.as_deref().ok_or("Bash parse omitted its root")?;
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|e| e.to_string())?;
-    let analysis = super::project_bash_analysis(source, root, &nodes)?;
+    // Empty/comment-only documents are valid directional endpoints. Derive this
+    // from the native root's children, never from textual source classification.
+    let index = tree_haver::NormalizedTreeIndex::new(&nodes)?;
+    let root_node = index.root(root)?;
+    let analysis = if index
+        .children(root_node)
+        .iter()
+        .all(|node| node.role == tree_haver::NodeRole::Comment)
+    {
+        ast_merge::native_analysis::NativeOwnerAnalysis {
+            document: SourcePreservingOwnerDocument { source: source.into(), owners: vec![] },
+            owner_node_ids: Default::default(),
+        }
+    } else {
+        super::project_bash_analysis(source, root, &nodes)?
+    };
     analysis.validate(parsed)?;
     Ok(analysis)
 }

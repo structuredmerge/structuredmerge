@@ -36,10 +36,10 @@ Logs: `tmp/bash-typed-{tests,regressions,clippy,generation,audits}.log`.
 ## Common operation profile
 
 `kernel.bash.owners.v1`, provider `kernel.bash`, family/dialect `bash`, now executes
-analyze, diff2 and merge3 through the existing common native-owner orchestration.
+analyze, diff2, merge2 and merge3 through the existing common native-owner orchestration.
 Explicit parser selection, cancellation and resource bounds remain TreeHaver's
 responsibility. No extra registry or binding signature is added. Unsupported
-dialects, enrichments, merge2, fallbacks and marker/label options fail closed.
+dialects, enrichments, fallbacks and marker/label options fail closed.
 
 Analysis captures native owner node IDs during the original family projection,
 not by searching spans or text afterward. Portable analysis carries exact owner
@@ -66,8 +66,40 @@ Broader Bash/core tests and strict Clippy pass. Logs:
 `tmp/bash-common-{tests,regressions,clippy,generation,audits}.log` (the final fifth
 exported-facade test is included in the regression run).
 
-Next: directional merge2 policy, broader analysis-policy and result-verifier
+Next: broader analysis-policy and result-verifier
 conformance, shared generated fixtures, rebuilt installed artifacts and actual
 Ruby consumer migration. No Bash legacy export is marked migrated by this Rust
 work. Broader authority, hosted, platform and publication gates remain open.
 No parser-default switch, prototype expansion or Alef push.
+
+## Directional merge2
+
+`template-into-current` / `source-preserving` uses the shared directional owner
+classifier and verifier with a Bash-owned insertion planner. Shared identities
+keep current owners, including current body edits. Incoming-only owners are
+inserted before the next shared anchor, or before the current footer. Every
+current byte remains in order. No fabricated base or three-way shortcut is used.
+This intentionally does not reproduce the prototype's destination-as-base wrapper,
+which selected the whole template even when current had its own edits.
+
+Insertion ranges use native owner/comment facts and newline framing: trailing
+inline comments remain with the preceding owner, while later leading gaps follow
+the next owner. Document headers (including shebangs) and footers are not imported
+from incoming. Current headers/footers remain exact. Empty/comment-only inputs are
+recognized from native root children and supported as typed endpoints; this is an
+intentional extension beyond the older entry point's no-owner rejection.
+
+Additions with reordered shared anchors, multiple owners on one physical line,
+unowned nontrivia separators or absent insertion newline boundaries fail closed.
+No newline is synthesized and misrepresented as retained source. With no additions,
+current is preserved even without a final newline. Output is freshly reparsed and
+checked against classified owner order/fingerprints. Complete directional source
+segments record exact bytes/digests and prove ordered retention of all current
+bytes. This is a declared whole-owner insertion policy, not broad Bash/Ruby parity.
+
+Seven common Bash tests cover all four exported operations and cancellation,
+including directional current precedence, empty inputs, native comments, Unicode,
+headers/footers, multi-owner additions, no-op verification and rejected placement.
+Bash/core regressions, strict Clippy, reviewed API baselines and 14 audits pass.
+Logs: `tmp/bash-merge2-{tests,regressions,clippy,generation,audits}.log`.
+Installed-artifact/shared-fixture and Ruby consumer gates remain next, not passed.

@@ -126,7 +126,8 @@ fn bash_conflicts_and_failures_do_not_invent_outputs_or_capabilities() {
         assert!(!result.ok, "{text}");
     }
     let (result, _) = run(request("merge2", &["x=1\n", "x=2\n"]));
-    assert!(!result.ok);
+    assert!(result.ok);
+    assert_eq!(result.output.as_deref(), Some("x=2\n"));
     for policy in [json!({"comments":true}), json!({"tokens":true}), json!({"ownership":false})] {
         let mut value = serde_json::to_value(request("analyze", &["x=1\n"])).unwrap();
         value["policy"] = policy;
@@ -153,7 +154,7 @@ fn exported_bash_profile_honors_explicit_selection_and_cancellation() {
     };
     let control = create_operation_control();
     control.cancel();
-    for operation in ["analyze", "diff2", "merge3"] {
+    for operation in ["analyze", "diff2", "merge2", "merge3"] {
         let mut input = request(operation, &["x=1\n"; 3]);
         input.parser_selection.backend = Some("bash.facade".into());
         assert_eq!(
@@ -165,4 +166,65 @@ fn exported_bash_profile_honors_explicit_selection_and_cancellation() {
         assert!(!execute_operation(input, limits.clone()).unwrap().ok);
     }
     unregister_parser_provider("bash.facade".into()).unwrap();
+}
+
+#[test]
+fn bash_merge2_preserves_current_and_inserts_native_owner_fragments() {
+    for (incoming, current, expected) in [
+        ("x=1\n", "", "x=1\n"),
+        ("", "x=9\n", "x=9\n"),
+        ("x=1\n", "# current header\n", "# current header\nx=1\n"),
+        ("x=1\ny=2\n", "x=9\n", "x=9\ny=2\n"),
+        (
+            "x=1\n# incoming é\ny=2 # inline\nz=3\n",
+            "# current header\nx=9 # keep inline\n# current z\nz=8\n# footer\n",
+            "# current header\nx=9 # keep inline\n# incoming é\ny=2 # inline\n# current z\nz=8\n# footer\n",
+        ),
+        (
+            "#!/bin/bash\nnew=2\nx=1\n",
+            "#!/usr/bin/env bash\nx=9\n",
+            "#!/usr/bin/env bash\nnew=2\nx=9\n",
+        ),
+        ("x=1\na=2\nb=3\n", "x=9\n# footer\n", "x=9\na=2\nb=3\n# footer\n"),
+        ("x=1\n", "x=9", "x=9"),
+    ] {
+        let (result, _) = run(request("merge2", &[incoming, current]));
+        assert!(result.ok, "{:?}", result.diagnostics);
+        assert_eq!(result.output.as_deref(), Some(expected));
+        assert_eq!(result.verification.directional_roles_preserved, Some(true));
+        assert_eq!(result.verification.base_participated, None);
+        assert_eq!(result.verification.output_reparsed, Some(true));
+        assert_eq!(
+            result.verification.consumed_source_roles,
+            Some(vec![SourceRole::Incoming, SourceRole::Current])
+        );
+        for retained in result.verification.retained_source_regions.unwrap() {
+            let source =
+                if retained.source_role == SourceRole::Incoming { incoming } else { current };
+            let output = &retained.extra["output_range"];
+            let start = output["start_byte"].as_u64().unwrap() as usize;
+            let end = output["end_byte"].as_u64().unwrap() as usize;
+            assert_eq!(
+                &source.as_bytes()[retained.range.start_byte..retained.range.end_byte],
+                &expected.as_bytes()[start..end]
+            );
+        }
+    }
+}
+
+#[test]
+fn bash_merge2_rejects_ambiguous_placement_without_exposing_output() {
+    for (incoming, current) in [
+        ("b=2\nnew=3\na=1\n", "a=9\nb=8\n"),
+        ("x=1\ny=2", "x=9\n"),
+        ("x=1\ny=2\n", "x=9"),
+        ("x=1; y=2\n", "x=9\n"),
+        ("x=1\ny=2\n", "x=9; z=8\n"),
+    ] {
+        let (result, _) = run(request("merge2", &[incoming, current]));
+        assert!(!result.ok, "{incoming:?} into {current:?}");
+        assert!(result.output.is_none());
+        assert!(result.verification.retained_source_regions.is_none());
+        assert!(!result.diagnostics.is_empty());
+    }
 }

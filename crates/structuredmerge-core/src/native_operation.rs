@@ -332,7 +332,7 @@ pub fn execute_native_operation(
     }
     let supported = match &input.operation {
         OperationPolicy::Merge2(policy) => {
-            family == "python"
+            matches!(family, "python" | "bash")
                 && policy.directional_merge == "template-into-current"
                 && policy.render_policy == "source-preserving"
                 && policy.extra.is_empty()
@@ -574,7 +574,11 @@ pub fn execute_native_operation(
             snapshot,
             context,
             analyzer,
-            python_merge::directional::plan_insertions,
+            if family == "bash" {
+                bash_merge::directional::plan_insertions
+            } else {
+                python_merge::directional::plan_insertions
+            },
         ) {
             Ok(execution) => execution,
             Err(error) => {
