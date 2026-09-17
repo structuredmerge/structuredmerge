@@ -14,6 +14,8 @@ use tree_haver::{
 
 pub const PACKAGE_NAME: &str = "bash-merge";
 
+pub mod typed;
+
 const BASH_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
     NamedOwnerKind { node_kind: "function_definition", path_kind: "function" },
     NamedOwnerKind { node_kind: "variable_assignment", path_kind: "variable" },

@@ -294,6 +294,52 @@ pub struct ParsedResult {
     pub source: SourceDocument,
 }
 
+impl ParsedResult {
+    /// Adapt validated facts to existing Rust family analyzers without loading
+    /// another parser or searching text for node locations. Native extensions
+    /// remain available on `document`; this view does not replace that record.
+    pub fn normalized_nodes(&self) -> Result<Vec<crate::NormalizedTreeNode>, String> {
+        let output = self.document.output();
+        if !output.ok || output.source != *self.source.descriptor() {
+            return Err("normalized view requires successful source-bound parser facts".into());
+        }
+        let fields = output
+            .nodes
+            .iter()
+            .flat_map(|node| &node.children)
+            .map(|edge| (edge.node_id.as_str(), edge.field_name.clone()))
+            .collect::<std::collections::HashMap<_, _>>();
+        output
+            .nodes
+            .iter()
+            .map(|node| {
+                Ok(crate::NormalizedTreeNode {
+                    id: node.id.clone(),
+                    kind: node.native_type.clone(),
+                    role: node.role,
+                    parent_id: node.parent_id.clone(),
+                    child_ids: node.children.iter().map(|edge| edge.node_id.clone()).collect(),
+                    span: node.span.clone(),
+                    field_name: fields.get(node.id.as_str()).cloned().flatten(),
+                    named: node.named,
+                    anonymous: !node.named,
+                    has_source_text: true,
+                    source_fragment: std::str::from_utf8(
+                        self.source.slice(node.span.range.clone()).map_err(|e| e.to_string())?,
+                    )
+                    .map_err(|e| e.to_string())?
+                    .to_string(),
+                    backend_kind: Some(node.native_type.clone()),
+                    semantic_roles: node.semantic_roles.clone(),
+                    backend_roles: vec![],
+                    unsupported_features: node.unsupported_features.clone(),
+                    metadata: Default::default(),
+                })
+            })
+            .collect()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum ServiceError {
     InvalidRequest,

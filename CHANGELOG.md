@@ -249,6 +249,8 @@
 
 - Expose an explicit typed Git JSON merge3 profile through the common operation facade, validating marker options and replaying canonical conflict classifications and rendering evidence without prototype transport.
 
+- Execute the existing Bash owner merge over validated TreeHaver facts with explicit output verification, including no-op selections; share native-node adaptation with typed JSON without parser rediscovery.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

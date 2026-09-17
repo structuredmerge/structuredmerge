@@ -2,7 +2,7 @@
 //! registry, source-text discovery or host-owned merge decisions live here.
 use crate::{JsonAnalysis, JsonDialect, source_preserving::*};
 use ast_merge::{MergeResult, ThreeWayMergeResult};
-use tree_haver::{NormalizedTreeNode, service::ParsedResult, source::SourceRole};
+use tree_haver::{service::ParsedResult, source::SourceRole};
 
 /// Nested source owners may overlap their descendants. They are comparison
 /// subjects, not a non-overlapping render partition. Array identity is positional.
@@ -227,55 +227,13 @@ pub struct JsonMergeExecution<T> {
 }
 
 fn document(parsed: &ParsedResult, dialect: JsonDialect) -> Result<JsonSyntaxDocument, String> {
-    let output = parsed.document.output();
-    if !output.ok || output.source != *parsed.source.descriptor() {
-        return Err("typed JSON input is unsuccessful or has mismatched source identity".into());
-    }
     if !parsed.backend.languages.iter().any(|language| language == parser_language(dialect)) {
         return Err("typed JSON input uses an incompatible parser language".into());
     }
+    let nodes = parsed.normalized_nodes()?;
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
-    let root = output.root_id.as_deref().ok_or("typed JSON input omitted its root")?;
-    let fields = output
-        .nodes
-        .iter()
-        .flat_map(|node| &node.children)
-        .map(|edge| (edge.node_id.as_str(), edge.field_name.clone()))
-        .collect::<std::collections::HashMap<_, _>>();
-    // Internal adaptation to the established family analyzer, not a public
-    // normalized/JSON transport. All text and topology come from validated facts.
-    let nodes = output
-        .nodes
-        .iter()
-        .map(|node| {
-            let field_name = fields.get(node.id.as_str()).cloned().flatten();
-            Ok(NormalizedTreeNode {
-                id: node.id.clone(),
-                kind: node.native_type.clone(),
-                role: node.role,
-                parent_id: node.parent_id.clone(),
-                child_ids: node.children.iter().map(|edge| edge.node_id.clone()).collect(),
-                span: node.span.clone(),
-                field_name,
-                named: node.named,
-                anonymous: !node.named,
-                has_source_text: true,
-                source_fragment: std::str::from_utf8(
-                    parsed
-                        .source
-                        .slice(node.span.range.clone())
-                        .map_err(|error| error.to_string())?,
-                )
-                .map_err(|error| error.to_string())?
-                .to_string(),
-                backend_kind: Some(node.native_type.clone()),
-                semantic_roles: node.semantic_roles.clone(),
-                backend_roles: vec![],
-                unsupported_features: node.unsupported_features.clone(),
-                metadata: Default::default(),
-            })
-        })
-        .collect::<Result<Vec<_>, String>>()?;
+    let root =
+        parsed.document.output().root_id.as_deref().ok_or("typed JSON input omitted its root")?;
     document_from_nodes(source, dialect, root, &nodes)
 }
 
