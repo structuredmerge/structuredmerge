@@ -17,7 +17,7 @@
       "disposition": "retain_until_consumer_migration",
       "consumers": ["ruby/gems/ast-merge/lib/ast/merge/rust_host_provider.rb"],
       "replacement": "Typed directional merge2 and base-aware merge3 request/result envelopes calling the existing family kernels.",
-      "gap": "The common core facade now orchestrates nested JSON/JSONC/JSON5 merge2/merge3 with typed TreeHaver parsing, canonical provider-specific conflicts and replay-checked edit/retention evidence. Common JSON analysis/diff2 with authoritative nested owner spans and actual Ruby adapter migration remain open; the Ruby adapter still owns diff comparisons. Remaining family engines also need migration. Preserve current/incoming direction, dialects, conflicts, diagnostics and source evidence; do not synthesize a base for merge2."
+      "gap": "The common core facade now orchestrates nested JSON/JSONC/JSON5 merge2/merge3 and exact-source diff2 with typed TreeHaver parsing. Diff reports native-span owner changes plus a complete-document summary covering outer trivia, with recomputed evidence validation; it is not an edit script or semantic move detector. Common JSON analysis with complete ownership/comment/layout projection and actual Ruby adapter migration remain open; the Ruby adapter still owns diff comparisons. Remaining family engines also need migration. Preserve current/incoming direction, dialects, conflicts, diagnostics and source evidence; do not synthesize a base for merge2."
     },
     {
       "id": "git-driver",

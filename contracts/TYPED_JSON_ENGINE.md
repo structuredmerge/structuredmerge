@@ -72,10 +72,38 @@ regions receive exact input-byte digests; absent alternatives remain absent.
 Unavailable native locality is not upgraded to exact locality. No fabricated
 decision IDs, resolutions, markers or conflicted output are introduced.
 
-Next: common JSON analysis/diff2 with authoritative nested owner spans, broader
+Next: common JSON analysis with authoritative nested owner spans, broader
 generated shared JSON fixtures and actual Ruby family/Git consumer migration.
 Those adapters' prototype calls and Ruby-owned diff decisions remain open. No
 public core API signature, parser default or publication authority changed.
+
+## Common exact-source diff2
+
+The same explicit JSON profile now accepts diff2 with omitted or
+`exact-source-owners` comparison profile and omitted, empty or `exact-source`
+equivalence rules. Other comparison rules fail before parsing. The shared
+TreeHaver snapshot supplies distinct Before/After inputs. Source-preservation
+evidence is always included; no output or output-reparse claim is made.
+
+Changes include a whole-document summary whenever any bytes differ, followed by
+the Rust-owned nested owner comparisons. The summary catches outer comments,
+CRLF/final-newline and other trivia changes without inventing their ownership.
+Each record carries exact source identity, spans and digests. Ancestor and summary
+subjects intentionally overlap; arrays are positional, and the result is neither
+a minimal edit script nor a semantic move detector. Duplicate decoded keys fail
+closed. Identical complete sources produce no changes.
+
+The result validator checks embedded native parse graphs against request bytes,
+source roles, dialect/backend and selection evidence, then recomputes all changes
+and summary claims. Missing or altered classifications, ranges, digests or whole
+document coverage are rejected. Compatible unknown fields survive forwarding.
+This consistency check does not authenticate a foreign parser or grant semantic
+authority to a fabricated result. Cancellation/deadline checks still surround
+execution and validation; recursive family work is not preemptible.
+
+Common analysis remains separate work: diff2's complete byte comparison does not
+pretend to resolve every comment attachment. Ruby consumer migration and shared
+generated JSON fixtures remain open.
 
 ## Nested owner facts and bounded comparison (2026-09-17)
 
@@ -98,8 +126,9 @@ it is not mislabeled as the common Slice 1024 analysis result.
 Five additional typed tests cover repeated fragments, escaped keys, Unicode/CRLF,
 native span/digest/parent consistency, nested changes, scalar roots, positional
 arrays, duplicate decoded keys, wrong roles, duplicate source IDs, and the
-outer-trivia limitation. Common analysis/diff2 still needs exact comment/layout
-projection and comparison plus evidence validation before consumer migration.
+outer-trivia limitation. Common analysis still needs exact comment/layout
+projection and ownership validation before consumer migration; common diff2
+now supplements this helper with complete-document comparison as described above.
 No generated export or installed artifact was changed in this step.
 JSON's 24 unit, 14 fixture and 12 typed tests pass, alongside Git/core regression
 tests (native-runtime opt-in tests were not rerun in this step) and strict Clippy.
@@ -120,11 +149,25 @@ Existing blank-run layout decisions now have exact byte spans and digests in
 it does not discover comments or infer syntax from text. These gaps do not yet
 cover all document trivia. Common analysis still requires owner-namespace
 projection, complete comment coverage/ambiguity handling, attachment/controller
-validation and document-trivia comparison before exposing common JSON diff2.
+validation. Common diff2's document summary does not supply these decisions.
 
 Two additional typed tests cover repeated same-line comments, multiline comments,
 unclaimed trailing comments and exact CRLF/final-whitespace gaps (14 typed tests
 total). Logs: `tmp/json-comment-provenance-{tests,clippy,workspace}.log`.
+
+## Installed diff2 verification (2026-09-17)
+
+Eleven common JSON tests pass, including diff2 coverage, cancellation, unsupported
+rules, ambiguous keys, unknown-field forwarding and altered/missing evidence.
+Core/JSON regressions, strict Clippy and 14 artifact/inventory audits pass.
+Both isolated installed packages execute nested and trivia-only JSON diff2 through
+the generated facade: Python 35 tests plus 15 existing generated fixtures; Ruby
+31 plus 12. No source API baseline changed. Shared generated JSON fixtures and
+broader downstream/platform gates remain open.
+
+Logs: `tmp/json-common-diff-{tests,facade,clippy,audits,python-artifact,ruby-artifact}.log`.
+Python wheel SHA-256: `6aa4f7df1d6bc13977b3b10c8bcca74b2e90531190cc2ca51d47c9d1cd465089`.
+Ruby gem SHA-256: `c5e65da7ec16ed7f386091ad1fd66449f56038b0efc8d494f386d737e01363b3`.
 
 ## Installed verification (2026-09-17)
 

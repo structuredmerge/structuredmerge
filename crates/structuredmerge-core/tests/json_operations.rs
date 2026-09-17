@@ -5,6 +5,7 @@ use tree_haver::{language_pack_provider::LanguagePackProvider, service::*};
 
 fn request(operation: &str, dialect: &str, texts: &[&str]) -> OperationRequest {
     let roles: &[&str] = match operation {
+        "diff2" => &["before", "after"],
         "merge2" => &["incoming", "current"],
         _ => &["base", "ours", "theirs"],
     };
@@ -22,7 +23,7 @@ fn request(operation: &str, dialect: &str, texts: &[&str]) -> OperationRequest {
     serde_json::from_value(json!({"schema": OPERATION_SCHEMA,"request_id":"json-common",
         "operation":operation,"provider_selection":{"provider_id":"kernel.json","family":"json","dialect":dialect,"profile_id":"kernel.json.nested.v1","required_capabilities":[operation]},
         "parser_selection":{"backend":"json.common","preference":[],"required_capabilities":[]},"sources":sources,
-        "policy":if operation == "merge2" { json!({"directional_merge":"template-into-current","render_policy":"source-preserving"}) } else { json!({"render_policy":"source-preserving"}) },
+        "policy":match operation { "diff2" => json!({"comparison_profile":"exact-source-owners","equivalence":["exact-source"]}), "merge2" => json!({"directional_merge":"template-into-current","render_policy":"source-preserving"}), _ => json!({"render_policy":"source-preserving"}) },
         "extensions":[],"metadata":{}})).unwrap()
 }
 fn run(request: OperationRequest) -> (OperationResult, ValidatedOperationRequest) {
@@ -54,6 +55,121 @@ fn run(request: OperationRequest) -> (OperationResult, ValidatedOperationRequest
     .unwrap();
     result.validate_against(&validated).unwrap();
     (result, validated)
+}
+
+#[test]
+fn common_json_diff_compares_complete_bytes_and_native_nested_subjects() {
+    let (result, _) = run(request(
+        "diff2",
+        "json5",
+        &["// old\r\n{a:{x:1},b:{x:1},gone:0}", "// new\r\n{a:{x:1},b:{x:2},added:0}"],
+    ));
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert!(result.output.is_none());
+    assert!(result.render_report.is_empty());
+    assert_ne!(result.verification.output_reparsed, Some(true));
+    assert_eq!(
+        result
+            .changes
+            .iter()
+            .map(|c| (c.path.as_deref(), c.classification.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            (None, "edited"),
+            (Some(""), "edited"),
+            (Some("/added"), "added"),
+            (Some("/b"), "edited"),
+            (Some("/b/x"), "edited"),
+            (Some("/gone"), "deleted")
+        ]
+    );
+    let nested = &result.changes[4];
+    assert_eq!(nested.role_states["before"]["owner"]["path"], "/b/x");
+    assert_eq!(nested.role_states["before"]["source"]["role"], "before");
+    assert_eq!(result.diff.unwrap().extra["document_bytes_compared"], true);
+}
+
+#[test]
+fn common_json_diff_covers_trivia_only_edits_noops_scalars_and_positional_arrays() {
+    for (left, right, count) in [
+        ("// old\n{}", "// new\n{}", 1),
+        ("{}", "{}\r\n", 1),
+        ("1", "2", 2),
+        ("[1,2]", "[0,1,2]", 5),
+        ("{x:1}", "{x:1}", 0),
+    ] {
+        let (result, _) = run(request("diff2", "json5", &[left, right]));
+        assert!(result.ok, "{:?}", result.diagnostics);
+        assert_eq!(result.changes.len(), count, "{left:?} -> {right:?}");
+        assert_eq!(
+            result.verification.consumed_source_roles,
+            Some(vec![SourceRole::Before, SourceRole::After])
+        );
+    }
+}
+
+#[test]
+fn common_json_diff_rejects_ambiguous_keys_and_unsupported_equivalence() {
+    let (result, _) = run(request("diff2", "json", &[r#"{"x":1,"x":2}"#, "{}"]));
+    assert!(!result.ok);
+    assert!(result.diff.is_none());
+    let mut unsupported = request("diff2", "json", &["{}", "{}"]);
+    let OperationPolicy::Diff2(policy) = &mut unsupported.operation else { panic!() };
+    policy.equivalence = Some(vec!["ignore-whitespace".into()]);
+    let (result, _) = run(unsupported);
+    assert!(!result.ok);
+    assert!(!result.extra.contains_key("input_parses"));
+}
+
+#[test]
+fn common_json_diff_recomputes_evidence_and_preserves_compatible_unknown_fields() {
+    let (result, request) = run(request("diff2", "json", &[r#"{"x":1}"#, r#"{"x":2}"#]));
+    assert!(result.ok);
+    for mutation in 0..8 {
+        let mut forged = result.clone();
+        match mutation {
+            0 => forged.changes[1].classification = "added".into(),
+            1 => {
+                forged.changes[1].role_states.get_mut("before").unwrap()["owner"]["sha256"] =
+                    json!("0".repeat(64))
+            }
+            2 => {
+                forged.changes.remove(0);
+                forged.diff.as_mut().unwrap().change_ids.remove(0);
+            }
+            3 => {
+                forged.extra.get_mut("input_parses").unwrap()[0]["parsed"]["source"]["role"] =
+                    json!("after")
+            }
+            4 => {
+                forged.extra.get_mut("input_parses").unwrap()[0]["backend"]["languages"] =
+                    json!(["yaml"])
+            }
+            5 => {
+                forged.extra.get_mut("input_parses").unwrap()[0]["parsed"]["nodes"][0]["span"]["range"]
+                    ["end_byte"] = json!(99999)
+            }
+            6 => forged
+                .diff
+                .as_mut()
+                .unwrap()
+                .extra
+                .insert("document_bytes_compared".into(), json!(false))
+                .map(|_| ())
+                .unwrap(),
+            _ => forged.verification.output_reparsed = Some(true),
+        }
+        assert!(forged.validate_against(&request).is_err(), "mutation {mutation}");
+    }
+    let mut extended = result.clone();
+    extended.changes[0].extra.insert("future".into(), json!({"passive":true}));
+    extended.changes[1].role_states.get_mut("before").unwrap()["owner"]["future"] =
+        json!(["retained"]);
+    extended.diff.as_mut().unwrap().extra.insert("future".into(), json!(true));
+    extended.validate_against(&request).unwrap();
+    let roundtrip: OperationResult =
+        serde_json::from_value(serde_json::to_value(&extended).unwrap()).unwrap();
+    assert_eq!(roundtrip, extended);
 }
 
 #[test]
@@ -171,8 +287,6 @@ fn common_json_rejects_invalid_dialects_syntax_and_unimplemented_constraints() {
 #[test]
 fn exported_facade_routes_json_and_honors_cancellation() {
     register_language_pack_parser("json.common.api".into(), "json".into()).unwrap();
-    let mut request = request("merge2", "json", &["{\"add\":1}", "{}"]);
-    request.parser_selection.backend = Some("json.common.api".into());
     let limits = ParseLimits {
         max_batch_items: 3,
         max_input_bytes: 100000,
@@ -182,11 +296,17 @@ fn exported_facade_routes_json_and_honors_cancellation() {
     };
     let control = create_operation_control();
     control.cancel();
-    assert_eq!(
-        execute_operation_controlled(request.clone(), limits.clone(), &control).unwrap_err().code,
-        "execution.cancelled"
-    );
-    assert!(execute_operation(request, limits).unwrap().ok);
+    for operation in ["merge2", "diff2"] {
+        let mut request = request(operation, "json", &["{\"add\":1}", "{}"]);
+        request.parser_selection.backend = Some("json.common.api".into());
+        assert_eq!(
+            execute_operation_controlled(request.clone(), limits.clone(), &control)
+                .unwrap_err()
+                .code,
+            "execution.cancelled"
+        );
+        assert!(execute_operation(request, limits.clone()).unwrap().ok);
+    }
     unregister_parser_provider("json.common.api".into()).unwrap();
 }
 

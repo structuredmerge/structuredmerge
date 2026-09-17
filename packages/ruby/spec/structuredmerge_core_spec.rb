@@ -41,6 +41,15 @@ RSpec.describe StructuredmergeCore do
     expect(conflict.ok).to be(false)
     expect(conflict.output).to be_nil
     expect(conflict.conflicts.first.canonical.alternatives.length).to eq(3)
+    diff = described_class.execute_operation(request.call("diff2", ['{"x":1}', '{"x":2}']), merge_limits)
+    expect(diff.ok).to be(true)
+    expect(diff.output).to be_nil
+    expect(diff.changes.map(&:path)).to eq([nil, "", "/x"])
+    expect(JSON.parse(diff.diff.extra.fetch("document_bytes_compared"))).to be(true)
+    trivia = described_class.execute_operation(request.call("diff2", ["{}", "{}\r\n"]), merge_limits)
+    expect(trivia.ok).to be(true)
+    expect(trivia.changes.length).to eq(1)
+    expect(trivia.changes.first.subject_ref).to eq("json.document")
   ensure
     described_class.unregister_parser_provider(provider_id)
   end

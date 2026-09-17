@@ -239,6 +239,8 @@
 
 - Retain parser-node provenance through shared comment grouping and expose JSON comment coverage plus byte-exact blank-run layout evidence without changing legacy attachment behavior.
 
+- Execute exact-source JSON diff2 through the typed common facade with nested native-span changes, whole-document trivia coverage, and independently recomputed evidence validation.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
