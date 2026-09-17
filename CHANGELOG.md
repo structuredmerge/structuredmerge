@@ -279,6 +279,8 @@
 
 - Allow CI to export an allowlisted typed Ruby core platform gem and digest report without running the full installed-artifact harness, preserving ABI/API/linkage checks and explicit unrun-test states.
 
+- Verify downloaded typed Ruby core exports before installation, rejecting digest, package, file allowlist, platform, Ruby ABI, and producer-report mismatches without claiming runtime validation.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

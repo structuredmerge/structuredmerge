@@ -32,6 +32,22 @@ under the matching Ruby minor/ABI and execute its own tests; successful packagin
 does not satisfy that gate. No prototype gem, second registry, executable product,
 runtime merge callback or publication is involved.
 
+Before installing a downloaded export, consumers must check it under the Ruby
+that will run their tests:
+
+```sh
+ruby workspace-scripts/verify_core_ruby_export.rb \
+  tmp/core-artifacts/structuredmerge-core-0.2.0-x86_64-linux.gem \
+  tmp/core-artifacts/core-ruby-artifact.json
+```
+
+This independently checks the digest, package metadata, exact file allowlist,
+platform, Ruby minor/ABI and producer report states. Missing or mismatched fields
+fail before installation. A passing result is only an integrity/compatibility
+check: it neither loads the extension nor authenticates the producer. The report
+and gem must come from a trusted build artifact; consumers must still install,
+require the typed core and run their tests. The check never executes gem payloads.
+
 This producer uses already generated, reviewed bindings. It does not regenerate
 via a forked Alef or establish upstream-only generation (D4). The native extension
 must be freshly compiled by the preceding build step. No stale-extension provenance
