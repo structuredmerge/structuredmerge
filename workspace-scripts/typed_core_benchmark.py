@@ -16,14 +16,18 @@ if not Path(core.__file__).resolve().is_relative_to(Path(sys.prefix).resolve()):
 
 ROLES = {"merge2": ("incoming", "current"), "merge3": ("base", "ours", "theirs")}
 PARSERS = set()
+OWNER_DIALECTS = {"bash": ("bash",), "go": ("go",), "rust": ("rust",),
+                  "typescript": ("typescript", "tsx")}
 
 
 def execute(operation, family, dialect, texts, request_id):
-    if family != "json" or dialect not in ("json", "jsonc", "json5") or operation not in ROLES:
+    json_family = family == "json" and dialect in ("json", "jsonc", "json5")
+    owner_family = operation == "merge3" and dialect in OWNER_DIALECTS.get(family, ())
+    if operation not in ROLES or not (json_family or owner_family):
         raise ValueError("unsupported typed benchmark combination")
     if len(texts) != len(ROLES[operation]):
         raise ValueError("incorrect source count")
-    language = "json" if dialect == "json" else "json5"
+    language = ("json" if dialect == "json" else "json5") if json_family else dialect
     backend = "benchmark.typed." + language
     if backend not in PARSERS:
         core.register_language_pack_parser(backend, language)
@@ -42,9 +46,11 @@ def execute(operation, family, dialect, texts, request_id):
         policy = core.OperationPolicy.from_merge3(core.ThreeWayMergePolicy(
             render_policy="source-preserving", fallback_policy="none", extra={}))
         provider, profile = "kernel.git.json", "kernel.git.json.v1"
+    if owner_family:
+        provider, profile = "kernel." + family, "kernel." + family + ".owners.v1"
     request = core.OperationRequest(schema="structuredmerge.operation-request/v1",
         request_id=request_id, operation=policy, sources=sources,
-        provider_selection=core.MergeProviderSelection(provider_id=provider, family="json",
+        provider_selection=core.MergeProviderSelection(provider_id=provider, family=family,
             dialect=dialect, profile_id=profile, required_capabilities=[operation], extra={}),
         parser_selection=core.OperationParserSelection(backend=backend, preference=[],
             required_capabilities=[], extra={}), extensions=[], metadata={}, extra={})

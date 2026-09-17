@@ -62,7 +62,9 @@ golden-master authority decisions remain separate.
 installed Python `structuredmerge-core` wheel. It contains transport only:
 JSON-family merge2 uses `kernel.json.nested.v1`, and merge3 uses the typed Git
 profile `kernel.git.json.v1` for review framing. TreeHaver owns language-pack
-parser registration; Rust owns all merge decisions. It does not import test
+parser registration; Rust owns all merge decisions. Bash, Go, Rust and
+TypeScript/TSX merge3 additionally select their typed `kernel.<family>.owners.v1`
+profiles. It does not import test
 fixtures, inspect benchmark oracles, invoke the old CLI or implement a fallback.
 
 Use the Python virtual environment from a successful
@@ -78,8 +80,10 @@ configuration above. Pass:
 For `dev`, supply both actual changed paths:
 `--changed-path workspace-scripts/typed_core_benchmark.py` and
 `--changed-path typed-benchmark-adapter.json`. The canonical corpus maps these
-to JSON-family coverage. Other families and metamorphic diff are explicitly
-unsupported in this initial descriptor, not silently delegated. File mode
+to the five implemented language-pack families. Other families, non-JSON merge2
+and metamorphic diff are explicitly unsupported in this descriptor, not silently
+delegated. The common owner profiles return typed conflicts but do not promise
+Git review framing; only the JSON merge3 path uses the typed Git profile. File mode
 preserves ours on an error and writes only Rust-produced output/review text;
 merge2 returns JSON without modifying input files. A persistent JSONL session
 uses the existing adapter-request/response v1 protocol. Verify it with the

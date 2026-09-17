@@ -311,6 +311,8 @@
 
 - Add an installed Python typed-core JSON adapter for the retained Slice 1023 benchmark, with cold-file and persistent-session protocols and explicit unsupported family coverage.
 
+- Extend the installed typed-core benchmark adapter to Bash, Go, Rust and TypeScript/TSX owner-profile merge3 without old CLI fallback; retain explicit unsupported operation coverage.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

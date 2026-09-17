@@ -77,6 +77,30 @@ class TypedBenchmarkProtocolTest(unittest.TestCase):
         self.assertEqual(response["output_base64"], "")
         self.assertNotIn("parse_error:", response["stderr"])
 
+    def test_owner_profiles_and_tsx_keep_native_provider_identity(self):
+        cases = [
+            ("bash", "bash", "a() { echo one; }\n"),
+            ("go", "go", "package main\nfunc a() int { return 1 }\n"),
+            ("rust", "rust", "fn a() -> i32 { 1 }\n"),
+            ("typescript", "typescript", "function a(): number { return 1; }\n"),
+            ("typescript", "tsx", "function View() { return <div />; }\n"),
+        ]
+        requests = []
+        for family, dialect, source in cases:
+            request = self.request("merge3", [source] * 3, dialect)
+            request["selector"] = {"family": family, "dialect": dialect}
+            requests.append(request)
+        process = self.run_driver(["benchmark-provider-session"], input="\n".join(map(json.dumps, requests)) + "\n")
+        self.assertEqual(process.returncode, 0, process.stderr)
+        responses = [json.loads(line) for line in process.stdout.splitlines()]
+        self.assertEqual(len(responses), len(cases))
+        for (family, dialect, source), response in zip(cases, responses):
+            with self.subTest(dialect=dialect):
+                self.assertEqual(response["status"], 0, response)
+                self.assertEqual(response["result"]["provider_id"], "kernel." + family)
+                self.assertEqual(response["result"]["profile_id"], "kernel." + family + ".owners.v1")
+                self.assertEqual(base64.b64decode(response["output_base64"]), source.encode())
+
 
 if __name__ == "__main__":
     unittest.main()
