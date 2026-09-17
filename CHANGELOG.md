@@ -24,6 +24,8 @@
 
 - Run the installed typed-core Ruby artifact gate across the six Ruby/platform CI combinations while retaining a separately labeled legacy checkout regression matrix.
 
+- Expand installed Python core artifact CI to Linux, macOS and Windows x64/ARM64 targets, retain Python 3.10 minimum-runtime coverage, and resolve exactly one wheel without shell-dependent wildcard expansion.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider

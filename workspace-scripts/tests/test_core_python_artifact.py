@@ -13,6 +13,22 @@ SPEC.loader.exec_module(ARTIFACT)
 
 
 class ArchiveValidationTest(unittest.TestCase):
+    def test_resolves_one_wheel_without_shell_expansion(self):
+        (ROOT / "tmp").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=ROOT / "tmp", prefix="wheel-path-test-") as directory:
+            path = Path(directory)
+            with self.assertRaisesRegex(ValueError, "exactly one wheel"):
+                ARTIFACT.resolve_wheel(path)
+            wheel = path / "core.whl"
+            wheel.touch()
+            self.assertEqual(ARTIFACT.resolve_wheel(path), wheel.resolve())
+            self.assertEqual(ARTIFACT.resolve_wheel(wheel), wheel.resolve())
+            with self.assertRaisesRegex(ValueError, "expected a wheel file"):
+                ARTIFACT.resolve_wheel(path / "*.whl")
+            (path / "other.whl").touch()
+            with self.assertRaisesRegex(ValueError, "exactly one wheel"):
+                ARTIFACT.resolve_wheel(path)
+
     def check(self, *, license_bytes=None, package="structuredmerge-core", extra=None, typing_files=True):
         (ROOT / "tmp").mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=ROOT / "tmp", prefix="wheel-audit-test-") as directory:

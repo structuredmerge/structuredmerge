@@ -51,11 +51,24 @@ def inspect_wheel(root, wheel):
     return metadata, license_files
 
 
+def resolve_wheel(value):
+    """Resolve one build output without depending on shell wildcard expansion."""
+    path = Path(value).resolve()
+    if path.is_dir():
+        wheels = sorted(path.glob("*.whl"))
+        if len(wheels) != 1:
+            raise ValueError(f"expected exactly one wheel in {path}; found {len(wheels)}")
+        path = wheels[0]
+    if not path.is_file() or path.suffix != ".whl":
+        raise ValueError(f"expected a wheel file: {path}")
+    return path
+
+
 def main():
     if len(sys.argv) != 2:
-        raise SystemExit("usage: check_core_python_artifact.py WHEEL")
+        raise SystemExit("usage: check_core_python_artifact.py WHEEL_OR_DIRECTORY")
     root = Path(__file__).resolve().parent.parent
-    wheel = Path(sys.argv[1]).resolve()
+    wheel = resolve_wheel(sys.argv[1])
     metadata, license_files = inspect_wheel(root, wheel)
     (root / "tmp").mkdir(exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix="core-python-artifact-", dir=root / "tmp"))

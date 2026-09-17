@@ -74,3 +74,19 @@ class CorePackagingWorkflowTest(unittest.TestCase):
                      "crates/structuredmerge-host-prototype-core/src/lib.rs",
                      "contracts/legacy-operation-migration.json"):
             self.assertTrue((self.root / path).is_file())
+
+    def test_python_installed_matrix_covers_planned_architectures(self):
+        job = self.jobs["typed-core-python-artifact"]
+        matrix = job["strategy"]["matrix"]["include"]
+        self.assertEqual(len(matrix), 7)
+        self.assertEqual({row["platform"] for row in matrix}, {
+            "linux-x64", "linux-arm64", "macos-x64", "macos-arm64",
+            "windows-x64", "windows-arm64",
+        })
+        self.assertEqual({row["python"] for row in matrix}, {"3.10", "3.14"})
+        self.assertEqual(job["runs-on"], "${{ matrix.runner }}")
+        self.assertFalse(job["strategy"]["fail-fast"])
+        self.assertEqual(job["env"]["STRUCTUREDMERGE_NATIVE_PYTHON"], "python")
+        gate = next(step for step in job["steps"] if "check_core_python_artifact.py" in step.get("run", ""))
+        self.assertNotIn("if", gate)
+        self.assertEqual(gate["run"], "python workspace-scripts/check_core_python_artifact.py tmp/core-wheels")
