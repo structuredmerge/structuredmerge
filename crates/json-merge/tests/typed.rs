@@ -30,13 +30,16 @@ impl Parser {
         }
     }
     fn parse(&self, text: &str, role: SourceRole) -> ParsedResult {
+        self.parse_with_id(text, role, &format!("{role:?}"))
+    }
+    fn parse_with_id(&self, text: &str, role: SourceRole, source_id: &str) -> ParsedResult {
         TreeHaverParseService::default()
             .parse_batch(
                 vec![ParseRequest {
                     schema: PARSE_REQUEST_SCHEMA.into(),
                     request_id: format!("{role:?}"),
                     source: source_input(
-                        format!("{role:?}"),
+                        source_id.into(),
                         role,
                         SourceEncoding::Utf8,
                         text.as_bytes().to_vec(),
@@ -59,6 +62,132 @@ impl Parser {
             .unwrap()
             .remove(0)
     }
+}
+
+#[test]
+fn owner_facts_use_native_spans_for_repeated_fragments_and_escaped_paths() {
+    let parser = Parser::new("json");
+    let source = "{\r\n \"é\": 0, \"a\": {\"x\":1}, \"b\": {\"x\":1}, \"~/\": [1,1]}";
+    let parsed = parser.parse(source, SourceRole::Source);
+    let analysis = typed::owner_analysis(&parsed, JsonDialect::Json).unwrap();
+    assert_eq!(analysis.source, *parsed.source.descriptor());
+    assert_eq!(analysis.family, typed::analyze(&parsed, JsonDialect::Json).unwrap());
+    assert_eq!(
+        analysis.owners.iter().map(|owner| owner.path.as_str()).collect::<Vec<_>>(),
+        ["", "/é", "/a", "/a/x", "/b", "/b/x", "/~0~1", "/~0~1/0", "/~0~1/1"]
+    );
+    for owner in &analysis.owners {
+        assert_eq!(owner.span, parsed.document.node(&owner.node_id).unwrap().span);
+        assert_eq!(owner.sha256, parsed.source.range_digest(owner.span.range.clone()).unwrap());
+        if let Some(parent_id) = &owner.parent_id {
+            let parent = analysis.owners.iter().find(|other| &other.id == parent_id).unwrap();
+            assert!(parent.span.range.start_byte <= owner.span.range.start_byte);
+            assert!(parent.span.range.end_byte >= owner.span.range.end_byte);
+        }
+    }
+    let first = &analysis.owners[3];
+    let second = &analysis.owners[5];
+    assert_eq!(first.sha256, second.sha256);
+    assert_ne!(first.node_id, second.node_id);
+    assert!(first.span.range.end_byte < second.span.range.start_byte);
+    assert_eq!(parsed.source.slice(second.span.range.clone()).unwrap(), b"\"x\":1");
+    assert_eq!(analysis.owners[6].match_key.as_deref(), Some("~/"));
+}
+
+#[test]
+fn exact_owner_diff_classifies_nested_changes_without_fragment_relocation() {
+    let parser = Parser::new("json");
+    let before = parser.parse(r#"{"a":{"x":1},"b":{"x":1},"gone":0}"#, SourceRole::Before);
+    let after = parser.parse(r#"{"a":{"x":1},"b":{"x":2},"new":0}"#, SourceRole::After);
+    let changes = typed::diff_owner_sources(&before, &after, JsonDialect::Json).unwrap();
+    assert_eq!(
+        changes.iter().map(|c| (c.path.as_str(), c.classification.as_str())).collect::<Vec<_>>(),
+        [
+            ("", "edited"),
+            ("/b", "edited"),
+            ("/b/x", "edited"),
+            ("/gone", "deleted"),
+            ("/new", "added")
+        ]
+    );
+    let nested = &changes[2];
+    assert_eq!(nested.before.as_ref().unwrap().span.range.start_byte, 18);
+    assert_eq!(nested.after.as_ref().unwrap().span.range.start_byte, 18);
+    assert!(changes[3].after.is_none());
+    assert!(changes[4].before.is_none());
+    let same = parser.parse(r#"{"a":{"x":1},"b":{"x":1},"gone":0}"#, SourceRole::After);
+    assert!(typed::diff_owner_sources(&before, &same, JsonDialect::Json).unwrap().is_empty());
+}
+
+#[test]
+fn exact_owner_diff_includes_scalar_roots_and_uses_positional_array_identity() {
+    let parser = Parser::new("json");
+    for (left, right) in [("1", "2"), ("{}", "[]"), ("true", "false")] {
+        let changes = typed::diff_owner_sources(
+            &parser.parse(left, SourceRole::Before),
+            &parser.parse(right, SourceRole::After),
+            JsonDialect::Json,
+        )
+        .unwrap();
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].path, "");
+        assert_eq!(changes[0].classification, "edited");
+    }
+    let changes = typed::diff_owner_sources(
+        &parser.parse("[1,2]", SourceRole::Before),
+        &parser.parse("[0,1,2]", SourceRole::After),
+        JsonDialect::Json,
+    )
+    .unwrap();
+    assert_eq!(
+        changes.iter().map(|c| (c.path.as_str(), c.classification.as_str())).collect::<Vec<_>>(),
+        [("", "edited"), ("/0", "edited"), ("/1", "edited"), ("/2", "added")]
+    );
+}
+
+#[test]
+fn owner_analysis_rejects_ambiguous_decoded_keys_and_diff_rejects_wrong_roles() {
+    let parser = Parser::new("json");
+    for source in [r#"{"x":1,"x":2}"#, r#"{"x":1,"\u0078":2}"#, r#"{"a":{"x":1,"x":2}}"#] {
+        assert!(
+            typed::owner_analysis(&parser.parse(source, SourceRole::Source), JsonDialect::Json)
+                .unwrap_err()
+                .contains("duplicate JSON owner identity")
+        );
+    }
+    let before = parser.parse("{}", SourceRole::Before);
+    let after = parser.parse("{}", SourceRole::After);
+    assert!(typed::diff_owner_sources(&after, &before, JsonDialect::Json).is_err());
+    assert!(typed::diff_owner_sources(&before, &before, JsonDialect::Json).is_err());
+    let same_id = parser.parse_with_id("{}", SourceRole::After, "Before");
+    assert!(
+        typed::diff_owner_sources(&before, &same_id, JsonDialect::Json)
+            .unwrap_err()
+            .contains("source IDs must be distinct")
+    );
+    let parser5 = Parser::new("json5");
+    assert!(
+        typed::owner_analysis(
+            &parser5.parse("{x:1,'x':2}", SourceRole::Source),
+            JsonDialect::Json5
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn owner_comparison_does_not_claim_to_cover_document_trivia() {
+    let parser = Parser::new("json5");
+    let before = parser.parse("// before\n{x:1}\n", SourceRole::Before);
+    let after = parser.parse("// after\n{x:1}\n\n", SourceRole::After);
+    let left = typed::owner_analysis(&before, JsonDialect::Json5).unwrap();
+    let right = typed::owner_analysis(&after, JsonDialect::Json5).unwrap();
+    assert_ne!(left.source.sha256, right.source.sha256);
+    assert_ne!(left.family.comment_regions, right.family.comment_regions);
+    assert!(typed::diff_owner_sources(&before, &after, JsonDialect::Json5).unwrap().is_empty());
+    let interior = parser.parse("// before\n{x: 1}\n", SourceRole::After);
+    let changes = typed::diff_owner_sources(&before, &interior, JsonDialect::Json5).unwrap();
+    assert_eq!(changes.iter().map(|c| c.path.as_str()).collect::<Vec<_>>(), ["", "/x"]);
 }
 
 #[test]

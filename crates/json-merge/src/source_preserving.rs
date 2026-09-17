@@ -22,6 +22,7 @@ pub(crate) enum JsonSemanticValue {
 
 #[derive(Clone, Debug)]
 pub(crate) struct JsonSyntaxMember {
+    pub node_id: String,
     pub key: String,
     pub pair_range: ByteRange,
     pub owned_region: OwnedSourceRegion,
@@ -334,6 +335,7 @@ fn build_object(
         let value = build_value(value_node, nodes)?;
         semantic.insert(key.clone(), value.semantic.clone());
         members.push(JsonSyntaxMember {
+            node_id: pair.id.clone(),
             key,
             pair_range: pair.span.range.clone(),
             owned_region: owned_region(pair),

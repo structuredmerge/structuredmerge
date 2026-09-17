@@ -4,6 +4,169 @@ use crate::{JsonAnalysis, JsonDialect, source_preserving::*};
 use ast_merge::{MergeResult, ThreeWayMergeResult};
 use tree_haver::{NormalizedTreeNode, service::ParsedResult, source::SourceRole};
 
+/// Nested source owners may overlap their descendants. They are comparison
+/// subjects, not a non-overlapping render partition. Array identity is positional.
+/// IDs are local to this analysis and must be qualified by its source descriptor.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct JsonOwnerFact {
+    pub id: String,
+    pub path: String,
+    pub kind: String,
+    pub node_id: String,
+    pub parent_id: Option<String>,
+    pub match_key: Option<String>,
+    pub span: tree_haver::SourceSpan,
+    pub sha256: String,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct JsonOwnerAnalysis {
+    pub source: tree_haver::source::SourceDescriptor,
+    pub owners: Vec<JsonOwnerFact>,
+    /// Legacy family comment/layout analysis retains its own native-node owner
+    /// namespace. It is not yet a Slice 1024 projection of `owners` above.
+    pub family: JsonAnalysis,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct JsonOwnerChange {
+    pub path: String,
+    pub classification: String,
+    pub before: Option<JsonOwnerFact>,
+    pub after: Option<JsonOwnerFact>,
+}
+
+pub fn owner_analysis(
+    parsed: &ParsedResult,
+    dialect: JsonDialect,
+) -> Result<JsonOwnerAnalysis, String> {
+    let document = document(parsed, dialect)?;
+    let mut owners = vec![];
+    let mut paths = std::collections::BTreeSet::new();
+    // Node ID and span are supplied together by family syntax analysis. Never
+    // search source text to relocate repeated or identical fragments.
+    let mut pending = vec![(
+        &document.root,
+        "".to_string(),
+        "root",
+        document.root.node_id.as_str(),
+        document.root.range.clone(),
+        None,
+        None,
+    )];
+    while let Some((value, path, kind, node_id, range, parent_id, match_key)) = pending.pop() {
+        if !paths.insert(path.clone()) {
+            return Err("duplicate JSON owner identity is ambiguous".into());
+        }
+        let node = parsed.document.node(node_id).ok_or("unresolved JSON owner node")?;
+        if node.span.range != range {
+            return Err("JSON owner range differs from native node".into());
+        }
+        let id = format!("json:{path}");
+        owners.push(JsonOwnerFact {
+            id: id.clone(),
+            path: path.clone(),
+            kind: kind.into(),
+            node_id: node_id.into(),
+            parent_id,
+            match_key,
+            span: node.span.clone(),
+            sha256: parsed.source.range_digest(range).map_err(|error| error.to_string())?,
+        });
+        for (index, element) in value.elements.iter().enumerate().rev() {
+            pending.push((
+                element,
+                format!("{path}/{index}"),
+                "element",
+                element.node_id.as_str(),
+                element.range.clone(),
+                Some(id.clone()),
+                Some(index.to_string()),
+            ));
+        }
+        for member in value.members.iter().rev() {
+            let key = member.key.replace('~', "~0").replace('/', "~1");
+            pending.push((
+                &member.value,
+                format!("{path}/{key}"),
+                "member",
+                member.node_id.as_str(),
+                member.pair_range.clone(),
+                Some(id.clone()),
+                Some(member.key.clone()),
+            ));
+        }
+    }
+    Ok(JsonOwnerAnalysis {
+        source: parsed.source.descriptor().clone(),
+        owners,
+        family: analyze_syntax(document, dialect),
+    })
+}
+
+/// Exact-source diff of nested owner subjects, including the root. An edited
+/// descendant also edits containing owners; this is not an edit script or a
+/// semantic array move detector. Equal text never supplies an owner's location.
+/// This helper deliberately excludes trivia outside the syntax root and is not
+/// a complete document diff. Common diff2 must also compare layout/comments.
+pub fn diff_owner_sources(
+    before: &ParsedResult,
+    after: &ParsedResult,
+    dialect: JsonDialect,
+) -> Result<Vec<JsonOwnerChange>, String> {
+    require_role(before, SourceRole::Before)?;
+    require_role(after, SourceRole::After)?;
+    if before.source.descriptor().source_id == after.source.descriptor().source_id {
+        return Err("JSON diff source IDs must be distinct".into());
+    }
+    let left = owner_analysis(before, dialect)?;
+    let right = owner_analysis(after, dialect)?;
+    let left = left
+        .owners
+        .into_iter()
+        .map(|owner| (owner.path.clone(), owner))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let right = right
+        .owners
+        .into_iter()
+        .map(|owner| (owner.path.clone(), owner))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let paths = left.keys().chain(right.keys()).collect::<std::collections::BTreeSet<_>>();
+    let mut changes = vec![];
+    for path in paths {
+        let before_owner = left.get(path);
+        let after_owner = right.get(path);
+        if let (Some(before_owner), Some(after_owner)) = (before_owner, after_owner) {
+            if before_owner.kind == after_owner.kind
+                && before
+                    .source
+                    .slice(before_owner.span.range.clone())
+                    .map_err(|e| e.to_string())?
+                    == after
+                        .source
+                        .slice(after_owner.span.range.clone())
+                        .map_err(|e| e.to_string())?
+            {
+                continue;
+            }
+        }
+        changes.push(JsonOwnerChange {
+            path: path.clone(),
+            classification: if before_owner.is_none() {
+                "added"
+            } else if after_owner.is_none() {
+                "deleted"
+            } else {
+                "edited"
+            }
+            .into(),
+            before: before_owner.cloned(),
+            after: after_owner.cloned(),
+        });
+    }
+    Ok(changes)
+}
+
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct JsonMergeExecution<T> {
     pub result: T,

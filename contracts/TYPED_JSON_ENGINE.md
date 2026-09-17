@@ -77,6 +77,34 @@ generated shared JSON fixtures and actual Ruby family/Git consumer migration.
 Those adapters' prototype calls and Ruby-owned diff decisions remain open. No
 public core API signature, parser default or publication authority changed.
 
+## Nested owner facts and bounded comparison (2026-09-17)
+
+`typed::owner_analysis` now returns source-qualified owner facts for the syntax
+root, every nested member and every array element. Members reference their actual
+native pair/member node; elements reference their value node. Byte spans must
+match those nodes exactly and carry source-byte digests. Parent references are
+owner IDs, paths use JSON Pointer escaping, and array identity is positional.
+Duplicate decoded keys fail explicitly instead of overwriting an owner in a map.
+Nested subjects overlap ancestors; they are not a render partition.
+
+`typed::diff_owner_sources` compares exact bytes at those spans in Rust. It
+classifies added/deleted/edited subjects, including scalar roots and containing
+ancestors. Equal fragments never supply locations. This is a Rust-only helper,
+not the common diff2 operation: comments and whitespace outside the syntax root
+are intentionally outside its comparison. The retained legacy family analysis
+has its own native-node owner namespace and line-based comment/layout records;
+it is not mislabeled as the common Slice 1024 analysis result.
+
+Five additional typed tests cover repeated fragments, escaped keys, Unicode/CRLF,
+native span/digest/parent consistency, nested changes, scalar roots, positional
+arrays, duplicate decoded keys, wrong roles, duplicate source IDs, and the
+outer-trivia limitation. Common analysis/diff2 still needs exact comment/layout
+projection and comparison plus evidence validation before consumer migration.
+No generated export or installed artifact was changed in this step.
+JSON's 24 unit, 14 fixture and 12 typed tests pass, alongside Git/core regression
+tests (native-runtime opt-in tests were not rerun in this step) and strict Clippy.
+Logs: `tmp/typed-json-owner-{regression,clippy}.log`.
+
 ## Installed verification (2026-09-17)
 
 Seven common-facade JSON tests pass, including canonical present/absent conflict

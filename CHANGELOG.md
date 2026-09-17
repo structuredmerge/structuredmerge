@@ -235,6 +235,8 @@
 
 - Execute explicit nested JSON/JSONC/JSON5 merge2 and merge3 requests through the typed common facade with shared TreeHaver selection, canonical conflict records, mandatory output verification and replay-checked render evidence.
 
+- Add Rust-owned JSON owner facts with parser-derived byte spans and a bounded exact-source owner comparison helper; reject ambiguous duplicate keys without claiming complete document diff coverage.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
