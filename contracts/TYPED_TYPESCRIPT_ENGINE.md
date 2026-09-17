@@ -102,8 +102,28 @@ and 98 generated cases. Package contents, reviewed API surfaces, Ruby linkage an
 RBS validation pass. Eight new test files were generated with the local Alef
 bridge; optional `poly fmt` was unavailable, so that formatting gate is not claimed.
 
-Actual Ruby TypeScript-provider migration remains next. These development artifacts
-do not establish source-gem distribution, the full platform matrix or publication
-readiness. No prototype files/logic were added and no Alef changes were pushed.
+## Ruby consumer migration
+
+Ruby main `1db86895d` migrates opt-in `rust.typescript` to the existing
+`Ast::Merge::TypedCoreProvider`. The compatibility name remains, but the adapter
+no longer inherits or loads the prototype. Both TypeScript and TSX are explicit
+dialects; all four operations use the typed kernel and existing TreeHaver registry.
+Native IDs/byte spans, canonical conflicts and actual verification are transported,
+not recomputed as host merge semantics. Neutral Git framing is accepted; custom
+labels/widths fail closed. Native defaults remain unchanged.
+
+All 55 TypeScript examples, including 18 focused provider cases, pass against the
+installed core without skips. Native merge3 comparisons cover functions, variables,
+comments, imports and JSX. Native incoming-preferred merge2 intentionally differs
+from typed current preference; both results are asserted and documented. Additional
+tests cover all four TSX operations and TypeScript JSX rejection, native wrapper
+spans after UTF-8, headers/imports/comments, deterministic no-op reparsing, import
+diffs and unsupported selectors/encoding. No prototype gem is loaded.
+
+Rust/Go/JSON/Bash regressions pass against the same installed artifact.
+Real Git integration also passes all 98 examples without pending cases, including
+the actual TypeScript clean and conflict paths.
+These local consumer tests do not establish source-gem distribution, the full platform matrix
+or publication readiness. No Alef changes were pushed.
 Full-language/golden-master/downstream, native compiler provider, platform/ABI,
 publication and default-authority gates remain separate.

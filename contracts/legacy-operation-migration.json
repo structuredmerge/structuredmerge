@@ -40,20 +40,13 @@
       "gap": "The opt-in Ruby adapter no longer inherits or loads the prototype. All 47 Rust examples, including 18 focused provider cases, pass against the installed core gem, along with Go/JSON/Bash regressions. Native three-way comparisons pass, including actual declaration reordering. Current-preferred merge2 intentionally differs from native incoming preference; both outcomes are asserted. Native IDs/spans and complete typed records replace legacy signatures. Full-language/golden-master, downstream, hosted/released-package and full lint/coverage gates remain open; native defaults remain unchanged."
     },
     {
-      "id": "family-analysis",
-      "methods": ["parse_typescript_analysis"],
-      "disposition": "retain_until_consumer_migration",
-      "consumers": ["ruby/gems/ast-merge/lib/ast/merge/rust_host_provider.rb", "ruby/gems/typescript-merge/lib/typescript/merge/rust_host_provider.rb"],
-      "replacement": "Typed analyze and diff2 operations in structuredmerge-core, using TreeHaver and Rust-owned family analysis/matching.",
-      "gap": "JSON, Bash, Go and Rust have migrated separately. The remaining TypeScript adapter still computes diff2 from owner maps and must move those decisions into Rust. parse_sources alone is syntax transport, not analysis."
-    },
-    {
-      "id": "family-merges",
-      "methods": ["merge_typescript_two_way", "merge_typescript_three_way"],
-      "disposition": "retain_until_consumer_migration",
-      "consumers": ["ruby/gems/ast-merge/lib/ast/merge/rust_host_provider.rb"],
-      "replacement": "Typed directional merge2 and base-aware merge3 request/result envelopes calling the existing family kernels.",
-      "gap": "JSON, Bash, Go and Rust have migrated separately. The remaining TypeScript engine and Ruby adapter still need typed orchestration and parity review. Preserve current/incoming direction, dialects, conflicts, diagnostics and source evidence; do not synthesize a base for merge2 or invent unsupported operations."
+      "id": "typescript-family",
+      "methods": ["parse_typescript_analysis", "merge_typescript_two_way", "merge_typescript_three_way"],
+      "disposition": "local_consumer_migrated",
+      "consumer_revision": "structuredmerge/structuredmerge-ruby@1db86895d",
+      "consumers": ["ruby/gems/typescript-merge/lib/typescript/merge/rust_host_provider.rb"],
+      "replacement": "Typed TypeScript/TSX analyze/diff2/merge2/merge3 using explicit grammar selection, native ownership and Rust-owned source verification.",
+      "gap": "All 55 TypeScript examples, including 18 focused provider cases, pass against the installed core with no skips or prototype dependency. Native TS/TSX merge3 comparisons pass; current-preferred merge2 intentionally differs from native incoming preference and both outcomes are asserted. Native IDs/spans, canonical conflicts and actual verification replace host-derived signatures and claims. JSON/Bash/Go/Rust regressions pass. Full-language/compiler, downstream, platform/ABI, hosted/released-package and lint/coverage gates remain open. Native defaults and generic legacy regression evidence are retained."
     },
     {
       "id": "git-driver",
