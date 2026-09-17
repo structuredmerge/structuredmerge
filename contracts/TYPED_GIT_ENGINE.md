@@ -48,8 +48,8 @@ rendering; altered classifications, bytes, provenance or omission fail validatio
 Compatible passive fields survive. No successful/failed JSON reparse is claimed
 for marker output, because no such parse was attempted.
 
-Generate shared binding fixtures,
-rebuild isolated artifacts, then migrate Ruby's opt-in Git provider and test real
+Shared fixtures and isolated artifacts are verified below. Next migrate Ruby's
+opt-in Git provider and test real
 Git write/leave-ours/error exits. Correct its current all-four-operations metadata
 at cutover; keep unimplemented operations unsupported. Retain canonical conflicts,
 render limitations and complete records across that boundary. Do not substitute
@@ -67,3 +67,22 @@ Common facade tests add clean results for all three dialects, canonical conflict
 replay/tampering and compatible fields, unrenderable cases, unsupported operations,
 unknown labels, injection/size/fallback rejection, parse errors and exported facade
 cancellation. Logs: `tmp/git-common-{operation-tests,regressions,clippy,generation,audits}.log`.
+
+## Shared installed binding verification (2026-09-17)
+
+Fixtures revision `9fbf97c` supplies nine authoritative Git cases to both generated
+targets. Helpers only register explicit parsers and construct typed requests.
+Cases cover clean JSON/JSONC/JSON5, exact selected-source CRLF/Unicode, custom
+markers/labels and canonical alternatives, the mixed-edit review limitation,
+absent/overlapping unrenderable conflicts, and invalid labels/marker widths.
+Rejected options explicitly report `classification_reached: false`.
+
+Rebuilt isolated artifacts pass: Python 35 runtime tests plus 35 generated cases;
+Ruby 31 runtime tests plus 32 generated cases. Both include the same nine Git cases.
+Wheel SHA-256: `0afa52e44d017e0d2568344a2576c0d434bab006b99a6084411ac7997ef83b93`.
+Gem SHA-256: `01ef616d521f2f4f9e84fab91c53e1148d280cc722e1c32e7baf5fdf989fbce4`.
+Logs: `tmp/git-shared-{generation,bindings,python-build,ruby-build,python-artifact,ruby-artifact,audits}.log`.
+Reviewed API baselines and all 14 audits pass. Optional `poly fmt` is absent;
+generation does not establish that formatting gate. These are local Linux binary
+artifact checks, not source-gem, multi-platform, publication, hosted-CI or Ruby
+Git consumer/protocol approval. No Alef changes were pushed.

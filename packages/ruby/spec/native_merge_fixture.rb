@@ -132,15 +132,21 @@ module NativeMergeFixture
     run_yaml_common("analyze", [source])
   end
 
-  def run_json_common(operation, dialect, sources)
+  def run_json_common(operation, dialect, sources, git_options = nil)
     provider_id = "ruby.fixture.json"
     StructuredmergeCore.register_language_pack_parser(provider_id, (dialect == "json") ? "json" : "json5")
     begin
       original = common_request(operation, sources)
+      policy = if git_options
+        StructuredmergeCore::OperationPolicy.from_merge3(StructuredmergeCore::ThreeWayMergePolicy.new(
+          render_policy: "source-preserving", conflict_marker_size: git_options[0], labels: {"ours" => git_options[1]}, extra: {}))
+      else
+        original.operation
+      end
       request = StructuredmergeCore::OperationRequest.new(schema: original.schema, request_id: original.request_id,
-        operation: original.operation, sources: original.sources, extensions: [], metadata: {}, extra: {},
-        provider_selection: StructuredmergeCore::MergeProviderSelection.new(provider_id: "kernel.json", family: "json", dialect: dialect,
-          profile_id: "kernel.json.nested.v1", required_capabilities: [operation], extra: {}),
+        operation: policy, sources: original.sources, extensions: [], metadata: {}, extra: {},
+        provider_selection: StructuredmergeCore::MergeProviderSelection.new(provider_id: git_options ? "kernel.git.json" : "kernel.json", family: "json", dialect: dialect,
+          profile_id: git_options ? "kernel.git.json.v1" : "kernel.json.nested.v1", required_capabilities: [operation], extra: {}),
         parser_selection: StructuredmergeCore::OperationParserSelection.new(backend: provider_id, preference: [], required_capabilities: [], extra: {}))
       StructuredmergeCore.execute_operation(request, merge_limits)
     ensure
@@ -162,6 +168,10 @@ module NativeMergeFixture
 
   def run_json_common_merge3(dialect, base, ours, theirs)
     run_json_common("merge3", dialect, [base, ours, theirs])
+  end
+
+  def run_git_common_merge3(dialect, base, ours, theirs, marker_size, ours_label)
+    run_json_common("merge3", dialect, [base, ours, theirs], [marker_size, ours_label])
   end
 
   def run_yaml_common_diff(before, after)

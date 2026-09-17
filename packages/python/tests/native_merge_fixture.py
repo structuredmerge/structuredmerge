@@ -25,15 +25,18 @@ def run_python_common_analyze(source):
     return run_python_common("analyze", [source])
 
 
-def run_json_common(operation, dialect, sources):
+def run_json_common(operation, dialect, sources, git_options=None):
     provider_id = "python.fixture.json"
     core.register_language_pack_parser(provider_id, "json" if dialect == "json" else "json5")
     try:
         original = TypedParserHostTest().common_request(operation, sources)
+        policy = original.operation if git_options is None else core.OperationPolicy.from_merge3(
+            core.ThreeWayMergePolicy(render_policy="source-preserving", conflict_marker_size=git_options[0],
+                labels={"ours": git_options[1]}, extra={}))
         request = core.OperationRequest(schema=original.schema, request_id=original.request_id,
-            operation=original.operation, sources=original.sources, extensions=[], metadata={}, extra={},
-            provider_selection=core.MergeProviderSelection(provider_id="kernel.json", family="json", dialect=dialect,
-                profile_id="kernel.json.nested.v1", required_capabilities=[operation], extra={}),
+            operation=policy, sources=original.sources, extensions=[], metadata={}, extra={},
+            provider_selection=core.MergeProviderSelection(provider_id="kernel.json" if git_options is None else "kernel.git.json", family="json", dialect=dialect,
+                profile_id="kernel.json.nested.v1" if git_options is None else "kernel.git.json.v1", required_capabilities=[operation], extra={}),
             parser_selection=core.OperationParserSelection(backend=provider_id, preference=[], required_capabilities=[], extra={}))
         limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
         return core.execute_operation(request, limits)
@@ -55,6 +58,10 @@ def run_json_common_merge2(dialect, incoming, current):
 
 def run_json_common_merge3(dialect, base, ours, theirs):
     return run_json_common("merge3", dialect, [base, ours, theirs])
+
+
+def run_git_common_merge3(dialect, base, ours, theirs, marker_size, ours_label):
+    return run_json_common("merge3", dialect, [base, ours, theirs], (marker_size, ours_label))
 
 
 def run_python_common_diff(before, after):

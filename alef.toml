@@ -269,3 +269,15 @@ args = [
   { name = "ours", field = "input.ours", type = "string" },
   { name = "theirs", field = "input.theirs", type = "string" },
 ]
+
+[crates.e2e.calls.git_common_merge3]
+function = "run_git_common_merge3"
+module = "native_merge_fixture"
+args = [
+  { name = "dialect", field = "input.dialect", type = "string" },
+  { name = "base", field = "input.base", type = "string" },
+  { name = "ours", field = "input.ours", type = "string" },
+  { name = "theirs", field = "input.theirs", type = "string" },
+  { name = "marker_size", field = "input.marker_size", type = "u64" },
+  { name = "ours_label", field = "input.ours_label", type = "string" },
+]
