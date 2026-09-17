@@ -81,7 +81,7 @@ fn exported_rust_operations_honor_selection_and_cancellation() {
     };
     let control = create_operation_control();
     control.cancel();
-    for operation in ["analyze", "diff2", "merge3"] {
+    for operation in ["analyze", "diff2", "merge2", "merge3"] {
         let mut input = request(operation, &[BASE; 3]);
         input.parser_selection.backend = Some("rust.facade".into());
         assert_eq!(
@@ -181,7 +181,7 @@ fn family_guard_precedes_shortcuts_and_does_not_fabricate_owner_decisions() {
 }
 
 #[test]
-fn unsupported_shapes_policies_and_directional_merge_fail_closed() {
+fn unsupported_shapes_and_policies_fail_closed() {
     for source in [
         "use std::fmt;\n",
         "impl X {}\nfn f() {}\n",
@@ -194,7 +194,6 @@ fn unsupported_shapes_policies_and_directional_merge_fail_closed() {
         assert!(!result.ok, "{source}");
         assert!(!result.diagnostics.is_empty());
     }
-    assert!(!run(request("merge2", &[OURS, BASE])).0.ok);
     let mut input = request("analyze", &[BASE]);
     input.provider_selection.dialect = Some("go".into());
     assert!(!run(input).0.ok);
@@ -202,6 +201,107 @@ fn unsupported_shapes_policies_and_directional_merge_fail_closed() {
     let OperationPolicy::Merge3(policy) = &mut input.operation else { panic!() };
     policy.conflict_marker_size = Some(8);
     assert!(!run(input).0.ok);
+}
+
+#[test]
+fn directional_rust_preserves_current_bytes_comments_and_module_scope() {
+    for (incoming, current, expected) in [
+        (
+            "fn f() { incoming(); }\nfn g() {}\n",
+            "fn f() { current(); }\n",
+            "fn f() { current(); }\nfn g() {}\n",
+        ),
+        (
+            "/// é added\nfn added() {}\nfn f() {}\n",
+            "//! module\n/// current f\nfn f() {} // inline\n// footer\n",
+            "//! module\n/// é added\nfn added() {}\n/// current f\nfn f() {} // inline\n// footer\n",
+        ),
+        (
+            "//! incoming module\n/// added\nfn added() {}\n",
+            "//! current module\n// footer\n",
+            "//! current module\n/// added\nfn added() {}\n// footer\n",
+        ),
+        (
+            "/*! incoming module */\n/** added */\nstruct T;\n",
+            "/*! current module */\n",
+            "/*! current module */\n/** added */\nstruct T;\n",
+        ),
+        (
+            "use std::fmt;\n/// first\nfn f() {}\n",
+            "use std::fmt;\n// footer\n",
+            "use std::fmt;\n/// first\nfn f() {}\n// footer\n",
+        ),
+        (
+            "fn f() {}\nuse std::fmt;\n// added\nfn g() {}\n",
+            "use std::fmt;\nfn f() { current(); } // inline\n// footer\n",
+            "use std::fmt;\nfn f() { current(); } // inline\n// added\nfn g() {}\n// footer\n",
+        ),
+        (
+            "const C: u8 = 1;\nenum E { A }\nfn f() {}\nmod m {}\nstatic S: u8 = 1;\nstruct T;\ntrait Q {}\ntype A = u8;\nunion U { x: u8 }\n",
+            "",
+            "const C: u8 = 1;\nenum E { A }\nfn f() {}\nmod m {}\nstatic S: u8 = 1;\nstruct T;\ntrait Q {}\ntype A = u8;\nunion U { x: u8 }\n",
+        ),
+        (
+            "fn f() {}\nfn g() {}\nuse std::fmt;\n",
+            "fn g() { current(); }\nuse std::fmt;\n",
+            "fn f() {}\nfn g() { current(); }\nuse std::fmt;\n",
+        ),
+        ("", "// footer", "// footer"),
+        (
+            "use std::io;\nfn f() { incoming(); }\n",
+            "use std::fmt;\nfn f() {}",
+            "use std::fmt;\nfn f() {}",
+        ),
+        (
+            "fn f() {}\r\nfn g() {}\r\n",
+            "fn f() { current(); }\r\n",
+            "fn f() { current(); }\r\nfn g() {}\r\n",
+        ),
+    ] {
+        let (result, _) = run(request("merge2", &[incoming, current]));
+        assert!(result.ok, "{incoming:?} into {current:?}: {:?}", result.diagnostics);
+        assert_eq!(result.output.as_deref(), Some(expected));
+        assert_eq!(result.verification.output_reparsed, Some(true));
+        assert_eq!(result.verification.directional_roles_preserved, Some(true));
+        assert_eq!(result.verification.base_participated, None);
+        let mut retained_current = vec![];
+        for region in result.verification.retained_source_regions.unwrap() {
+            let source =
+                if region.source_role == SourceRole::Incoming { incoming } else { current };
+            let output = &region.extra["output_range"];
+            assert_eq!(
+                &source.as_bytes()[region.range.start_byte..region.range.end_byte],
+                &expected.as_bytes()[output["start_byte"].as_u64().unwrap() as usize
+                    ..output["end_byte"].as_u64().unwrap() as usize]
+            );
+            if region.source_role == SourceRole::Current {
+                retained_current.extend_from_slice(
+                    &current.as_bytes()[region.range.start_byte..region.range.end_byte],
+                );
+            }
+        }
+        assert_eq!(retained_current, current.as_bytes());
+    }
+}
+
+#[test]
+fn directional_rust_rejects_unproven_dependencies_and_ambiguous_placement() {
+    for (incoming, current) in [
+        ("use std::io;\nfn g() {}\n", "use std::fmt;\nfn f() {}\n"),
+        ("use std::fmt;\nfn g() {}\n", "fn f() {}\n"),
+        ("fn b() {}\nfn new() {}\nfn a() {}\n", "fn a() {}\nfn b() {}\n"),
+        ("fn f() {} fn g() {}\n", "fn f() {}\n"),
+        ("fn f() {}\nfn g() {}", "fn f() {}\n"),
+        ("fn f() {}\nfn g() {}\n", "fn f() {}"),
+        ("impl T {}\nfn f() {}\n", "fn f() {}\n"),
+        ("#[test]\nfn f() {}\n", ""),
+        ("fn f() {}\nfn f() {}\n", "fn f() {}\n"),
+    ] {
+        let (result, _) = run(request("merge2", &[incoming, current]));
+        assert!(!result.ok, "{incoming:?} into {current:?}");
+        assert!(result.output.is_none());
+        assert_ne!(result.verification.output_reparsed, Some(true));
+    }
 }
 
 #[test]

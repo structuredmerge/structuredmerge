@@ -335,12 +335,14 @@ pub fn execute_native_operation(
     }
     let analyzer = if family == "go" && input.operation.kind() == OperationKind::Merge2 {
         go_merge::directional::owners as Analyzer
+    } else if family == "rust" && input.operation.kind() == OperationKind::Merge2 {
+        rust_merge::directional::owners as Analyzer
     } else {
         analyzer
     };
     let supported = match &input.operation {
         OperationPolicy::Merge2(policy) => {
-            matches!(family, "python" | "bash" | "go")
+            matches!(family, "python" | "bash" | "go" | "rust")
                 && policy.directional_merge == "template-into-current"
                 && policy.render_policy == "source-preserving"
                 && policy.extra.is_empty()
@@ -588,6 +590,8 @@ pub fn execute_native_operation(
                 bash_merge::directional::plan_insertions
             } else if family == "go" {
                 go_merge::directional::plan_insertions
+            } else if family == "rust" {
+                rust_merge::directional::plan_insertions
             } else {
                 python_merge::directional::plan_insertions
             },

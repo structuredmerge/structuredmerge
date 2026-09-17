@@ -15,6 +15,7 @@ use tree_haver::{
 
 pub const PACKAGE_NAME: &str = "rust-merge";
 
+pub mod directional;
 pub mod typed;
 
 const RUST_SOURCE_PRESERVING_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[

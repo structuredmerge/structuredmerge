@@ -36,9 +36,9 @@ failure. Go's typed regressions protect behavior during shared-helper extraction
 
 ## Common operations
 
-`kernel.rust.owners.v1` selects `kernel.rust` for analyze, diff2 and merge3.
+`kernel.rust.owners.v1` selects `kernel.rust` for analyze, diff2, merge2 and merge3.
 Selection accepts only the Rust family and absent/Rust dialect. Unsupported
-selectors, policies, marker options and merge2 fail closed. Parsing uses the
+selectors, policies and marker options fail closed. Parsing uses the
 existing TreeHaver registry; no host prototype or alternate registry is involved.
 
 Analysis retains native references and revalidates embedded owner claims. Diff2
@@ -56,12 +56,40 @@ true for this family decision; generic `owner_classification` remains null.
 Messages/categories alone cannot establish this evidence. General foreign-parser
 authentication and full semantic validation remain separate gates.
 
-Seven common Rust tests cover facade selection/cancellation, analysis tampering,
+Nine common Rust tests cover facade selection/cancellation, analysis tampering,
 owner/use/comment diff, native merge3 parity and fresh output parsing, guarded
-addition/deletion and shortcut cases, unsupported syntax/policies/merge2, and
-forged guard evidence. Existing Go tests cover the shared projector regression.
+addition/deletion and shortcut cases, unsupported syntax/policies, directional
+insertion and forged guard evidence. Existing Go tests cover the shared projector
+regression. A family test rejects forged directional ownership even on no-op paths.
 
-Directional merge2, shared fixtures, installed Ruby/Python artifacts and actual
+## Directional merge2
+
+The Rust-owned planner implements `template-into-current` / `source-preserving`:
+retain every current byte and shared declaration, inserting incoming-only owners
+before the next shared anchor or before the current footer. Native top-level
+declarations define ownership. Native comments define trivia; inner documentation
+markers keep module docs at module scope, while outer docs and ordinary leading
+comments travel with additions. Inline comments stay on the preceding full line.
+Byte scanning only identifies newline framing, never Rust syntax.
+
+Use declarations are module-scoped barriers, including when interleaved with
+owners. Additions require the exact ordered use-declaration fragments to agree;
+the planner neither transfers imports nor resolves dependencies. No-addition
+requests preserve current even with differing imports or a missing final newline.
+Empty/comment/use-only documents are valid directional endpoints without widening
+analysis/merge3's supported-owner requirement. All nine existing owner kinds are
+supported; attributes/macros/impl blocks and duplicate identities remain rejected.
+Reordered shared anchors with additions, same-line declarations and missing newline
+boundaries fail closed. Separators are never fabricated as source retention.
+
+The shared executor verifies a fresh output parse, owner order/fingerprints and
+the exact source partition. Tests check current-byte retention, Unicode/CRLF,
+all nine declaration kinds, interleaved imports, inner/outer line/block docs,
+empty endpoints, no-op import differences and unsupported placement/dependencies.
+These are structural/source guarantees, not Rust compilation or semantic name
+resolution guarantees, nor a claim of parity with legacy directional precedence.
+
+Shared fixtures, installed Ruby/Python artifacts and actual
 Ruby consumer migration remain next. Source API checks are not artifact tests.
 Full language/golden-master/downstream authority, native parser promotion,
 publication and default approval remain separate gates.

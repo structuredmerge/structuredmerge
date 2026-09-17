@@ -79,6 +79,37 @@ const OURS: &str = "use std::fmt;\n\nfn left() -> i32 { 2 }\n\nfn right() -> i32
 const THEIRS: &str = "use std::fmt;\n\nfn left() -> i32 { 1 }\n\nfn right() -> i32 { 2 }\n";
 
 #[test]
+fn directional_planning_revalidates_documents_before_noop_selection() {
+    let parser = Parser::new("rust");
+    let incoming = parser.parse(BASE, SourceRole::Incoming);
+    let current = parser.parse(OURS, SourceRole::Current);
+    let mut incoming_owners = rust_merge::directional::owners(&incoming).unwrap();
+    let current_owners = rust_merge::directional::owners(&current).unwrap();
+    assert!(
+        rust_merge::directional::plan_insertions(
+            &incoming,
+            &incoming_owners,
+            &current,
+            &current_owners
+        )
+        .unwrap()
+        .is_empty()
+    );
+    incoming_owners.owners[0].fingerprint.push_str(" forged");
+    assert!(
+        rust_merge::directional::plan_insertions(
+            &incoming,
+            &incoming_owners,
+            &current,
+            &current_owners
+        )
+        .is_err()
+    );
+    let other = Parser::new("go").parse("package main\n", SourceRole::Incoming);
+    assert!(rust_merge::directional::owners(&other).is_err());
+}
+
+#[test]
 fn native_analysis_retains_all_supported_declaration_kinds_and_exact_references() {
     let parser = Parser::new("rust");
     let source = "use std::fmt;\n// é\nconst C: i32 = 1;\nenum E { A }\nfn f() {}\nmod m {}\nstatic S: i32 = 1;\nstruct T;\ntrait Q {}\ntype A = i32;\nunion U { x: i32 }\n";

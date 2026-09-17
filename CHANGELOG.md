@@ -265,6 +265,8 @@
 
 - Expose typed Rust declaration analysis, exact-source diff2 and guarded source-preserving merge3 through the common kernel API, with source-bound canonical membership conflicts and verified output reparsing.
 
+- Add current-preferred typed Rust merge2 with native declaration/comment ranges, module documentation preservation, exact use-declaration compatibility, and verified source retention.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
