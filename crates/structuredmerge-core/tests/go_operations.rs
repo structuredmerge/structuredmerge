@@ -81,7 +81,7 @@ fn exported_go_operations_honor_selection_and_cancellation() {
     };
     let control = create_operation_control();
     control.cancel();
-    for operation in ["analyze", "diff2", "merge3"] {
+    for operation in ["analyze", "diff2", "merge2", "merge3"] {
         let mut input = request(operation, &[BASE; 3]);
         input.parser_selection.backend = Some("go.facade".into());
         assert_eq!(
@@ -176,13 +176,9 @@ fn family_guard_is_a_whole_document_conflict_without_invented_owner_decisions() 
 
 #[test]
 fn unsupported_operations_syntax_selection_and_cancellation_remain_fail_closed() {
-    for input in
-        [request("merge2", &[BASE, OURS]), request("analyze", &["package main\nvar x=1\n"])]
-    {
-        let (result, _) = run(input);
-        assert!(!result.ok);
-        assert!(!result.diagnostics.is_empty());
-    }
+    let (result, _) = run(request("analyze", &["package main\nvar x=1\n"]));
+    assert!(!result.ok);
+    assert!(!result.diagnostics.is_empty());
     let mut input = request("analyze", &[BASE]);
     input.provider_selection.dialect = Some("bash".into());
     assert!(!run(input).0.ok);
@@ -196,6 +192,87 @@ fn unsupported_operations_syntax_selection_and_cancellation_remain_fail_closed()
     let result = native_operation::execute_native_operation(&input, &snapshot, &context).unwrap();
     assert!(!result.ok);
     assert!(result.analysis.is_none());
+}
+
+#[test]
+fn directional_go_retains_current_bytes_and_native_function_comments() {
+    for (incoming, current, expected) in [
+        (
+            "package main\nfunc f() { println(1) }\nfunc g() {}\n",
+            "package main\nfunc f() { println(9) }\n",
+            "package main\nfunc f() { println(9) }\nfunc g() {}\n",
+        ),
+        (
+            "package main\n\n// é new\nfunc added() {}\nfunc f() {}\n",
+            "// current module\npackage main\n\n// current f\nfunc f() { println(9) }\n// footer\n",
+            "// current module\npackage main\n\n// é new\nfunc added() {}\n\n// current f\nfunc f() { println(9) }\n// footer\n",
+        ),
+        (
+            "package main\n\n// first\nfunc f() {}\n",
+            "package main\n// footer\n",
+            "package main\n\n// first\nfunc f() {}\n// footer\n",
+        ),
+        ("package main\n", "package main\nfunc f() {}", "package main\nfunc f() {}"),
+        (
+            "package other\nfunc f() { println(1) }\n",
+            "package main\nfunc f() {}",
+            "package main\nfunc f() {}",
+        ),
+        (
+            "package main\nimport \"fmt\"\nfunc f() {}\n// g\nfunc g() { fmt.Println(1) }\n",
+            "package main\nimport \"fmt\"\nfunc f() {} // current\n// footer\n",
+            "package main\nimport \"fmt\"\nfunc f() {} // current\n// g\nfunc g() { fmt.Println(1) }\n// footer\n",
+        ),
+    ] {
+        let (result, _) = run(request("merge2", &[incoming, current]));
+        assert!(result.ok, "{incoming:?} into {current:?}: {:?}", result.diagnostics);
+        assert_eq!(result.output.as_deref(), Some(expected));
+        assert_eq!(result.verification.output_reparsed, Some(true));
+        assert_eq!(result.verification.directional_roles_preserved, Some(true));
+        assert_eq!(result.verification.base_participated, None);
+        let mut retained_current = vec![];
+        for region in result.verification.retained_source_regions.unwrap() {
+            let source =
+                if region.source_role == SourceRole::Incoming { incoming } else { current };
+            let output = &region.extra["output_range"];
+            assert_eq!(
+                &source.as_bytes()[region.range.start_byte..region.range.end_byte],
+                &expected.as_bytes()[output["start_byte"].as_u64().unwrap() as usize
+                    ..output["end_byte"].as_u64().unwrap() as usize]
+            );
+            if region.source_role == SourceRole::Current {
+                retained_current.extend_from_slice(
+                    &current.as_bytes()[region.range.start_byte..region.range.end_byte],
+                );
+            }
+        }
+        assert_eq!(retained_current, current.as_bytes());
+    }
+}
+
+#[test]
+fn directional_go_rejects_unproven_headers_and_ambiguous_placement() {
+    for (incoming, current) in [
+        ("package other\nfunc g() {}\n", "package main\nfunc f() {}\n"),
+        (
+            "package main\nimport \"fmt\"\nfunc g() { fmt.Println(1) }\n",
+            "package main\nfunc f() {}\n",
+        ),
+        (
+            "package main\nfunc b() {}\nfunc new() {}\nfunc a() {}\n",
+            "package main\nfunc a() {}\nfunc b() {}\n",
+        ),
+        ("package main\nfunc f() {}; func g() {}\n", "package main\nfunc f() {}\n"),
+        ("package main\nfunc g() {}", "package main\nfunc f() {}\n"),
+        ("package main\nfunc g() {}\n", "package main\nfunc f() {}"),
+        ("package main\nfunc g() {}\n", ""),
+        ("package main\nvar x=1\nfunc g() {}\n", "package main\nfunc f() {}\n"),
+    ] {
+        let (result, _) = run(request("merge2", &[incoming, current]));
+        assert!(!result.ok, "{incoming:?} into {current:?}");
+        assert!(result.output.is_none());
+        assert!(result.verification.retained_source_regions.is_none());
+    }
 }
 
 #[test]

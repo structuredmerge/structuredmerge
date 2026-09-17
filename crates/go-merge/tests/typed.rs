@@ -82,6 +82,35 @@ const THEIRS: &str =
     "package main\n\nfunc left() int { return 1 }\n\nfunc right() int { return 2 }\n";
 
 #[test]
+fn directional_planner_checks_native_owners_even_when_there_are_no_additions() {
+    let parser = Parser::new("go");
+    let incoming = parser.parse(BASE, SourceRole::Incoming);
+    let current = parser.parse(OURS, SourceRole::Current);
+    let mut incoming_owners = go_merge::directional::owners(&incoming).unwrap();
+    let current_owners = go_merge::directional::owners(&current).unwrap();
+    assert!(
+        go_merge::directional::plan_insertions(
+            &incoming,
+            &incoming_owners,
+            &current,
+            &current_owners
+        )
+        .unwrap()
+        .is_empty()
+    );
+    incoming_owners.owners.clear();
+    assert!(
+        go_merge::directional::plan_insertions(
+            &incoming,
+            &incoming_owners,
+            &current,
+            &current_owners
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn analysis_preserves_native_function_references_and_unowned_header_bytes() {
     let parser = Parser::new("go");
     let parsed = parser.parse(

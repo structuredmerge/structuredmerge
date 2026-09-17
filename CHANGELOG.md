@@ -259,6 +259,8 @@
 
 - Execute typed Go analysis, structural diffs and three-way merges through kernel.go.owners.v1; retain the Go ownership guard as a validated whole-document canonical conflict instead of bypassing it through generic merge orchestration.
 
+- Add current-preferred typed Go directional function insertion with native comment ranges, exact current-source retention and fresh output verification; reject mismatched package/import declarations for additions instead of silently dropping dependencies.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

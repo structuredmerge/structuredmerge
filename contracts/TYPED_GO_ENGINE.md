@@ -33,7 +33,7 @@ identity, exact bytes, selected backend and supported ownership are checked.
 Failed output verification cannot retain clean output or its source proof.
 
 The engine building block is now connected to common operations as described
-below. Directional merge2, shared installed binding fixtures and consumer migration
+below. Shared installed binding fixtures and consumer migration
 remain open. No legacy consumer is marked migrated; no default or publication
 authority is transferred.
 
@@ -47,10 +47,10 @@ check native reference identity. Test counts alone do not establish broad parity
 
 ## Common operation profile
 
-`kernel.go.owners.v1`, provider `kernel.go`, supports analyze, diff2 and merge3
+`kernel.go.owners.v1`, provider `kernel.go`, supports analyze, diff2, merge2 and merge3
 through the existing typed facade, parser registry, limits and cancellation.
 Selection permits an omitted dialect or explicit `go`. Unsupported constraints,
-marker options and merge2 reject; no directional base is fabricated.
+marker options reject; no directional base is fabricated.
 
 Analysis projects native owner IDs/spans, embedded parse facts and exact layout.
 Embedded validation reconstructs family ownership and rejects altered owner
@@ -77,3 +77,39 @@ shortcut hazard, forged guard messages/sources/provider identity, unsupported
 requests, cancellation and exported facade selection. Broader data-only semantic
 result verification, complete Go conformance and installed Ruby/Python evidence
 remain separate gates; executor projection checks are not foreign-result authentication.
+
+## Directional merge2
+
+The shared directional classifier, source renderer and verifier now execute a
+Go-owned function insertion planner. Current owners and every current byte are
+retained; only incoming-only functions are inserted at ordered shared anchors or
+before the current footer. Unlike legacy `merge_go`, output is not reconstructed
+by trimming and joining declarations/imports. Formatting/source retention is proved
+by source segments, with a fresh parse verifying owner order and fingerprints.
+
+Before insertion, both inputs must have identical native package/import declaration
+fragments in the same order. Different imports—including import formatting—reject
+additions rather than silently importing functions with unavailable dependencies.
+This is not import reconciliation, name resolution, type checking or a proof of
+whole-program validity. With no additions, current wins unchanged even if incoming
+headers differ; nothing from incoming is transferred in that case.
+
+Native root children recognize package/import-only directional endpoints. A missing
+package or unsupported declaration rejects. This does not widen analyze/merge3's
+existing owner requirements. Comments before the package remain module context;
+comments after the final package/import declaration travel with the first incoming
+function. Later gaps start after the preceding owner's full trailing line, keeping
+inline comments attached there. Current header/footer bytes are never replaced.
+
+Byte scans locate newline framing only; syntax, declaration identity and comment
+ranges come from native tree nodes. Reordered anchors with additions, overlapping
+or same-line placement, unowned code and absent newline boundaries reject without
+output. No separator, base revision or retention evidence is fabricated.
+
+All nine common Go tests pass, with directional cases covering current preference,
+Unicode comments, first-function comments, module/footer retention, package-only
+targets, matching imports, no-final-newline no-op, and rejected imports/package,
+syntax, anchors and framing. Each successful case checks exact source-segment bytes
+and complete ordered retention of current. A separate engine test rejects forged
+owner documents even on the no-additions fast path. Installed binding fixtures and
+actual Ruby migration are still required before marking this consumer migrated.
