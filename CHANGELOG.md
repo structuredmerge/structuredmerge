@@ -245,6 +245,8 @@
 
 - Generate and run shared JSON/JSONC/JSON5 operation fixtures through isolated installed Ruby and Python core bindings.
 
+- Add Rust typed Git merge3 rendering over validated TreeHaver inputs, retaining verified clean edits and replayable conflict-marker provenance with explicit review-artifact limitations.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

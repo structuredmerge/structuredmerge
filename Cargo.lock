@@ -58,6 +58,7 @@ dependencies = [
  "json-merge",
  "serde",
  "serde_json",
+ "tree-haver",
 ]
 
 [[package]]
