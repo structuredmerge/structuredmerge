@@ -1524,6 +1524,7 @@ dependencies = [
  "rbs-merge",
  "ruby-merge",
  "rust-merge",
+ "same-file",
  "serde",
  "serde_json",
  "structuredmerge-toml-merge",

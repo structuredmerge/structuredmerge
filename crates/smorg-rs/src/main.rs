@@ -17,6 +17,7 @@ use serde_json::json;
 
 mod benchmark_adapter;
 mod external_command;
+mod path_safety;
 
 const EXIT_SUCCESS: i32 = 0;
 const EXIT_UNRESOLVED_CONFLICT: i32 = 1;
@@ -210,6 +211,27 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
     let Some(options) = parse_merge_driver_options(args, stderr) else {
         return EXIT_USER_ERROR;
     };
+    if let Some(report) = &options.report_path {
+        match path_safety::report_is_distinct(
+            report,
+            &[
+                &options.ancestor,
+                &options.current,
+                &options.other,
+                options.output.as_deref().unwrap_or(&options.current),
+            ],
+        ) {
+            Ok(true) => {}
+            Ok(false) => {
+                let _ = writeln!(stderr, "report path aliases an input or merge output");
+                return EXIT_USER_ERROR;
+            }
+            Err(error) => {
+                let _ = writeln!(stderr, "cannot validate report path: {error}");
+                return EXIT_USER_ERROR;
+            }
+        }
+    }
     let ancestor_source = match fs::read_to_string(&options.ancestor) {
         Ok(source) => source,
         Err(error) => {

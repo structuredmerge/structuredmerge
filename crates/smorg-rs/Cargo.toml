@@ -23,6 +23,7 @@ ruby-merge = { version = "0.2.0", path = "../ruby-merge" }
 rust-merge = { version = "0.2.0", path = "../rust-merge" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+same-file = "1.0.6"
 toml-merge = { package = "structuredmerge-toml-merge", version = "0.2.0", path = "../toml-merge" }
 typescript-merge = { version = "0.2.0", path = "../typescript-merge" }
 yaml-merge = { version = "0.2.0", path = "../yaml-merge" }

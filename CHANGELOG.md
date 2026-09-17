@@ -396,3 +396,5 @@
 - Derive the typed Rust release dependency closure from Cargo metadata, validate it in CI and before release commands, and provide a side-effect-free release inventory listing.
 
 - Reject missing merge-driver option values and unknown required promotion statuses before output writes, preserving current files on malformed CLI and attribute policies.
+
+- Reject merge-driver report destinations that alias inputs or output, including hard links, symlinks, and new output paths, before any source or output writes.
