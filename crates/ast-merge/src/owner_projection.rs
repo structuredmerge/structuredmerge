@@ -27,10 +27,23 @@ pub fn project_named_top_level_owners(
     nodes: &[NormalizedTreeNode],
     policy: NamedOwnerProjectionPolicy<'_>,
 ) -> Result<SourcePreservingOwnerDocument, String> {
+    project_named_top_level_analysis(source, root_id, nodes, policy)
+        .map(|analysis| analysis.document)
+}
+
+/// Preserve native references at the moment the family establishes ownership.
+/// The original document-only API delegates here without changing its policy.
+pub fn project_named_top_level_analysis(
+    source: &str,
+    root_id: &str,
+    nodes: &[NormalizedTreeNode],
+    policy: NamedOwnerProjectionPolicy<'_>,
+) -> Result<crate::native_analysis::NativeOwnerAnalysis, String> {
     let index = NormalizedTreeIndex::new(nodes)?;
     let root = index.root(root_id)?;
     let mut owners = Vec::new();
     let mut owner_ids = HashSet::new();
+    let mut owner_node_ids = std::collections::BTreeMap::new();
 
     for top_level in index.children(root) {
         if top_level.role == NodeRole::Comment
@@ -55,6 +68,7 @@ pub fn project_named_top_level_owners(
             return Err(format!("{} owner {path:?} has no source fragment", policy.family));
         }
 
+        owner_node_ids.insert(path.clone(), vec![top_level.id.clone()]);
         owners.push(SourcePreservingOwner {
             id: path.clone(),
             path,
@@ -70,7 +84,10 @@ pub fn project_named_top_level_owners(
         return Err(format!("{} document has no supported top-level named owners", policy.family));
     }
 
-    Ok(SourcePreservingOwnerDocument { source: source.to_string(), owners })
+    Ok(crate::native_analysis::NativeOwnerAnalysis {
+        document: SourcePreservingOwnerDocument { source: source.to_string(), owners },
+        owner_node_ids,
+    })
 }
 
 fn resolve_owner_node<'a>(
@@ -246,6 +263,10 @@ mod tests {
         assert_eq!(document.owners[0].start_byte, 10);
         assert_eq!(document.owners[1].id, "/function:right");
         assert_eq!(document.owners[1].fingerprint, "fn right() {}");
+        let analysis = project_named_top_level_analysis(source, "root", &nodes, policy()).unwrap();
+        assert_eq!(analysis.document, document);
+        assert_eq!(analysis.owner_node_ids["/function:left"], ["left"]);
+        assert_eq!(analysis.owner_node_ids["/function:right"], ["right"]);
     }
 
     #[test]

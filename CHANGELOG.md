@@ -255,6 +255,8 @@
 
 - Implement typed directional Bash merge2 with current-preferred ownership, native-comment-aware insertion ranges, exact current-byte retention and fresh output verification; reject ambiguous placement instead of fabricating a three-way base.
 
+- Add validated TreeHaver-based Go owner analysis and three-way merge execution, preserving native node references, the existing membership/edit safety guard, exact-source evidence, and fresh output verification.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
