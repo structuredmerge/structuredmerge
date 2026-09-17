@@ -299,6 +299,8 @@
 
 - Dispatch smorg NAME to smorg-NAME on PATH with OS-native arguments and no implicit Unix shell fallback; add explicit benchmark-provider-merge3 while retaining positional benchmark compatibility in smorg-rs.
 
+- Add an installed-executable real Git merge gate over every canonical JSON driver case; it exposes the unresolved delete/edit review-rendering gap without skipping that fixture.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
