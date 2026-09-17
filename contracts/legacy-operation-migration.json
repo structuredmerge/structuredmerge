@@ -90,7 +90,7 @@
       "disposition": "retain_until_consumer_migration",
       "consumers": ["structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb"],
       "replacement": "Typed capability manifest and provider identity with observable availability, support and default authority.",
-      "gap": "native_merge_profiles is static scope introspection, not registry negotiation or a full manifest."
+      "gap": "operation_profile_catalog declares all eight common-operation profiles, operation sets, explicit dialects and syntax limits through Rust and generated Ruby/Python bindings. Listing never probes: parser availability remains unknown and default authority remains false. native_merge_profiles retains the two explicit merge entry points. Registry inventory and request-specific selection reports provide separate observations; a composed availability/support/authority manifest and consumer migration remain open."
     },
     {
       "id": "workflow-hosts",

@@ -345,34 +345,37 @@ pub fn execute_native_operation(
     } else {
         analyzer
     };
-    let supported = match &input.operation {
-        OperationPolicy::Merge2(policy) => {
-            matches!(family, "python" | "bash" | "go" | "rust" | "typescript")
-                && policy.directional_merge == "template-into-current"
-                && policy.render_policy == "source-preserving"
-                && policy.extra.is_empty()
-                && policy.fallback_policy.as_deref().is_none_or(|p| p == "none")
-        }
-        OperationPolicy::Analyze(policy) => crate::native_analysis_projection::supports(policy),
-        OperationPolicy::Merge3(policy) => {
-            policy.render_policy == "source-preserving"
-                && (!matches!(family, "bash" | "go" | "rust" | "typescript")
-                    || (policy.labels.is_none() && policy.conflict_marker_size.is_none()))
-                && policy.extra.is_empty()
-                && policy.fallback_policy.as_deref().is_none_or(|policy| policy == "none")
-        }
-        OperationPolicy::Diff2(policy) => {
-            policy.extra.is_empty()
-                && policy
-                    .comparison_profile
-                    .as_deref()
-                    .is_none_or(|profile| profile == "exact-source-owners")
-                && policy
-                    .equivalence
-                    .as_ref()
-                    .is_none_or(|rules| rules.is_empty() || rules == &["exact-source"])
-        }
-    };
+    let supported = crate::profiles::profile_operations(
+        input.provider_selection.profile_id.as_deref().unwrap_or(""),
+    )
+    .contains(&input.operation.kind())
+        && match &input.operation {
+            OperationPolicy::Merge2(policy) => {
+                policy.directional_merge == "template-into-current"
+                    && policy.render_policy == "source-preserving"
+                    && policy.extra.is_empty()
+                    && policy.fallback_policy.as_deref().is_none_or(|p| p == "none")
+            }
+            OperationPolicy::Analyze(policy) => crate::native_analysis_projection::supports(policy),
+            OperationPolicy::Merge3(policy) => {
+                policy.render_policy == "source-preserving"
+                    && (!matches!(family, "bash" | "go" | "rust" | "typescript")
+                        || (policy.labels.is_none() && policy.conflict_marker_size.is_none()))
+                    && policy.extra.is_empty()
+                    && policy.fallback_policy.as_deref().is_none_or(|policy| policy == "none")
+            }
+            OperationPolicy::Diff2(policy) => {
+                policy.extra.is_empty()
+                    && policy
+                        .comparison_profile
+                        .as_deref()
+                        .is_none_or(|profile| profile == "exact-source-owners")
+                    && policy
+                        .equivalence
+                        .as_ref()
+                        .is_none_or(|rules| rules.is_empty() || rules == &["exact-source"])
+            }
+        };
     let operation = match input.operation.kind() {
         OperationKind::Analyze => "analyze",
         OperationKind::Merge3 => "merge3",

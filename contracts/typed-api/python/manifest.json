@@ -1,11 +1,11 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "python",
-  "review_reason": "Add typed atomic replace_parser_host(host, expected_generation) returning the commit generation; required integer remains required after trait-bridge parameter.",
+  "review_reason": "Reviewed additive typed operation profile catalog and declaration DTOs; existing entry points unchanged",
   "files": {
-    "structuredmerge_core/__init__.py": "36c689a906e12be67fc3484abdefa28282abc76cfdd8653f1c55ca3337b006f5",
-    "structuredmerge_core/_native.pyi": "f94d5b8a5b6bfaad22c082f47ae79f45e7c1aa5ea25ffee2db28fdd23ca0c619",
-    "structuredmerge_core/api.py": "d58cb5084351f6c6bfaf4b06e7be2439bfca1300e7349ec476c4294c393a2e41",
+    "structuredmerge_core/__init__.py": "4048dbecd2a48ccd38fb6ad0f487fcb47e97fcff2d59345695287cb62366f2a7",
+    "structuredmerge_core/_native.pyi": "c096e27360a6c05e3361b60f22e0ed99fffb37e73dfb635ace4a893b161f17f5",
+    "structuredmerge_core/api.py": "141f155ad77d54a2532e68090a6f480adbeae87993bb5c322456faf41f9eb94c",
     "structuredmerge_core/exceptions.py": "25e61ce52e2e192df977a5f2ba7473dd6012e064c4bba38b05c15dc043201a29",
     "structuredmerge_core/options.py": "7de7598c211b0a2847fa9357fb60ddcc9e872f6044bf3f2ca496971e30990d25",
     "structuredmerge_core/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"

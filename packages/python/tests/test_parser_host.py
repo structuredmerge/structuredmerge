@@ -64,6 +64,35 @@ class LibCSTHost:
 
 
 class TypedParserHostTest(unittest.TestCase):
+    def test_common_operation_catalog_is_not_availability_or_authority(self):
+        probe_calls = []
+        def unexpected_probe(request):
+            probe_calls.append(request)
+            raise AssertionError("catalog must not probe")
+        self.host.probe_batch = unexpected_probe
+        generation = core.parser_registry_inventory().generation
+        catalog = core.operation_profile_catalog()
+        self.assertIsInstance(catalog, core.OperationProfileCatalog)
+        self.assertEqual(catalog.schema, "structuredmerge.operation-profile-catalog/v1")
+        self.assertEqual(len(catalog.profiles), 8)
+        ids = [profile.id for profile in catalog.profiles]
+        self.assertEqual(ids, sorted(ids))
+        for profile in catalog.profiles:
+            self.assertIsNone(profile.parser_available)
+            self.assertFalse(profile.approved_as_default)
+            self.assertTrue(profile.experimental)
+            self.assertEqual(profile.semantic_runtime, "rust")
+            self.assertTrue(profile.limitations)
+            operations = [str(operation) for operation in profile.operations]
+            expected = (["merge3"] if profile.provider_id == "kernel.git.json" else
+                        ["analyze", "diff2", "merge3"] if profile.provider_id == "kernel.yaml" else
+                        ["analyze", "diff2", "merge2", "merge3"])
+            self.assertEqual(operations, expected)
+        self.assertEqual(core.parser_registry_inventory().generation, generation)
+        self.assertEqual(probe_calls, [])
+        self.assertEqual(self.host.calls, 0)
+        self.assertEqual(len(core.native_merge_profiles()), 2)
+
     def test_atomic_replacement_during_callback_preserves_old_operation(self):
         replacement = LibCSTHost()
         generation = core.parser_registry_inventory().generation

@@ -293,6 +293,8 @@
 
 - Expose generation-checked atomic ParserHost replacement through Rust and generated Ruby/Python bindings, preserving in-flight snapshots and rejecting stale or unknown registrations.
 
+- Expose a typed, source-free operation profile catalog across Rust, Ruby and Python with declared operation sets, dialects and syntax limits; availability remains unprobed and default authority remains false.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

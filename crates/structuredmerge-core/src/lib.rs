@@ -51,7 +51,10 @@ pub use structural::*;
 mod templates;
 pub use templates::*;
 mod profiles;
-pub use profiles::{NativeMergeProfile, native_merge_profiles};
+pub use profiles::{
+    NativeMergeProfile, OperationProfileCatalog, OperationProfileDeclaration,
+    native_merge_profiles, operation_profile_catalog,
+};
 pub use tree_haver::parsed::{
     AttachmentHint, ChildEdge, Metadata, NativeExtension, ParseComment, ParseDiagnostic, ParseNode,
     ParseOutput, ParseSeverity,

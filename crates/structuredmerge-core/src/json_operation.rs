@@ -163,7 +163,11 @@ pub(crate) fn execute(
         }
         _ => "unsupported",
     };
-    if operation == "unsupported"
+    if !crate::profiles::profile_operations(
+        input.provider_selection.profile_id.as_deref().unwrap_or(""),
+    )
+    .contains(&input.operation.kind())
+        || operation == "unsupported"
         || input.provider_selection.provider_id.as_deref().is_some_and(|id| id != provider)
         || input.provider_selection.family.as_deref().is_some_and(|family| family != "json")
         || !input.provider_selection.extra.is_empty()

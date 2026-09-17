@@ -1,4 +1,5 @@
-//! Introspection for explicit native merge entry points, not registry negotiation.
+//! Static operation profile and native entry-point scope, not registry negotiation.
+use crate::OperationKind;
 use serde::{Deserialize, Serialize};
 
 pub(crate) const YAML_MAPPING: &str = "kernel.yaml.native_mapping.v1";
@@ -9,6 +10,137 @@ pub(crate) const BASH_OWNERS: &str = "kernel.bash.owners.v1";
 pub(crate) const GO_OWNERS: &str = "kernel.go.owners.v1";
 pub(crate) const RUST_OWNERS: &str = "kernel.rust.owners.v1";
 pub(crate) const TYPESCRIPT_OWNERS: &str = "kernel.typescript.owners.v1";
+
+const ALL_OPERATIONS: &[OperationKind] =
+    &[OperationKind::Analyze, OperationKind::Diff2, OperationKind::Merge2, OperationKind::Merge3];
+const YAML_OPERATIONS: &[OperationKind] =
+    &[OperationKind::Analyze, OperationKind::Diff2, OperationKind::Merge3];
+const GIT_OPERATIONS: &[OperationKind] = &[OperationKind::Merge3];
+
+pub(crate) fn profile_operations(id: &str) -> &'static [OperationKind] {
+    match id {
+        YAML_MAPPING => YAML_OPERATIONS,
+        GIT_JSON => GIT_OPERATIONS,
+        JSON_NESTED | PYTHON_DECLARATIONS | BASH_OWNERS | GO_OWNERS | RUST_OWNERS
+        | TYPESCRIPT_OWNERS => ALL_OPERATIONS,
+        _ => &[],
+    }
+}
+
+/// Static implemented profile scope, not a successful parser/merge observation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct OperationProfileDeclaration {
+    pub id: String,
+    pub provider_id: String,
+    pub family: String,
+    /// Explicit dialect selectors accepted in addition to an absent selector.
+    pub explicit_dialects: Vec<String>,
+    pub operations: Vec<OperationKind>,
+    pub semantic_runtime: String,
+    pub parser_contract: String,
+    pub required_native_extension: Option<String>,
+    /// None means not probed; listing a declaration never loads a parser.
+    pub parser_available: Option<bool>,
+    pub syntax_scope: Vec<String>,
+    pub limitations: Vec<String>,
+    pub experimental: bool,
+    pub approved_as_default: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct OperationProfileCatalog {
+    pub schema: String,
+    pub profiles: Vec<OperationProfileDeclaration>,
+}
+
+/// Declarations for execute_operation, distinct from the two existing explicit
+/// native entry points. All requests still undergo syntax/policy/parse checks.
+pub fn operation_profile_catalog() -> OperationProfileCatalog {
+    let native = native_merge_profiles();
+    let mut profiles = vec![];
+    for (id, provider, family, dialects, scope, limits) in [
+        (
+            BASH_OWNERS,
+            "kernel.bash",
+            "bash",
+            vec!["bash"],
+            "top-level functions, variable assignments and literal test_expect_success calls",
+            "whole owners only; dynamic titles, duplicate identities and unsupported top-level constructs fail closed",
+        ),
+        (
+            GIT_JSON,
+            "kernel.git.json",
+            "json",
+            vec!["json", "jsonc", "json5"],
+            "JSON-family three-way merges with Git review framing",
+            "merge3 only; conflict review output is not a partially resolved merge",
+        ),
+        (
+            GO_OWNERS,
+            "kernel.go",
+            "go",
+            vec!["go"],
+            "top-level function declarations as whole owners",
+            "no import reconciliation or nested-body merge; membership plus existing-owner edits conflict",
+        ),
+        (
+            JSON_NESTED,
+            "kernel.json",
+            "json",
+            vec!["json", "jsonc", "json5"],
+            "nested object members; arrays and scalar values as whole owners",
+            "duplicate identities and unsupported syntax fail closed; exact source/layout constraints remain operation-specific",
+        ),
+        (PYTHON_DECLARATIONS, "kernel.python", "python", vec![], "", ""),
+        (
+            RUST_OWNERS,
+            "kernel.rust",
+            "rust",
+            vec!["rust"],
+            "top-level const, enum, function, module, static, struct, trait, type and union declarations",
+            "no impl blocks, macro semantics or nested-body merge; membership plus existing-owner edits conflict",
+        ),
+        (
+            TYPESCRIPT_OWNERS,
+            "kernel.typescript",
+            "typescript",
+            vec!["typescript", "tsx"],
+            "named top-level declarations and supported single-owner wrappers; TSX uses its own grammar",
+            "no nested-body merge or compiler semantics; duplicate, multi-owner and unsupported nested wrappers fail closed",
+        ),
+        (YAML_MAPPING, "kernel.yaml", "yaml", vec![], "", ""),
+    ] {
+        let native_profile = native.iter().find(|profile| profile.id == id);
+        let mut limitations = native_profile
+            .map_or_else(|| vec![limits.into()], |profile| profile.limitations.clone());
+        limitations.push("declared operations still require supported policies, valid source-bound parser facts and operation-specific syntax".into());
+        if profile_operations(id).contains(&OperationKind::Merge2) {
+            limitations.push("merge2 is current-preferred template-into-current; unsupported ownership/layout plans fail closed".into());
+        }
+        profiles.push(OperationProfileDeclaration {
+            id: id.into(),
+            provider_id: provider.into(),
+            family: family.into(),
+            explicit_dialects: dialects.into_iter().map(str::to_string).collect(),
+            operations: profile_operations(id).to_vec(),
+            semantic_runtime: "rust".into(),
+            parser_contract: crate::service::PARSE_RESULT_SCHEMA.into(),
+            required_native_extension: native_profile
+                .map(|profile| profile.native_extension.clone()),
+            parser_available: None,
+            syntax_scope: native_profile
+                .map_or_else(|| vec![scope.into()], |profile| profile.syntax_scope.clone()),
+            limitations,
+            experimental: true,
+            approved_as_default: false,
+        });
+    }
+    profiles.sort_by(|left, right| left.id.cmp(&right.id));
+    OperationProfileCatalog {
+        schema: "structuredmerge.operation-profile-catalog/v1".into(),
+        profiles,
+    }
+}
 
 pub(crate) fn native_language<'a>(family: &'a str, dialect: Option<&str>) -> Option<&'a str> {
     match (family, dialect) {

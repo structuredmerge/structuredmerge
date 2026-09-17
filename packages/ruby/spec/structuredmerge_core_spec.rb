@@ -17,6 +17,42 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  it "lists common operation scope without probing or granting default authority" do
+    host = TypedPsychHost.new
+    probe_calls = 0
+    host.define_singleton_method(:probe_batch) do |_request|
+      probe_calls += 1
+      raise "catalog must not probe"
+    end
+    described_class.register_parser_host(host)
+    generation = described_class.parser_registry_inventory.generation
+    catalog = described_class.operation_profile_catalog
+    expect(catalog).to be_a(described_class::OperationProfileCatalog)
+    expect(catalog.schema).to eq("structuredmerge.operation-profile-catalog/v1")
+    expect(catalog.profiles.length).to eq(8)
+    ids = catalog.profiles.map(&:id)
+    expect(ids).to eq(ids.sort)
+    catalog.profiles.each do |profile|
+      expect(profile.parser_available).to be_nil
+      expect(profile.approved_as_default).to be(false)
+      expect(profile.experimental).to be(true)
+      expect(profile.semantic_runtime).to eq("rust")
+      expect(profile.limitations).not_to be_empty
+      operations = profile.operations.map(&:to_s)
+      case profile.provider_id
+      when "kernel.git.json" then expect(operations).to eq(["merge3"])
+      when "kernel.yaml" then expect(operations).to eq(["analyze", "diff2", "merge3"])
+      else expect(operations).to eq(["analyze", "diff2", "merge2", "merge3"])
+      end
+    end
+    expect(described_class.parser_registry_inventory.generation).to eq(generation)
+    expect(probe_calls).to eq(0)
+    expect(host.calls).to eq(0)
+    expect(described_class.native_merge_profiles.length).to eq(2)
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
   it "atomically replaces an in-flight parser and rejects stale generations" do
     replacement = TypedPsychHost.new
     original = TypedPsychHost.new

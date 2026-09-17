@@ -119,3 +119,27 @@ dispatch selects again and reports its own evidence. Eligibility does not prove
 that any particular source parses, that a merge profile supports it, or that the
 provider is approved as the default. Full merge capability/authority reporting
 remains separate.
+
+## Operation profile declarations
+
+`operation_profile_catalog()` returns a versioned, ID-sorted catalog of the eight
+profiles implemented by `execute_operation`. Each declaration records provider
+identity, family, accepted explicit dialects, operation kinds, parser contract,
+required native extension (if any), syntax scope and limitations. An absent
+dialect selector is accepted in addition to the listed explicit values. The
+operation-kind table is shared with dispatch: YAML omits merge2 and the Git JSON
+profile exposes merge3 only. Request policy and source checks still apply.
+
+This is static scope introspection: it neither probes registered providers nor
+loads grammars, and `parser_available` is always unknown (`None`/`nil`/`null`),
+never a guessed availability result. All profiles remain experimental and
+unapproved as defaults. Tests assert that listing leaves registry generation
+unchanged and does not invoke host probes or parse callbacks.
+
+The existing `native_merge_profiles()` remains the two explicit native merge3
+entry points; it is not renamed or expanded into this common-operation catalog.
+Neither listing is a full capability/authority manifest. Registry inventory
+describes registrations, selection reports observe request-specific parser
+eligibility, and execution supplies actual source/policy support evidence. A
+catalog declaration alone proves none of those later outcomes and does not
+authorize replacing a native consumer or changing its default provider.
