@@ -25,9 +25,44 @@ descriptor/capacity bounds, and trait-object handles without serialization or
 clone requirements. Full `ast-merge` tests and strict Clippy pass; see
 `tmp/merge-registry-full-tests.log` (562 tests, no failures or ignored tests).
 
+## Source-free two-stage selection
+
+`ast_merge::provider_selection::negotiate_merge_provider` filters these
+declarations by explicit provider ID or workflow role, family, operation,
+dialect, merge profile, capability and preservation requirements. It passes
+provider parser constraints to `TreeHaverParseService`, rejecting candidates
+without an eligible parser before ranking by explicit match, descending
+priority and stable ID. Every registered merge candidate remains in the trace;
+declaration-rejected candidates are not probed. The report retains both
+snapshot generations/digests and each attempted parser selection report.
+
+TreeHaver's `with_constraints` adds conjunctive constraints. It cannot replace
+or weaken application restrictions. Backend-ID/family allow/deny constraints,
+normalized contracts and required capabilities apply to both source-free
+observation and actual parse dispatch. Request preference still precedes
+language-profile preference, priority and stable backend ID.
+
+Parser language/dialect requirements are checked against the explicit parser
+query, not guessed from the merge-provider ID. Versioned parser-profile
+requirements currently fail closed: TreeHaver has language preference lists,
+not a versioned parser-profile catalog. This is a recorded missing capability,
+not proof of full Slice 1026 negotiation. Source-free selection does not call
+merge executors or establish source-specific support, runtime availability,
+execution ownership or default authority.
+
+New tests cover backend non-hijacking, registration-order independence,
+explicit-provider/backend failure without substitution, merge and preservation
+filters, parser-contract rejection before provider ranking, conjunctive
+constraints, preference order, callback faults, cancellation, and reentrant
+removal from both registries. A TreeHaver test verifies the same constraints
+govern `parse_batch` dispatch with an instrumented provider, not only reports.
+`tmp/negotiation-tests.log` records
+638 passed tests and five existing opt-in tests ignored, plus strict Clippy.
+
 This is not yet connected to the public typed-core facade or Alef bindings.
-Next implement the typed executor/WorkflowHost boundary, request/result
-validation, explicit execution ownership, merge-provider selection and
-TreeHaver negotiation using this foundation. Existing explicit kernel profiles
-are unchanged. No new package, prototype release dependency, registry-mode
-acceptance claim, or default promotion is introduced.
+Next connect the typed executor/WorkflowHost boundary to this selector, adding
+request/result validation, explicit execution ownership, host availability,
+allowed delegation and the portable capability envelope. Versioned parser
+profiles remain open. Existing explicit kernel profiles are unchanged. No new
+package, prototype release dependency, registry-mode acceptance claim, or
+default promotion is introduced.

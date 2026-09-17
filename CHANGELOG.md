@@ -333,6 +333,8 @@
 
 - Add the ast-merge merge-provider registry foundation with explicit workflow/backend declarations, bounded metadata, stable snapshot digests, and generation-checked replacement and retirement; registration alone grants no selection or default authority.
 
+- Add snapshot-bound merge-provider declaration filtering and deterministic ranking through TreeHaver parser negotiation; provider constraints apply conjunctively to both parser observations and dispatch without changing existing explicit kernel profiles.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

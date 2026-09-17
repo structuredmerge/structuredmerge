@@ -246,6 +246,54 @@ fn context() -> ExecutionContext {
 }
 
 #[test]
+fn provider_constraints_apply_to_both_observation_and_actual_parse_dispatch() {
+    let registry = ParserRegistry::default();
+    let blocked = Arc::new(TestParser::new("blocked", 100));
+    let allowed = Arc::new(TestParser::new("allowed", 0));
+    registry.register(blocked.clone()).unwrap();
+    registry.register(allowed.clone()).unwrap();
+    let service = TreeHaverParseService::default()
+        .with_constraints(ParserConstraints {
+            forbidden_backend_ids: vec!["blocked".into()],
+            required_contracts: vec![PARSE_RESULT_SCHEMA.into()],
+            required_capabilities: vec!["source_spans".into()],
+            ..ParserConstraints::default()
+        })
+        .unwrap();
+    let input = request("input");
+    let snapshot = registry.snapshot().unwrap();
+    let report = service
+        .selection_report(&ParserSelectionRequest::from(&input), &snapshot, &context())
+        .unwrap();
+    assert_eq!(report.selected_backend.as_deref(), Some("allowed"));
+    let output = service.parse_batch(vec![input.clone()], &snapshot, &context()).unwrap();
+    assert_eq!(output[0].selection, report);
+    assert_eq!(output[0].backend.id, "allowed");
+    assert_eq!(blocked.probes.load(Ordering::SeqCst), 0);
+    assert_eq!(blocked.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(allowed.calls.load(Ordering::SeqCst), 1);
+    let narrowed = service
+        .with_constraints(ParserConstraints {
+            allowed_backend_ids: vec!["blocked".into()],
+            ..ParserConstraints::default()
+        })
+        .unwrap();
+    assert!(
+        narrowed
+            .selection_report(&ParserSelectionRequest::from(&input), &snapshot, &context())
+            .unwrap()
+            .selected_backend
+            .is_none()
+    );
+    assert!(matches!(
+        narrowed.parse_batch(vec![input], &snapshot, &context()),
+        Err(ServiceError::Selection(_))
+    ));
+    assert_eq!(blocked.probes.load(Ordering::SeqCst), 0);
+    assert_eq!(allowed.calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
 fn atomic_replacement_is_generation_checked_and_preserves_old_snapshots() {
     let registry = ParserRegistry::default();
     let old = Arc::new(TestParser::new("replaceable", 0));

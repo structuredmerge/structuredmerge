@@ -431,9 +431,22 @@ pub enum ServiceError {
 
 /// Language-profile preferences are explicit service configuration, never a
 /// built-in package-name order. This initial implementation has no availability cache.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct TreeHaverParseService {
     profile_preferences: BTreeMap<String, Vec<String>>,
+    constraints: Vec<ParserConstraints>,
+}
+
+/// Provider-imposed hard constraints, shared by source-free selection and parse
+/// dispatch. They never replace explicit request selection or preference order.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ParserConstraints {
+    pub allowed_backend_ids: Vec<String>,
+    pub forbidden_backend_ids: Vec<String>,
+    pub allowed_backend_families: Vec<String>,
+    pub forbidden_backend_families: Vec<String>,
+    pub required_contracts: Vec<String>,
+    pub required_capabilities: Vec<String>,
 }
 
 pub trait ParseService: Send + Sync {
@@ -459,7 +472,38 @@ impl TreeHaverParseService {
         {
             return Err(ServiceError::InvalidRequest);
         }
-        Ok(Self { profile_preferences: preferences })
+        Ok(Self { profile_preferences: preferences, constraints: vec![] })
+    }
+
+    /// Add conjunctive constraints: a provider cannot weaken an existing
+    /// application constraint by supplying an empty or broader allowed set.
+    pub fn with_constraints(
+        mut self,
+        mut constraints: ParserConstraints,
+    ) -> Result<Self, ServiceError> {
+        for values in [
+            &mut constraints.allowed_backend_ids,
+            &mut constraints.forbidden_backend_ids,
+            &mut constraints.allowed_backend_families,
+            &mut constraints.forbidden_backend_families,
+            &mut constraints.required_contracts,
+            &mut constraints.required_capabilities,
+        ] {
+            if !ordered_ids_valid(values) {
+                return Err(ServiceError::InvalidRequest);
+            }
+            values.sort();
+        }
+        for (allowed, forbidden) in [
+            (&constraints.allowed_backend_ids, &constraints.forbidden_backend_ids),
+            (&constraints.allowed_backend_families, &constraints.forbidden_backend_families),
+        ] {
+            if allowed.iter().any(|id| forbidden.contains(id)) {
+                return Err(ServiceError::InvalidRequest);
+            }
+        }
+        self.constraints.push(constraints);
+        Ok(self)
     }
 }
 
@@ -502,6 +546,34 @@ impl TreeHaverParseService {
             if request.selection.backend_id.as_ref().is_some_and(|id| id != &descriptor.id) {
                 candidate.rejections.push("explicit_backend_mismatch".into());
             }
+            for constraints in &self.constraints {
+                for (value, allowed, forbidden, kind) in [
+                    (
+                        &descriptor.id,
+                        &constraints.allowed_backend_ids,
+                        &constraints.forbidden_backend_ids,
+                        "backend",
+                    ),
+                    (
+                        &descriptor.family,
+                        &constraints.allowed_backend_families,
+                        &constraints.forbidden_backend_families,
+                        "backend_family",
+                    ),
+                ] {
+                    if !allowed.is_empty() && !allowed.contains(value) {
+                        candidate.rejections.push(format!("provider_{kind}_not_allowed"));
+                    }
+                    if forbidden.contains(value) {
+                        candidate.rejections.push(format!("provider_{kind}_forbidden"));
+                    }
+                }
+                for contract in &constraints.required_contracts {
+                    if !descriptor.contracts.contains(contract) {
+                        candidate.rejections.push(format!("missing_contract:{contract}"));
+                    }
+                }
+            }
             if !descriptor.languages.contains(&request.language) {
                 candidate.rejections.push("unsupported_language".into());
             }
@@ -513,6 +585,9 @@ impl TreeHaverParseService {
                 candidate.rejections.push("unsupported_dialect".into());
             }
             let mut required = request.selection.required_capabilities.clone();
+            for constraints in &self.constraints {
+                required.extend(constraints.required_capabilities.clone());
+            }
             for (enabled, capability) in [
                 (request.options.comments, "comments"),
                 (request.options.tokens, "tokens"),
@@ -523,6 +598,8 @@ impl TreeHaverParseService {
                     required.push(capability.into());
                 }
             }
+            required.sort();
+            required.dedup();
             for capability in required {
                 if !descriptor.capabilities.contains(&capability) {
                     candidate.rejections.push(format!("missing_capability:{capability}"));
