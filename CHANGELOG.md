@@ -237,6 +237,8 @@
 
 - Add Rust-owned JSON owner facts with parser-derived byte spans and a bounded exact-source owner comparison helper; reject ambiguous duplicate keys without claiming complete document diff coverage.
 
+- Retain parser-node provenance through shared comment grouping and expose JSON comment coverage plus byte-exact blank-run layout evidence without changing legacy attachment behavior.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

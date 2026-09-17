@@ -26,6 +26,60 @@ pub struct CommentAugmentation {
     pub orphan_region_ids: Vec<String>,
 }
 
+/// Companion evidence, not a change to the legacy serialized augmentation.
+/// References are captured during grouping, never recovered by text matching.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NormalizedCommentEvidence {
+    pub augmentation: CommentAugmentation,
+    pub region_node_ids: std::collections::BTreeMap<String, Vec<String>>,
+    /// Native comments the existing attachment policy did not claim. Callers
+    /// must account for these before claiming complete comment ownership.
+    pub unclaimed_node_ids: Vec<String>,
+}
+
+pub fn augment_normalized_comments_with_evidence(
+    source: &str,
+    owners: &[LayoutOwner],
+    nodes: &[NormalizedTreeNode],
+    style: &str,
+    normalize_comment: impl Fn(&str) -> String,
+) -> Result<NormalizedCommentEvidence, String> {
+    let lines = source_lines(source);
+    let mut tracked = nodes
+        .iter()
+        .filter(|node| node.role == NodeRole::Comment)
+        .flat_map(|node| {
+            tracked_normalized_comment(&lines, node, &normalize_comment)
+                .into_iter()
+                .map(move |comment| (comment, node.id.clone()))
+        })
+        .collect::<Vec<_>>();
+    // augment_comments uses this same stable ordering. Equal-line comments keep
+    // their distinct native identities even when their source text is equal.
+    tracked.sort_by_key(|(comment, _)| comment.line);
+    let comments = tracked.iter().map(|(comment, _)| comment.clone()).collect::<Vec<_>>();
+    let mut region_node_ids = std::collections::BTreeMap::<String, Vec<String>>::new();
+    let mut claimed = HashSet::new();
+    let augmentation =
+        augment_comments_observed(&lines, owners, &comments, style, &mut |region, indices| {
+            let ids = region_node_ids.entry(region.to_string()).or_default();
+            for index in indices {
+                claimed.insert(*index);
+                let id = &tracked[*index].1;
+                if !ids.contains(id) {
+                    ids.push(id.clone());
+                }
+            }
+        })?;
+    let mut unclaimed_node_ids = vec![];
+    for (index, (_, id)) in tracked.iter().enumerate() {
+        if !claimed.contains(&index) && !unclaimed_node_ids.contains(id) {
+            unclaimed_node_ids.push(id.clone());
+        }
+    }
+    Ok(NormalizedCommentEvidence { augmentation, region_node_ids, unclaimed_node_ids })
+}
+
 pub fn augment_normalized_tree_comments(
     source: &str,
     root_id: &str,
@@ -197,6 +251,16 @@ pub fn augment_comments(
     comments: &[TrackedComment],
     style: &str,
 ) -> Result<CommentAugmentation, String> {
+    augment_comments_observed(lines, owners, comments, style, &mut |_, _| {})
+}
+
+fn augment_comments_observed(
+    lines: &[String],
+    owners: &[LayoutOwner],
+    comments: &[TrackedComment],
+    style: &str,
+    observed: &mut dyn FnMut(&str, &[usize]),
+) -> Result<CommentAugmentation, String> {
     validate_comments(lines, comments)?;
     let mut owners = owners.to_vec();
     owners.sort_by_key(|owner| (owner.start_line, owner.end_line, owner.owner_id.clone()));
@@ -240,6 +304,7 @@ pub fn augment_comments(
             style,
             true,
             leading_floating,
+            observed,
         );
         let inline_region_id = push_region(
             &mut regions,
@@ -251,6 +316,7 @@ pub fn augment_comments(
             style,
             false,
             false,
+            observed,
         );
         let trailing_region_id = push_region(
             &mut regions,
@@ -262,6 +328,7 @@ pub fn augment_comments(
             style,
             true,
             false,
+            observed,
         );
         claimed.extend(leading.iter().chain(&inline).chain(&trailing).copied());
         let layout_attachment =
@@ -289,8 +356,15 @@ pub fn augment_comments(
         })
         .map(|(index, _)| index)
         .collect::<Vec<_>>();
-    let postlude_region_id =
-        push_document_region(&mut regions, "postlude", &postlude, &comments, lines, style);
+    let postlude_region_id = push_document_region(
+        &mut regions,
+        "postlude",
+        &postlude,
+        &comments,
+        lines,
+        style,
+        observed,
+    );
     claimed.extend(postlude);
 
     let remaining = comments
@@ -308,7 +382,7 @@ pub fn augment_comments(
             && first_owner_start.is_some_and(|line| comments[*group.last().unwrap()].line < line);
         let kind = if is_preamble { "preamble" } else { "orphan" };
         if let Some(region_id) =
-            push_document_region(&mut regions, kind, &group, &comments, lines, style)
+            push_document_region(&mut regions, kind, &group, &comments, lines, style, observed)
         {
             if is_preamble {
                 preamble_region_id = Some(region_id);
@@ -414,6 +488,7 @@ fn push_region(
     style: &str,
     include_blank_lines: bool,
     floating: bool,
+    observed: &mut dyn FnMut(&str, &[usize]),
 ) -> Option<String> {
     push_region_for_owner(
         regions,
@@ -425,6 +500,7 @@ fn push_region(
         style,
         include_blank_lines,
         floating,
+        observed,
     )
 }
 
@@ -435,6 +511,7 @@ fn push_document_region(
     comments: &[TrackedComment],
     lines: &[String],
     style: &str,
+    observed: &mut dyn FnMut(&str, &[usize]),
 ) -> Option<String> {
     push_region_for_owner(
         regions,
@@ -446,6 +523,7 @@ fn push_document_region(
         style,
         true,
         false,
+        observed,
     )
 }
 
@@ -460,6 +538,7 @@ fn push_region_for_owner(
     style: &str,
     include_blank_lines: bool,
     floating: bool,
+    observed: &mut dyn FnMut(&str, &[usize]),
 ) -> Option<String> {
     if indices.is_empty() {
         return None;
@@ -472,6 +551,7 @@ fn push_region_for_owner(
         comments[*ordered.last().unwrap()].line
     );
     let mut nodes = Vec::new();
+    observed(&id, &ordered);
     let mut previous_line = None;
     for index in ordered {
         let comment = &comments[index];

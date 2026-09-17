@@ -23,9 +23,22 @@ pub struct JsonOwnerFact {
 pub struct JsonOwnerAnalysis {
     pub source: tree_haver::source::SourceDescriptor,
     pub owners: Vec<JsonOwnerFact>,
+    /// Exact native-node provenance for the existing family region decisions.
+    /// A multiline node can participate in multiple regions; callers must not
+    /// assume these references form disjoint emission ranges.
+    pub comment_region_node_ids: std::collections::BTreeMap<String, Vec<String>>,
+    pub unclaimed_comment_node_ids: Vec<String>,
+    /// Exact bytes of the legacy blank-run gaps (not all document trivia).
+    pub layout_gap_sources: std::collections::BTreeMap<String, JsonLayoutGapSource>,
     /// Legacy family comment/layout analysis retains its own native-node owner
     /// namespace. It is not yet a Slice 1024 projection of `owners` above.
     pub family: JsonAnalysis,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct JsonLayoutGapSource {
+    pub span: tree_haver::SourceSpan,
+    pub sha256: String,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -97,9 +110,46 @@ pub fn owner_analysis(
             ));
         }
     }
+    // Convert the existing line-based decisions using a byte line index. This
+    // indexes newline boundaries only; it does not discover syntax or comments.
+    let mut line_starts = vec![0];
+    line_starts.extend(
+        parsed
+            .source
+            .bytes()
+            .iter()
+            .enumerate()
+            .filter_map(|(index, byte)| (*byte == b'\n').then_some(index + 1)),
+    );
+    let mut layout_gap_sources = std::collections::BTreeMap::new();
+    for gap in &document.comment_augmentation.augmentation.gaps {
+        let start = gap
+            .start_line
+            .checked_sub(1)
+            .and_then(|index| line_starts.get(index))
+            .copied()
+            .ok_or("invalid JSON layout gap start line")?;
+        let end = line_starts.get(gap.end_line).copied().unwrap_or(parsed.source.bytes().len());
+        let range = tree_haver::ByteRange { start_byte: start, end_byte: end };
+        let span = tree_haver::SourceSpan {
+            start_point: parsed.source.point(start).map_err(|e| e.to_string())?,
+            end_point: parsed.source.point(end).map_err(|e| e.to_string())?,
+            range: range.clone(),
+        };
+        layout_gap_sources.insert(
+            gap.id.clone(),
+            JsonLayoutGapSource {
+                span,
+                sha256: parsed.source.range_digest(range).map_err(|e| e.to_string())?,
+            },
+        );
+    }
     Ok(JsonOwnerAnalysis {
         source: parsed.source.descriptor().clone(),
         owners,
+        comment_region_node_ids: document.comment_augmentation.region_node_ids.clone(),
+        unclaimed_comment_node_ids: document.comment_augmentation.unclaimed_node_ids.clone(),
+        layout_gap_sources,
         family: analyze_syntax(document, dialect),
     })
 }

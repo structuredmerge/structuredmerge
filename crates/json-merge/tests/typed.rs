@@ -191,6 +191,75 @@ fn owner_comparison_does_not_claim_to_cover_document_trivia() {
 }
 
 #[test]
+fn comment_provenance_preserves_identical_native_nodes_and_reports_unclaimed_comments() {
+    let parser = Parser::new("json5");
+    for source in [
+        "{/*same*/x:1,/*same*/y:2}",
+        "// pre\n{\n x: 1,\n // same\n y: 2\n}\n// post\n",
+        "{\n /* multiline\n comment */\n x: 1\n}",
+        "{} /* unclaimed */",
+    ] {
+        let parsed = parser.parse(source, SourceRole::Source);
+        let analysis = typed::owner_analysis(&parsed, JsonDialect::Json5).unwrap();
+        assert_eq!(analysis.family, typed::analyze(&parsed, JsonDialect::Json5).unwrap());
+        for region in &analysis.family.comment_regions {
+            let ids = &analysis.comment_region_node_ids[&region.id];
+            assert!(!ids.is_empty());
+            for id in ids {
+                let node = parsed.document.node(id).unwrap();
+                assert_eq!(node.role, tree_haver::NodeRole::Comment);
+                assert!(
+                    parsed.document.output().comments.iter().any(|comment| &comment.node_id == id)
+                );
+            }
+        }
+        let observed = analysis
+            .comment_region_node_ids
+            .values()
+            .flatten()
+            .chain(&analysis.unclaimed_comment_node_ids)
+            .collect::<std::collections::BTreeSet<_>>();
+        let expected = parsed
+            .document
+            .output()
+            .comments
+            .iter()
+            .map(|comment| &comment.node_id)
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(observed, expected);
+        if source.starts_with("{/*same*/") {
+            assert_eq!(analysis.comment_region_node_ids.values().flatten().count(), 2);
+            assert_eq!(observed.len(), 2);
+        }
+        if source.starts_with("{}") {
+            assert_eq!(analysis.unclaimed_comment_node_ids.len(), 1);
+        }
+    }
+}
+
+#[test]
+fn layout_gap_evidence_preserves_exact_crlf_and_final_whitespace_bytes() {
+    let parser = Parser::new("json5");
+    let parsed = parser.parse("\r\n{\"é\":1}\r\n \t\r\n\t", SourceRole::Source);
+    let analysis = typed::owner_analysis(&parsed, JsonDialect::Json5).unwrap();
+    assert_eq!(analysis.layout_gap_sources.len(), analysis.family.layout_gaps.len());
+    assert!(!analysis.layout_gap_sources.is_empty());
+    for gap in &analysis.family.layout_gaps {
+        let fact = &analysis.layout_gap_sources[&gap.id];
+        assert_eq!(fact.span.start_point.row + 1, gap.start_line);
+        assert_eq!(fact.sha256, parsed.source.range_digest(fact.span.range.clone()).unwrap());
+        let bytes = parsed.source.slice(fact.span.range.clone()).unwrap();
+        assert!(bytes.iter().all(u8::is_ascii_whitespace));
+    }
+    let suffix = analysis
+        .layout_gap_sources
+        .values()
+        .find(|fact| fact.span.range.end_byte == parsed.source.bytes().len())
+        .unwrap();
+    assert_eq!(parsed.source.slice(suffix.span.range.clone()).unwrap(), b" \t\r\n\t");
+}
+
+#[test]
 fn nested_directional_merge_preserves_current_and_reparses_once() {
     let parser = Parser::new("json");
     let current = parser.parse(

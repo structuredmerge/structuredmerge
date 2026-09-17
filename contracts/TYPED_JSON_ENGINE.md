@@ -105,6 +105,27 @@ JSON's 24 unit, 14 fixture and 12 typed tests pass, alongside Git/core regressio
 tests (native-runtime opt-in tests were not rerun in this step) and strict Clippy.
 Logs: `tmp/typed-json-owner-{regression,clippy}.log`.
 
+### Comment provenance and exact blank-run gaps
+
+The shared `ast-merge` comment augmenter now offers companion evidence captured
+while executing its existing grouping decisions. Each region retains the native
+comment node IDs that supplied its lines; repeated equal-text comments remain
+distinct. The legacy serialized augmentation and attachment policy are unchanged.
+The JSON owner analysis exposes this map and explicitly lists unclaimed native
+comments. A multiline node can contribute to more than one region or be partly
+unclaimed: the map is evidence, not a disjoint render partition.
+
+Existing blank-run layout decisions now have exact byte spans and digests in
+`layout_gap_sources`. Newline indexing preserves CRLF and final whitespace bytes;
+it does not discover comments or infer syntax from text. These gaps do not yet
+cover all document trivia. Common analysis still requires owner-namespace
+projection, complete comment coverage/ambiguity handling, attachment/controller
+validation and document-trivia comparison before exposing common JSON diff2.
+
+Two additional typed tests cover repeated same-line comments, multiline comments,
+unclaimed trailing comments and exact CRLF/final-whitespace gaps (14 typed tests
+total). Logs: `tmp/json-comment-provenance-{tests,clippy,workspace}.log`.
+
 ## Installed verification (2026-09-17)
 
 Seven common-facade JSON tests pass, including canonical present/absent conflict

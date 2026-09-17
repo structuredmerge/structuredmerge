@@ -1,11 +1,11 @@
 use std::collections::{BTreeMap, HashMap};
 
 use ast_merge::{
-    CommentAugmentation, ConflictAlternative, ConflictAlternativeState, Diagnostic,
-    DiagnosticCategory, DiagnosticSeverity, LayoutOwner, MergeConflict, MergeResult, NodeIdentity,
-    NodeSignature, OwnedSourceRegion, SequenceConflictCategory, SequenceMergeAnalysis,
+    ConflictAlternative, ConflictAlternativeState, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, LayoutOwner, MergeConflict, MergeResult, NodeIdentity, NodeSignature,
+    NormalizedCommentEvidence, OwnedSourceRegion, SequenceConflictCategory, SequenceMergeAnalysis,
     SequenceNode, SourceEdit, SourceRevision, ThreeWayMergeOutcome, ThreeWayMergeResult,
-    analyze_three_way_sequence, apply_source_edits, augment_normalized_comments_with_owners,
+    analyze_three_way_sequence, apply_source_edits, augment_normalized_comments_with_evidence,
 };
 use tree_haver::{
     ByteRange, NormalizedTreeNode, ParserRequest, parse_normalized_with_language_pack,
@@ -46,7 +46,7 @@ pub(crate) struct JsonSyntaxValue {
 pub(crate) struct JsonSyntaxDocument {
     pub source: String,
     pub root: JsonSyntaxValue,
-    pub comment_augmentation: CommentAugmentation,
+    pub comment_augmentation: NormalizedCommentEvidence,
 }
 
 pub(crate) fn parser_language(dialect: JsonDialect) -> &'static str {
@@ -155,9 +155,9 @@ pub(crate) fn analyze_syntax(document: JsonSyntaxDocument, dialect: JsonDialect)
         normalized_source: document.source,
         root_kind,
         owners,
-        comment_regions: document.comment_augmentation.regions,
-        layout_gaps: document.comment_augmentation.gaps,
-        comment_attachments: document.comment_augmentation.attachments,
+        comment_regions: document.comment_augmentation.augmentation.regions,
+        layout_gaps: document.comment_augmentation.augmentation.gaps,
+        comment_attachments: document.comment_augmentation.augmentation.attachments,
     }
 }
 
@@ -165,7 +165,7 @@ fn json_comment_augmentation(
     source: &str,
     root: &JsonSyntaxValue,
     nodes: &[NormalizedTreeNode],
-) -> Result<CommentAugmentation, String> {
+) -> Result<NormalizedCommentEvidence, String> {
     let owners = if root.members.is_empty() {
         root.elements
             .iter()
@@ -182,7 +182,7 @@ fn json_comment_augmentation(
     } else {
         owners
     };
-    augment_normalized_comments_with_owners(source, &owners, nodes, "slash_comment", |text| {
+    augment_normalized_comments_with_evidence(source, &owners, nodes, "slash_comment", |text| {
         normalize_json_comment(text)
     })
 }
