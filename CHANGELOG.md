@@ -269,6 +269,8 @@
 
 - Exercise all four typed Rust operations through shared Alef-generated Ruby/Python fixtures and isolated installed core-package tests.
 
+- Add typed TypeScript/TSX declaration analysis and source-preserving merge3 over validated TreeHaver facts, retaining native wrapper spans and fresh output verification without host merge logic.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

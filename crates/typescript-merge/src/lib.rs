@@ -13,6 +13,8 @@ use tree_haver::{
 
 pub const PACKAGE_NAME: &str = "typescript-merge";
 
+pub mod typed;
+
 const TYPESCRIPT_DECLARATION_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
     NamedOwnerKind { node_kind: "class_declaration", path_kind: "class" },
     NamedOwnerKind { node_kind: "enum_declaration", path_kind: "enum" },
@@ -326,20 +328,19 @@ fn parse_source_preserving_typescript(
     if !parsed.source_fragments_available {
         return Err("TypeScript parser did not retain source fragments".to_string());
     }
-    project_named_top_level_owners(
-        source,
-        &parsed.root_id,
-        &parsed.nodes,
-        NamedOwnerProjectionPolicy {
-            family: "TypeScript",
-            owner_kinds: TYPESCRIPT_DECLARATION_OWNER_KINDS,
-            ignored_kinds: &["import_statement"],
-            wrapper_kinds: &["export_statement", "ambient_declaration", "lexical_declaration"],
-            name_fields: &["name"],
-            fallback_name_kinds: &["identifier", "type_identifier"],
-            accept_any_named_kind: false,
-        },
-    )
+    project_named_top_level_owners(source, &parsed.root_id, &parsed.nodes, owner_policy())
+}
+
+fn owner_policy() -> NamedOwnerProjectionPolicy<'static> {
+    NamedOwnerProjectionPolicy {
+        family: "TypeScript",
+        owner_kinds: TYPESCRIPT_DECLARATION_OWNER_KINDS,
+        ignored_kinds: &["import_statement"],
+        wrapper_kinds: &["export_statement", "ambient_declaration", "lexical_declaration"],
+        name_fields: &["name"],
+        fallback_name_kinds: &["identifier", "type_identifier"],
+        accept_any_named_kind: false,
+    }
 }
 
 fn declaration_node<'a>(
