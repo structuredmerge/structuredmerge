@@ -374,3 +374,5 @@
 - Build the retained historical Ruby regression extension explicitly before checkout tests; keep this test-only step separate from typed-core artifact production and publication.
 
 - Reject successful typed JSON merge results with forged input parse evidence, unrelated output request IDs, or contradictory output parser-selection records.
+
+- Reject typed JSON diff and merge evidence that mixes registry snapshot generations or digests across input parsing and output verification.

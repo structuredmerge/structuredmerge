@@ -95,6 +95,8 @@ pub(crate) fn validate_render(
     expected_selection.backend_id = Some(selected.backend.id.clone());
     let candidates: Vec<_> = core.selection.candidates.iter().filter(|c| c.selected).collect();
     if core.backend != selected.backend
+        || core.selection.generation != selected.selection.generation
+        || core.selection.digest != selected.selection.digest
         || core.parsed.request_id != format!("{}:output", request.request().request_id)
         || core.selection.requested != expected_selection
         || candidates.len() != 1

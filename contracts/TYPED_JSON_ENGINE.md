@@ -66,6 +66,10 @@ the current/ours parser selection, and carry exactly one selected, available,
 loadable candidate with no rejection or probe fault. A matching backend name
 alone is insufficient evidence. These consistency checks do not authenticate a
 foreign parser or establish semantic authority for a supplied merge plan.
+All recorded input selections must agree on registry snapshot generation and
+digest; output verification must use that same snapshot. This also applies when
+TreeHaver selects a backend by policy rather than an explicit request. Mixing
+otherwise plausible parse records from different snapshots is invalid evidence.
 
 The preservation property is deliberately `exact-bytes-outside-executed-edits`,
 not preservation of every byte inside replaced owners. The existing engine may

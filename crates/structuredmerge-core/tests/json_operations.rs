@@ -479,6 +479,42 @@ fn common_directional_nested_json_has_replayed_source_evidence() {
 }
 
 #[test]
+fn common_json_policy_selection_preserves_one_registry_snapshot() {
+    for operation in ["diff2", "merge2", "merge3"] {
+        let texts = if operation == "merge3" { vec!["{}", "{}", "{}"] } else { vec!["{}", "{}"] };
+        let mut input = request(operation, "json", &texts);
+        input.parser_selection.backend = None;
+        input.parser_selection.preference = vec!["json.common".into()];
+        let (result, request) = run(input);
+        assert!(result.ok);
+        assert_eq!(
+            result.profile.parser.as_ref().unwrap().selection_mode.as_deref(),
+            Some("policy")
+        );
+        let snapshot = &result.extra["input_parses"][0]["selection"];
+        for parse in result.extra["input_parses"].as_array().unwrap() {
+            assert_eq!(parse["selection"]["generation"], snapshot["generation"]);
+            assert_eq!(parse["selection"]["digest"], snapshot["digest"]);
+        }
+        for field in ["generation", "digest"] {
+            let changed = if field == "generation" {
+                json!(snapshot[field].as_u64().unwrap() + 1)
+            } else {
+                json!("0".repeat(64))
+            };
+            let mut forged = result.clone();
+            forged.extra.get_mut("input_parses").unwrap()[1]["selection"][field] = changed.clone();
+            assert!(forged.validate_against(&request).is_err(), "{operation}: input {field}");
+            if operation != "diff2" {
+                let mut forged = result.clone();
+                forged.extra.get_mut("output_parse").unwrap()["selection"][field] = changed;
+                assert!(forged.validate_against(&request).is_err(), "{operation}: output {field}");
+            }
+        }
+    }
+}
+
+#[test]
 fn common_json_merge_rejects_forged_input_and_output_selection_evidence() {
     for operation in ["merge2", "merge3"] {
         let texts = if operation == "merge2" {

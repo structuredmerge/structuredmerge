@@ -167,6 +167,10 @@ pub(crate) fn validated_parses(
     if cores.len() != roles.len() || cores.is_empty() {
         return Err(Invalid);
     }
+    // Execution parses the entire request against one immutable registry snapshot.
+    // These fields prove internal consistency, not authenticity of a foreign report.
+    let generation = cores[0].selection.generation;
+    let digest = cores[0].selection.digest.clone();
     let selection = &input.parser_selection;
     let mut parses = vec![];
     for (core, role) in cores.into_iter().zip(roles) {
@@ -179,6 +183,8 @@ pub(crate) fn validated_parses(
         let candidates =
             core.selection.candidates.iter().filter(|c| c.selected).collect::<Vec<_>>();
         if core.schema != service::PARSE_RESULT_SCHEMA
+            || core.selection.generation != generation
+            || core.selection.digest != digest
             || !core.parsed.ok
             || core.parsed.request_id != format!("{}:{role:?}", input.request_id)
             || core.backend.id.is_empty()
