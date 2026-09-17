@@ -59,6 +59,13 @@ regions are independently byte-checked. Even selected-source/no-op paths report
 their actual source role. Failed semantic or parse verification discards the
 proof and output. The common result validator checks the edit replay, retained
 range projection and output parse against request/output bytes.
+Successful merge envelopes also validate every input parse against its ordered
+request role, identity, source bytes and parser selection, using the same checks
+as analyze/diff. Output verification must name this request's output parse, pin
+the current/ours parser selection, and carry exactly one selected, available,
+loadable candidate with no rejection or probe fault. A matching backend name
+alone is insufficient evidence. These consistency checks do not authenticate a
+foreign parser or establish semantic authority for a supplied merge plan.
 
 The preservation property is deliberately `exact-bytes-outside-executed-edits`,
 not preservation of every byte inside replaced owners. The existing engine may

@@ -83,11 +83,27 @@ pub(crate) fn validate_render(
     {
         return Err(Invalid);
     }
-    let inputs: Vec<CoreParseResult> =
-        serde_json::from_value(result.extra.get("input_parses").ok_or(Invalid)?.clone())
-            .map_err(|_| Invalid)?;
+    let dialect = match request.request().provider_selection.dialect.as_deref().unwrap_or("json") {
+        "json" => json_merge::JsonDialect::Json,
+        "jsonc" => json_merge::JsonDialect::Jsonc,
+        "json5" => json_merge::JsonDialect::Json5,
+        _ => return Err(Invalid),
+    };
+    let inputs = crate::json_diff::validated_parses(result, request, dialect)?;
     let selected = inputs.get(1).ok_or(Invalid)?;
-    if core.backend != selected.backend {
+    let mut expected_selection = selected.selection.requested.clone();
+    expected_selection.backend_id = Some(selected.backend.id.clone());
+    let candidates: Vec<_> = core.selection.candidates.iter().filter(|c| c.selected).collect();
+    if core.backend != selected.backend
+        || core.parsed.request_id != format!("{}:output", request.request().request_id)
+        || core.selection.requested != expected_selection
+        || candidates.len() != 1
+        || candidates[0].backend_id != core.backend.id
+        || !candidates[0].rejections.is_empty()
+        || candidates[0].available != Some(true)
+        || candidates[0].loadable != Some(true)
+        || candidates[0].probe_fault.is_some()
+    {
         return Err(Invalid);
     }
     let source = SourceDocument::validate(

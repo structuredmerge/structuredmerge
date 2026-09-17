@@ -479,6 +479,56 @@ fn common_directional_nested_json_has_replayed_source_evidence() {
 }
 
 #[test]
+fn common_json_merge_rejects_forged_input_and_output_selection_evidence() {
+    for operation in ["merge2", "merge3"] {
+        let texts = if operation == "merge2" {
+            vec!["{\"add\":1}", "{\"keep\":2}"]
+        } else {
+            vec!["{\"x\":0}", "{\"x\":0}", "{\"x\":1}"]
+        };
+        let (result, request) = run(request(operation, "json", &texts));
+        assert!(result.ok);
+        for mutation in 0..8 {
+            let mut forged = result.clone();
+            match mutation {
+                0 => {
+                    forged.extra.get_mut("input_parses").unwrap()[0]["parsed"]["source"]["sha256"] =
+                        json!("0".repeat(64))
+                }
+                1 => {
+                    forged.extra.get_mut("input_parses").unwrap()[0]["parsed"]["request_id"] =
+                        json!("another-request")
+                }
+                2 => {
+                    forged.extra.get_mut("input_parses").unwrap().as_array_mut().unwrap().pop();
+                }
+                3 => {
+                    forged.extra.get_mut("output_parse").unwrap()["parsed"]["request_id"] =
+                        json!("another-request")
+                }
+                4 => {
+                    forged.extra.get_mut("output_parse").unwrap()["selection"]["requested"]["backend_id"] =
+                        json!("wrong")
+                }
+                5 => {
+                    forged.extra.get_mut("output_parse").unwrap()["selection"]["candidates"] =
+                        json!([])
+                }
+                6 => {
+                    forged.extra.get_mut("output_parse").unwrap()["selection"]["candidates"][0]["available"] =
+                        json!(false)
+                }
+                _ => {
+                    forged.extra.get_mut("output_parse").unwrap()["selection"]["candidates"][0]["loadable"] =
+                        json!(false)
+                }
+            }
+            assert!(forged.validate_against(&request).is_err(), "{operation}, mutation {mutation}");
+        }
+    }
+}
+
+#[test]
 fn common_json_rejects_tampered_render_and_output_parse_evidence() {
     let (result, request) = run(request("merge2", "json", &["{\"add\":1}", "{\n\"keep\":2\n}"]));
     assert!(result.ok);

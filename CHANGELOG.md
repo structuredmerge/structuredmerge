@@ -372,3 +372,5 @@
 - Regenerate the typed Ruby core dispatcher with bounded interrupt-aware waits so an idle registered parser does not hang Ruby 3.2 interpreter shutdown.
 
 - Build the retained historical Ruby regression extension explicitly before checkout tests; keep this test-only step separate from typed-core artifact production and publication.
+
+- Reject successful typed JSON merge results with forged input parse evidence, unrelated output request IDs, or contradictory output parser-selection records.
