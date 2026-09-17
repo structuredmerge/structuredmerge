@@ -14,6 +14,7 @@
 
 owned_paths = [
   ".gitattributes",
+  "docs/reference/api-python.md",
   "docs/reference/api-ruby.md",
   "docs/reference/api-rust.md",
   "docs/reference/configuration.md",
@@ -21,6 +22,7 @@ owned_paths = [
   "docs/reference/types.md",
   "e2e/ruby/Gemfile",
   "packages/python/LICENSE",
+  "packages/python/README.md",
   "packages/python/structuredmerge_core/_native.pyi",
   "packages/python/structuredmerge_core/py.typed",
   "packages/ruby-core/Rakefile",
@@ -33,4 +35,5 @@ owned_paths = [
   "packages/ruby/sig/types.rbs",
   "packages/ruby/structuredmerge_core.gemspec",
   "packages/ruby/structuredmerge_host_prototype.gemspec",
+  "test_apps/ruby/Gemfile",
 ]

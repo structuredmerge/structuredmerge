@@ -321,6 +321,8 @@
 
 - Verify installed Python typed-core function parameter signatures and defaults against generated declarations through both native and public facade exports.
 
+- Generate Python package documentation and Ruby/Python typed-core consumer test applications.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
