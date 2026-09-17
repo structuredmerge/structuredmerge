@@ -17,6 +17,33 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  it "observes owned parser declarations without probing or changing registration" do
+    host = TypedPsychHost.new
+    def host.probe_batch(_request) = raise("inventory must not probe")
+    described_class.register_parser_host(host)
+    before = described_class.parser_registry_inventory
+    expect(before).to be_a(described_class::ParserRegistryInventory)
+    expect(before.schema).to eq("structuredmerge.parser-registry-inventory/v1")
+    ids = before.providers.map(&:id)
+    expect(ids).to eq(ids.sort)
+    expect(ids).to include("ruby.typed.psych")
+    before.providers.find { |provider| provider.id == "ruby.typed.psych" }.languages.clear
+    unchanged = described_class.parser_registry_inventory
+    expect(unchanged.providers.find { |provider| provider.id == "ruby.typed.psych" }.languages).to include("yaml")
+    expect(unchanged.generation).to eq(before.generation)
+    expect(unchanged.descriptor_digest).to eq(before.descriptor_digest)
+    described_class.unregister_parser_host("ruby.typed.psych")
+    removed = described_class.parser_registry_inventory
+    expect(removed.providers.map(&:id)).not_to include("ruby.typed.psych")
+    expect(removed.generation).to be > before.generation
+    expect(before.providers.map(&:id)).to include("ruby.typed.psych")
+    expect(host.calls).to eq(0)
+  ensure
+    if described_class.parser_registry_inventory.providers.any? { |provider| provider.id == "ruby.typed.psych" }
+      described_class.unregister_parser_host("ruby.typed.psych")
+    end
+  end
+
   it "executes nested JSON common merges in Rust with render and conflict evidence" do
     provider_id = "ruby.common.json"
     described_class.register_language_pack_parser(provider_id, "json")

@@ -208,8 +208,7 @@ pub(crate) fn registry() -> &'static ParserRegistry {
 
 /// Observe registered parser declarations without loading or probing providers.
 /// This is not an availability report, merge capability manifest or authority grant.
-pub fn parser_registry_inventory() -> Result<tree_haver::service::ParserRegistryInventory, CoreError>
-{
+pub fn parser_registry_inventory() -> Result<crate::ParserRegistryInventory, CoreError> {
     registry()
         .snapshot()
         .map(|snapshot| snapshot.inventory())

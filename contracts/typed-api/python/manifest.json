@@ -1,11 +1,11 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "python",
-  "review_reason": "Add opt-in native language-pack registration and provider-neutral removal; preserve host registration/removal behavior",
+  "review_reason": "Additive typed parser registry inventory DTO and zero-argument observation function; cached declarations only, no availability or authority claim.",
   "files": {
-    "structuredmerge_core/__init__.py": "dbd6816b5953f5b404ab7e07420da011ea08aa363dad07ae4d79b5a516d8b705",
-    "structuredmerge_core/_native.pyi": "b24bbae7ea0c2d20c0dcdf39b26be33a9d085bf5a791ce2d187b2ff3c1e4e42c",
-    "structuredmerge_core/api.py": "23284a0073cb294bf5e68e8ce40036e3a0ec608b1aa87536f28381e6de71ab19",
+    "structuredmerge_core/__init__.py": "c247ee11bba919ac2120829f0a3158b4a7d2a8115e048ed22cdcc8fb6ae32372",
+    "structuredmerge_core/_native.pyi": "c9155c4cc9dbd5e481ee12fd6e8837440c12de67672fd38ec692561bc398ad94",
+    "structuredmerge_core/api.py": "eddcf55b7fde5136a272abaf3a7fbd5b6691ddec8739c7244b7f4273f8e0b569",
     "structuredmerge_core/exceptions.py": "25e61ce52e2e192df977a5f2ba7473dd6012e064c4bba38b05c15dc043201a29",
     "structuredmerge_core/options.py": "7de7598c211b0a2847fa9357fb60ddcc9e872f6044bf3f2ca496971e30990d25",
     "structuredmerge_core/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"

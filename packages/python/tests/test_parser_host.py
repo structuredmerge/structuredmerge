@@ -64,6 +64,37 @@ class LibCSTHost:
 
 
 class TypedParserHostTest(unittest.TestCase):
+    def test_inventory_is_owned_and_does_not_probe(self):
+        class UnprobedHost(LibCSTHost):
+            def probe_batch(self, request):
+                raise AssertionError("inventory must not probe")
+
+        host = UnprobedHost()
+        core.unregister_parser_host("python.libcst")
+        core.register_parser_host(host)
+        try:
+            before = core.parser_registry_inventory()
+            self.assertIsInstance(before, core.ParserRegistryInventory)
+            self.assertEqual(before.schema, "structuredmerge.parser-registry-inventory/v1")
+            ids = [provider.id for provider in before.providers]
+            self.assertEqual(ids, sorted(ids))
+            self.assertIn("python.libcst", ids)
+            next(provider for provider in before.providers if provider.id == "python.libcst").languages.clear()
+            unchanged = core.parser_registry_inventory()
+            self.assertIn("python", next(provider for provider in unchanged.providers if provider.id == "python.libcst").languages)
+            self.assertEqual(unchanged.generation, before.generation)
+            self.assertEqual(unchanged.descriptor_digest, before.descriptor_digest)
+            core.unregister_parser_host("python.libcst")
+            removed = core.parser_registry_inventory()
+            self.assertNotIn("python.libcst", [provider.id for provider in removed.providers])
+            self.assertGreater(removed.generation, before.generation)
+            self.assertIn("python.libcst", [provider.id for provider in before.providers])
+            self.assertEqual(host.calls, 0)
+        finally:
+            if any(provider.id == "python.libcst" for provider in core.parser_registry_inventory().providers):
+                core.unregister_parser_host("python.libcst")
+            core.register_parser_host(self.host)
+
     def test_common_json_merges_execute_in_rust_with_edit_evidence_and_conflicts(self):
         provider_id = "python.common.json"
         core.register_language_pack_parser(provider_id, "json")

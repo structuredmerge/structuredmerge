@@ -40,9 +40,11 @@ availability. Removing and re-registering identical declarations restores the
 digest but advances the generation. Generations are local to a registry instance,
 not globally unique identities or timestamps.
 
-This initial inventory is Rust-only. Generated binding exposure, installed
-consumer tests, request-specific availability and the complete capability/authority
-manifest remain unfinished. Never infer that a listed parser is available,
+The same inventory DTO and observation function are exposed by the generated
+Ruby and Python bindings. Installed-consumer tests check cached declarations,
+owned-copy isolation and removal visibility with hosts that raise if probed.
+Request-specific availability and the complete capability/authority manifest
+remain unfinished. Never infer that a listed parser is available,
 loadable, semantically supported for a merge operation or approved as default.
 
 | Legacy operation | Typed direction and remaining work |
@@ -52,7 +54,7 @@ loadable, semantically supported for a merge operation or approved as default.
 | `unregister_parser_host` | Compatibility spelling of `unregister_parser_provider`, with snapshot retention. |
 | `parse_with_parser`, `parse_normalized_with_tslp` | Typed `parse_sources`, with explicit selection and validated source-bound results; migrated TreeHaver consumer. |
 | `replace_parser_host` | Still unimplemented as an atomic typed operation; remove/re-register must not be advertised as equivalent. |
-| `registered_parser_hosts` | Rust-only typed declaration inventory exists; generated binding exposure and full capability observability remain pending. |
+| `registered_parser_hosts` | Typed declaration inventory is exposed in Rust/Ruby/Python; full capability and request-specific availability observability remain pending. |
 | `probe_with_parser` | Typed service selection already probes internally; explicit public observability remains part of the capability contract, not a legacy JSON wrapper. |
 | `clear_parser_hosts` | No product need established by the local consumer inventory. Retain legacy regression evidence; prefer explicit removal of owned IDs and require an ownership/concurrency contract before adding process-wide destructive cleanup. |
 

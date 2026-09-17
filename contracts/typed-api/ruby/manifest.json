@@ -1,11 +1,11 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "ruby",
-  "review_reason": "Add opt-in native language-pack registration and provider-neutral removal; preserve host registration/removal behavior",
+  "review_reason": "Additive typed parser registry inventory DTO and zero-argument observation function; cached declarations only, no availability or authority claim.",
   "files": {
     "lib/structuredmerge_core/native.rb": "1958362029340a5786ed9762f1431dcdbcf0017626d262aede09db17eb2ea32f",
     "lib/structuredmerge_core/version.rb": "6cda1e4772dbebb74e509d2aefe2fcc1a9081782f9dd3f514f00a629c4211125",
     "lib/structuredmerge_core.rb": "defe67340887e4fcfecefc0a68d255fab86768e5c81260916819b636303f5cdf",
-    "sig/types.rbs": "1c043922d5a35d60736987dcda3f9f63f101c8e14990e23feb7b71bfa2ad14c5"
+    "sig/types.rbs": "83ad13f32a321fcfb32a415fd2dea2808b917836013440e43e4ca8c769f32bc4"
   }
 }

@@ -285,6 +285,8 @@
 
 - Expose a typed, non-loading parser registry inventory in Rust with cached provider declarations, snapshot generation and descriptor digest, without conflating registration with availability or default authority.
 
+- Expose the typed, non-loading parser registry inventory through generated Ruby and Python bindings, with installed-consumer tests for ownership, cached declarations, removal visibility, and no provider probes.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
