@@ -424,3 +424,5 @@
 - Declare frozen API review snapshots and retained legacy regression sources outside active Alef generation ownership, preserving independent API drift checks.
 
 - Correct generated Python struct constructor enum annotations and verify explicit enum inputs, optional None, and rejection of implicit string/int coercion in installed artifacts.
+
+- Generated Python capability assertions compare profile identifiers and parser-language strings exactly rather than case-folding indexed fields.

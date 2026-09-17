@@ -19,10 +19,11 @@ merge logic. Successful/faulted native probes and snapshot retirement remain in
 the installed boundary suites. This observation contract does not replace the
 spec's full Slice 1026 workflow-provider negotiation requirements.
 
-Current Alef output compares some nested Python string fields case-insensitively;
-Ruby comparisons are exact. Boolean/null eligibility and authority assertions
-are exact in both targets. Do not treat these Python identifier assertions as
-proof of case-sensitive wire identity; generator classification needs follow-up.
+Python capability identifiers and parser-language strings now use exact equality,
+as Ruby does. The local Alef correction removes index-zero access as evidence of
+an enum type; only explicit configuration or resolved type information enables
+enum coercion. Boolean/null eligibility and authority assertions remain exact in
+both targets. Upstream-only regeneration remains a separate open gate.
 
 The profile fixture checks native profile IDs, Rust execution ownership, and
 experimental/default-approval flags. The Python native-merge family additionally
