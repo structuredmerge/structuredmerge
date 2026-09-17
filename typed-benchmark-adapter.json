@@ -1,7 +1,7 @@
 {
   "schema_version": "structuredmerge.benchmark.adapter-descriptor/v1",
   "adapter": {
-    "adapter_id": "typed-core.python.language-pack",
+    "adapter_id": "typed-core.python.parsers",
     "implementation": "rust-via-python",
     "package": "structuredmerge-core",
     "package_version": "0.2.0",
@@ -15,24 +15,28 @@
       "package": "structuredmerge-core",
       "profile": "kernel.json.nested.v1 (merge2); kernel.git.json.v1 (merge3)"
       },
+      "python": {"provider_id": "kernel.python", "package": "structuredmerge-core", "profile": "kernel.python.native_declarations.v1"},
       "bash": {"provider_id": "kernel.bash", "package": "structuredmerge-core", "profile": "kernel.bash.owners.v1"},
       "go": {"provider_id": "kernel.go", "package": "structuredmerge-core", "profile": "kernel.go.owners.v1"},
       "rust": {"provider_id": "kernel.rust", "package": "structuredmerge-core", "profile": "kernel.rust.owners.v1"},
       "typescript": {"provider_id": "kernel.typescript", "package": "structuredmerge-core", "profile": "kernel.typescript.owners.v1"}
     },
     "parser_provider": {
-      "provider_id": "tree-sitter-language-pack",
-      "backend_family": "tree-sitter",
+      "provider_id": "tree-sitter-language-pack / python.libcst",
+      "backend_family": "tree-sitter / native",
       "selection_mode": "explicit",
-      "boundary": "installed Python binding / TreeHaver"
+      "boundary": "installed Python binding / TreeHaver; Python uses conformance-only LibCST callback",
+      "python_helper": "packages/python/tests/libcst_facts.py",
+      "python_dependency": "libcst==1.9.0"
     }
   },
   "supports": {
     "operations": ["merge2", "merge3"],
-    "families": ["bash", "go", "json", "rust", "typescript"],
-    "dialects": ["bash", "go", "json", "jsonc", "json5", "rust", "typescript", "tsx"],
+    "families": ["bash", "go", "json", "python", "rust", "typescript"],
+    "dialects": ["bash", "go", "json", "jsonc", "json5", "python", "rust", "typescript", "tsx"],
     "combinations": [
       {"family": "json", "operations": ["merge2", "merge3"], "dialects": ["json", "jsonc", "json5"]},
+      {"family": "python", "operations": ["merge2", "merge3"], "dialects": ["python"]},
       {"family": "bash", "operations": ["merge3"], "dialects": ["bash"]},
       {"family": "go", "operations": ["merge3"], "dialects": ["go"]},
       {"family": "rust", "operations": ["merge3"], "dialects": ["rust"]},

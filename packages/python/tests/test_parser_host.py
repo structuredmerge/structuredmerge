@@ -7,7 +7,6 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 import ast
-import importlib.metadata
 from pathlib import Path
 import sys
 import unittest
@@ -15,54 +14,9 @@ import tempfile
 import subprocess
 import textwrap
 
-import libcst
 import structuredmerge_core as core
 from structuredmerge_core import _native as native
-from libcst_facts import project
-
-
-class LibCSTHost:
-    def __init__(self):
-        self.calls = 0
-
-    def descriptor(self):
-        version = importlib.metadata.version("libcst")
-        return core.ParserProviderDescriptor(
-            id="python.libcst", family="native", runtime="python", package="libcst",
-            package_version=version, parser="libcst", parser_version=version,
-            languages=["python"], dialects=[], contracts=["structuredmerge.parse-result/v1"],
-            capabilities=["native_extensions", "source_spans"], probe_id="libcst.import", priority=0,
-            metadata={}, extensions=[], grammar=None, grammar_version=None,
-        )
-
-    def probe_batch(self, request):
-        assert isinstance(request, core.ProbeBatchRequest)
-        return core.ProbeBatchResult(items=[core.ParserProbeResult(available=True, loadable=True) for _ in request.items])
-
-    def parse_batch(self, request):
-        assert isinstance(request, core.ParseBatchRequest)
-        self.calls += 1
-        self.received_batch = request
-        outputs = []
-        for item in request.items:
-            data = bytes(item.source.bytes)
-            nodes, diagnostics = [], []
-            try:
-                module = libcst.parse_module(data)
-                assert module.bytes == data
-                nodes = project(module, data)
-            except libcst.ParserSyntaxError as error:
-                diagnostics.append(core.ParseDiagnostic(
-                    id="libcst.syntax", severity=core.ParseSeverity.ERROR, category="parse_error",
-                    message=str(error), source_role=item.source.descriptor.role, blocking=True,
-                    metadata={}, extra={}, code="libcst.syntax", span=None, node_id=None,
-                ))
-            outputs.append(native.ParseOutput(
-                request_id=item.request_id, source=item.source.descriptor, ok=not diagnostics,
-                root_id="0" if nodes else None, nodes=nodes, comments=[], diagnostics=diagnostics,
-                extensions=[], metadata={}, extra={},
-            ))
-        return core.ParseBatchResult(items=outputs)
+from libcst_facts import LibCSTHost
 
 
 class TypedParserHostTest(unittest.TestCase):

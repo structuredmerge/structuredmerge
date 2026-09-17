@@ -64,8 +64,14 @@ JSON-family merge2 uses `kernel.json.nested.v1`, and merge3 uses the typed Git
 profile `kernel.git.json.v1` for review framing. TreeHaver owns language-pack
 parser registration; Rust owns all merge decisions. Bash, Go, Rust and
 TypeScript/TSX merge3 additionally select their typed `kernel.<family>.owners.v1`
-profiles. It does not import test
-fixtures, inspect benchmark oracles, invoke the old CLI or implement a fallback.
+profiles. Python merge2/merge3 select `kernel.python.native_declarations.v1`
+through the real registered LibCST callback. The adapter explicitly loads the
+shared conformance projection in `packages/python/tests/libcst_facts.py`; this is
+not a shipped native-layer package. It does not inspect benchmark input fixtures
+or oracles, invoke the old CLI or implement a fallback. The LibCST helper reports
+syntax facts only; Rust owns identities, merge decisions and rendering. The
+Python corpus case retains its historical generic-provider label; the candidate
+result and descriptor report the actual native provider instead.
 
 Use the Python virtual environment from a successful
 `check_core_python_artifact.py` run. Prepend its `venv/bin` to PATH **after**
@@ -80,7 +86,9 @@ configuration above. Pass:
 For `dev`, supply both actual changed paths:
 `--changed-path workspace-scripts/typed_core_benchmark.py` and
 `--changed-path typed-benchmark-adapter.json`. The canonical corpus maps these
-to the five implemented language-pack families. Other families, non-JSON merge2
+to the five implemented language-pack families and Python. Include
+`--changed-path packages/python/tests/libcst_facts.py` when changing that helper.
+Other families, non-JSON/non-Python merge2
 and metamorphic diff are explicitly unsupported in this descriptor, not silently
 delegated. The common owner profiles return typed conflicts but do not promise
 Git review framing; only the JSON merge3 path uses the typed Git profile. File mode
@@ -94,7 +102,9 @@ python workspace-scripts/check_typed_benchmark_adapter.py
 ```
 
 Record the installed wheel digest/report and exact interpreter alongside driver,
-kernel, Ruby, fixtures, bundle-lock and raw result digests. Debug builds establish
+kernel, Ruby, fixtures, bundle-lock and raw result digests. For Python also record
+the conformance helper digest and installed LibCST version (the artifact gate
+pins 1.9.0). Debug builds establish
 no performance ranking. Expected parser failures use the existing diagnostic
 wire format `typed-core: parse_error: CODE: MESSAGE`. The initial adapter omitted
 the executable prefix, so the retained harness correctly treated its unrecognized

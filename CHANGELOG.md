@@ -313,6 +313,8 @@
 
 - Extend the installed typed-core benchmark adapter to Bash, Go, Rust and TypeScript/TSX owner-profile merge3 without old CLI fallback; retain explicit unsupported operation coverage.
 
+- Exercise LibCST-backed Python merge2 and merge3 through the installed typed-core benchmark adapter, reusing the conformance parser projection without a prototype package.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

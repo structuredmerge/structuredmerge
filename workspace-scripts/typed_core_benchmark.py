@@ -2,6 +2,7 @@
 """Installed typed-core adapter for the retained Slice 1023 harness, not a harness."""
 import base64
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -23,14 +24,26 @@ OWNER_DIALECTS = {"bash": ("bash",), "go": ("go",), "rust": ("rust",),
 def execute(operation, family, dialect, texts, request_id):
     json_family = family == "json" and dialect in ("json", "jsonc", "json5")
     owner_family = operation == "merge3" and dialect in OWNER_DIALECTS.get(family, ())
-    if operation not in ROLES or not (json_family or owner_family):
+    python_family = family == "python" and dialect == "python"
+    if operation not in ROLES or not (json_family or owner_family or python_family):
         raise ValueError("unsupported typed benchmark combination")
     if len(texts) != len(ROLES[operation]):
         raise ValueError("incorrect source count")
     language = ("json" if dialect == "json" else "json5") if json_family else dialect
     backend = "benchmark.typed." + language
+    if python_family:
+        backend = "python.libcst"
     if backend not in PARSERS:
-        core.register_language_pack_parser(backend, language)
+        if python_family:
+            # Reuse the conformance projection, not a source-tree core package or
+            # benchmark oracle. This is explicitly not a production native layer.
+            path = Path(__file__).resolve().parent.parent / "packages/python/tests/libcst_facts.py"
+            spec = importlib.util.spec_from_file_location("benchmark_libcst_facts", path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            core.register_parser_host(module.LibCSTHost())
+        else:
+            core.register_language_pack_parser(backend, language)
         PARSERS.add(backend)
     sources = {}
     for name, text in zip(ROLES[operation], texts):
@@ -48,10 +61,12 @@ def execute(operation, family, dialect, texts, request_id):
         provider, profile = "kernel.git.json", "kernel.git.json.v1"
     if owner_family:
         provider, profile = "kernel." + family, "kernel." + family + ".owners.v1"
+    if python_family:
+        provider, profile = "kernel.python", "kernel.python.native_declarations.v1"
     request = core.OperationRequest(schema="structuredmerge.operation-request/v1",
         request_id=request_id, operation=policy, sources=sources,
         provider_selection=core.MergeProviderSelection(provider_id=provider, family=family,
-            dialect=dialect, profile_id=profile, required_capabilities=[operation], extra={}),
+            dialect=None if python_family else dialect, profile_id=profile, required_capabilities=[operation], extra={}),
         parser_selection=core.OperationParserSelection(backend=backend, preference=[],
             required_capabilities=[], extra={}), extensions=[], metadata={}, extra={})
     result = core.execute_operation(request, core.ParseLimits(max_batch_items=3,

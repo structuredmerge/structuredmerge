@@ -101,6 +101,41 @@ class TypedBenchmarkProtocolTest(unittest.TestCase):
                 self.assertEqual(response["result"]["profile_id"], "kernel." + family + ".owners.v1")
                 self.assertEqual(base64.b64decode(response["output_base64"]), source.encode())
 
+    def test_libcst_session_executes_both_merges_and_recovers_from_parse_failure(self):
+        cases = [
+            ("merge3", ["a = 1\nb = 1\n", "a = 2\nb = 1\n", "a = 1\nb = 2\n"], 0, b"a = 2\nb = 2\n"),
+            ("merge3", ["a = 1\n", "a =\n", "a = 2\n"], 2, b""),
+            ("merge3", ["a = 1\n", "a = 2\n", "a = 3\n"], 1, b""),
+            ("merge2", ["a = 1\nb = 2\n", "a = 9 # keep\n"], 0, b"a = 9 # keep\nb = 2\n"),
+        ]
+        requests = []
+        for index, (operation, texts, _, _) in enumerate(cases):
+            request = self.request(operation, texts, str(index))
+            request["selector"] = {"family": "python", "dialect": "python"}
+            requests.append(request)
+        process = self.run_driver(["benchmark-provider-session"], input="\n".join(map(json.dumps, requests)) + "\n")
+        self.assertEqual(process.returncode, 0, process.stderr)
+        responses = [json.loads(line) for line in process.stdout.splitlines()]
+        self.assertEqual(len(responses), len(cases))
+        self.assertEqual(len({response["process_id"] for response in responses}), 1)
+        for case, response in zip(cases, responses):
+            self.assertEqual(response["status"], case[2], response)
+            self.assertEqual(base64.b64decode(response["output_base64"]), case[3])
+            self.assertEqual(response["result"]["provider_id"], "kernel.python")
+            self.assertEqual(response["result"]["profile_id"], "kernel.python.native_declarations.v1")
+        self.assertEqual(responses[1]["result"]["diagnostics"][0]["category"], "parse_error")
+
+    def test_cold_libcst_parse_error_preserves_ours(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / "tmp") as directory:
+            path = Path(directory)
+            for role, text in {"base": "a = 1\n", "ours": "a =\n", "theirs": "a = 2\n"}.items():
+                (path / role).write_bytes(text.encode())
+            env = dict(os.environ, AST_MERGE_FAMILY="python", AST_MERGE_DIALECT="python")
+            result = self.run_driver(["base", "ours", "theirs", "file.py", "7"], cwd=path, env=env)
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertTrue(result.stderr.startswith("typed-core: parse_error:"), result.stderr)
+            self.assertEqual((path / "ours").read_bytes(), b"a =\n")
+
 
 if __name__ == "__main__":
     unittest.main()
