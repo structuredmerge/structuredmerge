@@ -106,7 +106,27 @@ Ruby linkage and RBS validation pass. The local Alef bridge generated eight new
 test files; optional `poly fmt` was unavailable, so that formatting gate is not
 claimed. No Alef changes were pushed and no core package was published.
 
-Actual Ruby Rust-provider migration remains next. Installed development artifacts
-do not establish source-gem distribution or the complete platform/ABI matrix.
+## Ruby consumer migration
+
+Ruby main `45cc6000d` migrates the opt-in `rust.rust` provider to the shared
+`Ast::Merge::TypedCoreProvider`. Its `RustHostProvider` name remains for call-site
+compatibility, but it no longer inherits or loads the host prototype. All four
+operations execute typed Rust decisions; the adapter transports native owner
+identities/byte spans, actual verification and complete canonical conflict records.
+Neutral Git framing is accepted; custom labels/marker widths fail closed.
+
+The installed-core bundle passes all 47 Rust examples, including 18 focused
+provider cases. Native merge3 comparisons cover functions, named items, comments,
+membership conflicts and actual reordered declarations (the old test's quoted
+newline substitutions were inert). Native merge2 prefers incoming while typed
+merge2 retains current: both outcomes are explicitly asserted, not labeled parity.
+Tests additionally cover UTF-8 spans, docs/import/empty-file insertion, full-document
+guard evidence before shortcuts, deterministic no-op reparsing, layout diffs and
+unsupported inputs. No prototype gem is loaded. Go/JSON/Bash regressions pass.
+Real Git integration passes 98 examples with two TypeScript-only pending cases;
+both Rust clean and conflicting driver paths now run against the installed core.
+
+Native defaults remain unchanged. Installed development artifacts and local
+consumer tests do not establish source-gem distribution or the complete platform/ABI matrix.
 Full language/golden-master/downstream authority, native parser promotion,
 publication and default approval remain separate gates.
