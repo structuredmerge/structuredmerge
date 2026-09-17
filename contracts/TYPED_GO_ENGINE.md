@@ -32,12 +32,9 @@ have a fresh parse, including exact/no-op/whole-source selections. Output role,
 identity, exact bytes, selected backend and supported ownership are checked.
 Failed output verification cannot retain clean output or its source proof.
 
-This is an engine building block, not a common operation-result implementation.
-Canonical conflict projection for the Go-specific guard, typed analyze/diff2 and
-directional merge2 orchestration, shared installed binding fixtures and consumer
-migration remain open. In particular, merely routing Go through the common generic
-owner path would bypass the family guard and is not an acceptable integration.
-No legacy consumer is marked migrated by this change; no default or publication
+The engine building block is now connected to common operations as described
+below. Directional merge2, shared installed binding fixtures and consumer migration
+remain open. No legacy consumer is marked migrated; no default or publication
 authority is transferred.
 
 ## Validation
@@ -47,3 +44,36 @@ merge3 parity, fresh no-op output parsing, membership additions/deletions combin
 with edits, rejected syntax/roles, wrong output identity/bytes/backend and parser
 service failure. Shared projector regressions retain the document-only result and
 check native reference identity. Test counts alone do not establish broad parity.
+
+## Common operation profile
+
+`kernel.go.owners.v1`, provider `kernel.go`, supports analyze, diff2 and merge3
+through the existing typed facade, parser registry, limits and cancellation.
+Selection permits an omitted dialect or explicit `go`. Unsupported constraints,
+marker options and merge2 reject; no directional base is fabricated.
+
+Analysis projects native owner IDs/spans, embedded parse facts and exact layout.
+Embedded validation reconstructs family ownership and rejects altered owner
+references while preserving passive fields. Comments remain in native facts and
+layout; requested semantic comment/token enrichment is not silently discarded.
+Diff2 uses Rust owner decisions plus a whole-document byte summary so package,
+import or comment-only changes remain visible. Summaries overlap owner changes
+and are not edit scripts or import-merge semantics.
+
+Shared native merge orchestration now accepts a Rust family engine alongside its
+analyzer. Existing callers retain the generic default; Go selects its guarded
+engine. This is not an FFI callback for host-owned merge decisions or a new registry.
+The guard conflict projector checks source-bound parses, recomputes the family
+predicate, and checks the actual conflict result before projecting canonical
+`ownership` conflict code `go.membership_with_owner_edit`. All three alternatives
+carry exact full-document ranges/digests. Localization is whole-document, not a
+fabricated owner range. No owner decision IDs or render fragments are invented.
+Common `classification_reached` is true for this family conflict decision;
+`owner_classification` remains null, correctly distinguishing the generic classifier.
+
+Seven common-profile tests exercise analysis validation, owner/document diffs,
+clean/no-op/ordinary-conflict merge3, the family guard including a base-equals-side
+shortcut hazard, forged guard messages/sources/provider identity, unsupported
+requests, cancellation and exported facade selection. Broader data-only semantic
+result verification, complete Go conformance and installed Ruby/Python evidence
+remain separate gates; executor projection checks are not foreign-result authentication.

@@ -257,6 +257,8 @@
 
 - Add validated TreeHaver-based Go owner analysis and three-way merge execution, preserving native node references, the existing membership/edit safety guard, exact-source evidence, and fresh output verification.
 
+- Execute typed Go analysis, structural diffs and three-way merges through kernel.go.owners.v1; retain the Go ownership guard as a validated whole-document canonical conflict instead of bypassing it through generic merge orchestration.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

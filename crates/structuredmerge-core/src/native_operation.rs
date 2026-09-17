@@ -296,6 +296,7 @@ pub fn execute_native_operation(
             Some(crate::profiles::BASH_OWNERS) => {
                 ("bash", "kernel.bash", bash_merge::typed::owners)
             }
+            Some(crate::profiles::GO_OWNERS) => ("go", "kernel.go", go_merge::typed::owners),
             _ => {
                 diagnostic(
                     &mut result,
@@ -314,7 +315,7 @@ pub fn execute_native_operation(
             .provider_selection
             .dialect
             .as_deref()
-            .is_some_and(|dialect| family != "bash" || dialect != "bash")
+            .is_some_and(|dialect| !matches!(family, "bash" | "go") || dialect != family)
         || !input.provider_selection.extra.is_empty()
         || input.parser_selection.profile_id.is_some()
         || input.parser_selection.language_version.is_some()
@@ -341,7 +342,7 @@ pub fn execute_native_operation(
         OperationPolicy::Analyze(policy) => crate::native_analysis_projection::supports(policy),
         OperationPolicy::Merge3(policy) => {
             policy.render_policy == "source-preserving"
-                && (family != "bash"
+                && (!matches!(family, "bash" | "go")
                     || (policy.labels.is_none() && policy.conflict_marker_size.is_none()))
                 && policy.extra.is_empty()
                 && policy.fallback_policy.as_deref().is_none_or(|policy| policy == "none")
@@ -450,6 +451,7 @@ pub fn execute_native_operation(
             "yaml" => yaml_merge::typed::mapping_analysis(&parsed[0]),
             "python" => python_merge::declaration_analysis(&parsed[0]),
             "bash" => bash_merge::typed::analysis(&parsed[0]),
+            "go" => go_merge::typed::analysis(&parsed[0]),
             _ => unreachable!("profile already selected"),
         }
         .and_then(|analysis| {
@@ -519,9 +521,9 @@ pub fn execute_native_operation(
                     });
                 }
                 // Exact owner comparisons alone omit comments/layout changes.
-                // Bash's common profile includes a complete-byte summary too;
+                // Bash/Go common profiles include a complete-byte summary too;
                 // it overlaps owner changes and is not an executable edit.
-                if family == "bash"
+                if matches!(family, "bash" | "go")
                     && execution.input_parses[0].source.bytes()
                         != execution.input_parses[1].source.bytes()
                 {
@@ -709,14 +711,29 @@ pub fn execute_native_operation(
         }
         return finish(result, request, &evidence);
     }
-    let mut execution = match merge_native_sources_with_evidence(
-        family,
-        parses.clone(),
-        &TreeHaverParseService::default(),
-        snapshot,
-        context,
-        analyzer,
-    ) {
+    let executed = if family == "go" {
+        ast_merge::typed_merge::merge_native_sources_with_engine(
+            family,
+            parses.clone(),
+            &TreeHaverParseService::default(),
+            snapshot,
+            context,
+            ast_merge::typed_merge::NativeOwnerEngine {
+                analyze: analyzer,
+                merge: go_merge::typed::merge_documents,
+            },
+        )
+    } else {
+        merge_native_sources_with_evidence(
+            family,
+            parses.clone(),
+            &TreeHaverParseService::default(),
+            snapshot,
+            context,
+            analyzer,
+        )
+    };
+    let mut execution = match executed {
         Ok(execution) => execution,
         Err(error) => {
             execution_failure(&mut result, error);
@@ -751,6 +768,15 @@ pub fn execute_native_operation(
                 .collect();
             result.diagnostics =
                 projection.diagnostics.into_iter().map(DiagnosticRecord::Canonical).collect();
+            if family == "go" && !classified {
+                // The family guard classified an ownership conflict, but did
+                // not run the generic owner classifier (owner_classification
+                // remains null). The common contract counts either decision.
+                result.verification.classification_reached = Some(true);
+                result.verification.base_participated = Some(true);
+                result.verification.consumed_source_roles =
+                    Some(input.operation.kind().source_roles().to_vec());
+            }
             finish(result, request, &projection.evidence)
         }
         ThreeWayMergeOutcome::Clean => {

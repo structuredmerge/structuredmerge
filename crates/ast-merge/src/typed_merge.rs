@@ -77,6 +77,43 @@ pub fn merge_native_sources_with_evidence(
     context: &ExecutionContext,
     analyze: fn(&ParsedResult) -> Result<SourcePreservingOwnerDocument, String>,
 ) -> Result<NativeMergeExecution, NativeMergeError> {
+    merge_native_sources_with_engine(
+        language,
+        requests,
+        service,
+        snapshot,
+        context,
+        NativeOwnerEngine {
+            analyze,
+            merge: |base, ours, theirs, verify| {
+                merge_source_preserving_owners_with_evidence(base, ours, theirs, verify)
+            },
+        },
+    )
+}
+
+/// A Rust family engine, never a host-provided matching or rendering callback.
+pub struct NativeOwnerEngine {
+    pub analyze: fn(&ParsedResult) -> Result<SourcePreservingOwnerDocument, String>,
+    pub merge: NativeOwnerMerger,
+}
+
+pub type NativeOwnerMerger = fn(
+    SourcePreservingOwnerDocument,
+    SourcePreservingOwnerDocument,
+    SourcePreservingOwnerDocument,
+    &mut dyn FnMut(&str) -> Result<SourcePreservingOwnerDocument, String>,
+) -> SourcePreservingMergeEvidence;
+
+pub fn merge_native_sources_with_engine(
+    language: &str,
+    requests: Vec<ParseRequest>,
+    service: &dyn ParseService,
+    snapshot: &ParserRegistrySnapshot,
+    context: &ExecutionContext,
+    engine: NativeOwnerEngine,
+) -> Result<NativeMergeExecution, NativeMergeError> {
+    let analyze = engine.analyze;
     let roles: BTreeSet<_> =
         requests.iter().map(|request| request.source.descriptor.role).collect();
     if requests.len() != 3
@@ -189,7 +226,7 @@ pub fn merge_native_sources_with_evidence(
         output_parse = Some(parsed);
         analysis
     };
-    let rendered = merge_source_preserving_owners_with_evidence(
+    let rendered = (engine.merge)(
         documents.remove(&SourceRole::Base).ok_or(NativeMergeError::InvalidInputs)?,
         documents.remove(&SourceRole::Ours).ok_or(NativeMergeError::InvalidInputs)?,
         documents.remove(&SourceRole::Theirs).ok_or(NativeMergeError::InvalidInputs)?,

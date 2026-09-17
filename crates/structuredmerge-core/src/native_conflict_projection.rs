@@ -69,6 +69,9 @@ pub fn project_native_merge_conflicts(
             return Err(E::Source);
         }
     }
+    if provider_id == "kernel.go" && execution.rendered.classification.is_none() {
+        return project_go_membership_guard(execution, request, provider_id);
+    }
     let classification = execution.rendered.classification.as_ref().ok_or(E::Classification)?;
     if classification.whole_source_selection.is_some() {
         return Err(E::Classification);
@@ -244,4 +247,157 @@ pub fn project_native_merge_conflicts(
         return Err(E::Classification);
     }
     Ok(projected)
+}
+
+/// The Go ownership guard precedes generic classification. Recompute its actual
+/// family predicate from source-bound native facts; never infer it from a legacy
+/// message/category, invent owner decisions, or pretend to localize an owner.
+fn project_go_membership_guard(
+    execution: &NativeMergeExecution,
+    request: &ValidatedOperationRequest,
+    provider: &str,
+) -> Result<NativeConflictProjection, ConflictProjectionError> {
+    use ConflictProjectionError as E;
+    let roles = [SourceRole::Base, SourceRole::Ours, SourceRole::Theirs];
+    if request.request().provider_selection.profile_id.as_deref()
+        != Some(crate::profiles::GO_OWNERS)
+        || execution.input_parses.len() != 3
+        || execution.output_parse.is_some()
+        || execution.output_source.is_some()
+        || !execution.rendered.source_segments.is_empty()
+        || execution.verification_error.is_some()
+    {
+        return Err(E::Classification);
+    }
+    let mut documents = vec![];
+    let mut alternatives = vec![];
+    let mut source_refs = vec![];
+    for (parsed, role) in execution.input_parses.iter().zip(roles) {
+        let input = &request.request().sources[&role];
+        let source = request.sources().get(&input.source_id).map_err(|_| E::Source)?;
+        if parsed.source.descriptor() != source.descriptor()
+            || parsed.source.bytes() != source.bytes()
+        {
+            return Err(E::Source);
+        }
+        documents.push(go_merge::typed::owners(parsed).map_err(|_| E::Classification)?);
+        alternatives.push(ConflictSourceAlternative {
+            role,
+            state: AlternativeState::Present,
+            source_id: Some(input.source_id.clone()),
+            regions: vec![ExactConflictRegion {
+                range: ResultRange {
+                    start_byte: 0,
+                    end_byte: source.bytes().len(),
+                    extra: Metadata::new(),
+                },
+                byte_length: source.descriptor().byte_length,
+                sha256: source.descriptor().sha256.clone(),
+                extra: Metadata::new(),
+            }],
+            change_ids: vec![],
+            extra: Metadata::new(),
+        });
+        source_refs.push(DiagnosticSourceRef {
+            source_id: input.source_id.clone(),
+            role,
+            span: None,
+            extra: Metadata::new(),
+        });
+    }
+    let expected =
+        go_merge::typed::membership_conflict(&documents[0], &documents[1], &documents[2])
+            .ok_or(E::Classification)?;
+    if execution.rendered.result != expected {
+        return Err(E::Classification);
+    }
+    let actual = &expected.conflicts[0];
+    let id = actual.conflict_id.clone();
+    let diagnostic_id = format!("diagnostic.{id}");
+    let code = "go.membership_with_owner_edit";
+    let diagnostic = PortableDiagnostic {
+        schema: DIAGNOSTIC_SCHEMA.into(),
+        id: diagnostic_id.clone(),
+        sequence: 0,
+        severity: DiagnosticSeverity::Error,
+        category: PortableCategory::MergeConflict,
+        code: code.into(),
+        message: actual.message.clone(),
+        blocking: true,
+        operation: Some(OperationKind::Merge3),
+        request_id: Some(request.request().request_id.clone()),
+        source_refs,
+        subject_refs: Some(vec![DiagnosticSubjectRef {
+            kind: "conflict".into(),
+            id: id.clone(),
+            extra: Metadata::new(),
+        }]),
+        cause_ids: vec![],
+        related_ids: vec![],
+        origin: DiagnosticOrigin {
+            layer: DiagnosticLayer::Provider,
+            provider_id: Some(provider.into()),
+            backend_id: None,
+            package: None,
+            package_version: None,
+            native_code: None,
+            extra: Metadata::new(),
+        },
+        data: Metadata::new(),
+        extensions: vec![],
+        metadata: Metadata::new(),
+        extra: Metadata::new(),
+    };
+    let conflict = PortableConflict {
+        schema: CONFLICT_SCHEMA.into(),
+        id,
+        operation: OperationKind::Merge3,
+        category: ConflictCategory::Ownership,
+        code: code.into(),
+        message: Some(actual.message.clone()),
+        subject: ConflictSubject {
+            structural_path: None,
+            owner_ref: None,
+            node_ref: None,
+            archive_entry: None,
+            binary_region: None,
+            whole_document: Some(true),
+            extra: Metadata::new(),
+        },
+        roles: roles.to_vec(),
+        alternatives,
+        classification: ConflictClassification {
+            base_participated: Some(true),
+            change_ids: vec![],
+            decision_ids: vec![],
+            extra: [("family_guard".into(), serde_json::json!(code))].into(),
+        },
+        localization: ConflictLocalization {
+            status: LocalizationStatus::WholeDocument,
+            verified: true,
+            output_regions: vec![],
+            extra: Metadata::new(),
+        },
+        resolution: ConflictResolution {
+            status: ResolutionStatus::Unresolved,
+            strategy: ResolutionStrategy::None,
+            selected_roles: vec![],
+            decision_id: None,
+            resolver: None,
+            reason: None,
+            extra: Metadata::new(),
+        },
+        diagnostic_ids: vec![diagnostic_id],
+        change_ids: vec![],
+        decision_ids: vec![],
+        render_fragment_ids: vec![],
+        extensions: vec![],
+        metadata: Metadata::new(),
+        extra: Metadata::new(),
+    };
+    Ok(NativeConflictProjection {
+        conflicts: vec![conflict],
+        diagnostics: vec![diagnostic],
+        evidence: ConflictEvidence::default(),
+    })
 }

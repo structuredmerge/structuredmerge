@@ -1566,6 +1566,7 @@ dependencies = [
  "ast-merge-git",
  "ast-template",
  "bash-merge",
+ "go-merge",
  "json-merge",
  "python-merge",
  "serde",
