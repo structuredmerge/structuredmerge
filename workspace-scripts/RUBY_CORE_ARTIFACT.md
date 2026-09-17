@@ -22,10 +22,15 @@ does not substitute for installed typed-core tests or authorize prototype releas
 Local minimum-runtime check (2026-09-17): Ruby 3.2.11 built after supplying
 `BINDGEN_EXTRA_CLANG_ARGS='-include stdbool.h'` for this machine's Ruby header /
 libclang mismatch. This is a local build workaround, not a CI requirement.
-The installed runtime suite then passed 35/36 examples: the fresh-process
+The initial installed runtime suite passed 35/36 examples: the fresh-process
 registered-host shutdown case timed out after completing its parse and GC work.
-Ruby 3.2 compatibility remains unproven; keep this test enabled. Ruby 4.0.6 passed
-all 36 runtime and 98 generated examples, plus linkage and RBS checks.
+Regenerating with the local interrupt-aware dispatcher fix resolves that failure:
+Ruby 3.2.11 now passes all 36 runtime and 98 generated examples, plus linkage and
+RBS checks. This Linux result does not establish the hosted matrix or eliminate
+the local header workaround. The generator fix remains local, so upstream-only
+generation and release approval are still open.
+The rebuilt Ruby 4.0.6 artifact also passes the same 36 runtime / 98 generated
+examples, linkage and RBS checks after this change.
 
 CI artifact producers may build/export without installing the test harness:
 

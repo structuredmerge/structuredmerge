@@ -40,6 +40,15 @@ GC runs before the child prints its completion marker and exits normally. The
 parent checks both the marker and successful process termination, with a bounded
 timeout and cleanup, so reaching the last assertion alone cannot hide an exit hang.
 
+The Ruby dispatcher uses bounded 50ms channel waits outside the GVL, including
+when registry ownership keeps the sender alive. The `without_gvl2` API defers
+Ruby interrupts to Magnus's protected `thread_check_ints` check after each wait.
+A shutdown interrupt ends the dispatcher and drops its receiver/queued work;
+channel callers receive disconnection rather than retaining an idle worker
+forever. The bound is a channel wait duration, not a wall-clock shutdown SLA or
+permission to interrupt a callback already executing. This fixes the reproduced
+Ruby 3.2 registered-idle shutdown hang without clearing the process-wide registry.
+
 These checks establish the scoped normal-process-exit path in the tested installed
 MRI/CPython artifacts. They do not prove interpreter embedding/finalization while
 foreign threads remain active, forced interruption of callbacks, subinterpreter
