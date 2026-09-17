@@ -48,14 +48,13 @@ rendering; altered classifications, bytes, provenance or omission fail validatio
 Compatible passive fields survive. No successful/failed JSON reparse is claimed
 for marker output, because no such parse was attempted.
 
-Shared fixtures and isolated artifacts are verified below. Next migrate Ruby's
-opt-in Git provider and test real
-Git write/leave-ours/error exits. Correct its current all-four-operations metadata
-at cutover; keep unimplemented operations unsupported. Retain canonical conflicts,
+Shared fixtures, isolated artifacts and the local Ruby consumer are verified below.
+Next migrate remaining family engines and complete broader authority gates.
+Keep unimplemented operations unsupported. Retain canonical conflicts,
 render limitations and complete records across that boundary. Do not substitute
 generic JSON merge output for the Git protocol or mark the legacy export migrated
-before the actual consumer changes. The existing typed operation entry point is
-used without new binding signatures; the Ruby consumer is not migrated yet.
+before their actual consumer changes. The existing typed operation entry point is
+used without new binding signatures.
 
 Local tests: `cargo test -p ast-merge-git --locked` exercises eight typed cases and
 five existing fixtures. The cases include all three dialects, real clean-output
@@ -86,3 +85,27 @@ Reviewed API baselines and all 14 audits pass. Optional `poly fmt` is absent;
 generation does not establish that formatting gate. These are local Linux binary
 artifact checks, not source-gem, multi-platform, publication, hosted-CI or Ruby
 Git consumer/protocol approval. No Alef changes were pushed.
+
+## Ruby Git consumer migration (2026-09-17)
+
+Ruby revision `8d469aaf5` moves the opt-in `rust.git.json` provider onto this
+profile. Compatibility naming remains, but no prototype is loaded or called.
+Shared transport conversion now lives in `Ast::Merge::TypedCoreProvider`, also
+used by JSON, with deterministic portable records and no Ruby merge decisions.
+Git marker/label options reach Rust. Explicit Git-provider command selection,
+clean/conflict writes, leave-ours and invalid/unrenderable output paths are tested.
+Capabilities now advertise merge3 only; the Ruby registry permits nonempty known
+operation subsets while retaining all required methods and operation filtering.
+
+The complete Git suite passes **98 examples, 0 failures, 4 pending**. The pending
+cases are unmigrated Go/Rust/TypeScript/Bash providers: their availability guards
+now correctly check their own family rather than treating migrated Git JSON as
+proof of prototype availability. No prototype was installed to make them pass.
+All 93 JSON regression examples and 17 registry examples pass. The full suite
+requires an absolute artifact Gemfile and the existing family-bundle override for
+Git subprocesses; the artifact Gemfile includes its native-family dependencies.
+
+Logs: `tmp/git-ruby-{bundle,focused,final,audits}.log`,
+`tmp/git-json-regression.log`, `tmp/git-provider-registry.log`.
+Development path lockfiles remain unstaged. Broader golden-master authority,
+lint/coverage, hosted/released-package, platform and publication gates remain open.

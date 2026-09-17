@@ -31,10 +31,11 @@
     {
       "id": "git-driver",
       "methods": ["merge_ast_merge_git_json"],
-      "disposition": "retain_until_consumer_migration",
+      "disposition": "local_consumer_migrated",
+      "consumer_revision": "structuredmerge/structuredmerge-ruby@8d469aaf5",
       "consumers": ["ruby/gems/ast-merge-git/lib/ast/merge/git/rust_host_provider.rb"],
       "replacement": "Typed Git merge3 report over ast-merge-git and shared core operation results.",
-      "gap": "Retain change classifications, render report, conflicted source and exit-policy evidence. The Ruby adapter advertises all operations but rejects analyze/diff2/merge2: capability correction is required, not invented implementations."
+      "gap": "Local Ruby Git provider now selects kernel.git.json.v1 through the typed core, preserving full portable core records, canonical conflicts and actual render evidence. It advertises merge3 only; registry methods remain complete but capabilities may be nonempty subsets. Git write/leave-ours/error and command selection tests run against the installed core artifact. The existing marker review artifact retains ours outside conflicts and is not a partially resolved merge. Other family Rust providers still require migration; broader authority, hosted/released-package, lint/coverage and publication gates remain open."
     },
     {
       "id": "structural-editing",
