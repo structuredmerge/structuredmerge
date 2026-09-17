@@ -28,6 +28,26 @@ This is Rust typed-facade evidence, not proof of Ruby/Python GC, foreign-thread
 entry, runtime shutdown or every binding's callback affinity. Those gates remain
 open. No public API was added to reproduce the abandoned prototype.
 
+## Installed runtime process exit
+
+The Ruby and Python artifact suites each run nine fresh child processes: three
+repetitions each with a registered idle provider, an unregistered provider, and
+an operation cancelled while its callback is outstanding. Every child first
+executes real typed native parsing. The outstanding-callback case synchronizes
+entry, unregisters the provider, cancels the operation, releases the callback,
+joins the worker and verifies cancellation discarded the late result before exit.
+GC runs before the child prints its completion marker and exits normally. The
+parent checks both the marker and successful process termination, with a bounded
+timeout and cleanup, so reaching the last assertion alone cannot hide an exit hang.
+
+These checks establish the scoped normal-process-exit path in the tested installed
+MRI/CPython artifacts. They do not prove interpreter embedding/finalization while
+foreign threads remain active, forced interruption of callbacks, subinterpreter
+support, exhaustive leak freedom or every platform/runtime combination. Callers
+remain responsible for draining outstanding operations before graceful shutdown;
+cancellation is not a join. No `start_host_runtime`/`shutdown_host_runtime` facade
+or process-wide destructive registry cleanup was introduced.
+
 ## Legacy operation disposition
 
 Rust callers can now use `parser_registry_inventory()` on the core, or

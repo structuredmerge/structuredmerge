@@ -106,7 +106,7 @@
       "disposition": "retain_regression_only",
       "consumers": ["structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb"],
       "replacement": "Real typed-operation lifecycle tests, OperationControl and generated runtime-affine callback infrastructure; no identity-worker product API by default.",
-      "gap": "Some GC, concurrency, cancellation and deadline cases are migrated. Shutdown, foreign-thread entry and broad stress remain open; do not remove legacy evidence before equivalent coverage."
+      "gap": "GC, concurrency, cancellation and deadline cases are migrated in scoped installed Ruby/Python tests. Fresh installed-runtime processes now verify normal exit with idle registered providers, retired providers, and cancelled/drained callbacks (three repetitions per mode). This is not active-callback interpreter finalization, foreign-thread entry, embedding/subinterpreter support or broad stress evidence; retain legacy regressions and the remaining runtime gates."
     }
   ]
 }

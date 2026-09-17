@@ -12,6 +12,8 @@ from pathlib import Path
 import sys
 import unittest
 import tempfile
+import subprocess
+import textwrap
 
 import libcst
 import structuredmerge_core as core
@@ -64,6 +66,66 @@ class LibCSTHost:
 
 
 class TypedParserHostTest(unittest.TestCase):
+    def test_installed_runtime_exits_after_registered_retired_and_drained_callbacks(self):
+        script = textwrap.dedent('''
+            import gc, sys, threading
+            import structuredmerge_core as core
+            from test_parser_host import LibCSTHost, TypedParserHostTest
+            mode = sys.argv[1]
+            fixture = TypedParserHostTest()
+            host = LibCSTHost()
+            core.register_parser_host(host)
+            requests = fixture.merge_requests(["a = 1\\n"] * 3)
+            limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000,
+                max_nodes=1000, max_diagnostics=20)
+            if mode == "drained":
+                entered, release = threading.Event(), threading.Event()
+                parse = host.parse_batch
+                def blocked(request):
+                    entered.set()
+                    if not release.wait(5):
+                        raise RuntimeError("callback not released")
+                    return parse(request)
+                host.parse_batch = blocked
+                control = core.create_operation_control()
+                outcomes = []
+                def run():
+                    try:
+                        core.parse_sources_controlled(requests, limits, control)
+                        outcomes.append("unexpected success")
+                    except RuntimeError as error:
+                        outcomes.append(str(error))
+                worker = threading.Thread(target=run)
+                worker.start()
+                try:
+                    assert entered.wait(5), "callback never entered"
+                    core.unregister_parser_host("python.libcst")
+                    control.cancel()
+                finally:
+                    release.set()
+                    worker.join(5)
+                assert not worker.is_alive(), "operation failed to drain"
+                assert len(outcomes) == 1 and "execution.cancelled" in outcomes[0], outcomes
+                assert host.calls == 1
+            else:
+                parsed = core.parse_sources(requests, limits)
+                assert len(parsed) == 3 and all(item.parsed.ok for item in parsed)
+                assert host.calls == 1
+                if mode == "retired":
+                    core.unregister_parser_host("python.libcst")
+            del host
+            gc.collect()
+            print("ready-to-exit:" + mode, flush=True)
+        ''')
+        for mode in ("registered", "retired", "drained"):
+            for repetition in range(3):
+                with self.subTest(mode=mode, repetition=repetition):
+                    completed = subprocess.run([sys.executable, "-c", script, mode],
+                        cwd=Path(__file__).resolve().parent, capture_output=True, text=True,
+                        timeout=20, check=False)
+                    self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                    self.assertEqual(completed.stdout.strip(), "ready-to-exit:" + mode)
+
     def test_common_operation_catalog_is_not_availability_or_authority(self):
         probe_calls = []
         def unexpected_probe(request):

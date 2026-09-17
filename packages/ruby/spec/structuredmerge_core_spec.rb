@@ -5,6 +5,8 @@ require "weakref"
 require "json"
 require "tmpdir"
 require "fileutils"
+require "open3"
+require "rbconfig"
 
 if (expected_home = ENV["STRUCTUREDMERGE_EXPECT_GEM_HOME"])
   installed = Gem.loaded_specs.fetch("structuredmerge-core").full_gem_path
@@ -16,6 +18,73 @@ end
 
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
+
+  it "exits fresh runtimes with registered, retired and cancelled-drained callbacks" do
+    script = <<~'RUBY'
+      require_relative "native_merge_fixture"
+      include NativeMergeFixture
+      mode = ARGV.fetch(0)
+      host = TypedPsychHost.new
+      StructuredmergeCore.register_parser_host(host)
+      requests = merge_requests(["a: one\n"] * 3)
+      limits = merge_limits
+      if mode == "drained"
+        entered, release = Queue.new, Queue.new
+        host.define_singleton_method(:parse_batch) do |request|
+          entered << true
+          raise "callback not released" unless release.pop(timeout: 5)
+          super(request)
+        end
+        control = StructuredmergeCore.create_operation_control
+        worker = Thread.new do
+          begin
+            StructuredmergeCore.parse_sources_controlled(requests, limits, control)
+            "unexpected success"
+          rescue RuntimeError => error
+            error.message
+          end
+        end
+        begin
+          raise "callback never entered" unless entered.pop(timeout: 5)
+          StructuredmergeCore.unregister_parser_host("ruby.typed.psych")
+          control.cancel
+        ensure
+          release << true
+          raise "operation failed to drain" unless worker.join(5)
+        end
+        raise "late result was accepted" unless worker.value.include?("execution.cancelled")
+        raise "callback did not finish" unless host.calls == 1
+      else
+        results = StructuredmergeCore.parse_sources(requests, limits)
+        raise "parse failed" unless results.length == 3 && results.all? { |item| item.parsed.ok }
+        raise "callback did not finish" unless host.calls == 1
+        StructuredmergeCore.unregister_parser_host("ruby.typed.psych") if mode == "retired"
+      end
+      host = nil
+      GC.start
+      GC.compact if GC.respond_to?(:compact)
+      puts "ready-to-exit:#{mode}"
+    RUBY
+    %w[registered retired drained].each do |mode|
+      3.times do
+        Open3.popen2e(RbConfig.ruby, "-rbundler/setup", "-e", script, mode, chdir: __dir__) do |input, output, process|
+          input.close
+          reader = Thread.new { output.read }
+          begin
+            expect(process.join(20)).not_to be_nil, "runtime exit timed out: #{mode}"
+            expect(process.value.success?).to be(true), reader.value
+            expect(reader.value.strip).to eq("ready-to-exit:#{mode}")
+          ensure
+            if process.alive?
+              Process.kill("KILL", process.pid)
+              process.join
+            end
+            reader.join
+          end
+        end
+      end
+    end
+  end
 
   it "lists common operation scope without probing or granting default authority" do
     host = TypedPsychHost.new
