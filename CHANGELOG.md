@@ -20,6 +20,8 @@
 
 - Rename the kernel CLI crate to smorg and ship the smorg executable alongside the retained smorg-rs compatibility alias; existing Git-driver defaults remain unchanged.
 
+- Retire the prototype Ruby publication workflow and convert the kernel package job/task to non-publishing typed-core exports with integrity checks; retain independent installed tests and legacy regression sources.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider

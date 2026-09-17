@@ -223,67 +223,40 @@ jobs:
         working-directory: packages/ruby
 
   ruby-package:
-    name: Ruby platform package
+    name: Typed core Ruby export (not publication)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Checkout TreeHaver consumer fixture
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: structuredmerge/structuredmerge-ruby
-          ref: 680e6de509186ec7b845cfa8644b33a9f16a6766
-          path: structuredmerge-ruby
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
           toolchain: stable
-      - name: Setup mise
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "4.0"
           bundler-cache: true
           working-directory: packages/ruby
-      - name: Install Alef
+      - name: Compile committed generated core binding
+        run: bundle exec rake compile
+        working-directory: packages/ruby
+      - name: Export allowlisted current-ABI core artifact
+        run: bundle exec ruby ../../workspace-scripts/check_core_ruby_artifact.rb --package-only ../../tmp/core-artifacts
+        working-directory: packages/ruby
+      - name: Verify export metadata and integrity before upload
         shell: bash
         run: |
-          cargo install alef --version "=$(cat workspace-scripts/alef-version)" --locked
-      - name: Build platform gem and provenance
-        run: mise run ruby-package
-      - name: Check packaged native linkage
-        run: ruby workspace-scripts/check_ruby_linkage.rb dist
-      - name: Measure packaged cold paths
-        run: mise run ruby-cold-paths
-      - name: Install packaged gem in isolation
-        shell: bash
-        run: |
-          gem_home="$(mktemp -d)"
-          (
-            cd structuredmerge-ruby/gems/tree_haver
-            SKIP_GEM_SIGNING=true gem build tree_haver.gemspec \
-              --output "$GITHUB_WORKSPACE/tree_haver-consumer.gem"
-          )
-          GEM_HOME="$gem_home" GEM_PATH="$gem_home" \
-            gem install dist/*.gem --install-dir "$gem_home" --no-document
-          GEM_HOME="$gem_home" GEM_PATH="$gem_home" \
-            gem install tree_haver-consumer.gem --install-dir "$gem_home" --no-document
-          GEM_HOME="$gem_home" GEM_PATH="$gem_home" \
-            STRUCTUREDMERGE_API_USE_INSTALLED=true \
-            ruby workspace-scripts/check_ruby_api.rb
-          GEM_HOME="$gem_home" GEM_PATH="$gem_home" \
-            ruby workspace-scripts/check_ruby_normalized_parser.rb
-          GEM_HOME="$gem_home" GEM_PATH="$gem_home" \
-            ruby workspace-scripts/check_tree_haver_consumer.rb
-      - name: Upload platform gem and provenance
+          ruby workspace-scripts/verify_core_ruby_export.rb \
+            tmp/core-artifacts/*.gem tmp/core-artifacts/core-ruby-artifact.json
+      - name: Upload development core export
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: structuredmerge-host-prototype-x86_64-linux
+          name: structuredmerge-core-development-x86_64-linux
           path: |
-            dist/*.gem
-            dist/*.provenance.json
-            dist/*.cold-path.json
+            tmp/core-artifacts/*.gem
+            tmp/core-artifacts/core-ruby-artifact.json
+            workspace-scripts/verify_core_ruby_export.rb
           if-no-files-found: error
 
   alef:

@@ -53,8 +53,17 @@ via a forked Alef or establish upstream-only generation (D4). The native extensi
 must be freshly compiled by the preceding build step. No stale-extension provenance
 claim is made from the presence of a shared library alone.
 
-The Ruby repository's old `rust-host`/HEAD-dependency workflow still needs conversion
-to this typed-core producer/consumer path. Its old repository, prototype artifact
-name and prototype-only load check must be replaced together, with matched Ruby
-ABI and explicit install checks. Current/coverage's obsolete prototype publication
-switches also require migration; do not publish the prototype to unblock them.
+The Ruby repository's current/coverage/dependency-HEAD workflow has a local
+typed-core producer/consumer conversion, with matched Ruby ABI and explicit export
+verification. Its hosted validation remains open until the coordinated commits
+are available remotely; a local workflow edit is not a hosted test result.
+
+Kernel CI's `ruby-package` job now exports only the allowlisted typed core. The
+`mise run ruby-package` task uses the same package-only path; its fixed export
+directory must be absent or use the direct command above with a fresh directory.
+The former `release-ruby-host.yml` workflow is removed: prototype tags and manual
+runs must never publish that package. The workflow remains recoverable in Git
+history, and legacy API/lifecycle regression sources are retained separately.
+Historical cold-path tooling is explicitly named `legacy-ruby-cold-paths`, not a
+core release gate. A new core publication workflow still requires the plan's
+upstream-generation, ABI/platform, provenance and installed-consumer gates.

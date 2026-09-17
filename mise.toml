@@ -29,9 +29,12 @@ run = "bundle exec ruby ../../workspace-scripts/check_ruby_api.rb"
 dir = "packages/ruby"
 
 [tasks.ruby-package]
-run = "alef publish build --lang ruby && alef publish package --lang ruby --target x86_64-unknown-linux-gnu --output dist && BUNDLE_GEMFILE=packages/ruby/Gemfile bundle exec ruby workspace-scripts/write_ruby_artifact_manifest.rb dist"
+description = "Export a development typed-core platform gem; never publish"
+dir = "packages/ruby"
+run = "bundle exec rake compile && bundle exec ruby ../../workspace-scripts/check_core_ruby_artifact.rb --package-only ../../tmp/core-artifacts"
 
-[tasks.ruby-cold-paths]
+[tasks.legacy-ruby-cold-paths]
+description = "Historical prototype artifact measurement only; not a core release gate"
 run = "ruby workspace-scripts/measure_ruby_cold_paths.rb dist"
 
 [tasks.publish-validate]
