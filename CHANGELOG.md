@@ -22,6 +22,8 @@
 
 - Retire the prototype Ruby publication workflow and convert the kernel package job/task to non-publishing typed-core exports with integrity checks; retain independent installed tests and legacy regression sources.
 
+- Run the installed typed-core Ruby artifact gate across the six Ruby/platform CI combinations while retaining a separately labeled legacy checkout regression matrix.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider

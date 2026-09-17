@@ -39,9 +39,30 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         steps = self.jobs["typed-core-ruby-artifact"]["steps"]
         gate = next(step["run"] for step in steps if "check_core_ruby_artifact.rb" in step.get("run", ""))
         self.assertNotIn("--package-only", gate)
-        for job in ("typed-core-ruby-artifact", "ruby-package"):
-            ruby = next(step for step in self.jobs[job]["steps"] if step.get("uses", "").startswith("ruby/setup-ruby@"))
-            self.assertEqual(ruby["with"]["ruby-version"], "4.0")
+        ruby = next(step for step in self.jobs["ruby-package"]["steps"] if step.get("uses", "").startswith("ruby/setup-ruby@"))
+        self.assertEqual(ruby["with"]["ruby-version"], "4.0")
+
+    def test_installed_core_matrix_preserves_separate_legacy_coverage(self):
+        job = self.jobs["typed-core-ruby-artifact"]
+        legacy = self.jobs["ruby-bindings"]
+        matrix = job["strategy"]["matrix"]["include"]
+        self.assertEqual(matrix, legacy["strategy"]["matrix"]["include"])
+        self.assertEqual(len(matrix), 6)
+        self.assertEqual({row["ruby"] for row in matrix}, {"3.2", "4.0"})
+        self.assertEqual({row["platform"] for row in matrix}, {
+            "x86_64-linux", "aarch64-linux", "arm64-darwin",
+            "x86_64-darwin", "x64-mingw-ucrt",
+        })
+        self.assertFalse(job["strategy"]["fail-fast"])
+        self.assertEqual(job["runs-on"], "${{ matrix.runner }}")
+        ruby = next(step for step in job["steps"] if step.get("uses", "").startswith("ruby/setup-ruby@"))
+        self.assertEqual(ruby["with"]["ruby-version"], "${{ matrix.ruby }}")
+        windows = next(step for step in job["steps"] if step.get("if") == "runner.os == 'Windows'")
+        self.assertIn("CARGO_BUILD_TARGET=x86_64-pc-windows-gnu", windows["run"])
+        self.assertIn("RUST_TARGET=x86_64-pc-windows-gnu", windows["run"])
+        commands = "\n".join(step.get("run", "") for step in legacy["steps"])
+        self.assertIn("bundle exec rake spec", commands)
+        self.assertIn("check_ruby_api.rb", commands)
 
     def test_retired_publication_is_removed_but_regression_sources_remain(self):
         self.assertFalse((self.root / ".github/workflows/release-ruby-host.yml").exists())

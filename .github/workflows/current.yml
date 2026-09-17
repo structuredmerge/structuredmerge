@@ -104,8 +104,31 @@ jobs:
         run: python workspace-scripts/check_core_python_artifact.py tmp/core-wheels/*.whl
 
   typed-core-ruby-artifact:
-    name: Typed core Ruby installed artifact
-    runs-on: ubuntu-latest
+    name: Typed core installed artifact (${{ matrix.platform }}, Ruby ${{ matrix.ruby }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: x86_64-linux
+            runner: ubuntu-latest
+            ruby: "3.2"
+          - platform: x86_64-linux
+            runner: ubuntu-latest
+            ruby: "4.0"
+          - platform: aarch64-linux
+            runner: ubuntu-24.04-arm
+            ruby: "4.0"
+          - platform: arm64-darwin
+            runner: macos-14
+            ruby: "4.0"
+          - platform: x86_64-darwin
+            runner: macos-15-intel
+            ruby: "4.0"
+          - platform: x64-mingw-ucrt
+            runner: windows-2025
+            ruby: "4.0"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -113,10 +136,17 @@ jobs:
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
           toolchain: stable
+          targets: ${{ runner.os == 'Windows' && 'x86_64-pc-windows-gnu' || '' }}
+      - name: Match typed extension to RubyInstaller ABI
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo 'RUST_TARGET=x86_64-pc-windows-gnu' >> "$GITHUB_ENV"
+          echo 'CARGO_BUILD_TARGET=x86_64-pc-windows-gnu' >> "$GITHUB_ENV"
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "4.0"
+          ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
           working-directory: packages/ruby
       - name: Compile checked-in generated core binding
@@ -159,7 +189,7 @@ jobs:
         run: mise exec -- cargo test -p structuredmerge-core --test native_operations --locked -- --ignored --skip python_
 
   ruby-bindings:
-    name: Ruby bindings (${{ matrix.platform }}, Ruby ${{ matrix.ruby }})
+    name: Legacy checkout regressions (${{ matrix.platform }}, Ruby ${{ matrix.ruby }})
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false

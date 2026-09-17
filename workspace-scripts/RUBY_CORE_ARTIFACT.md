@@ -12,6 +12,21 @@ The default command builds an allowlisted platform gem, installs it into an
 isolated consumer and runs runtime/generated tests, linkage and RBS validation.
 It does not publish or establish source-gem or other-platform compatibility.
 
+The `typed-core-ruby-artifact` CI matrix runs that full installed gate on Linux
+x86_64 (Ruby 3.2 and 4.0), Linux ARM64, macOS ARM64/x86_64 and Windows UCRT
+(Ruby 4.0). Windows builds select the GNU target to match RubyInstaller.
+These are requested CI checks, not proof of support until each hosted leg passes.
+The separately named legacy checkout regression matrix remains unchanged; it
+does not substitute for installed typed-core tests or authorize prototype releases.
+
+Local minimum-runtime check (2026-09-17): Ruby 3.2.11 built after supplying
+`BINDGEN_EXTRA_CLANG_ARGS='-include stdbool.h'` for this machine's Ruby header /
+libclang mismatch. This is a local build workaround, not a CI requirement.
+The installed runtime suite then passed 35/36 examples: the fresh-process
+registered-host shutdown case timed out after completing its parse and GC work.
+Ruby 3.2 compatibility remains unproven; keep this test enabled. Ruby 4.0.6 passed
+all 36 runtime and 98 generated examples, plus linkage and RBS checks.
+
 CI artifact producers may build/export without installing the test harness:
 
 ```sh
