@@ -176,6 +176,23 @@ def process_request(request):
         extensions=[], metadata={})
 
 
+# The process harness above remains a retained conformance oracle. In installed
+# native-layer mode, only instrumentation is supplied here; all callback syntax
+# projection comes from the independently installed provider distribution.
+import os
+if os.environ.get("STRUCTUREDMERGE_LIBCST_INSTALLED") == "1":
+    from structuredmerge_libcst import LibCSTHost as _InstalledLibCSTHost
+
+    class LibCSTHost(_InstalledLibCSTHost):
+        def __init__(self):
+            self.calls = 0
+
+        def parse_batch(self, request):
+            self.calls += 1
+            self.received_batch = request
+            return super().parse_batch(request)
+
+
 if __name__ == "__main__":
     import sys
     json.dump([process_request(request) for request in json.load(sys.stdin)], sys.stdout)

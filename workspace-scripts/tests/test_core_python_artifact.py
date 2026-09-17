@@ -14,6 +14,26 @@ SPEC.loader.exec_module(ARTIFACT)
 
 
 class WorkspaceLifecycleTest(unittest.TestCase):
+    def test_independent_provider_mode_installs_wheel_and_records_distinct_evidence(self):
+        (ROOT / "tmp").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=ROOT / "tmp", prefix="artifact-provider-test-") as directory:
+            stage = Path(directory)
+            wheel, provider = stage / "core.whl", stage / "provider.whl"
+            wheel.write_bytes(b"core")
+            provider.write_bytes(b"provider")
+            with patch.object(ARTIFACT.venv.EnvBuilder, "create"), \
+                    patch.object(ARTIFACT.subprocess, "run") as run:
+                ARTIFACT.run_checks(ROOT, wheel, {"Name": "structuredmerge-core", "Version": "0.2.0"}, [], stage,
+                    provider_wheel=provider)
+            self.assertIn(str(provider), run.call_args_list[0].args[0])
+            self.assertNotIn("libcst==1.9.0", run.call_args_list[0].args[0])
+            self.assertTrue(all(call.kwargs["env"]["STRUCTUREDMERGE_LIBCST_INSTALLED"] == "1"
+                for call in run.call_args_list))
+            report = json.loads((stage / "report.json").read_text())
+            self.assertEqual(report["native_provider_mode"], "installed-provider")
+            self.assertEqual(report["provider_artifact"], str(provider))
+            self.assertFalse(report["publication_gate"])
+
     def test_generated_app_has_local_support_and_separate_artifact_evidence(self):
         (ROOT / "tmp").mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=ROOT / "tmp", prefix="artifact-app-test-") as directory:
@@ -22,7 +42,7 @@ class WorkspaceLifecycleTest(unittest.TestCase):
             wheel.write_bytes(b"test artifact")
             with patch.object(ARTIFACT.venv.EnvBuilder, "create"), \
                     patch.object(ARTIFACT.subprocess, "run") as run, \
-                    patch.dict(ARTIFACT.os.environ, {"PYTHONPATH": "/unwanted/checkout"}):
+                    patch.dict(ARTIFACT.os.environ, {"PYTHONPATH": "/unwanted/checkout", "STRUCTUREDMERGE_LIBCST_INSTALLED": "1"}):
                 ARTIFACT.run_checks(ROOT, wheel, {"Name": "structuredmerge-core", "Version": "0.2.0"}, [], stage)
             app = stage / "consumer/test_app"
             for name in ("test_parser_host.py", "libcst_facts.py", "native_merge_fixture.py"):
@@ -34,6 +54,7 @@ class WorkspaceLifecycleTest(unittest.TestCase):
             self.assertEqual(call.kwargs["cwd"], app)
             self.assertTrue(call.kwargs["check"])
             self.assertNotIn("PYTHONPATH", call.kwargs["env"])
+            self.assertNotIn("STRUCTUREDMERGE_LIBCST_INSTALLED", call.kwargs["env"])
             report = json.loads((stage / "report.json").read_text())
             self.assertEqual(report["registry_install"], "not_run")
             self.assertFalse(report["publication_gate"])

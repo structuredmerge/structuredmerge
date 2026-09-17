@@ -341,6 +341,8 @@
 
 - Extend installed Ruby/Python WorkflowHost lifecycle gates with GC retention/release, reentrant registry changes, stale generations, overlapping host threads and caller context, late-result cancellation, and bounded registered/retired/drained runtime-exit checks.
 
+- Allow isolated Python core artifact gates to run all boundary and generated suites against an independently installed LibCST provider wheel, with separate provenance from the retained conformance adapter.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

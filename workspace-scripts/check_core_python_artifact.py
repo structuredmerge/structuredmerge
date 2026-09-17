@@ -4,6 +4,7 @@
 This is a local runtime gate, not publication approval or the full platform matrix.
 """
 import email.parser
+import argparse
 import ast
 from contextlib import contextmanager
 import hashlib
@@ -87,15 +88,19 @@ def artifact_workspace(root):
 
 
 def main():
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: check_core_python_artifact.py WHEEL_OR_DIRECTORY")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("wheel")
+    parser.add_argument("--provider-wheel", help="Install the independent structuredmerge-libcst provider instead of the conformance adapter")
+    args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    wheel = resolve_wheel(sys.argv[1])
+    wheel = resolve_wheel(args.wheel)
+    provider_wheel = resolve_wheel(args.provider_wheel) if args.provider_wheel else None
     metadata, license_files = inspect_wheel(root, wheel)
     with artifact_workspace(root) as stage:
         print(f"Artifact report directory: {stage}", flush=True)
         try:
-            run_checks(root, wheel, metadata, license_files, stage)
+            run_checks(root, wheel, metadata, license_files, stage,
+                **({"provider_wheel": provider_wheel} if provider_wheel else {}))
         except BaseException as error:
             (stage / "report.json").write_text(json.dumps({
                 "artifact": str(wheel), "publication_gate": False,
@@ -105,7 +110,7 @@ def main():
             raise
 
 
-def run_checks(root, wheel, metadata, license_files, stage):
+def run_checks(root, wheel, metadata, license_files, stage, provider_wheel=None):
     environment = stage / "venv"
     venv.EnvBuilder(with_pip=True).create(environment)
     python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -121,8 +126,13 @@ def run_checks(root, wheel, metadata, license_files, stage):
     for name in ("test_parser_host.py", "libcst_facts.py", "native_merge_fixture.py"):
         shutil.copyfile(root / "packages/python/tests" / name, test_app / name)
     env = {key: value for key, value in os.environ.items() if key not in ("PYTHONPATH", "PYTHONHOME")}
+    # Never inherit this test mode accidentally from the invoking shell.
+    env.pop("STRUCTUREDMERGE_LIBCST_INSTALLED", None)
+    if provider_wheel:
+        env["STRUCTUREDMERGE_LIBCST_INSTALLED"] = "1"
     env.setdefault("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR", str(root / "tmp/typed-tslp-cache"))
-    subprocess.run([str(python), "-m", "pip", "install", "--no-cache-dir", str(wheel), "libcst==1.9.0", "pytest>=7.4",
+    subprocess.run([str(python), "-m", "pip", "install", "--no-cache-dir", str(wheel),
+                    str(provider_wheel) if provider_wheel else "libcst==1.9.0", "pytest>=7.4",
                     "pytest-asyncio>=0.23", "pytest-timeout>=2.1"],
         cwd=consumer, env=env, check=True)
     subprocess.run([str(python), "-m", "unittest", "discover", "-s", ".", "-v"],
@@ -137,10 +147,14 @@ def run_checks(root, wheel, metadata, license_files, stage):
         "python": sys.version, "libcst": "1.9.0", "license_files": license_files,
         "installed_merge_tests": "passed", "publication_gate": False,
         "generated_e2e_tests": "passed",
-        "generated_test_app": "passed with local wheel and copied native-provider support",
+        "generated_test_app": "passed with local wheels and independent provider" if provider_wheel else "passed with local wheel and copied native-provider support",
+        "native_provider_mode": "installed-provider" if provider_wheel else "conformance-adapter",
         "registry_install": "not_run",
         "api_review_baseline": "python source surface matched",
     }
+    if provider_wheel:
+        report.update(provider_artifact=str(provider_wheel),
+            provider_sha256=hashlib.sha256(provider_wheel.read_bytes()).hexdigest())
     (stage / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report))
     print(f"Report: {stage / 'report.json'} (temporary consumer removed on exit)")
