@@ -58,7 +58,72 @@ class TypedPsychHost
   end
 end
 
+# Test-only host-owned analysis. It consumes native facts, not merge semantics.
+class TypedWorkflowHost
+  attr_accessor :cancel, :before_return
+  attr_reader :calls, :tag
+
+  def initialize(tag = "original")
+    @tag = tag
+    @calls = []
+    @cancel = false
+  end
+
+  def descriptor
+    StructuredmergeCore::MergeProviderDescriptor.new(provider_id: "ruby.psych.workflow", family: "yaml", role: :workflow,
+      operations: ["analyze"], dialects: [], profiles: ["ruby.psych.analysis.v1"], capabilities: ["analyze"],
+      preservation_guarantees: [], priority: 0,
+      parser_requirements: StructuredmergeCore::MergeParserRequirements.new(languages: ["yaml"], allowed_backend_ids: ["ruby.typed.psych"]),
+      allowed_delegation_targets: [], runtime: "ruby", package: "psych", package_version: Psych::VERSION,
+      metadata: {"host_tag" => tag.to_json}, extensions: [])
+  end
+
+  def execute_batch(prepared, control)
+    core = StructuredmergeCore
+    raise "expected native batch" unless prepared.is_a?(core::PreparedWorkflowBatch)
+    raise "expected native control" unless control.is_a?(core::OperationControl)
+    calls << prepared
+    before_return&.call
+    if cancel
+      control.cancel
+      raise "private host exception"
+    end
+    core::WorkflowBatchResult.new(items: prepared.items.map do |item|
+      parsed = item.parses.first.parsed
+      source = item.operation.sources.fetch(:source)
+      raise "source identity changed" unless parsed.source.source_id == source.source_id && parsed.source.sha256 == source.sha256
+      raise "no parser facts" if parsed.nodes.empty?
+      core::OperationResult.new(schema: "https://structuredmerge.org/schemas/provider-result/v1.json", request_id: item.operation.request_id,
+        operation: :analyze, ok: true, provider: core::ResultProvider.new(provider_id: "ruby.psych.workflow", family: "yaml", extra: {}),
+        profile: core::ResultProfile.new(profile_id: "ruby.psych.analysis.v1", extra: {}, parser: core::ResultParserSelection.new(
+          requested_backend: "ruby.typed.psych", selected_backend: "ruby.typed.psych", selection_mode: "explicit", extra: {})),
+        diagnostics: [], changes: [], conflicts: [], fallbacks: [], render_report: {},
+        verification: core::ResultVerification.new(consumed_source_roles: [:source], classification_reached: true, extra: {}),
+        analysis: core::ResultAnalysis.new(schema: "structuredmerge.analysis-result/v1", extra: {"native_node_count" => parsed.nodes.length.to_json}),
+        extensions: [], metadata: {"host_tag" => tag.to_json}, extra: {})
+    end)
+  end
+end
+
 module NativeMergeFixture
+  def workflow_request
+    core = StructuredmergeCore
+    items = ["a: λ\n", "\uFEFFb: two\n"].each_with_index.map do |text, index|
+      original = common_request("analyze", [text])
+      operation = core::OperationRequest.new(schema: original.schema, request_id: "workflow-#{index}",
+        operation: original.operation, sources: original.sources, parser_selection: original.parser_selection,
+        provider_selection: core::MergeProviderSelection.new(provider_id: "ruby.psych.workflow", family: "yaml", profile_id: "ruby.psych.analysis.v1",
+          required_capabilities: ["analyze"], extra: {}), extensions: [], metadata: {}, extra: {})
+      core::WorkflowOperation.new(operation: operation, parser_language: "yaml", parser_dialect: nil,
+        parse_options: core::ParseOptions.new(native_extensions: true))
+    end
+    core::WorkflowBatchRequest.new(items: items)
+  end
+
+  def workflow_limits
+    StructuredmergeCore::WorkflowLimits.new(max_operations: 4, max_request_bytes: 1000000, max_response_bytes: 1000000, parse: merge_limits)
+  end
+
   def run_capability_manifest(profile, operation, dialect)
     query = StructuredmergeCore::CapabilityQuery.new(profile_id: profile, operation: operation.to_sym,
       dialect: dialect.empty? ? nil : dialect, parser_selection: StructuredmergeCore::ParserSelection.new(

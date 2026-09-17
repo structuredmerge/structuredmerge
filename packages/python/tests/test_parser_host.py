@@ -21,16 +21,18 @@ from libcst_facts import LibCSTHost
 
 
 class TypedParserHostTest(unittest.TestCase):
-    def test_workflow_batch_uses_native_facts_and_shared_cancellation_handle(self):
-        self.assertIs(core.MergeProviderDescriptor, native.MergeProviderDescriptor)
-        self.assertIs(core.MergeParserRequirements, native.MergeParserRequirements)
+    def workflow_fixture(self):
         provider_id = "python.libcst.workflow"
         profile = "python.libcst.analysis.v1"
-        calls = []
-        cancelled = []
         testcase = self
 
         class Host:
+            def __init__(self, tag="original"):
+                self.tag = tag
+                self.calls = []
+                self.cancel = False
+                self.before_return = None
+
             def descriptor(self):
                 return core.MergeProviderDescriptor(
                     provider_id=provider_id, family="python", role=native.MergeProviderRole.WORKFLOW,
@@ -39,14 +41,16 @@ class TypedParserHostTest(unittest.TestCase):
                     parser_requirements=core.MergeParserRequirements(
                         languages=["python"], allowed_backend_ids=["python.libcst"]),
                     allowed_delegation_targets=[], runtime="python", package="libcst",
-                    package_version="1.9.0", metadata={}, extensions=[])
+                    package_version="1.9.0", metadata={"host_tag": json.dumps(self.tag)}, extensions=[])
 
             def execute_batch(self, prepared, control):
                 testcase.assertIsInstance(prepared, native.PreparedWorkflowBatch)
                 testcase.assertIsInstance(control, native.OperationControl)
                 testcase.assertFalse(control.is_cancelled())
-                calls.append(prepared)
-                if cancelled:
+                self.calls.append(prepared)
+                if self.before_return:
+                    self.before_return()
+                if self.cancel:
                     control.cancel()
                     raise RuntimeError("private host exception")
                 results = []
@@ -68,7 +72,7 @@ class TypedParserHostTest(unittest.TestCase):
                             classification_reached=True, extra={}),
                         analysis=native.ResultAnalysis(schema="structuredmerge.analysis-result/v1",
                             extra={"native_node_count": json.dumps(len(parsed.nodes))}),
-                        extensions=[], metadata={}, extra={}))
+                        extensions=[], metadata={"host_tag": json.dumps(self.tag)}, extra={}))
                 return native.WorkflowBatchResult(items=results)
 
         items = []
@@ -86,24 +90,214 @@ class TypedParserHostTest(unittest.TestCase):
         limits = native.WorkflowLimits(max_operations=4, max_request_bytes=1000000,
             max_response_bytes=1000000, parse=native.ParseLimits(max_batch_items=4,
                 max_input_bytes=10000, max_nodes=1000, max_diagnostics=20))
-        generation = core.register_workflow_host(Host())
+        return Host, provider_id, request, limits
+
+    def test_workflow_batch_uses_native_facts_and_shared_cancellation_handle(self):
+        self.assertIs(core.MergeProviderDescriptor, native.MergeProviderDescriptor)
+        self.assertIs(core.MergeParserRequirements, native.MergeParserRequirements)
+        Host, provider_id, request, limits = self.workflow_fixture()
+        host = Host()
+        generation = core.register_workflow_host(host)
         try:
             execution = core.execute_workflow_batch(provider_id, request, limits)
-            self.assertEqual(len(calls), 1)
-            self.assertEqual(len(calls[0].items), 2)
+            self.assertEqual(len(host.calls), 1)
+            self.assertEqual(len(host.calls[0].items), 2)
             self.assertEqual([result.request_id for result in execution.results], ["workflow-0", "workflow-1"])
             self.assertEqual(execution.execution_owner, native.WorkflowExecutionOwner.HOST)
             self.assertFalse(execution.approved_as_default)
             self.assertTrue(all(json.loads(result.analysis.extra["native_node_count"]) > 0
                 for result in execution.results))
-            cancelled.append(True)
+            host.cancel = True
             control = core.create_operation_control()
             with self.assertRaisesRegex(RuntimeError, "execution.cancelled"):
                 core.execute_workflow_batch_controlled(provider_id, request, limits, control)
             self.assertTrue(control.is_cancelled(), "callback must share the caller's cancellation state")
-            self.assertEqual(len(calls), 2, "workflow callbacks must not be retried")
+            self.assertEqual(len(host.calls), 2, "workflow callbacks must not be retried")
         finally:
             core.unregister_workflow_host(provider_id, generation)
+
+    def test_workflow_registry_retains_and_releases_python_callbacks(self):
+        Host, provider_id, request, limits = self.workflow_fixture()
+        for index in range(8):
+            host = Host(str(index))
+            reference = weakref.ref(host)
+            generation = core.register_workflow_host(host)
+            del host
+            try:
+                gc.collect()
+                self.assertIsNotNone(reference())
+                execution = core.execute_workflow_batch(provider_id, request, limits)
+                self.assertEqual(json.loads(execution.results[0].metadata["host_tag"]), str(index))
+            finally:
+                core.unregister_workflow_host(provider_id, generation)
+            gc.collect()
+            self.assertIsNone(reference(), "registry retirement must release the Python callback")
+
+    def test_workflow_reentrant_replacement_keeps_inflight_snapshot_and_rejects_stale_writes(self):
+        Host, provider_id, request, limits = self.workflow_fixture()
+        old, replacement = Host("old"), Host("replacement")
+        generation = core.register_workflow_host(old)
+        inventory = core.workflow_registry_inventory()
+        current = [generation]
+        def replace():
+            current[0] = core.replace_workflow_host(replacement, generation)
+            with self.assertRaisesRegex(RuntimeError, "StaleGeneration"):
+                core.unregister_workflow_host(provider_id, generation)
+            with self.assertRaisesRegex(RuntimeError, "StaleGeneration"):
+                core.replace_workflow_host(Host("stale"), generation)
+        old.before_return = replace
+        try:
+            execution = core.execute_workflow_batch(provider_id, request, limits)
+            self.assertEqual(json.loads(execution.provider.metadata["host_tag"]), "old")
+            self.assertTrue(all(json.loads(result.metadata["host_tag"]) == "old" for result in execution.results))
+            self.assertTrue(all(report.provider_generation == generation for report in execution.selections))
+            self.assertEqual(len(old.calls), 1)
+            self.assertEqual(replacement.calls, [])
+            self.assertEqual(json.loads(inventory.providers[0].metadata["host_tag"]), "old")
+            subsequent = core.execute_workflow_batch(provider_id, request, limits)
+            self.assertEqual(json.loads(subsequent.provider.metadata["host_tag"]), "replacement")
+            self.assertTrue(all(report.provider_generation == current[0] for report in subsequent.selections))
+            self.assertEqual(len(replacement.calls), 1)
+        finally:
+            core.unregister_workflow_host(provider_id, current[0])
+
+    def test_workflow_callback_can_unregister_itself_without_retry(self):
+        Host, provider_id, request, limits = self.workflow_fixture()
+        host = Host()
+        generation = core.register_workflow_host(host)
+        retired = []
+        def unregister():
+            retired.append(core.unregister_workflow_host(provider_id, generation))
+        host.before_return = unregister
+        try:
+            execution = core.execute_workflow_batch(provider_id, request, limits)
+            self.assertEqual(len(execution.results), 2)
+            self.assertEqual(len(host.calls), 1)
+            self.assertEqual(core.workflow_registry_inventory().providers, [])
+            with self.assertRaisesRegex(RuntimeError, "workflow"):
+                core.execute_workflow_batch(provider_id, request, limits)
+            self.assertEqual(len(host.calls), 1)
+        finally:
+            if not retired:
+                core.unregister_workflow_host(provider_id, generation)
+
+    def test_workflow_callbacks_preserve_worker_thread_and_context(self):
+        import contextvars
+        Host, provider_id, request, limits = self.workflow_fixture()
+        host = Host()
+        worker_context = contextvars.ContextVar("workflow_worker")
+        observations = []
+        start = threading.Barrier(4, timeout=10)
+        callback_barrier = threading.Barrier(4, timeout=10)
+        def observe():
+            observations.append((worker_context.get(), threading.get_ident()))
+            callback_barrier.wait()
+        host.before_return = observe
+        generation = core.register_workflow_host(host)
+        try:
+            def execute(index):
+                token = worker_context.set(index)
+                try:
+                    start.wait()
+                    result = core.execute_workflow_batch(provider_id, request, limits)
+                    return index, threading.get_ident(), len(result.results)
+                finally:
+                    worker_context.reset(token)
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                results = list(pool.map(execute, range(16)))
+            self.assertCountEqual(observations, [(index, thread) for index, thread, _ in results])
+            self.assertTrue(all(count == 2 for _, _, count in results))
+            self.assertEqual(len({thread for _, thread, _ in results}), 4)
+            self.assertEqual(len(host.calls), 16)
+        finally:
+            core.unregister_workflow_host(provider_id, generation)
+
+    def test_workflow_discards_late_result_after_cross_thread_cancel_and_retirement(self):
+        Host, provider_id, request, limits = self.workflow_fixture()
+        host = Host()
+        arrived, release = threading.Event(), threading.Event()
+        def pause():
+            arrived.set()
+            if not release.wait(timeout=10):
+                raise RuntimeError("workflow cancellation barrier timed out")
+        host.before_return = pause
+        generation = core.register_workflow_host(host)
+        retired = False
+        control = core.create_operation_control()
+        try:
+            with ThreadPoolExecutor(max_workers=1) as workers:
+                pending = workers.submit(core.execute_workflow_batch_controlled, provider_id, request, limits, control)
+                try:
+                    self.assertTrue(arrived.wait(timeout=10))
+                    control.cancel()
+                    core.unregister_workflow_host(provider_id, generation)
+                    retired = True
+                finally:
+                    release.set()
+                with self.assertRaisesRegex(RuntimeError, "execution.cancelled"):
+                    pending.result(timeout=15)
+            self.assertEqual(len(host.calls), 1)
+            self.assertEqual(core.workflow_registry_inventory().providers, [])
+        finally:
+            release.set()
+            if not retired:
+                core.unregister_workflow_host(provider_id, generation)
+
+    def test_workflow_runtime_exits_with_registered_retired_and_cancelled_drained_hosts(self):
+        script = textwrap.dedent('''
+            import gc, sys, threading
+            import structuredmerge_core as core
+            from test_parser_host import LibCSTHost, TypedParserHostTest
+            mode = sys.argv[1]
+            fixture = TypedParserHostTest()
+            core.register_parser_host(LibCSTHost())
+            Host, provider_id, request, limits = fixture.workflow_fixture()
+            host = Host()
+            generation = core.register_workflow_host(host)
+            if mode == "drained":
+                entered, release = threading.Event(), threading.Event()
+                def pause():
+                    entered.set()
+                    if not release.wait(5):
+                        raise RuntimeError("workflow not released")
+                host.before_return = pause
+                control = core.create_operation_control()
+                outcomes = []
+                def run():
+                    try:
+                        core.execute_workflow_batch_controlled(provider_id, request, limits, control)
+                        outcomes.append("unexpected success")
+                    except RuntimeError as error:
+                        outcomes.append(str(error))
+                worker = threading.Thread(target=run)
+                worker.start()
+                try:
+                    assert entered.wait(5), "workflow never entered"
+                    core.unregister_workflow_host(provider_id, generation)
+                    control.cancel()
+                finally:
+                    release.set()
+                    worker.join(5)
+                assert not worker.is_alive(), "workflow failed to drain"
+                assert len(outcomes) == 1 and "execution.cancelled" in outcomes[0], outcomes
+            else:
+                result = core.execute_workflow_batch(provider_id, request, limits)
+                assert len(result.results) == 2
+                if mode == "retired":
+                    core.unregister_workflow_host(provider_id, generation)
+            assert len(host.calls) == 1
+            del host
+            gc.collect()
+            print("ready-to-exit:" + mode, flush=True)
+        ''')
+        for mode in ("registered", "retired", "drained"):
+            for repetition in range(3):
+                with self.subTest(mode=mode, repetition=repetition):
+                    completed = subprocess.run([sys.executable, "-c", script, mode],
+                        cwd=Path(__file__).resolve().parent, capture_output=True, text=True,
+                        timeout=20, check=False)
+                    self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                    self.assertEqual(completed.stdout.strip(), "ready-to-exit:" + mode)
 
     def test_capability_manifest_separates_support_probes_and_authority(self):
         limits = core.ParseLimits(max_batch_items=4, max_input_bytes=0, max_nodes=0, max_diagnostics=0)

@@ -32,53 +32,10 @@ RSpec.describe StructuredmergeCore do
       raise
     end
     core.register_parser_host(parser)
-    provider_id = "ruby.psych.workflow"
-    profile = "ruby.psych.analysis.v1"
-    calls = []
-    cancel = false
-    host = Object.new
-    host.define_singleton_method(:descriptor) do
-      core::MergeProviderDescriptor.new(provider_id: provider_id, family: "yaml", role: :workflow,
-        operations: ["analyze"], dialects: [], profiles: [profile], capabilities: ["analyze"],
-        preservation_guarantees: [], priority: 0,
-        parser_requirements: core::MergeParserRequirements.new(languages: ["yaml"], allowed_backend_ids: ["ruby.typed.psych"]),
-        allowed_delegation_targets: [], runtime: "ruby", package: "psych", package_version: Psych::VERSION,
-        metadata: {}, extensions: [])
-    end
-    host.define_singleton_method(:execute_batch) do |prepared, control|
-      raise "expected native batch" unless prepared.is_a?(core::PreparedWorkflowBatch)
-      raise "expected native control" unless control.is_a?(core::OperationControl)
-      calls << prepared
-      if cancel
-        control.cancel
-        raise "private host exception"
-      end
-      core::WorkflowBatchResult.new(items: prepared.items.map do |item|
-        parsed = item.parses.first.parsed
-        source = item.operation.sources.fetch(:source)
-        raise "source identity changed" unless parsed.source.source_id == source.source_id && parsed.source.sha256 == source.sha256
-        raise "no parser facts" if parsed.nodes.empty?
-        core::OperationResult.new(schema: "https://structuredmerge.org/schemas/provider-result/v1.json", request_id: item.operation.request_id,
-          operation: :analyze, ok: true, provider: core::ResultProvider.new(provider_id: provider_id, family: "yaml", extra: {}),
-          profile: core::ResultProfile.new(profile_id: profile, extra: {}, parser: core::ResultParserSelection.new(
-            requested_backend: "ruby.typed.psych", selected_backend: "ruby.typed.psych", selection_mode: "explicit", extra: {})),
-          diagnostics: [], changes: [], conflicts: [], fallbacks: [], render_report: {},
-          verification: core::ResultVerification.new(consumed_source_roles: [:source], classification_reached: true, extra: {}),
-          analysis: core::ResultAnalysis.new(schema: "structuredmerge.analysis-result/v1", extra: {"native_node_count" => parsed.nodes.length.to_json}),
-          extensions: [], metadata: {}, extra: {})
-      end)
-    end
-    items = ["a: λ\n", "\uFEFFb: two\n"].each_with_index.map do |text, index|
-      original = common_request("analyze", [text])
-      operation = core::OperationRequest.new(schema: original.schema, request_id: "workflow-#{index}",
-        operation: original.operation, sources: original.sources, parser_selection: original.parser_selection,
-        provider_selection: core::MergeProviderSelection.new(provider_id: provider_id, family: "yaml", profile_id: profile,
-          required_capabilities: ["analyze"], extra: {}), extensions: [], metadata: {}, extra: {})
-      core::WorkflowOperation.new(operation: operation, parser_language: "yaml", parser_dialect: nil,
-        parse_options: core::ParseOptions.new(native_extensions: true))
-    end
-    request = core::WorkflowBatchRequest.new(items: items)
-    limits = core::WorkflowLimits.new(max_operations: 4, max_request_bytes: 1000000, max_response_bytes: 1000000, parse: merge_limits)
+    host = TypedWorkflowHost.new
+    provider_id = host.descriptor.provider_id
+    request = workflow_request
+    limits = workflow_limits
     generation = core.register_workflow_host(host)
     begin
       execution = core.execute_workflow_batch(provider_id, request, limits)
@@ -86,20 +43,251 @@ RSpec.describe StructuredmergeCore do
       expect(parser_errors).to be_empty
       raise
     end
-    expect(calls.length).to eq(1)
-    expect(calls.first.items.length).to eq(2)
+    expect(host.calls.length).to eq(1)
+    expect(host.calls.first.items.length).to eq(2)
     expect(execution.results.map(&:request_id)).to eq(%w[workflow-0 workflow-1])
     expect(execution.execution_owner).to eq(:host)
     expect(execution.approved_as_default).to be(false)
     expect(execution.results.all? { |result| JSON.parse(result.analysis.extra.fetch("native_node_count")) > 0 }).to be(true)
-    cancel = true
+    host.cancel = true
     control = core.create_operation_control
     expect { core.execute_workflow_batch_controlled(provider_id, request, limits, control) }.to raise_error(RuntimeError, /execution.cancelled/)
     expect(control.is_cancelled).to be(true)
-    expect(calls.length).to eq(2)
+    expect(host.calls.length).to eq(2)
   ensure
     core.unregister_workflow_host(provider_id, generation) if generation
     core.unregister_parser_host("ruby.typed.psych")
+  end
+
+  def register_ephemeral_workflow(tag)
+    host = TypedWorkflowHost.new(tag)
+    reference = WeakRef.new(host)
+    [reference, described_class.register_workflow_host(host)]
+  end
+
+  it "retains workflow callbacks across GC and releases retired registrations" do
+    described_class.register_parser_host(TypedPsychHost.new)
+    8.times do |index|
+      reference, generation = register_ephemeral_workflow(index.to_s)
+      begin
+        GC.start
+        GC.compact if GC.respond_to?(:compact)
+        expect(reference.weakref_alive?).to be_truthy
+        execution = described_class.execute_workflow_batch("ruby.psych.workflow", workflow_request, workflow_limits)
+        expect(JSON.parse(execution.results.first.metadata.fetch("host_tag"))).to eq(index.to_s)
+      ensure
+        described_class.unregister_workflow_host("ruby.psych.workflow", generation)
+      end
+      50.times do
+        Thread.pass
+        GC.start
+        break unless reference.weakref_alive?
+      end
+      expect(reference.weakref_alive?).to be_falsey
+    end
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "keeps in-flight workflow snapshots through reentrant replacement and rejects stale writes" do
+    described_class.register_parser_host(TypedPsychHost.new)
+    original = TypedWorkflowHost.new("original")
+    replacement = TypedWorkflowHost.new("replacement")
+    generation = described_class.register_workflow_host(original)
+    inventory = described_class.workflow_registry_inventory
+    current = generation
+    original.before_return = lambda do
+      current = described_class.replace_workflow_host(replacement, generation)
+      expect { described_class.unregister_workflow_host("ruby.psych.workflow", generation) }.to raise_error(RuntimeError, /StaleGeneration/)
+      expect { described_class.replace_workflow_host(TypedWorkflowHost.new("stale"), generation) }.to raise_error(RuntimeError, /StaleGeneration/)
+    end
+    execution = described_class.execute_workflow_batch("ruby.psych.workflow", workflow_request, workflow_limits)
+    expect(JSON.parse(execution.provider.metadata.fetch("host_tag"))).to eq("original")
+    expect(execution.results.map { |result| JSON.parse(result.metadata.fetch("host_tag")) }).to eq(["original"] * 2)
+    expect(execution.selections.map(&:provider_generation)).to eq([generation] * 2)
+    expect(original.calls.length).to eq(1)
+    expect(replacement.calls).to be_empty
+    expect(JSON.parse(inventory.providers.first.metadata.fetch("host_tag"))).to eq("original")
+    subsequent = described_class.execute_workflow_batch("ruby.psych.workflow", workflow_request, workflow_limits)
+    expect(JSON.parse(subsequent.provider.metadata.fetch("host_tag"))).to eq("replacement")
+    expect(subsequent.selections.map(&:provider_generation)).to eq([current] * 2)
+    expect(replacement.calls.length).to eq(1)
+  ensure
+    described_class.unregister_workflow_host("ruby.psych.workflow", current) if current
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "lets a workflow callback unregister itself without retrying or losing its batch" do
+    described_class.register_parser_host(TypedPsychHost.new)
+    host = TypedWorkflowHost.new
+    generation = described_class.register_workflow_host(host)
+    retired = false
+    host.before_return = lambda do
+      described_class.unregister_workflow_host("ruby.psych.workflow", generation)
+      retired = true
+    end
+    execution = described_class.execute_workflow_batch("ruby.psych.workflow", workflow_request, workflow_limits)
+    expect(execution.results.length).to eq(2)
+    expect(host.calls.length).to eq(1)
+    expect(described_class.workflow_registry_inventory.providers).to be_empty
+    expect { described_class.execute_workflow_batch("ruby.psych.workflow", workflow_request, workflow_limits) }.to raise_error(RuntimeError, /workflow/)
+    expect(host.calls.length).to eq(1)
+  ensure
+    described_class.unregister_workflow_host("ruby.psych.workflow", generation) if generation && !retired
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "overlaps workflow callbacks on four Ruby threads without crossing thread-local context" do
+    described_class.register_parser_host(TypedPsychHost.new)
+    host = TypedWorkflowHost.new
+    arrivals = Queue.new
+    releases = []
+    closing = false
+    observations = []
+    host.before_return = lambda do
+      observations << [Thread.current.object_id, Thread.current.thread_variable_get(:workflow_worker)]
+      gate = Queue.new
+      releases << gate
+      arrivals << gate
+      raise "workflow callback barrier timed out" unless closing || gate.pop(timeout: 10)
+    end
+    generation = described_class.register_workflow_host(host)
+    request, limits = workflow_request, workflow_limits
+    workers = 4.times.map do |index|
+      Thread.new do
+        Thread.current.thread_variable_set(:workflow_worker, index)
+        4.times.map do
+          result = described_class.execute_workflow_batch("ruby.psych.workflow", request, limits)
+          [Thread.current.object_id, index, result.results.length]
+        end
+      rescue => error
+        error
+      end
+    end
+    4.times do
+      gates = 4.times.map do
+        gate = arrivals.pop(timeout: 10)
+        expect(gate).to be_a(Queue)
+        gate
+      end
+      gates.each { |gate| gate << true }
+    end
+    results = workers.flat_map do |worker|
+      raise "workflow worker did not finish" unless worker.join(15)
+      value = worker.value
+      raise value if value.is_a?(Exception)
+      value
+    end
+    expect(observations).to match_array(results.map { |thread, index, _| [thread, index] })
+    expect(results.map(&:last)).to eq([2] * 16)
+    expect(results.map(&:first).uniq.length).to eq(4)
+    expect(host.calls.length).to eq(16)
+  ensure
+    closing = true
+    releases&.each { |gate| gate << true }
+    workers&.each { |worker| worker.join(15) }
+    described_class.unregister_workflow_host("ruby.psych.workflow", generation) if generation
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "discards a late workflow result after cross-thread cancellation and registry retirement" do
+    described_class.register_parser_host(TypedPsychHost.new)
+    host = TypedWorkflowHost.new
+    arrived, release = Queue.new, Queue.new
+    host.before_return = lambda do
+      arrived << true
+      raise "workflow cancellation barrier timed out" unless release.pop(timeout: 10)
+    end
+    generation = described_class.register_workflow_host(host)
+    retired = false
+    control = described_class.create_operation_control
+    request, limits = workflow_request, workflow_limits
+    worker = Thread.new do
+      described_class.execute_workflow_batch_controlled("ruby.psych.workflow", request, limits, control)
+    rescue RuntimeError => error
+      error
+    end
+    begin
+      expect(arrived.pop(timeout: 10)).to be(true)
+      control.cancel
+      described_class.unregister_workflow_host("ruby.psych.workflow", generation)
+      retired = true
+    ensure
+      release << true
+    end
+    raise "cancelled workflow worker did not finish" unless worker.join(15)
+    expect(worker.value).to be_a(RuntimeError)
+    expect(worker.value.message).to include("execution.cancelled")
+    expect(host.calls.length).to eq(1)
+    expect(described_class.workflow_registry_inventory.providers).to be_empty
+  ensure
+    release << true if release
+    worker&.join(15)
+    described_class.unregister_workflow_host("ruby.psych.workflow", generation) if generation && !retired
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
+  it "exits fresh runtimes with registered, retired and cancelled-drained workflow hosts" do
+    script = <<~'RUBY'
+      require_relative "native_merge_fixture"
+      include NativeMergeFixture
+      mode = ARGV.fetch(0)
+      StructuredmergeCore.register_parser_host(TypedPsychHost.new)
+      host = TypedWorkflowHost.new
+      generation = StructuredmergeCore.register_workflow_host(host)
+      request, limits = workflow_request, workflow_limits
+      if mode == "drained"
+        entered, release = Queue.new, Queue.new
+        host.before_return = lambda do
+          entered << true
+          raise "workflow not released" unless release.pop(timeout: 5)
+        end
+        control = StructuredmergeCore.create_operation_control
+        worker = Thread.new do
+          StructuredmergeCore.execute_workflow_batch_controlled("ruby.psych.workflow", request, limits, control)
+          "unexpected success"
+        rescue RuntimeError => error
+          error.message
+        end
+        begin
+          raise "workflow never entered" unless entered.pop(timeout: 5)
+          StructuredmergeCore.unregister_workflow_host("ruby.psych.workflow", generation)
+          control.cancel
+        ensure
+          release << true
+          raise "workflow failed to drain" unless worker.join(5)
+        end
+        raise "late result was accepted" unless worker.value.include?("execution.cancelled")
+      else
+        result = StructuredmergeCore.execute_workflow_batch("ruby.psych.workflow", request, limits)
+        raise "wrong result count" unless result.results.length == 2
+        StructuredmergeCore.unregister_workflow_host("ruby.psych.workflow", generation) if mode == "retired"
+      end
+      raise "workflow did not finish once" unless host.calls.length == 1
+      host = nil
+      GC.start
+      GC.compact if GC.respond_to?(:compact)
+      puts "ready-to-exit:#{mode}"
+    RUBY
+    %w[registered retired drained].each do |mode|
+      3.times do
+        Open3.popen2e(RbConfig.ruby, "-rbundler/setup", "-e", script, mode, chdir: __dir__) do |input, output, process|
+          input.close
+          reader = Thread.new { output.read }
+          begin
+            expect(process.join(20)).not_to be_nil, "workflow runtime exit timed out: #{mode}"
+            expect(process.value.success?).to be(true), reader.value
+            expect(reader.value.strip).to eq("ready-to-exit:#{mode}")
+          ensure
+            if process.alive?
+              Process.kill("KILL", process.pid)
+              process.join
+            end
+            reader.join
+          end
+        end
+      end
+    end
   end
 
   it "separates capability declarations, parser eligibility and default approval" do

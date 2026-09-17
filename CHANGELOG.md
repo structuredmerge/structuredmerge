@@ -339,6 +339,8 @@
 
 - Expose typed WorkflowHost registration, inventory, prepared native-parser batches and bounded host-owned execution to Ruby and Python, with shared cancellation controls and no default-authority promotion.
 
+- Extend installed Ruby/Python WorkflowHost lifecycle gates with GC retention/release, reentrant registry changes, stale generations, overlapping host threads and caller context, late-result cancellation, and bounded registered/retired/drained runtime-exit checks.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

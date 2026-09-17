@@ -54,6 +54,37 @@ The test-only Psych projector probes whether the installed parser counts a BOM
 in character columns; it always parses the original document bytes. This keeps
 the isolated default Psych 5.3.1 and local Psych 5.5.0 byte ranges consistent.
 
+## Installed lifecycle evidence
+
+`tmp/workflow-lifecycle-python.log` and `tmp/workflow-lifecycle-ruby.log` extend
+the same installed artifacts' coverage to:
+
+- Eight registration/GC/retirement cycles per runtime, including Ruby compaction.
+- Reentrant replacement with stale-generation rejection and unchanged in-flight
+  provider identity, results and selection generation; the next call uses the
+  replacement. Previously returned inventories remain unchanged.
+- Self-unregistration during the callback, preserving the captured batch but
+  preventing a later dispatch, with no retry.
+- Sixteen overlapping calls on four host-created threads, preserving Python
+  context variables and Ruby thread-local values on the calling thread.
+- Cross-thread cancellation and registry retirement while a callback is paused;
+  the late successful host result is discarded after cooperative release.
+- Nine fresh subprocess exits per runtime: registered, retired and
+  cancelled-and-drained hosts, each repeated three times with a 20-second bound.
+
+The completed runs pass 55 Python boundary tests and 48 Ruby boundary examples;
+generated e2e/test-app counts remain 113/114 and 110/110 respectively. All 40
+workspace-script tests and both API baselines pass. Reports are
+`tmp/core-python-artifact-c7p7fo86/report.json` and
+`tmp/core-ruby-artifact-20260917-2391920-lj0xd1/report.json`. No binding rebuild or
+API change was needed; artifact digests match the preceding binding slice.
+Temporary installed consumers were removed, leaving only their small reports.
+
+This is Linux CPython 3.14.2/MRI 4.0.6 evidence for synchronous host-thread calls
+and cooperative draining. It does not establish abrupt VM teardown with active
+callbacks, foreign Rust-thread dispatch, free-threaded Python, other Ruby
+implementations, or the remaining platform/runtime matrix.
+
 The initial error path returns `CoreError`; full portable failure/selection
 envelopes remain open. Host availability, versioned parser-profile support,
 family-default workflow execution, allowed delegation, complete portable batch
