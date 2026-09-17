@@ -12,6 +12,21 @@ The default command builds an allowlisted platform gem, installs it into an
 isolated consumer and runs runtime/generated tests, linkage and RBS validation.
 It does not publish or establish source-gem or other-platform compatibility.
 
+Both helpers below clean disposable staging on completion, failure, `abort`,
+and Ruby-handled interruption. The installed gate removes its package copy,
+consumer, and gem home; source preparation removes its checkout snapshot, tar
+archive, and staging package. Reports/logs remain in the printed scratch directory,
+and explicit package exports remain in the requested output directory. Failure
+evidence is recorded separately in `failure.json`. The default installed report's
+artifact path identifies the temporary package that was tested, not a retained
+package; use `--package-only` when an exported package is needed.
+
+Check free disk space before and during these commands, reserve at least 20 GiB,
+and allocate a separate job budget. Cleanup is not a disk quota or a guard for
+the preceding native compilation. Forced kills or machine crashes can bypass
+teardown; inspect and clean that invocation's scratch paths before resuming.
+Do not retain a new installed environment for every benchmark run.
+
 ## Source archive preparation (not installation approval)
 
 The separate source helper prepares **committed HEAD**, not dirty source files,

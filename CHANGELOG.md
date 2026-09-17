@@ -400,3 +400,5 @@
 - Reject merge-driver report destinations that alias inputs or output, including hard links, symlinks, and new output paths, before any source or output writes.
 
 - Clean disposable Python core artifact environments on success, failure, and handled interruption; retain reports, refuse low-disk runs, and disable pip download caching.
+
+- Clean Ruby typed-core artifact installations and source-package snapshots on completion or failure while preserving reports and explicit exports.

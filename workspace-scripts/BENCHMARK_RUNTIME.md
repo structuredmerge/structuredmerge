@@ -129,9 +129,15 @@ is delegated to a legacy implementation. It imports the conformance helper, not
 benchmark input/oracle data, and is not a production native-layer package.
 
 Build and verify the current Ruby artifact with `check_core_ruby_artifact.rb`.
-For the benchmark command above, set `STRUCTUREDMERGE_BENCHMARK_GEM_HOME` to that
-report's sibling `gems/` directory and `STRUCTUREDMERGE_BENCHMARK_RUBY` to the exact
-absolute `RbConfig.ruby` used to build it. Use:
+The installed gate now removes its disposable gem home. Export the same build
+with `--package-only`, verify that its digest matches the installed-test report,
+and install that export into one separately scoped benchmark gem home. Remove
+that home in the session runner's guaranteed teardown and retain benchmark
+reports outside it. Check free space before and during the session, with a job
+budget above the 20 GiB reserve. For the benchmark command above, set
+`STRUCTUREDMERGE_BENCHMARK_GEM_HOME` to this temporary home and
+`STRUCTUREDMERGE_BENCHMARK_RUBY` to the exact absolute `RbConfig.ruby` used to build
+it. Use:
 
 ```sh
 --driver "$PWD/workspace-scripts/typed_ruby_benchmark" \
