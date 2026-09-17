@@ -126,3 +126,35 @@ Next: actual Ruby Bash consumer migration and broader analysis/result-verifier
 conformance. These local Linux artifact checks do not approve broad family parity,
 source-gem, multi-platform, hosted/downstream or publication gates. The Bash legacy
 exports remain unmigrated; no default switch, package publication or Alef push.
+
+## Local Ruby consumer migration (2026-09-17)
+
+Ruby commit `e326d7a0e` replaces the opt-in Bash prototype adapter with the shared
+typed core transport. Family-specific dialect, parser and owner identity hooks
+preserve JSON/Git behavior. Native-owner diff revisions use typed kernel spans,
+not host source scans or host classifications. Full typed records, canonical
+conflicts and actual verification remain portable Ruby values. Legacy analysis
+shapes are intentionally replaced by kernel owner identities and native spans;
+merge2 is current-preferred, not the old fake-base template selection.
+
+The adapter accepts Git path context, empty labels and default width 7, but never
+renders markers; custom marker requests fail. Native Ruby defaults are unchanged.
+The artifact bundle has no prototype dependency, while released-package CI still
+requires the real core package and remains a separate gate.
+
+Against the installed gem above, all 13 provider examples pass, including native
+merge3 comparisons, byte/line spans after Unicode, added/deleted owners, trivia,
+canonical conflicts, invalid syntax/selectors and directional comment retention.
+Full Bash: 463 examples, zero failures, two existing removal-mode pending cases.
+JSON regression: 93 examples, zero failures. Git regression: 98 examples, zero
+failures, three unavailable-family pending cases before strengthening its conflict
+tests. The updated real-Git suite then passes 30 examples with six pending cases:
+Go/Rust/TypeScript clean and conflict tests now require their actual providers.
+Git status 1 alone is not conflict evidence, since a failed driver produces it too.
+The available Bash path proves actual conflict classification before checking Git.
+
+Logs: `tmp/bash-ruby-{final,focused-final}.log`,
+`tmp/bash-json-merge-regression.log`, `tmp/bash-git-{final,real-final}.log`.
+The migration inventory now marks the Bash consumer migrated locally. Broad
+golden-master/full-language authority, hosted/released-package, full lint/coverage
+and downstream gates remain open. No prototype publication or Alef push occurred.

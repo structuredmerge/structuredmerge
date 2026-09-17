@@ -13,20 +13,29 @@
       "gap": "Local Ruby JSON provider no longer inherits the prototype adapter or performs Ruby diff comparisons/text lookup. Complete core evidence is projected into portable Ruby values. All 93 JSON examples pass against the installed core artifact, including native semantic comparisons. JSON Pointer identities, root/document subjects and strict constraint rejection are intentional compatibility changes. Broader golden-master authority, downstream, hosted/released-package and lint/coverage gates remain open; retain legacy regression evidence without publishing the prototype."
     },
     {
+      "id": "bash-family",
+      "methods": ["parse_bash_analysis", "merge_bash_two_way", "merge_bash_three_way"],
+      "disposition": "local_consumer_migrated",
+      "consumer_revision": "structuredmerge/structuredmerge-ruby@e326d7a0e",
+      "consumers": ["ruby/gems/bash-merge/lib/bash/merge/rust_host_provider.rb"],
+      "replacement": "Typed common Bash analyze/diff2/merge2/merge3 operations with TreeHaver parser registration, Rust-owned owner matching and source verification.",
+      "gap": "The opt-in Ruby adapter no longer depends on the prototype or computes diffs in Ruby. Installed-artifact tests pass all 13 provider cases and the 463-example Bash suite (two existing removal-mode pending cases), JSON regressions and real Git Bash selection. Current-preferred merge2 intentionally replaces fake-base template selection. Kernel owner identities/spans and complete typed records replace legacy analysis shapes. Neutral Git framing is accepted, custom marker requests rejected. Full-language/golden-master authority, downstream, hosted/released-package and lint/coverage gates remain open; native defaults and legacy regression evidence remain unchanged."
+    },
+    {
       "id": "family-analysis",
-      "methods": ["parse_bash_analysis", "parse_go_analysis", "parse_rust_analysis", "parse_typescript_analysis"],
+      "methods": ["parse_go_analysis", "parse_rust_analysis", "parse_typescript_analysis"],
       "disposition": "retain_until_consumer_migration",
-      "consumers": ["ruby/gems/ast-merge/lib/ast/merge/rust_host_provider.rb", "ruby/gems/bash-merge/lib/bash/merge/rust_host_provider.rb", "ruby/gems/go-merge/lib/go/merge/rust_host_provider.rb", "ruby/gems/rust-merge/lib/rust/merge/rust_host_provider.rb", "ruby/gems/typescript-merge/lib/typescript/merge/rust_host_provider.rb"],
+      "consumers": ["ruby/gems/ast-merge/lib/ast/merge/rust_host_provider.rb", "ruby/gems/go-merge/lib/go/merge/rust_host_provider.rb", "ruby/gems/rust-merge/lib/rust/merge/rust_host_provider.rb", "ruby/gems/typescript-merge/lib/typescript/merge/rust_host_provider.rb"],
       "replacement": "Typed analyze and diff2 operations in structuredmerge-core, using TreeHaver and Rust-owned family analysis/matching.",
-      "gap": "JSON has migrated separately. Remaining family adapters still compute diff2 from owner maps and must move those decisions into Rust. parse_sources alone is syntax transport, not analysis."
+      "gap": "JSON and Bash have migrated separately. Remaining family adapters still compute diff2 from owner maps and must move those decisions into Rust. parse_sources alone is syntax transport, not analysis."
     },
     {
       "id": "family-merges",
-      "methods": ["merge_bash_two_way", "merge_bash_three_way", "merge_go_two_way", "merge_go_three_way", "merge_rust_two_way", "merge_rust_three_way", "merge_typescript_two_way", "merge_typescript_three_way"],
+      "methods": ["merge_go_two_way", "merge_go_three_way", "merge_rust_two_way", "merge_rust_three_way", "merge_typescript_two_way", "merge_typescript_three_way"],
       "disposition": "retain_until_consumer_migration",
       "consumers": ["ruby/gems/ast-merge/lib/ast/merge/rust_host_provider.rb"],
       "replacement": "Typed directional merge2 and base-aware merge3 request/result envelopes calling the existing family kernels.",
-      "gap": "JSON has migrated separately. Remaining family engines and their Ruby adapters still need typed orchestration and parity review. Preserve current/incoming direction, dialects, conflicts, diagnostics and source evidence; do not synthesize a base for merge2 or invent unsupported operations."
+      "gap": "JSON and Bash have migrated separately. Remaining family engines and their Ruby adapters still need typed orchestration and parity review. Preserve current/incoming direction, dialects, conflicts, diagnostics and source evidence; do not synthesize a base for merge2 or invent unsupported operations."
     },
     {
       "id": "git-driver",
