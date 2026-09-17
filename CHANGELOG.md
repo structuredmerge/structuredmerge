@@ -277,6 +277,8 @@
 
 - Exercise typed TypeScript and TSX operations, including grammar-specific JSX behavior, through shared Alef-generated tests in isolated installed Ruby/Python core packages.
 
+- Allow CI to export an allowlisted typed Ruby core platform gem and digest report without running the full installed-artifact harness, preserving ABI/API/linkage checks and explicit unrun-test states.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

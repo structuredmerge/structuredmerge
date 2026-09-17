@@ -12,6 +12,14 @@ require "rbconfig"
 require "rubygems/package"
 require "tmpdir"
 
+usage = "usage: check_core_ruby_artifact.rb [--package-only OUTPUT_DIRECTORY]"
+if ARGV == ["--help"]
+  puts usage
+  exit
+end
+abort usage unless ARGV.empty? || (ARGV.length == 2 && ARGV[0] == "--package-only" && !ARGV[1].empty?)
+export_directory = File.expand_path(ARGV[1]) unless ARGV.empty?
+
 root = File.expand_path("..", __dir__)
 package_root = File.join(root, "packages/ruby")
 FileUtils.mkdir_p(File.join(root, "tmp"))
@@ -66,6 +74,39 @@ raise "unexpected archive contents" unless archive.contents.sort == copies.keys.
 raise "prototype files leaked into core gem" if archive.contents.any? { |name| name.include?("prototype") }
 raise "binary gem retained an extension build step" unless archive.spec.extensions.empty?
 raise "binding gem ships executables" unless archive.spec.executables.empty?
+
+if export_directory
+  # CI can build a pre-publication artifact without running/installing the test
+  # harness. Keep the same allowlist, ABI restriction and API checks as the full
+  # gate, and never label package-only output as installed-runtime verification.
+  output, status = Open3.capture2e(RbConfig.ruby,
+    File.join(root, "workspace-scripts/check_ruby_linkage.rb"), artifact)
+  puts output
+  abort "core artifact linkage check failed" unless status.success?
+  FileUtils.mkdir_p(export_directory)
+  destination = File.join(export_directory, File.basename(artifact))
+  report_path = File.join(export_directory, "core-ruby-artifact.json")
+  abort "refusing to overwrite an existing artifact or report" if File.exist?(destination) || File.symlink?(destination) || File.exist?(report_path) || File.symlink?(report_path)
+  report = {
+    "artifact" => File.basename(artifact), "sha256" => Digest::SHA256.file(artifact).hexdigest,
+    "package" => spec.name, "version" => spec.version.to_s,
+    "platform" => spec.platform.to_s, "ruby" => RUBY_VERSION, "ruby_abi" => abi,
+    "required_ruby_version" => spec.required_ruby_version.to_s,
+    "files" => archive.contents.sort, "linkage_check" => "passed",
+    "api_review_baseline" => "ruby source surface matched",
+    "mode" => "package-only", "installed_merge_tests" => "not_run",
+    "generated_e2e_tests" => "not_run", "type_declarations" => "not_validated",
+    "publication_gate" => false, "source_gem_gate" => false,
+  }
+  File.open(destination, File::WRONLY | File::CREAT | File::EXCL, 0o644) do |file|
+    File.open(artifact, "rb") { |source| IO.copy_stream(source, file) }
+  end
+  File.open(report_path, File::WRONLY | File::CREAT | File::EXCL, 0o644) do |file|
+    file.write(JSON.pretty_generate(report) + "\n")
+  end
+  puts JSON.generate(report)
+  exit
+end
 
 consumer = File.join(stage, "consumer")
 gem_home = File.join(stage, "gems")
