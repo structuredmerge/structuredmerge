@@ -17,6 +17,36 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  it "reports request-specific parser eligibility without parsing source" do
+    host = TypedPsychHost.new
+    described_class.register_parser_host(host)
+    query = lambda do |backend, comments = false|
+      described_class::ParserSelectionRequest.new(language: "yaml", dialect: nil,
+        selection: described_class::ParserSelection.new(backend_id: backend, preference: [], required_capabilities: []),
+        options: described_class::ParseOptions.new(comments: comments, tokens: false, diagnostics: false, native_extensions: false))
+    end
+    report = described_class.parser_selection_report(query.call("ruby.typed.psych"), merge_limits)
+    expect(report.selected_backend).to eq("ruby.typed.psych")
+    candidate = report.candidates.find { |item| item.backend_id == "ruby.typed.psych" }
+    expect(candidate.available).to be(true)
+    expect(candidate.loadable).to be(true)
+    unsupported = described_class.parser_selection_report(query.call("ruby.typed.psych", true), merge_limits)
+    expect(unsupported.selected_backend).to be_nil
+    rejected = unsupported.candidates.find { |item| item.backend_id == "ruby.typed.psych" }
+    expect(rejected.rejections).to include("missing_capability:comments")
+    expect(rejected.available).to be_nil
+    missing = described_class.parser_selection_report(query.call("missing.inventory.parser"), merge_limits)
+    expect(missing.selected_backend).to be_nil
+    expect(missing.candidates.map(&:selected)).not_to include(true)
+    expect(missing.candidates.find { |item| item.backend_id == "ruby.typed.psych" }.available).to be_nil
+    control = described_class.create_operation_control
+    control.cancel
+    expect { described_class.parser_selection_report_controlled(query.call("ruby.typed.psych"), merge_limits, control) }.to raise_error(RuntimeError, /execution.cancelled/)
+    expect(host.calls).to eq(0)
+  ensure
+    described_class.unregister_parser_host("ruby.typed.psych")
+  end
+
   it "observes owned parser declarations without probing or changing registration" do
     host = TypedPsychHost.new
     def host.probe_batch(_request) = raise("inventory must not probe")

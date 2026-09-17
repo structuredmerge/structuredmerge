@@ -82,6 +82,27 @@ pub struct ParserProbeRequest {
     pub dialect: Option<String>,
 }
 
+/// Source-free selection query. Probes can load grammars; a successful report
+/// neither parses a document nor grants merge support or default authority.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ParserSelectionRequest {
+    pub language: String,
+    pub dialect: Option<String>,
+    pub selection: ParserSelection,
+    pub options: ParseOptions,
+}
+
+impl From<&ParseRequest> for ParserSelectionRequest {
+    fn from(request: &ParseRequest) -> Self {
+        Self {
+            language: request.language.clone(),
+            dialect: request.dialect.clone(),
+            selection: request.selection.clone(),
+            options: request.options.clone(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ParserProbeResult {
     pub available: bool,
@@ -412,15 +433,15 @@ impl TreeHaverParseService {
     }
 }
 
-impl ParseService for TreeHaverParseService {
-    fn parser_for(
+impl TreeHaverParseService {
+    fn select_parser(
         &self,
-        request: &ParseRequest,
+        request: &ParserSelectionRequest,
         snapshot: &ParserRegistrySnapshot,
         context: &ExecutionContext,
     ) -> Result<SelectedParser, ServiceError> {
         context.check()?;
-        validate_request(request)?;
+        validate_selection(request)?;
         let mut report = SelectionReport {
             requested: request.selection.clone(),
             generation: snapshot.generation(),
@@ -531,6 +552,34 @@ impl ParseService for TreeHaverParseService {
         Ok(SelectedParser { registration: snapshot.state.entries[&id].clone(), report })
     }
 
+    /// Run the same eligibility and probe algorithm used by parse dispatch.
+    /// No eligible provider is report data; malformed queries and execution
+    /// control failures remain errors, with no partial success report.
+    pub fn selection_report(
+        &self,
+        request: &ParserSelectionRequest,
+        snapshot: &ParserRegistrySnapshot,
+        context: &ExecutionContext,
+    ) -> Result<SelectionReport, ServiceError> {
+        match self.select_parser(request, snapshot, context) {
+            Ok(selected) => Ok(selected.report),
+            Err(ServiceError::Selection(report)) => Ok(*report),
+            Err(error) => Err(error),
+        }
+    }
+}
+
+impl ParseService for TreeHaverParseService {
+    fn parser_for(
+        &self,
+        request: &ParseRequest,
+        snapshot: &ParserRegistrySnapshot,
+        context: &ExecutionContext,
+    ) -> Result<SelectedParser, ServiceError> {
+        context.check()?;
+        validate_request(request)?;
+        self.select_parser(&ParserSelectionRequest::from(request), snapshot, context)
+    }
     fn parse_batch(
         &self,
         requests: Vec<ParseRequest>,
@@ -648,9 +697,14 @@ fn ordered_ids_valid(values: &[String]) -> bool {
 }
 
 fn validate_request(request: &ParseRequest) -> Result<(), ServiceError> {
-    if request.schema != PARSE_REQUEST_SCHEMA
-        || request.request_id.is_empty()
-        || request.language.is_empty()
+    if request.schema != PARSE_REQUEST_SCHEMA || request.request_id.is_empty() {
+        return Err(ServiceError::InvalidRequest);
+    }
+    validate_selection(&ParserSelectionRequest::from(request))
+}
+
+fn validate_selection(request: &ParserSelectionRequest) -> Result<(), ServiceError> {
+    if request.language.is_empty()
         || request.dialect.as_ref().is_some_and(String::is_empty)
         || request.selection.backend_id.as_ref().is_some_and(String::is_empty)
         || !ordered_ids_valid(&request.selection.preference)

@@ -246,6 +246,77 @@ fn context() -> ExecutionContext {
 }
 
 #[test]
+fn source_free_selection_reports_match_dispatch_without_parsing() {
+    let registry = ParserRegistry::default();
+    let available = Arc::new(TestParser::new("available", 0));
+    let mut unavailable = TestParser::new("unavailable", 100);
+    unavailable.available = false;
+    let unavailable = Arc::new(unavailable);
+    registry.register(available.clone()).unwrap();
+    registry.register(unavailable.clone()).unwrap();
+    let snapshot = registry.snapshot().unwrap();
+    let service = TreeHaverParseService::default();
+    let mut input = request("selection-report");
+    for explicit in [None, Some("unavailable"), Some("missing")] {
+        input.selection.backend_id = explicit.map(str::to_string);
+        let query = ParserSelectionRequest::from(&input);
+        let report = service.selection_report(&query, &snapshot, &context()).unwrap();
+        let dispatch_report = match service.parser_for(&input, &snapshot, &context()) {
+            Ok(selected) => selected.report,
+            Err(ServiceError::Selection(report)) => *report,
+            Err(error) => panic!("unexpected dispatch failure: {error:?}"),
+        };
+        assert_eq!(report, dispatch_report);
+        assert_eq!(report.selected_backend.as_deref(), explicit.is_none().then_some("available"));
+        assert_eq!(report.generation, snapshot.generation());
+        assert_eq!(report.digest, snapshot.digest());
+        assert_eq!(available.calls.load(Ordering::SeqCst), 0);
+        assert_eq!(unavailable.calls.load(Ordering::SeqCst), 0);
+    }
+    input.selection.backend_id = Some("available".into());
+    input.options.comments = true;
+    let probes = available.probes.load(Ordering::SeqCst);
+    let report = service
+        .selection_report(&ParserSelectionRequest::from(&input), &snapshot, &context())
+        .unwrap();
+    let candidate =
+        report.candidates.iter().find(|candidate| candidate.backend_id == "available").unwrap();
+    assert!(candidate.rejections.contains(&"missing_capability:comments".into()));
+    assert_eq!(candidate.available, None);
+    assert_eq!(candidate.loadable, None);
+    assert_eq!(available.probes.load(Ordering::SeqCst), probes);
+}
+
+#[test]
+fn selection_report_rejects_invalid_queries_and_execution_control_before_probes() {
+    let registry = ParserRegistry::default();
+    let parser = Arc::new(TestParser::new("available", 0));
+    registry.register(parser.clone()).unwrap();
+    let snapshot = registry.snapshot().unwrap();
+    let service = TreeHaverParseService::default();
+    let query = ParserSelectionRequest::from(&request("query"));
+    let mut invalid = query.clone();
+    invalid.language.clear();
+    assert!(matches!(
+        service.selection_report(&invalid, &snapshot, &context()),
+        Err(ServiceError::InvalidRequest)
+    ));
+    let cancelled = context();
+    cancelled.cancelled.store(true, Ordering::Release);
+    assert!(matches!(
+        service.selection_report(&query, &snapshot, &cancelled),
+        Err(ServiceError::Cancelled)
+    ));
+    let expired = ExecutionContext { deadline: Some(Instant::now()), ..context() };
+    assert!(matches!(
+        service.selection_report(&query, &snapshot, &expired),
+        Err(ServiceError::DeadlineExceeded)
+    ));
+    assert_eq!(parser.probes.load(Ordering::SeqCst), 0);
+    assert_eq!(parser.calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
 fn stable_selection_and_digest_do_not_depend_on_registration_order() {
     let service = TreeHaverParseService::default();
     let mut digests = vec![];

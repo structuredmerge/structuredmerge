@@ -255,6 +255,10 @@ fn facade_calls_typed_host_batches_through_tree_haver_and_keeps_native_failure()
         timeout_millis: None,
     };
     let results = parse_sources(vec![request.clone()], limits.clone()).unwrap();
+    let observed =
+        parser_selection_report(ParserSelectionRequest::from(&request), limits.clone()).unwrap();
+    assert_eq!(observed, results[0].selection);
+    assert_eq!(host.calls.load(Ordering::SeqCst), 1);
     let control = OperationControl::new();
     assert!(!control.is_cancelled());
     control.clone().cancel();
@@ -347,6 +351,10 @@ fn facade_calls_typed_host_batches_through_tree_haver_and_keeps_native_failure()
     assert!(removed.providers.is_empty());
     assert!(removed.generation > inventory.generation);
     assert_eq!(inventory.providers[0].id, "core-test");
+    let unavailable =
+        parser_selection_report(ParserSelectionRequest::from(&request), limits.clone()).unwrap();
+    assert_eq!(unavailable.selected_backend, None);
+    assert!(unavailable.candidates.is_empty());
     assert_eq!(parse_sources(vec![request], limits).unwrap_err().code, "selection.no_parser");
     assert_eq!(host.calls.load(Ordering::SeqCst), 2);
 }

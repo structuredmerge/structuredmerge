@@ -43,8 +43,8 @@ not globally unique identities or timestamps.
 The same inventory DTO and observation function are exposed by the generated
 Ruby and Python bindings. Installed-consumer tests check cached declarations,
 owned-copy isolation and removal visibility with hosts that raise if probed.
-Request-specific availability and the complete capability/authority manifest
-remain unfinished. Never infer that a listed parser is available,
+The complete merge capability/authority manifest remains unfinished. Never infer
+from inventory alone that a listed parser is available,
 loadable, semantically supported for a merge operation or approved as default.
 
 | Legacy operation | Typed direction and remaining work |
@@ -54,10 +54,36 @@ loadable, semantically supported for a merge operation or approved as default.
 | `unregister_parser_host` | Compatibility spelling of `unregister_parser_provider`, with snapshot retention. |
 | `parse_with_parser`, `parse_normalized_with_tslp` | Typed `parse_sources`, with explicit selection and validated source-bound results; migrated TreeHaver consumer. |
 | `replace_parser_host` | Still unimplemented as an atomic typed operation; remove/re-register must not be advertised as equivalent. |
-| `registered_parser_hosts` | Typed declaration inventory is exposed in Rust/Ruby/Python; full capability and request-specific availability observability remain pending. |
-| `probe_with_parser` | Typed service selection already probes internally; explicit public observability remains part of the capability contract, not a legacy JSON wrapper. |
+| `registered_parser_hosts` | Typed declaration inventory is exposed in Rust/Ruby/Python; request-specific probes use selection reports, while full merge capability/authority reporting remains pending. |
+| `probe_with_parser` | Source-free typed selection reports expose the same eligibility/probes as dispatch, without a legacy JSON wrapper. |
 | `clear_parser_hosts` | No product need established by the local consumer inventory. Retain legacy regression evidence; prefer explicit removal of owned IDs and require an ownership/concurrency contract before adding process-wide destructive cleanup. |
 
 The inventory names observed local consumers, not an exhaustive external usage
 search. These dispositions do not authorize deleting legacy regression coverage
 or publishing a compatibility host product.
+
+## Request-specific selection reports
+
+`ParserSelectionRequest` contains language, optional dialect, parser selection
+and parse options; it needs no source bytes, fabricated document or request ID.
+`parser_selection_report` and its controlled variant return the same
+`SelectionReport` used by parse dispatch, through the same internal selector.
+The report records snapshot generation/digest, candidate ordering, rejections,
+probe states and the eligible winner. Missing/unavailable explicit backends do not
+fall back. No eligible provider is a report with no winner, while invalid requests,
+cancellation and deadlines remain errors rather than partial successful reports.
+
+Unlike inventory, selection reporting **can load or download grammars** through
+provider probes. Candidates rejected by language, dialect, explicit selection or
+capability checks remain unprobed (`available`/`loadable` are absent, not false).
+Probe faults/panics retain the dispatch report's rejection behavior. No parse
+callback runs. `ParseLimits` supplies execution timeout here; document byte/node,
+batch and diagnostic limits do not apply to this source-free query. Cancellation
+is checked around callbacks and does not forcibly interrupt foreign code.
+
+A report is an observation, not a parser lease or a promise of later success.
+Later registration changes or availability changes may alter a subsequent parse;
+dispatch selects again and reports its own evidence. Eligibility does not prove
+that any particular source parses, that a merge profile supports it, or that the
+provider is approved as the default. Full merge capability/authority reporting
+remains separate.

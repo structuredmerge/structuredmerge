@@ -361,6 +361,31 @@ pub fn parse_sources(
     parse_sources_controlled(requests, limits, &OperationControl::new())
 }
 
+/// Probe source-free eligibility using the same snapshot/selection algorithm as
+/// parse dispatch. No eligible parser is a report, not an exception or fallback.
+/// Parse byte/node limits do not apply because no document is submitted; timeout
+/// and cancellation still apply around callbacks, which are not forcibly stopped.
+pub fn parser_selection_report(
+    request: crate::ParserSelectionRequest,
+    limits: ParseLimits,
+) -> Result<SelectionReport, CoreError> {
+    parser_selection_report_controlled(request, limits, &OperationControl::new())
+}
+
+pub fn parser_selection_report_controlled(
+    request: crate::ParserSelectionRequest,
+    limits: ParseLimits,
+    control: &OperationControl,
+) -> Result<SelectionReport, CoreError> {
+    let context = limits.controlled_context(control)?;
+    let snapshot = registry()
+        .snapshot()
+        .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;
+    TreeHaverParseService::default()
+        .selection_report(&request, &snapshot, &context)
+        .map_err(CoreError::from)
+}
+
 pub fn parse_sources_controlled(
     requests: Vec<ParseRequest>,
     limits: ParseLimits,

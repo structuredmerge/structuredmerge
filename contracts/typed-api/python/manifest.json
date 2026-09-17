@@ -1,11 +1,11 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "python",
-  "review_reason": "Additive typed parser registry inventory DTO and zero-argument observation function; cached declarations only, no availability or authority claim.",
+  "review_reason": "Add source-free ParserSelectionRequest and shared-selector report functions, including explicit cancellation; report eligibility is not parse success or merge/default authority.",
   "files": {
-    "structuredmerge_core/__init__.py": "c247ee11bba919ac2120829f0a3158b4a7d2a8115e048ed22cdcc8fb6ae32372",
-    "structuredmerge_core/_native.pyi": "c9155c4cc9dbd5e481ee12fd6e8837440c12de67672fd38ec692561bc398ad94",
-    "structuredmerge_core/api.py": "eddcf55b7fde5136a272abaf3a7fbd5b6691ddec8739c7244b7f4273f8e0b569",
+    "structuredmerge_core/__init__.py": "0512e93bb1160f9fab50f557819e4d5a57fe4279c87b77de9ab6a4f74629fcb6",
+    "structuredmerge_core/_native.pyi": "dd24638dab87ec2f56eed6acbfba991a7540b3387d89e11e837841ce1d4a4e16",
+    "structuredmerge_core/api.py": "30b1fbb60503c4ddea40f6439d3db9089913cd9c53348d1b4254d5af4ba2a51f",
     "structuredmerge_core/exceptions.py": "25e61ce52e2e192df977a5f2ba7473dd6012e064c4bba38b05c15dc043201a29",
     "structuredmerge_core/options.py": "7de7598c211b0a2847fa9357fb60ddcc9e872f6044bf3f2ca496971e30990d25",
     "structuredmerge_core/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"

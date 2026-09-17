@@ -287,6 +287,8 @@
 
 - Expose the typed, non-loading parser registry inventory through generated Ruby and Python bindings, with installed-consumer tests for ownership, cached declarations, removal visibility, and no provider probes.
 
+- Expose source-free parser selection reports through Rust and generated Ruby/Python APIs, sharing dispatch eligibility/probing and preserving unavailable, unprobed, rejection, and cancellation states without parsing or granting merge authority.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

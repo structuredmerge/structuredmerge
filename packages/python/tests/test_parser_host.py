@@ -64,6 +64,33 @@ class LibCSTHost:
 
 
 class TypedParserHostTest(unittest.TestCase):
+    def test_selection_report_probes_without_parsing_source(self):
+        def query(backend, comments=False):
+            return core.ParserSelectionRequest(language="python", dialect=None,
+                selection=core.ParserSelection(backend_id=backend, preference=[], required_capabilities=[]),
+                options=core.ParseOptions(comments=comments, tokens=False, diagnostics=False, native_extensions=False))
+
+        limits = core.ParseLimits(max_batch_items=1, max_input_bytes=0, max_nodes=0, max_diagnostics=0, timeout_millis=None)
+        report = core.parser_selection_report(query("python.libcst"), limits)
+        self.assertEqual(report.selected_backend, "python.libcst")
+        candidate = next(item for item in report.candidates if item.backend_id == "python.libcst")
+        self.assertTrue(candidate.available)
+        self.assertTrue(candidate.loadable)
+        unsupported = core.parser_selection_report(query("python.libcst", comments=True), limits)
+        self.assertIsNone(unsupported.selected_backend)
+        rejected = next(item for item in unsupported.candidates if item.backend_id == "python.libcst")
+        self.assertIn("missing_capability:comments", rejected.rejections)
+        self.assertIsNone(rejected.available)
+        missing = core.parser_selection_report(query("missing.inventory.parser"), limits)
+        self.assertIsNone(missing.selected_backend)
+        self.assertFalse(any(item.selected for item in missing.candidates))
+        self.assertIsNone(next(item for item in missing.candidates if item.backend_id == "python.libcst").available)
+        control = core.create_operation_control()
+        control.cancel()
+        with self.assertRaisesRegex(RuntimeError, "execution.cancelled"):
+            core.parser_selection_report_controlled(query("python.libcst"), limits, control)
+        self.assertEqual(self.host.calls, 0)
+
     def test_inventory_is_owned_and_does_not_probe(self):
         class UnprobedHost(LibCSTHost):
             def probe_batch(self, request):
