@@ -51,8 +51,8 @@ pub use ast_crispr::{CrisprLimitConstraint, CrisprLimitOperator, CrisprLimitRepo
 pub use structural::*;
 mod templates;
 pub use templates::*;
-mod profiles;
 mod capabilities;
+mod profiles;
 pub use capabilities::*;
 pub use profiles::{
     NativeMergeProfile, OperationProfileCatalog, OperationProfileDeclaration,

@@ -1,10 +1,10 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "python",
-  "review_reason": "Add native typed capability DTOs and public controlled/uncontrolled facade functions without changing existing signatures or default authority.",
+  "review_reason": "Remove unsupported implicit string coercion from struct enum constructor annotations; runtime behavior unchanged, explicit Enum(value) and optional None remain supported.",
   "files": {
     "structuredmerge_core/__init__.py": "5b6e049408aefdd6d2a50263218b95ab239a84f2843c1a1c3135ce47438c76fa",
-    "structuredmerge_core/_native.pyi": "856fb60d4e170454ca57aa034ca4ca63a2a228ba511466a6fdc948abd9617d12",
+    "structuredmerge_core/_native.pyi": "7bcd329d6ec432732e982a9a29e15cfc0d2b3f68765bc4761fc07f41ac68ed6b",
     "structuredmerge_core/api.py": "e34a589529500c104be7371b7816b39b65968bb3e7fcb238038f16884543d268",
     "structuredmerge_core/exceptions.py": "25e61ce52e2e192df977a5f2ba7473dd6012e064c4bba38b05c15dc043201a29",
     "structuredmerge_core/options.py": "7de7598c211b0a2847fa9357fb60ddcc9e872f6044bf3f2ca496971e30990d25",

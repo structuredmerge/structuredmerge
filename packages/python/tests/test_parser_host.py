@@ -826,6 +826,52 @@ class TypedParserHostTest(unittest.TestCase):
                 checked += 1
         self.assertGreater(checked, 0)
 
+    def test_struct_enum_annotations_do_not_advertise_implicit_string_coercion(self):
+        declarations = ast.parse((Path(core.__file__).parent / "_native.pyi").read_text(encoding="utf-8"))
+        classes = [node for node in declarations.body if isinstance(node, ast.ClassDef)]
+        enum_names = {node.name for node in classes if any(
+            isinstance(member, ast.AnnAssign) and isinstance(member.target, ast.Name)
+            and member.target.id.isupper() and isinstance(member.annotation, ast.Name)
+            and member.annotation.id == node.name for member in node.body)}
+        self.assertIn("OperationKind", enum_names)
+        def union_names(annotation):
+            if isinstance(annotation, ast.BinOp) and isinstance(annotation.op, ast.BitOr):
+                return union_names(annotation.left) | union_names(annotation.right)
+            return {annotation.id} if isinstance(annotation, ast.Name) else set()
+        checked = 0
+        for declaration in classes:
+            for member in declaration.body:
+                if not isinstance(member, ast.FunctionDef) or member.name != "__init__":
+                    continue
+                for argument in member.args.posonlyargs + member.args.args + member.args.kwonlyargs:
+                    names = union_names(argument.annotation)
+                    if names & enum_names:
+                        with self.subTest(cls=declaration.name, parameter=argument.arg):
+                            self.assertNotIn("str", names)
+                        checked += 1
+        self.assertGreater(checked, 0)
+
+    def test_struct_enum_inputs_require_explicit_enum_construction(self):
+        for module in (native, core):
+            selection = module.ParserSelection(backend_id=None, preference=[], required_capabilities=[])
+            def query(operation):
+                return module.CapabilityQuery(profile_id="kernel.python.native_declarations.v1",
+                    operation=operation, dialect=None, parser_selection=selection)
+            self.assertEqual(str(query(module.OperationKind("merge3")).operation), "merge3")
+            self.assertEqual(str(query(module.OperationKind(0)).operation), "analyze")
+            for raw in ("merge3", 0, None):
+                with self.subTest(module=module.__name__, required=raw), self.assertRaises(TypeError):
+                    query(raw)
+            def diagnostic(**optional):
+                return module.ResultDiagnostic(id="test", severity="info", category="test", code="test",
+                    message="test", blocking=False, metadata={}, extra={}, **optional)
+            self.assertIsNone(diagnostic().source_role)
+            self.assertIsNone(diagnostic(source_role=None).source_role)
+            self.assertEqual(str(diagnostic(source_role=module.SourceRole("ours")).source_role), "ours")
+            for raw in ("ours", 0):
+                with self.subTest(module=module.__name__, optional=raw), self.assertRaises(TypeError):
+                    diagnostic(source_role=raw)
+
     def test_rust_default_constructors_allow_omission_but_reject_none(self):
         for module in (native, core):
             for name, defaults in (
