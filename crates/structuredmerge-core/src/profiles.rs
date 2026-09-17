@@ -17,6 +17,30 @@ const YAML_OPERATIONS: &[OperationKind] =
     &[OperationKind::Analyze, OperationKind::Diff2, OperationKind::Merge3];
 const GIT_OPERATIONS: &[OperationKind] = &[OperationKind::Merge3];
 
+pub(crate) fn operation_parse_options(id: &str, operation: OperationKind) -> crate::ParseOptions {
+    if matches!(id, JSON_NESTED | GIT_JSON) {
+        if operation == OperationKind::Analyze {
+            crate::ParseOptions {
+                comments: true,
+                tokens: false,
+                diagnostics: true,
+                native_extensions: true,
+            }
+        } else {
+            crate::ParseOptions::default()
+        }
+    } else {
+        // Native owner profiles retain layout as bytes; only the extension
+        // channel is required, not optional comment/token/diagnostic channels.
+        crate::ParseOptions {
+            comments: false,
+            tokens: false,
+            diagnostics: false,
+            native_extensions: true,
+        }
+    }
+}
+
 pub(crate) fn profile_operations(id: &str) -> &'static [OperationKind] {
     match id {
         YAML_MAPPING => YAML_OPERATIONS,

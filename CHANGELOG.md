@@ -325,6 +325,8 @@
 
 - Exercise generated Ruby and Python test applications with staged native-provider support in isolated pre-publication artifact gates; report registry installation separately.
 
+- Add a typed Rust capability manifest that separates profile scope, snapshot-bound parser eligibility observations, and explicit default authority without parsing or merging source.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

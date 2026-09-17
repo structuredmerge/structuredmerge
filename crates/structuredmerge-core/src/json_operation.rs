@@ -235,16 +235,10 @@ pub(crate) fn execute(
                 preference: input.parser_selection.preference.clone(),
                 required_capabilities: input.parser_selection.required_capabilities.clone(),
             },
-            options: if operation == "analyze" {
-                ParseOptions {
-                    comments: true,
-                    tokens: false,
-                    diagnostics: true,
-                    native_extensions: true,
-                }
-            } else {
-                ParseOptions::default()
-            },
+            options: crate::profiles::operation_parse_options(
+                if git { crate::profiles::GIT_JSON } else { crate::profiles::JSON_NESTED },
+                input.operation.kind(),
+            ),
             metadata: input.metadata.clone(),
             extra: Metadata::new(),
         });

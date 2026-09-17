@@ -3,8 +3,8 @@
 //! no family-default selection, host workflow merge, or fallback is introduced.
 
 use crate::{
-    CoreError, CoreParseResult, DiagnosticSeverity, Metadata, OperationKind, ParseOptions,
-    ParseRequest, ParserSelection, SourceEncoding, SourceInput, SourceRole,
+    CoreError, CoreParseResult, DiagnosticSeverity, Metadata, OperationKind, ParseRequest,
+    ParserSelection, SourceEncoding, SourceInput, SourceRole,
     operation::{OperationPolicy, ValidatedOperationRequest},
     operation_result::*,
     portable_conflict::{ConflictEvidence, ConflictRecord},
@@ -423,14 +423,10 @@ pub fn execute_native_operation(
                 preference: input.parser_selection.preference.clone(),
                 required_capabilities: input.parser_selection.required_capabilities.clone(),
             },
-            options: ParseOptions {
-                // These owner profiles retain comments/layout as source bytes;
-                // they do not require optional parser comment/token channels.
-                comments: false,
-                tokens: false,
-                diagnostics: false,
-                native_extensions: true,
-            },
+            options: crate::profiles::operation_parse_options(
+                input.provider_selection.profile_id.as_deref().unwrap_or_default(),
+                input.operation.kind(),
+            ),
             metadata: input.metadata.clone(),
             extra: Metadata::new(),
         });
