@@ -55,7 +55,7 @@
       "consumer_revision": "structuredmerge/structuredmerge-ruby@8d469aaf5",
       "consumers": ["ruby/gems/ast-merge-git/lib/ast/merge/git/rust_host_provider.rb"],
       "replacement": "Typed Git merge3 report over ast-merge-git and shared core operation results.",
-      "gap": "Local Ruby Git provider now selects kernel.git.json.v1 through the typed core, preserving full portable core records, canonical conflicts and actual render evidence. It advertises merge3 only; registry methods remain complete but capabilities may be nonempty subsets. Git write/leave-ours/error and command selection tests run against the installed core artifact. The existing marker review artifact retains ours outside conflicts and is not a partially resolved merge. Other family Rust providers still require migration; broader authority, hosted/released-package, lint/coverage and publication gates remain open."
+      "gap": "Local Ruby Git provider now selects kernel.git.json.v1 through the typed core, preserving full portable core records, canonical conflicts and actual render evidence. It advertises merge3 only; registry methods remain complete but capabilities may be nonempty subsets. Git write/leave-ours/error and command selection tests run against the installed core artifact. The existing marker review artifact retains ours outside conflicts and is not a partially resolved merge. The five family Ruby adapters now use the typed core and all 98 real-Git examples run without pending cases; broader authority, hosted/released-package, lint/coverage and publication gates remain open."
     },
     {
       "id": "structural-editing",
@@ -82,7 +82,7 @@
       "consumer_revision": "structuredmerge/structuredmerge-ruby@1a13e6484",
       "consumers": ["ruby/gems/tree_haver/lib/tree_haver/backends/rust_tslp.rb", "structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb"],
       "replacement": "Typed ParserHost registration, TreeHaver selection and parse_sources; explicit Rust TSLP provider registration and typed normalized results.",
-      "gap": "Ruby TreeHaver now registers and parses through typed structuredmerge-core, including a versioned native extra-node flag; its full 90-example suite passes against the installed core gem. Provider identity and diagnostic wording intentionally follow typed results. Hosted/released-package, downstream and full lint/coverage gates remain open. Legacy facade regression specs are retained, not migrated implementations of replace/list/probe/bulk-clear. Those lifecycle methods still need explicit disposition/contracts before facade deletion; matching method names are not drop-in compatibility."
+      "gap": "Ruby TreeHaver now registers and parses through typed structuredmerge-core, including a versioned native extra-node flag; its full 90-example suite passes against the installed core gem. Provider identity and diagnostic wording intentionally follow typed results. Hosted/released-package, downstream and full lint/coverage gates remain open. Legacy facade regression specs are retained, not migrated implementations of replace/list/probe/bulk-clear. Typed Rust facade regressions now prove in-flight snapshot retention, same-ID re-registration isolation, retired-host release and cancellation. See contracts/TYPED_PARSER_LIFECYCLE.md for explicit method dispositions. Atomic replacement, registry/probe observability and binding runtime guarantees remain open; matching method names are not drop-in compatibility."
     },
     {
       "id": "capabilities",

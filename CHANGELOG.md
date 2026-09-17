@@ -281,6 +281,8 @@
 
 - Verify downloaded typed Ruby core exports before installation, rejecting digest, package, file allowlist, platform, Ruby ABI, and producer-report mismatches without claiming runtime validation.
 
+- Document and verify typed parser snapshot retention during in-flight removal, same-ID re-registration, cancellation, and retired-host release without recreating a prototype registry API.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

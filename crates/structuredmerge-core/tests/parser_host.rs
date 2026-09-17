@@ -1,15 +1,152 @@
 use std::{
     collections::BTreeMap,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
+        mpsc,
     },
+    time::Duration,
 };
 use structuredmerge_core::*;
+
+// Registry mutation uses generation checks; isolate independent test scenarios.
+static REGISTRY_TEST: Mutex<()> = Mutex::new(());
 
 struct Host {
     calls: AtomicUsize,
     descriptions: AtomicUsize,
+}
+
+struct LifecycleHost {
+    inner: Host,
+    revision: &'static str,
+    entered: Option<mpsc::Sender<()>>,
+    resume: Option<Mutex<mpsc::Receiver<()>>>,
+}
+
+impl ParserHost for LifecycleHost {
+    fn descriptor(&self) -> Result<ParserProviderDescriptor, CoreError> {
+        let mut descriptor = self.inner.descriptor()?;
+        descriptor.id = "core-test.lifecycle".into();
+        descriptor.parser_version = self.revision.into();
+        Ok(descriptor)
+    }
+
+    fn probe_batch(&self, request: ProbeBatchRequest) -> Result<ProbeBatchResult, CoreError> {
+        self.inner.probe_batch(request)
+    }
+
+    fn parse_batch(&self, request: ParseBatchRequest) -> Result<ParseBatchResult, CoreError> {
+        if let Some(entered) = &self.entered {
+            entered.send(()).map_err(|error| CoreError::new(error.to_string()))?;
+            self.resume
+                .as_ref()
+                .unwrap()
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(10))
+                .map_err(|error| CoreError::new(error.to_string()))?;
+        }
+        let mut result = self.inner.parse_batch(request)?;
+        for output in &mut result.items {
+            output.diagnostics[0].message = self.revision.into();
+        }
+        Ok(result)
+    }
+}
+
+#[test]
+fn removal_and_reregistration_do_not_retarget_or_release_an_inflight_host() {
+    let _scenario = REGISTRY_TEST.lock().unwrap();
+    exercise_inflight_retirement(false);
+    exercise_inflight_retirement(true);
+}
+
+fn exercise_inflight_retirement(cancel_old: bool) {
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (resume_tx, resume_rx) = mpsc::channel();
+    let old = Arc::new(LifecycleHost {
+        inner: Host { calls: AtomicUsize::new(0), descriptions: AtomicUsize::new(0) },
+        revision: "old",
+        entered: Some(entered_tx),
+        resume: Some(Mutex::new(resume_rx)),
+    });
+    let retained = Arc::downgrade(&old);
+    register_parser_host(old.clone()).unwrap();
+    drop(old);
+    let request = ParseRequest {
+        schema: service::PARSE_REQUEST_SCHEMA.into(),
+        request_id: "lifecycle-request".into(),
+        source: source_input(
+            "lifecycle-source".into(),
+            SourceRole::Current,
+            SourceEncoding::Utf8,
+            b"x".to_vec(),
+        )
+        .unwrap(),
+        language: "test".into(),
+        dialect: None,
+        selection: ParserSelection {
+            backend_id: Some("core-test.lifecycle".into()),
+            preference: vec![],
+            required_capabilities: vec![],
+        },
+        options: ParseOptions::default(),
+        metadata: BTreeMap::new(),
+        extra: BTreeMap::new(),
+    };
+    let limits = ParseLimits {
+        max_batch_items: 1,
+        max_input_bytes: 100,
+        max_nodes: 100,
+        max_diagnostics: 100,
+        timeout_millis: None,
+    };
+    let worker_request = request.clone();
+    let worker_limits = limits.clone();
+    let control = OperationControl::new();
+    let worker_control = control.clone();
+    let worker = std::thread::spawn(move || {
+        parse_sources_controlled(vec![worker_request], worker_limits, &worker_control)
+    });
+    entered_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+
+    // Mutation while the callback is blocked must not wait for it. The old
+    // operation owns a snapshot; future selection observes removal immediately.
+    unregister_parser_provider("core-test.lifecycle".into()).unwrap();
+    assert!(retained.upgrade().is_some());
+    assert_eq!(
+        parse_sources(vec![request.clone()], limits.clone()).unwrap_err().code,
+        "selection.no_parser"
+    );
+    let new = Arc::new(LifecycleHost {
+        inner: Host { calls: AtomicUsize::new(0), descriptions: AtomicUsize::new(0) },
+        revision: "new",
+        entered: None,
+        resume: None,
+    });
+    register_parser_host(new.clone()).unwrap();
+    if cancel_old {
+        control.cancel();
+    }
+    resume_tx.send(()).unwrap();
+    let old_result = worker.join().unwrap();
+    if cancel_old {
+        assert_eq!(old_result.unwrap_err().code, "execution.cancelled");
+    } else {
+        let old_result = old_result.unwrap();
+        assert_eq!(old_result[0].backend.parser_version, "old");
+        assert_eq!(old_result[0].parsed.diagnostics[0].message, "old");
+    }
+    assert!(retained.upgrade().is_none(), "completed operation leaked the retired host");
+    assert_eq!(new.inner.calls.load(Ordering::SeqCst), 0);
+
+    let new_result = parse_sources(vec![request], limits).unwrap();
+    assert_eq!(new_result[0].backend.parser_version, "new");
+    assert_eq!(new_result[0].parsed.diagnostics[0].message, "new");
+    assert_eq!(new.inner.descriptions.load(Ordering::SeqCst), 1);
+    assert_eq!(new.inner.calls.load(Ordering::SeqCst), 1);
+    unregister_parser_provider("core-test.lifecycle".into()).unwrap();
 }
 impl ParserHost for Host {
     fn descriptor(&self) -> Result<ParserProviderDescriptor, CoreError> {
@@ -80,6 +217,7 @@ impl ParserHost for Host {
 
 #[test]
 fn facade_calls_typed_host_batches_through_tree_haver_and_keeps_native_failure() {
+    let _scenario = REGISTRY_TEST.lock().unwrap();
     let host = Arc::new(Host { calls: AtomicUsize::new(0), descriptions: AtomicUsize::new(0) });
     register_parser_host(host.clone()).unwrap();
     let request = ParseRequest {

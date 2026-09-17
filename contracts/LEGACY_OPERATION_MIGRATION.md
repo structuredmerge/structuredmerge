@@ -8,6 +8,13 @@ depend on that crate as a shortcut.
 
 ## Evidence and limits
 
+Current lifecycle work is recorded in [Typed parser lifecycle](TYPED_PARSER_LIFECYCLE.md).
+The typed Rust facade now has deterministic in-flight removal/re-registration,
+host-release and cancellation regressions. Atomic replacement, registry/capability
+observability and binding-runtime shutdown/affinity guarantees remain open.
+The dated consumer snapshots below are historical; consult the machine-readable
+inventory for the subsequently migrated JSON/Bash/Go/Rust/TypeScript/Git consumers.
+
 Revalidated 2026-09-16: Ruby local main was fast-forwarded from `4c31387bf` to
 `0a1f4ee32`, integrating the typed ast-crispr and ast-template adapters. Their
 artifact bundles pass 51 and 78 examples respectively against core gem SHA-256
