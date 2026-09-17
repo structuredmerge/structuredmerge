@@ -55,3 +55,44 @@ safety gate does not prove complete coverage or native binding parity: this
 adapter exercises the existing CLI providers, including the generic TSLP Python
 provider, not the typed Psych/LibCST facade. Registry/released-package gates and
 golden-master authority decisions remain separate.
+
+## Installed typed-core adapter
+
+`workspace-scripts/typed_core_benchmark.py` connects this same harness to an
+installed Python `structuredmerge-core` wheel. It contains transport only:
+JSON-family merge2 uses `kernel.json.nested.v1`, and merge3 uses the typed Git
+profile `kernel.git.json.v1` for review framing. TreeHaver owns language-pack
+parser registration; Rust owns all merge decisions. It does not import test
+fixtures, inspect benchmark oracles, invoke the old CLI or implement a fallback.
+
+Use the Python virtual environment from a successful
+`check_core_python_artifact.py` run. Prepend its `venv/bin` to PATH **after**
+`mise exec` when invoking the benchmark bundle, and keep the Ruby bundle/runtime
+configuration above. Pass:
+
+```sh
+--driver "$PWD/workspace-scripts/typed_core_benchmark.py" \
+--adapter-descriptor typed-benchmark-adapter.json
+```
+
+For `dev`, supply both actual changed paths:
+`--changed-path workspace-scripts/typed_core_benchmark.py` and
+`--changed-path typed-benchmark-adapter.json`. The canonical corpus maps these
+to JSON-family coverage. Other families and metamorphic diff are explicitly
+unsupported in this initial descriptor, not silently delegated. File mode
+preserves ours on an error and writes only Rust-produced output/review text;
+merge2 returns JSON without modifying input files. A persistent JSONL session
+uses the existing adapter-request/response v1 protocol. Verify it with the
+installed environment's Python:
+
+```sh
+python workspace-scripts/check_typed_benchmark_adapter.py
+```
+
+Record the installed wheel digest/report and exact interpreter alongside driver,
+kernel, Ruby, fixtures, bundle-lock and raw result digests. Debug builds establish
+no performance ranking. Initial micro/affected-dev runs are **red**: malformed
+JSON is rejected as a parser error and the retained harness classifies it as a
+reliability failure. Do not relabel this as a conflict or relax the gate to obtain
+a pass. Broader typed/native-provider coverage and disposition of this mismatch
+remain open. This is not a publication or default-driver approval.

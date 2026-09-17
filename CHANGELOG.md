@@ -309,6 +309,8 @@
 
 - Run the installed smorg and smorg-rs real-Git gate in Linux CI with pinned canonical fixtures and retained failure evidence, separate from publication and default approval.
 
+- Add an installed Python typed-core JSON adapter for the retained Slice 1023 benchmark, with cold-file and persistent-session protocols and explicit unsupported family coverage.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

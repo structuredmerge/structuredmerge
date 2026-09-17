@@ -1,0 +1,31 @@
+{
+  "schema_version": "structuredmerge.benchmark.adapter-descriptor/v1",
+  "adapter": {
+    "adapter_id": "typed-core.python.json",
+    "implementation": "rust-via-python",
+    "package": "structuredmerge-core",
+    "package_version": "0.2.0",
+    "source": {"repository": "structuredmerge/structuredmerge"}
+  },
+  "source_root": ".",
+  "provider": {
+    "merge_provider": {
+      "provider_id": "kernel.json / kernel.git.json",
+      "package": "structuredmerge-core",
+      "profile": "kernel.json.nested.v1 (merge2); kernel.git.json.v1 (merge3)"
+    },
+    "parser_provider": {
+      "provider_id": "tree-sitter-language-pack",
+      "backend_family": "tree-sitter",
+      "selection_mode": "explicit",
+      "boundary": "installed Python binding / TreeHaver"
+    }
+  },
+  "supports": {
+    "operations": ["merge2", "merge3"],
+    "families": ["json"],
+    "dialects": ["json", "jsonc", "json5"],
+    "combinations": [{"family": "json", "operations": ["merge2", "merge3"], "dialects": ["json", "jsonc", "json5"]}]
+  },
+  "environment": {"binding_runtime": "python", "semantic_runtime": "rust", "publication_gate": false}
+}
