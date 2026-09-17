@@ -293,6 +293,9 @@ pub fn execute_native_operation(
             Some(crate::profiles::PYTHON_DECLARATIONS) => {
                 ("python", "kernel.python", python_merge::declaration_owners)
             }
+            Some(crate::profiles::BASH_OWNERS) => {
+                ("bash", "kernel.bash", bash_merge::typed::owners)
+            }
             _ => {
                 diagnostic(
                     &mut result,
@@ -307,7 +310,11 @@ pub fn execute_native_operation(
         };
     if input.provider_selection.provider_id.as_deref().is_some_and(|id| id != provider)
         || input.provider_selection.family.as_deref().is_some_and(|name| name != family)
-        || input.provider_selection.dialect.is_some()
+        || input
+            .provider_selection
+            .dialect
+            .as_deref()
+            .is_some_and(|dialect| family != "bash" || dialect != "bash")
         || !input.provider_selection.extra.is_empty()
         || input.parser_selection.profile_id.is_some()
         || input.parser_selection.language_version.is_some()
@@ -334,6 +341,8 @@ pub fn execute_native_operation(
         OperationPolicy::Analyze(policy) => crate::native_analysis_projection::supports(policy),
         OperationPolicy::Merge3(policy) => {
             policy.render_policy == "source-preserving"
+                && (family != "bash"
+                    || (policy.labels.is_none() && policy.conflict_marker_size.is_none()))
                 && policy.extra.is_empty()
                 && policy.fallback_policy.as_deref().is_none_or(|policy| policy == "none")
         }
@@ -440,6 +449,7 @@ pub fn execute_native_operation(
         let analysis = match family {
             "yaml" => yaml_merge::typed::mapping_analysis(&parsed[0]),
             "python" => python_merge::declaration_analysis(&parsed[0]),
+            "bash" => bash_merge::typed::analysis(&parsed[0]),
             _ => unreachable!("profile already selected"),
         }
         .and_then(|analysis| {
@@ -508,13 +518,45 @@ pub fn execute_native_operation(
                         extra: Metadata::new(),
                     });
                 }
+                // Exact owner comparisons alone omit comments/layout changes.
+                // Bash's common profile includes a complete-byte summary too;
+                // it overlaps owner changes and is not an executable edit.
+                if family == "bash"
+                    && execution.input_parses[0].source.bytes()
+                        != execution.input_parses[1].source.bytes()
+                {
+                    let mut source_spans = std::collections::BTreeMap::new();
+                    let mut role_states = Metadata::new();
+                    for (name, parsed) in
+                        ["before", "after"].into_iter().zip(&execution.input_parses)
+                    {
+                        let source = &parsed.source;
+                        let region = ast_merge::owner_diff::DiffSourceRegion {
+                            source_id: source.descriptor().source_id.clone(),
+                            source_role: source.descriptor().role,
+                            range: crate::ByteRange {
+                                start_byte: 0,
+                                end_byte: source.bytes().len(),
+                            },
+                            sha256: source.descriptor().sha256.clone(),
+                        };
+                        source_spans.insert(region.source_role, diff_span(&region, request)?);
+                        role_states.insert(name.into(), serde_json::to_value(region).unwrap());
+                    }
+                    result.changes.push(ResultChange {
+                        id: "document-change".into(),
+                        classification: "edited".into(),
+                        subject_ref: Some("document".into()),
+                        path: None,
+                        role_states,
+                        source_spans,
+                        metadata: [("scope".into(), serde_json::json!("complete-source-summary"))]
+                            .into(),
+                        extra: Metadata::new(),
+                    });
+                }
                 result.diff = Some(ResultDiff {
-                    change_ids: execution
-                        .diff
-                        .changes
-                        .iter()
-                        .map(|change| change.id.clone())
-                        .collect(),
+                    change_ids: result.changes.iter().map(|change| change.id.clone()).collect(),
                     extra: [("owner_diff".into(), serde_json::to_value(&execution.diff).unwrap())]
                         .into(),
                 });

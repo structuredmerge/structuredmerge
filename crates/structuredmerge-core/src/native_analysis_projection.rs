@@ -24,6 +24,7 @@ pub(crate) fn validate_embedded(
     let (family, provider) = match result.profile.profile_id.as_deref() {
         Some(crate::profiles::YAML_MAPPING) => ("yaml", "kernel.yaml"),
         Some(crate::profiles::PYTHON_DECLARATIONS) => ("python", "kernel.python"),
+        Some(crate::profiles::BASH_OWNERS) => ("bash", "kernel.bash"),
         _ => return Ok(()), // Other profiles need their own analysis validator.
     };
     let analysis = result.analysis.as_ref().ok_or(Invalid)?;
@@ -34,7 +35,12 @@ pub(crate) fn validate_embedded(
         || !result.ok
         || result.provider.family.as_deref() != Some(family)
         || result.provider.provider_id.as_deref() != Some(provider)
-        || request.request().provider_selection.dialect.is_some()
+        || request
+            .request()
+            .provider_selection
+            .dialect
+            .as_deref()
+            .is_some_and(|dialect| family != "bash" || dialect != "bash")
         || !request.request().provider_selection.extra.is_empty()
         || request
             .request()
@@ -99,7 +105,11 @@ pub(crate) fn validate_embedded(
         max_nodes: core.parsed.nodes.len(),
         max_diagnostics: core.parsed.diagnostics.len(),
         partial_tree_allowed: false,
-        comments_supported: false,
+        comments_supported: core
+            .backend
+            .capabilities
+            .iter()
+            .any(|capability| capability == "comments"),
     };
     let document = crate::parsed::ParsedDocument::validate(core.parsed, &parse_id, &source, limits)
         .map_err(|_| Invalid)?;
@@ -113,6 +123,7 @@ pub(crate) fn validate_embedded(
     let owners = match family {
         "yaml" => yaml_merge::typed::mapping_analysis(&parsed),
         "python" => python_merge::declaration_analysis(&parsed),
+        "bash" => bash_merge::typed::analysis(&parsed),
         _ => unreachable!(),
     }
     .map_err(|_| Invalid)?;
@@ -229,7 +240,9 @@ pub(crate) fn project(
     family: &str,
 ) -> Result<ResultAnalysis, String> {
     analysis.validate(parsed)?;
-    if !parsed.document.output().comments.is_empty() {
+    // Bash retains native comments in the embedded parse and exact layout gaps.
+    // This exact-owner profile does not request semantic comment attachment.
+    if family != "bash" && !parsed.document.output().comments.is_empty() {
         return Err("native comment attachment requires another analysis policy".into());
     }
     let mut owners = vec![];

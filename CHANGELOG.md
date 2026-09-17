@@ -251,6 +251,8 @@
 
 - Execute the existing Bash owner merge over validated TreeHaver facts with explicit output verification, including no-op selections; share native-node adaptation with typed JSON without parser rediscovery.
 
+- Expose explicit common Bash owner analysis, exact-source diff2 and merge3 operations with native owner references, retained layout evidence and complete-byte diff summaries; unsupported policies fail closed.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

@@ -33,8 +33,41 @@ require fresh no-op verification, and reject unsupported syntax, wrong roles,
 changed verification bytes/identity/backend and failed output parsing.
 Logs: `tmp/bash-typed-{tests,regressions,clippy,generation,audits}.log`.
 
-Next: common operation profile, portable analysis/diff/merge evidence, remaining
-operation policies, shared generated fixtures, rebuilt installed artifacts and
-the actual Ruby consumer migration. No Bash legacy export is marked migrated by
-this Rust groundwork. Broader authority, hosted, platform and publication gates
-remain open. No parser-default switch, prototype expansion or Alef push.
+## Common operation profile
+
+`kernel.bash.owners.v1`, provider `kernel.bash`, family/dialect `bash`, now executes
+analyze, diff2 and merge3 through the existing common native-owner orchestration.
+Explicit parser selection, cancellation and resource bounds remain TreeHaver's
+responsibility. No extra registry or binding signature is added. Unsupported
+dialects, enrichments, merge2, fallbacks and marker/label options fail closed.
+
+Analysis captures native owner node IDs during the original family projection,
+not by searching spans or text afterward. Portable analysis carries exact owner
+spans/digests, embedded native facts, layout gaps, adjacency and controller records.
+The default/exact-source-owners policy does not claim semantic comment attachment:
+comments are retained in the embedded parse and source gaps, with comment analysis
+declared not requested. Explicit comments/tokens enrichment is rejected. Embedded
+analysis validation recomputes native owner/layout decisions and permits passive
+compatible fields. Native comment records are validated according to the backend's
+declared capability, not discarded because an optional enrichment wasn't requested.
+
+Diff2 retains Rust owner classification/order/layout evidence and adds a complete
+document-byte summary whenever sources differ. This summary overlaps owner changes
+and is not an edit script or semantic-equivalence claim. Merge3 retains shared
+classification, canonical conflicts and byte-segment evidence, with fresh output
+verification even for source-selection shortcuts. Canonical decision references
+are checked by the trusted executor; a standalone data-only result validator must
+not invent the executor's authorization evidence.
+
+Five common Bash tests pass, covering native references and tampering, passive
+fields, comment/layout retention, trivia-only diffs, independent/no-op merge3,
+conflicts, rejected syntax/policies/selection, exported execution and cancellation.
+Broader Bash/core tests and strict Clippy pass. Logs:
+`tmp/bash-common-{tests,regressions,clippy,generation,audits}.log` (the final fifth
+exported-facade test is included in the regression run).
+
+Next: directional merge2 policy, broader analysis-policy and result-verifier
+conformance, shared generated fixtures, rebuilt installed artifacts and actual
+Ruby consumer migration. No Bash legacy export is marked migrated by this Rust
+work. Broader authority, hosted, platform and publication gates remain open.
+No parser-default switch, prototype expansion or Alef push.

@@ -6,13 +6,21 @@ use ast_merge::{
 use tree_haver::{service::ParsedResult, source::SourceRole};
 
 pub fn owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, String> {
+    analysis(parsed).map(|analysis| analysis.document)
+}
+
+pub fn analysis(
+    parsed: &ParsedResult,
+) -> Result<ast_merge::native_analysis::NativeOwnerAnalysis, String> {
     if !parsed.backend.languages.iter().any(|language| language == "bash") {
         return Err("Bash analysis requires a Bash parser".into());
     }
     let nodes = parsed.normalized_nodes()?;
     let root = parsed.document.output().root_id.as_deref().ok_or("Bash parse omitted its root")?;
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|e| e.to_string())?;
-    super::project_bash_functions(source, root, &nodes)
+    let analysis = super::project_bash_analysis(source, root, &nodes)?;
+    analysis.validate(parsed)?;
+    Ok(analysis)
 }
 
 #[derive(Clone, Debug)]

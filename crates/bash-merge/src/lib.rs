@@ -173,10 +173,19 @@ fn project_bash_functions(
     root_id: &str,
     nodes: &[NormalizedTreeNode],
 ) -> Result<SourcePreservingOwnerDocument, String> {
+    project_bash_analysis(source, root_id, nodes).map(|analysis| analysis.document)
+}
+
+fn project_bash_analysis(
+    source: &str,
+    root_id: &str,
+    nodes: &[NormalizedTreeNode],
+) -> Result<ast_merge::native_analysis::NativeOwnerAnalysis, String> {
     let index = NormalizedTreeIndex::new(nodes)?;
     let root = index.root(root_id)?;
     let mut owners = Vec::new();
     let mut owner_ids = HashSet::new();
+    let mut owner_node_ids = std::collections::BTreeMap::new();
 
     for top_level in index.children(root) {
         if top_level.role == NodeRole::Comment {
@@ -204,6 +213,7 @@ fn project_bash_functions(
             return Err(format!("Bash owner {path:?} has no source fragment"));
         }
 
+        owner_node_ids.insert(path.clone(), vec![top_level.id.clone()]);
         owners.push(ast_merge::SourcePreservingOwner {
             id: path.clone(),
             path,
@@ -219,7 +229,10 @@ fn project_bash_functions(
         return Err("Bash document has no supported top-level named owners".to_string());
     }
 
-    Ok(SourcePreservingOwnerDocument { source: source.to_string(), owners })
+    Ok(ast_merge::native_analysis::NativeOwnerAnalysis {
+        document: SourcePreservingOwnerDocument { source: source.to_string(), owners },
+        owner_node_ids,
+    })
 }
 
 fn named_child_source(
