@@ -21,6 +21,90 @@ from libcst_facts import LibCSTHost
 
 
 class TypedParserHostTest(unittest.TestCase):
+    def test_workflow_batch_uses_native_facts_and_shared_cancellation_handle(self):
+        self.assertIs(core.MergeProviderDescriptor, native.MergeProviderDescriptor)
+        self.assertIs(core.MergeParserRequirements, native.MergeParserRequirements)
+        provider_id = "python.libcst.workflow"
+        profile = "python.libcst.analysis.v1"
+        calls = []
+        cancelled = []
+        testcase = self
+
+        class Host:
+            def descriptor(self):
+                return core.MergeProviderDescriptor(
+                    provider_id=provider_id, family="python", role=native.MergeProviderRole.WORKFLOW,
+                    operations=["analyze"], dialects=[], profiles=[profile], capabilities=["analyze"],
+                    preservation_guarantees=[], priority=0,
+                    parser_requirements=core.MergeParserRequirements(
+                        languages=["python"], allowed_backend_ids=["python.libcst"]),
+                    allowed_delegation_targets=[], runtime="python", package="libcst",
+                    package_version="1.9.0", metadata={}, extensions=[])
+
+            def execute_batch(self, prepared, control):
+                testcase.assertIsInstance(prepared, native.PreparedWorkflowBatch)
+                testcase.assertIsInstance(control, native.OperationControl)
+                testcase.assertFalse(control.is_cancelled())
+                calls.append(prepared)
+                if cancelled:
+                    control.cancel()
+                    raise RuntimeError("private host exception")
+                results = []
+                for item in prepared.items:
+                    parsed = item.parses[0].parsed
+                    source = item.operation.sources[native.SourceRole.SOURCE]
+                    testcase.assertEqual(parsed.source.sha256, source.sha256)
+                    testcase.assertEqual(parsed.source.source_id, source.source_id)
+                    testcase.assertGreater(len(parsed.nodes), 0)
+                    results.append(native.OperationResult(
+                        schema="https://structuredmerge.org/schemas/provider-result/v1.json", request_id=item.operation.request_id,
+                        operation=native.OperationKind.ANALYZE, ok=True,
+                        provider=native.ResultProvider(provider_id=provider_id, family="python", extra={}),
+                        profile=native.ResultProfile(profile_id=profile, parser=native.ResultParserSelection(
+                            requested_backend="python.libcst", selected_backend="python.libcst",
+                            selection_mode="explicit", extra={}), extra={}),
+                        diagnostics=[], changes=[], conflicts=[], fallbacks=[], render_report={},
+                        verification=native.ResultVerification(consumed_source_roles=[native.SourceRole.SOURCE],
+                            classification_reached=True, extra={}),
+                        analysis=native.ResultAnalysis(schema="structuredmerge.analysis-result/v1",
+                            extra={"native_node_count": json.dumps(len(parsed.nodes))}),
+                        extensions=[], metadata={}, extra={}))
+                return native.WorkflowBatchResult(items=results)
+
+        items = []
+        for index, text in enumerate(["a = 'λ'\n", "\ufeffb = 2\n"]):
+            original = self.common_request("analyze", [text])
+            operation = native.OperationRequest(
+                schema=original.schema, request_id=f"workflow-{index}", operation=original.operation,
+                sources=original.sources, parser_selection=original.parser_selection,
+                provider_selection=native.MergeProviderSelection(provider_id=provider_id,
+                    family="python", profile_id=profile, required_capabilities=["analyze"], extra={}),
+                extensions=[], metadata={}, extra={})
+            items.append(native.WorkflowOperation(operation=operation, parser_language="python",
+                parse_options=native.ParseOptions(native_extensions=True)))
+        request = native.WorkflowBatchRequest(items=items)
+        limits = native.WorkflowLimits(max_operations=4, max_request_bytes=1000000,
+            max_response_bytes=1000000, parse=native.ParseLimits(max_batch_items=4,
+                max_input_bytes=10000, max_nodes=1000, max_diagnostics=20))
+        generation = core.register_workflow_host(Host())
+        try:
+            execution = core.execute_workflow_batch(provider_id, request, limits)
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(len(calls[0].items), 2)
+            self.assertEqual([result.request_id for result in execution.results], ["workflow-0", "workflow-1"])
+            self.assertEqual(execution.execution_owner, native.WorkflowExecutionOwner.HOST)
+            self.assertFalse(execution.approved_as_default)
+            self.assertTrue(all(json.loads(result.analysis.extra["native_node_count"]) > 0
+                for result in execution.results))
+            cancelled.append(True)
+            control = core.create_operation_control()
+            with self.assertRaisesRegex(RuntimeError, "execution.cancelled"):
+                core.execute_workflow_batch_controlled(provider_id, request, limits, control)
+            self.assertTrue(control.is_cancelled(), "callback must share the caller's cancellation state")
+            self.assertEqual(len(calls), 2, "workflow callbacks must not be retried")
+        finally:
+            core.unregister_workflow_host(provider_id, generation)
+
     def test_capability_manifest_separates_support_probes_and_authority(self):
         limits = core.ParseLimits(max_batch_items=4, max_input_bytes=0, max_nodes=0, max_diagnostics=0)
         def query(profile="kernel.python.native_declarations.v1", backend="python.libcst"):

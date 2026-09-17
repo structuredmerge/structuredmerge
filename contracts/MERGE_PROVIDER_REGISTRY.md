@@ -60,8 +60,8 @@ govern `parse_batch` dispatch with an instrumented provider, not only reports.
 638 passed tests and five existing opt-in tests ignored, plus strict Clippy.
 
 The Rust typed-core `WorkflowHost` boundary now uses this registry and selector
-for explicit-provider batch execution; see `TYPED_WORKFLOW_HOST.md`. Alef binding
-exposure remains open. Next complete generated callback/runtime validation, host availability,
+for explicit-provider batch execution; see `TYPED_WORKFLOW_HOST.md`. Alef now
+exposes the boundary to Ruby/Python. Next complete broader callback/runtime validation, host availability,
 allowed delegation and the portable capability envelope. Versioned parser
 profiles remain open. Existing explicit kernel profiles are unchanged. No new
 package, prototype release dependency, registry-mode acceptance claim, or

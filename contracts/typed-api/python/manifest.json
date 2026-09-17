@@ -1,13 +1,13 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "python",
-  "review_reason": "Remove unsupported implicit string coercion from struct enum constructor annotations; runtime behavior unchanged, explicit Enum(value) and optional None remain supported.",
+  "review_reason": "Expose typed host-owned WorkflowHost batches and native descriptor identities; no default authority change",
   "files": {
-    "structuredmerge_core/__init__.py": "5b6e049408aefdd6d2a50263218b95ab239a84f2843c1a1c3135ce47438c76fa",
-    "structuredmerge_core/_native.pyi": "7bcd329d6ec432732e982a9a29e15cfc0d2b3f68765bc4761fc07f41ac68ed6b",
-    "structuredmerge_core/api.py": "e34a589529500c104be7371b7816b39b65968bb3e7fcb238038f16884543d268",
+    "structuredmerge_core/__init__.py": "a6b5a0e50c12891acc15b34063549bf1eede133fef0349ee751e5b27f7253a1f",
+    "structuredmerge_core/_native.pyi": "0276b0de66c1160b0bb02e1bc4c598ce0adc4afbabbae08818ead5666398016c",
+    "structuredmerge_core/api.py": "91fcef87600a0ab78baadf0074ec808a53d5acd707eabd0ee8d86c1240b08be5",
     "structuredmerge_core/exceptions.py": "25e61ce52e2e192df977a5f2ba7473dd6012e064c4bba38b05c15dc043201a29",
-    "structuredmerge_core/options.py": "7de7598c211b0a2847fa9357fb60ddcc9e872f6044bf3f2ca496971e30990d25",
+    "structuredmerge_core/options.py": "51d412a5f28ed2f31f1585c9beb4e4d130dbb7ea7e0f5577a1cbeb050e98b894",
     "structuredmerge_core/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   }
 }

@@ -6,6 +6,11 @@
 require "json"
 require "psych"
 
+# Psych versions differ on whether a leading BOM counts as a character column.
+# Probe the native AST convention without changing the document passed to Psych.
+PSYCH_BOM_COLUMN_WIDTH = Psych.parse_stream("\uFEFFx: 1\n").children.first.start_column
+raise "unsupported Psych BOM column convention" unless [0, 1].include?(PSYCH_BOM_COLUMN_WIDTH)
+
 def project(request)
   source = request.fetch("source")
   text = source.fetch("bytes").pack("C*").force_encoding(Encoding::UTF_8)
@@ -19,8 +24,9 @@ def project(request)
     # Psych's columns count Unicode characters, not UTF-8 bytes.
     # Libyaml reports the next row at EOF even without a final newline.
     next text.bytesize if row == lines.length && column.zero?
+    column -= PSYCH_BOM_COLUMN_WIDTH if row.zero? && bom_bytes.positive?
     line = lines.fetch(row)
-    raise "invalid character column" if column > line.length
+    raise "invalid character column: row=#{row} column=#{column} length=#{line.length}" if column.negative? || column > line.length
     starts.fetch(row) + (row.zero? ? bom_bytes : 0) + line[0, column].bytesize
   end
   point = lambda do |byte|

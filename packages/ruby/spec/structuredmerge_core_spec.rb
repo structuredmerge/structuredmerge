@@ -20,6 +20,88 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  it "delivers native Psych facts and shared cancellation to a coarse workflow callback" do
+    core = described_class
+    parser = TypedPsychHost.new
+    parser_errors = []
+    parse_batch = parser.method(:parse_batch)
+    parser.define_singleton_method(:parse_batch) do |batch|
+      parse_batch.call(batch)
+    rescue => error
+      parser_errors << "#{error.class}: #{error.message}"
+      raise
+    end
+    core.register_parser_host(parser)
+    provider_id = "ruby.psych.workflow"
+    profile = "ruby.psych.analysis.v1"
+    calls = []
+    cancel = false
+    host = Object.new
+    host.define_singleton_method(:descriptor) do
+      core::MergeProviderDescriptor.new(provider_id: provider_id, family: "yaml", role: :workflow,
+        operations: ["analyze"], dialects: [], profiles: [profile], capabilities: ["analyze"],
+        preservation_guarantees: [], priority: 0,
+        parser_requirements: core::MergeParserRequirements.new(languages: ["yaml"], allowed_backend_ids: ["ruby.typed.psych"]),
+        allowed_delegation_targets: [], runtime: "ruby", package: "psych", package_version: Psych::VERSION,
+        metadata: {}, extensions: [])
+    end
+    host.define_singleton_method(:execute_batch) do |prepared, control|
+      raise "expected native batch" unless prepared.is_a?(core::PreparedWorkflowBatch)
+      raise "expected native control" unless control.is_a?(core::OperationControl)
+      calls << prepared
+      if cancel
+        control.cancel
+        raise "private host exception"
+      end
+      core::WorkflowBatchResult.new(items: prepared.items.map do |item|
+        parsed = item.parses.first.parsed
+        source = item.operation.sources.fetch(:source)
+        raise "source identity changed" unless parsed.source.source_id == source.source_id && parsed.source.sha256 == source.sha256
+        raise "no parser facts" if parsed.nodes.empty?
+        core::OperationResult.new(schema: "https://structuredmerge.org/schemas/provider-result/v1.json", request_id: item.operation.request_id,
+          operation: :analyze, ok: true, provider: core::ResultProvider.new(provider_id: provider_id, family: "yaml", extra: {}),
+          profile: core::ResultProfile.new(profile_id: profile, extra: {}, parser: core::ResultParserSelection.new(
+            requested_backend: "ruby.typed.psych", selected_backend: "ruby.typed.psych", selection_mode: "explicit", extra: {})),
+          diagnostics: [], changes: [], conflicts: [], fallbacks: [], render_report: {},
+          verification: core::ResultVerification.new(consumed_source_roles: [:source], classification_reached: true, extra: {}),
+          analysis: core::ResultAnalysis.new(schema: "structuredmerge.analysis-result/v1", extra: {"native_node_count" => parsed.nodes.length.to_json}),
+          extensions: [], metadata: {}, extra: {})
+      end)
+    end
+    items = ["a: λ\n", "\uFEFFb: two\n"].each_with_index.map do |text, index|
+      original = common_request("analyze", [text])
+      operation = core::OperationRequest.new(schema: original.schema, request_id: "workflow-#{index}",
+        operation: original.operation, sources: original.sources, parser_selection: original.parser_selection,
+        provider_selection: core::MergeProviderSelection.new(provider_id: provider_id, family: "yaml", profile_id: profile,
+          required_capabilities: ["analyze"], extra: {}), extensions: [], metadata: {}, extra: {})
+      core::WorkflowOperation.new(operation: operation, parser_language: "yaml", parser_dialect: nil,
+        parse_options: core::ParseOptions.new(native_extensions: true))
+    end
+    request = core::WorkflowBatchRequest.new(items: items)
+    limits = core::WorkflowLimits.new(max_operations: 4, max_request_bytes: 1000000, max_response_bytes: 1000000, parse: merge_limits)
+    generation = core.register_workflow_host(host)
+    begin
+      execution = core.execute_workflow_batch(provider_id, request, limits)
+    rescue RuntimeError
+      expect(parser_errors).to be_empty
+      raise
+    end
+    expect(calls.length).to eq(1)
+    expect(calls.first.items.length).to eq(2)
+    expect(execution.results.map(&:request_id)).to eq(%w[workflow-0 workflow-1])
+    expect(execution.execution_owner).to eq(:host)
+    expect(execution.approved_as_default).to be(false)
+    expect(execution.results.all? { |result| JSON.parse(result.analysis.extra.fetch("native_node_count")) > 0 }).to be(true)
+    cancel = true
+    control = core.create_operation_control
+    expect { core.execute_workflow_batch_controlled(provider_id, request, limits, control) }.to raise_error(RuntimeError, /execution.cancelled/)
+    expect(control.is_cancelled).to be(true)
+    expect(calls.length).to eq(2)
+  ensure
+    core.unregister_workflow_host(provider_id, generation) if generation
+    core.unregister_parser_host("ruby.typed.psych")
+  end
+
   it "separates capability declarations, parser eligibility and default approval" do
     host = TypedPsychHost.new
     described_class.register_parser_host(host)

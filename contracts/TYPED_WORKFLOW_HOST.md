@@ -21,9 +21,38 @@ tests, not native parser or merge semantic parity evidence.
 
 Verification is recorded in `tmp/workflow-final-tests.log`: core and ast-merge
 tests and strict Clippy. Existing native opt-in tests are not claimed by this
-run. Ruby/Python bindings do not yet expose this interface. Next add the required
-Alef exports and generated trait bridges, then validate real native providers
-against isolated installed artifacts before declaring that boundary complete.
+run.
+
+Alef now generates the Ruby/Python registry functions, workflow DTOs and trait
+bridges. The callback receives a native `OperationControl` whose cloned Rust
+handle shares the caller's cancellation state; it is not a serialized control
+message. Python provider descriptors and parser requirements are native
+re-exports, so their public and callback/result identities agree. Three local-only
+Alef fixes supply native opaque callback arguments and resolve shared `host`
+parameter names by trait type before name fallback, and retain serializable
+nested request records containing data enums.
+
+Installed-artifact tests exercise LibCST/Psych analysis callbacks over two
+TreeHaver-prepared operations, Unicode/BOM source identity, typed results, one
+coarse host callback and cancellation from inside that callback. The analysis
+is a native-fact node count, not a migrated merge implementation. Broad runtime
+lifecycle/stress checks and independently packaged native workflow providers
+remain open. Build and installed-consumer evidence is retained under
+`tmp/workflow-bindings-*.log`. Completed isolated runs pass 49 Python boundary
+tests, 113 generated e2e tests and 114 test-app tests; Ruby passes 42 boundary
+examples and 110 examples in each generated suite. Python uses 3.14.2/LibCST
+1.9.0; Ruby uses 4.0.6. Reports are retained at
+`tmp/core-python-artifact-cqc1qgob/report.json` and
+`tmp/core-ruby-artifact-20260917-2383726-b0ukqd/report.json`.
+The successful Python rebuild is `tmp/workflow-bindings-python-build.log`;
+the earlier combined build log retains the diagnosed, now-fixed generator error.
+Both API baselines, all 40 workspace-script tests and local Alef verification
+pass. Verification's presence-only/declared-ownership entries are not content
+checks. Local Alef commits `a82b77e`, `8e40b19` and `16b8ed0` remain unpushed;
+464 trait-bridge and 239 PyO3 generator tests pass.
+The test-only Psych projector probes whether the installed parser counts a BOM
+in character columns; it always parses the original document bytes. This keeps
+the isolated default Psych 5.3.1 and local Psych 5.5.0 byte ranges consistent.
 
 The initial error path returns `CoreError`; full portable failure/selection
 envelopes remain open. Host availability, versioned parser-profile support,

@@ -1,11 +1,11 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "ruby",
-  "review_reason": "Add typed capability queries, observations and manifest plus controlled/uncontrolled entry points; existing API unchanged and default authority remains explicit.",
+  "review_reason": "Expose typed host-owned WorkflowHost batches and native cancellation; no default authority change",
   "files": {
     "lib/structuredmerge_core/native.rb": "1958362029340a5786ed9762f1431dcdbcf0017626d262aede09db17eb2ea32f",
     "lib/structuredmerge_core/version.rb": "6cda1e4772dbebb74e509d2aefe2fcc1a9081782f9dd3f514f00a629c4211125",
     "lib/structuredmerge_core.rb": "defe67340887e4fcfecefc0a68d255fab86768e5c81260916819b636303f5cdf",
-    "sig/types.rbs": "c0bc1987879f9dccf4fbb529ef9d2dc225eb1aca637bbabdd58dddea97a2d1a9"
+    "sig/types.rbs": "9bb28ae5700e52900758f1de3a94092a81343f4a21aac9f324e15dbfb8ca1709"
   }
 }

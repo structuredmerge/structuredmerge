@@ -337,6 +337,8 @@
 
 - Add a Rust typed WorkflowHost batch boundary over the merge registry, with TreeHaver-prepared source facts, explicit host execution ownership, bounded envelopes, cancellation and common-result validation; generated binding exposure and release gates remain pending.
 
+- Expose typed WorkflowHost registration, inventory, prepared native-parser batches and bounded host-owned execution to Ruby and Python, with shared cancellation controls and no default-authority promotion.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
@@ -434,3 +436,5 @@
 - Generated Python capability assertions compare profile identifiers and parser-language strings exactly rather than case-folding indexed fields.
 
 - Common-operation diagnostics classify source and parser-result resource limits consistently as resource_limit, while preserving opaque provider-native error codes and failure evidence.
+
+- Keep test-only Psych native byte-span projection consistent across BOM column conventions in Psych 5.3.1 and 5.5.0 without preprocessing source bytes.
