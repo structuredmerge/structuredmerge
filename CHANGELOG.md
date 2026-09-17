@@ -398,3 +398,5 @@
 - Reject missing merge-driver option values and unknown required promotion statuses before output writes, preserving current files on malformed CLI and attribute policies.
 
 - Reject merge-driver report destinations that alias inputs or output, including hard links, symlinks, and new output paths, before any source or output writes.
+
+- Clean disposable Python core artifact environments on success, failure, and handled interruption; retain reports, refuse low-disk runs, and disable pip download caching.

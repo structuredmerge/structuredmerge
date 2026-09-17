@@ -73,8 +73,14 @@ syntax facts only; Rust owns identities, merge decisions and rendering. The
 Python corpus case retains its historical generic-provider label; the candidate
 result and descriptor report the actual native provider instead.
 
-Use the Python virtual environment from a successful
-`check_core_python_artifact.py` run. Prepend its `venv/bin` to PATH **after**
+First verify the wheel with `check_core_python_artifact.py`. That gate now removes
+its disposable environment; do not depend on a retained `core-python-artifact-*`
+virtual environment. For a benchmark session, create one repository-local
+temporary virtual environment, install the exact verified wheel and
+`libcst==1.9.0` with pip's `--no-cache-dir`, and remove that environment in the
+session runner's guaranteed teardown. Check free space before and during the
+session, preserving the 20 GiB reserve plus a separate job budget. Keep result
+reports outside the disposable environment. Prepend its `bin` to PATH **after**
 `mise exec` when invoking the benchmark bundle, and keep the Ruby bundle/runtime
 configuration above. Pass:
 

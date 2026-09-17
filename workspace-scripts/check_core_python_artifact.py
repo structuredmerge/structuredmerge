@@ -5,6 +5,7 @@ This is a local runtime gate, not publication approval or the full platform matr
 """
 import email.parser
 import ast
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -64,14 +65,47 @@ def resolve_wheel(value):
     return path
 
 
+@contextmanager
+def artifact_workspace(root):
+    """Keep small evidence, never retain the disposable installed environment."""
+    scratch = root / "tmp"
+    scratch.mkdir(exist_ok=True)
+    # This runner installs an existing wheel; it must never invoke a Rust build.
+    # Allow 2 GiB for the environment in addition to the 20 GiB emergency reserve.
+    if shutil.disk_usage(scratch).free < 22 * 1024**3:
+        raise RuntimeError("artifact check requires 22 GiB free (20 GiB reserve + 2 GiB budget)")
+    stage = Path(tempfile.mkdtemp(prefix="core-python-artifact-", dir=scratch))
+    try:
+        yield stage
+    finally:
+        # These paths belong to this invocation, not an arbitrary supplied root.
+        # Reports stay outside them so failed checks can retain useful evidence.
+        for name in ("venv", "consumer"):
+            path = stage / name
+            if path.exists():
+                shutil.rmtree(path)
+
+
 def main():
     if len(sys.argv) != 2:
         raise SystemExit("usage: check_core_python_artifact.py WHEEL_OR_DIRECTORY")
     root = Path(__file__).resolve().parent.parent
     wheel = resolve_wheel(sys.argv[1])
     metadata, license_files = inspect_wheel(root, wheel)
-    (root / "tmp").mkdir(exist_ok=True)
-    stage = Path(tempfile.mkdtemp(prefix="core-python-artifact-", dir=root / "tmp"))
+    with artifact_workspace(root) as stage:
+        print(f"Artifact report directory: {stage}", flush=True)
+        try:
+            run_checks(root, wheel, metadata, license_files, stage)
+        except BaseException as error:
+            (stage / "report.json").write_text(json.dumps({
+                "artifact": str(wheel), "publication_gate": False,
+                "status": "failed", "error": type(error).__name__,
+                "message": str(error),
+            }, indent=2) + "\n", encoding="utf-8")
+            raise
+
+
+def run_checks(root, wheel, metadata, license_files, stage):
     environment = stage / "venv"
     venv.EnvBuilder(with_pip=True).create(environment)
     python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -82,7 +116,7 @@ def main():
     shutil.copytree(root / "e2e/python/tests", consumer / "generated")
     env = {key: value for key, value in os.environ.items() if key not in ("PYTHONPATH", "PYTHONHOME")}
     env.setdefault("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR", str(root / "tmp/typed-tslp-cache"))
-    subprocess.run([str(python), "-m", "pip", "install", str(wheel), "libcst==1.9.0", "pytest>=7.4"],
+    subprocess.run([str(python), "-m", "pip", "install", "--no-cache-dir", str(wheel), "libcst==1.9.0", "pytest>=7.4"],
         cwd=consumer, env=env, check=True)
     subprocess.run([str(python), "-m", "unittest", "discover", "-s", ".", "-v"],
         cwd=consumer, env=env, check=True)
@@ -98,7 +132,7 @@ def main():
     }
     (stage / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report))
-    print(f"Consumer and report: {stage}")
+    print(f"Report: {stage / 'report.json'} (temporary consumer removed on exit)")
 
 
 if __name__ == "__main__":

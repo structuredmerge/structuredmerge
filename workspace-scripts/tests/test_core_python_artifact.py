@@ -4,12 +4,78 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("artifact", ROOT / "workspace-scripts/check_core_python_artifact.py")
 ARTIFACT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ARTIFACT)
+
+
+class WorkspaceLifecycleTest(unittest.TestCase):
+    def test_main_failure_records_error_and_cleans_partial_install(self):
+        (ROOT / "tmp").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=ROOT / "tmp", prefix="artifact-main-test-") as directory:
+            root = Path(directory)
+            script = root / "workspace-scripts/check_core_python_artifact.py"
+            script.parent.mkdir()
+            wheel = root / "test.whl"
+            wheel.touch()
+
+            def fail_install(root, wheel, metadata, licenses, stage):
+                (stage / "venv").mkdir()
+                (stage / "venv/partial").write_text("incomplete installation")
+                raise RuntimeError("injected install failure")
+
+            with patch.object(ARTIFACT, "__file__", str(script)), \
+                    patch.object(ARTIFACT.sys, "argv", [str(script), str(wheel)]), \
+                    patch.object(ARTIFACT, "inspect_wheel", return_value=({}, [])), \
+                    patch.object(ARTIFACT, "run_checks", side_effect=fail_install), \
+                    patch.object(ARTIFACT.shutil, "disk_usage") as usage:
+                usage.return_value.free = 22 * 1024**3
+                with self.assertRaisesRegex(RuntimeError, "injected install failure"):
+                    ARTIFACT.main()
+            stages = list((root / "tmp").iterdir())
+            self.assertEqual(len(stages), 1)
+            self.assertEqual(list(stages[0].iterdir()), [stages[0] / "report.json"])
+            report = json.loads((stages[0] / "report.json").read_text())
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["error"], "RuntimeError")
+            self.assertFalse(report["publication_gate"])
+
+    def test_cleanup_on_success_failure_and_interruption_retains_report(self):
+        (ROOT / "tmp").mkdir(exist_ok=True)
+        for error in (None, RuntimeError("install failed"), KeyboardInterrupt()):
+            with self.subTest(error=error), tempfile.TemporaryDirectory(
+                dir=ROOT / "tmp", prefix="artifact-lifecycle-test-"
+            ) as directory:
+                root = Path(directory)
+                with patch.object(ARTIFACT.shutil, "disk_usage") as usage:
+                    usage.return_value.free = 22 * 1024**3
+                    try:
+                        with ARTIFACT.artifact_workspace(root) as stage:
+                            for name in ("venv", "consumer"):
+                                (stage / name).mkdir()
+                                (stage / name / "partial").write_text("disposable")
+                            (stage / "report.json").write_text("evidence")
+                            if error is not None:
+                                raise error
+                    except (RuntimeError, KeyboardInterrupt) as caught:
+                        self.assertIs(caught, error)
+                self.assertEqual(list(stage.iterdir()), [stage / "report.json"])
+                self.assertEqual((stage / "report.json").read_text(), "evidence")
+
+    def test_low_disk_refuses_before_creating_environment(self):
+        (ROOT / "tmp").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=ROOT / "tmp", prefix="artifact-budget-test-") as directory:
+            root = Path(directory)
+            with patch.object(ARTIFACT.shutil, "disk_usage") as usage:
+                usage.return_value.free = 22 * 1024**3 - 1
+                with self.assertRaisesRegex(RuntimeError, "22 GiB free"):
+                    with ARTIFACT.artifact_workspace(root):
+                        self.fail("low-disk runner must not start")
+            self.assertEqual(list((root / "tmp").iterdir()), [])
 
 
 class ArchiveValidationTest(unittest.TestCase):
