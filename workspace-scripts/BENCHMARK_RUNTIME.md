@@ -139,7 +139,11 @@ With those same environment variables, run
 parent-Bundler variables and missing-gem failure tests. Setup/runtime failures
 return 2, reserving 1 for actual typed conflicts. Inspect raw diagnostics as well
 as the official report: an early broken launch returning 1 was classified as the
-expected YAML conflict by the harness and is not valid execution evidence.
+expected YAML conflict by the older harness and is not valid execution evidence.
+The corrected harness requires a complete marker region or the categorized
+`EXECUTABLE: merge_conflict: CODE: MESSAGE` diagnostic before accepting exit 1
+as a conflict. Unexplained startup failures now remain reliability errors; pin
+the harness revision when comparing reports produced before and after this fix.
 
 Include actual adapter, descriptor and conformance-helper changed paths for dev.
 The current micro corpus has no YAML merge3 sentinel, so all 16 cases are
