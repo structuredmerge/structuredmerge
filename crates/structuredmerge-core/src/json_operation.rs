@@ -24,6 +24,9 @@ pub(crate) fn validate_render(
     if result.operation == OperationKind::Diff2 {
         return crate::json_diff::validate(result, request);
     }
+    if result.operation == OperationKind::Analyze {
+        return crate::json_analysis::validate(result, request);
+    }
     let output = result.output.as_deref().ok_or(Invalid)?;
     let render: json_merge::render_evidence::JsonRenderEvidence =
         serde_json::from_value(result.render_report.get("evidence").ok_or(Invalid)?.clone())
@@ -124,6 +127,7 @@ pub(crate) fn execute(
         }
     };
     let operation = match &input.operation {
+        OperationPolicy::Analyze(policy) if crate::json_analysis::supports(policy) => "analyze",
         OperationPolicy::Diff2(policy) if crate::json_diff::supports(policy) => "diff2",
         OperationPolicy::Merge2(policy)
             if policy.directional_merge == "template-into-current"
@@ -193,7 +197,16 @@ pub(crate) fn execute(
                 preference: input.parser_selection.preference.clone(),
                 required_capabilities: input.parser_selection.required_capabilities.clone(),
             },
-            options: ParseOptions::default(),
+            options: if operation == "analyze" {
+                ParseOptions {
+                    comments: true,
+                    tokens: false,
+                    diagnostics: true,
+                    native_extensions: true,
+                }
+            } else {
+                ParseOptions::default()
+            },
             metadata: input.metadata.clone(),
             extra: Metadata::new(),
         });
@@ -229,6 +242,25 @@ pub(crate) fn execute(
     }
     if let Err(error) = context.check() {
         service_failure(&mut result, error);
+        return finish(result);
+    }
+    if operation == "analyze" {
+        match crate::json_analysis::project(&parses[0], dialect) {
+            Ok(analysis) => {
+                result.ok = true;
+                result.analysis = Some(analysis);
+                result.verification.classification_reached = Some(true);
+                result.verification.consumed_source_roles = Some(roles.to_vec());
+            }
+            Err(_) => diagnostic(
+                &mut result,
+                PortableCategory::UnsupportedFeature,
+                "json.analysis_rejected",
+                "JSON family analysis rejected the parsed input",
+                DiagnosticLayer::Analysis,
+                vec![],
+            ),
+        }
         return finish(result);
     }
     if operation == "diff2" {

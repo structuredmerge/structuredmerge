@@ -241,6 +241,8 @@
 
 - Execute exact-source JSON diff2 through the typed common facade with nested native-span changes, whole-document trivia coverage, and independently recomputed evidence validation.
 
+- Execute common typed JSON analysis with native owner/comment references, exact blank-gap bytes and controllers, explicit unresolved comment retention, and recomputed evidence validation.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

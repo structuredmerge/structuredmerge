@@ -130,18 +130,49 @@ pub(crate) fn validate(
         "json5" => json_merge::JsonDialect::Json5,
         _ => return Err(Invalid),
     };
+    let parses = validated_parses(result, request, dialect)?;
+    let (changes, diff) = project(&parses[0], &parses[1], dialect).map_err(|_| Invalid)?;
+    if changes.len() != result.changes.len()
+        || changes.iter().zip(&result.changes).any(|(expected, actual)| {
+            expected.path != actual.path
+                || expected.subject_ref != actual.subject_ref
+                || expected.source_spans.keys().ne(actual.source_spans.keys())
+                || expected.role_states.keys().ne(actual.role_states.keys())
+        })
+    {
+        return Err(Invalid);
+    }
+    for (expected, actual) in [
+        (serde_json::to_value(changes), serde_json::to_value(&result.changes)),
+        (serde_json::to_value(diff), serde_json::to_value(result.diff.as_ref().ok_or(Invalid)?)),
+    ] {
+        if !contains_fields(&expected.map_err(|_| Invalid)?, &actual.map_err(|_| Invalid)?) {
+            return Err(Invalid);
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn validated_parses(
+    result: &OperationResult,
+    request: &ValidatedOperationRequest,
+    dialect: json_merge::JsonDialect,
+) -> Result<Vec<ParsedResult>, ResultContractError> {
+    use ResultContractError::InvalidSourceEvidence as Invalid;
+    let input = request.request();
+    let roles = input.operation.kind().source_roles();
     let cores: Vec<CoreParseResult> =
         serde_json::from_value(result.extra.get("input_parses").ok_or(Invalid)?.clone())
             .map_err(|_| Invalid)?;
-    if cores.len() != 2 {
+    if cores.len() != roles.len() || cores.is_empty() {
         return Err(Invalid);
     }
     let selection = &input.parser_selection;
     let mut parses = vec![];
-    for (core, role) in cores.into_iter().zip([SourceRole::Before, SourceRole::After]) {
+    for (core, role) in cores.into_iter().zip(roles) {
         let source = request
             .sources()
-            .get(&input.sources.get(&role).ok_or(Invalid)?.source_id)
+            .get(&input.sources.get(role).ok_or(Invalid)?.source_id)
             .map_err(|_| Invalid)?
             .clone();
         let language = if dialect == json_merge::JsonDialect::Json { "json" } else { "json5" };
@@ -200,31 +231,12 @@ pub(crate) fn validate(
     {
         return Err(Invalid);
     }
-    let (changes, diff) = project(&parses[0], &parses[1], dialect).map_err(|_| Invalid)?;
-    if changes.len() != result.changes.len()
-        || changes.iter().zip(&result.changes).any(|(expected, actual)| {
-            expected.path != actual.path
-                || expected.subject_ref != actual.subject_ref
-                || expected.source_spans.keys().ne(actual.source_spans.keys())
-                || expected.role_states.keys().ne(actual.role_states.keys())
-        })
-    {
-        return Err(Invalid);
-    }
-    for (expected, actual) in [
-        (serde_json::to_value(changes), serde_json::to_value(&result.changes)),
-        (serde_json::to_value(diff), serde_json::to_value(result.diff.as_ref().ok_or(Invalid)?)),
-    ] {
-        if !contains_fields(&expected.map_err(|_| Invalid)?, &actual.map_err(|_| Invalid)?) {
-            return Err(Invalid);
-        }
-    }
-    Ok(())
+    Ok(parses)
 }
 
 // Compatible unknown fields are passive and survive forwarding; required
 // evidence is checked recursively rather than rejecting every extra key.
-fn contains_fields(expected: &serde_json::Value, actual: &serde_json::Value) -> bool {
+pub(crate) fn contains_fields(expected: &serde_json::Value, actual: &serde_json::Value) -> bool {
     match (expected, actual) {
         (serde_json::Value::Object(left), serde_json::Value::Object(right)) => left
             .iter()

@@ -5,6 +5,7 @@ use tree_haver::{language_pack_provider::LanguagePackProvider, service::*};
 
 fn request(operation: &str, dialect: &str, texts: &[&str]) -> OperationRequest {
     let roles: &[&str] = match operation {
+        "analyze" => &["source"],
         "diff2" => &["before", "after"],
         "merge2" => &["incoming", "current"],
         _ => &["base", "ours", "theirs"],
@@ -23,7 +24,7 @@ fn request(operation: &str, dialect: &str, texts: &[&str]) -> OperationRequest {
     serde_json::from_value(json!({"schema": OPERATION_SCHEMA,"request_id":"json-common",
         "operation":operation,"provider_selection":{"provider_id":"kernel.json","family":"json","dialect":dialect,"profile_id":"kernel.json.nested.v1","required_capabilities":[operation]},
         "parser_selection":{"backend":"json.common","preference":[],"required_capabilities":[]},"sources":sources,
-        "policy":match operation { "diff2" => json!({"comparison_profile":"exact-source-owners","equivalence":["exact-source"]}), "merge2" => json!({"directional_merge":"template-into-current","render_policy":"source-preserving"}), _ => json!({"render_policy":"source-preserving"}) },
+        "policy":match operation { "analyze" => json!({}), "diff2" => json!({"comparison_profile":"exact-source-owners","equivalence":["exact-source"]}), "merge2" => json!({"directional_merge":"template-into-current","render_policy":"source-preserving"}), _ => json!({"render_policy":"source-preserving"}) },
         "extensions":[],"metadata":{}})).unwrap()
 }
 fn run(request: OperationRequest) -> (OperationResult, ValidatedOperationRequest) {
@@ -55,6 +56,169 @@ fn run(request: OperationRequest) -> (OperationResult, ValidatedOperationRequest
     .unwrap();
     result.validate_against(&validated).unwrap();
     (result, validated)
+}
+
+#[test]
+fn common_json_analysis_has_resolvable_owners_comments_layout_and_native_evidence() {
+    let (result, _) = run(request(
+        "analyze",
+        "json5",
+        &["// pre\r\n{\r\n a:{x:'é'},\r\n\r\n // next\r\n b:[1,2]\r\n}\r\n// post\r\n"],
+    ));
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert!(result.output.is_none());
+    assert!(result.diff.is_none());
+    let analysis = result.analysis.unwrap().extra;
+    let owners = analysis["owners"].as_array().unwrap();
+    let ids =
+        owners.iter().map(|o| o["id"].as_str().unwrap()).collect::<std::collections::BTreeSet<_>>();
+    assert!(ids.contains("json:/a/x"));
+    assert!(ids.contains("json:/b/1"));
+    let nodes = analysis["parse_result"]["parsed"]["nodes"].as_array().unwrap();
+    for owner in owners {
+        let node = nodes.iter().find(|node| node["id"] == owner["node_id"]).unwrap();
+        assert_eq!(owner["span"], node["span"]);
+        for node_id in owner["node_ids"].as_array().unwrap() {
+            assert!(nodes.iter().any(|node| &node["id"] == node_id));
+        }
+    }
+    for comment in analysis["comment_regions"].as_array().unwrap() {
+        for group_id in comment["family_region_ids"].as_array().unwrap() {
+            assert!(
+                analysis["family_comment_regions"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|group| &group["id"] == group_id
+                        && ids.contains(group["owner_id"].as_str().unwrap()))
+            );
+        }
+        assert!(ids.contains(comment["owner_id"].as_str().unwrap()));
+        assert_eq!(comment["node_ids"].as_array().unwrap().len(), 1);
+        let node = nodes.iter().find(|node| node["id"] == comment["node_ids"][0]).unwrap();
+        assert_eq!(node["span"], comment["span"]);
+    }
+    assert_eq!(analysis["comment_regions"].as_array().unwrap().len(), 3);
+    for decision in analysis["ownership"].as_array().unwrap() {
+        assert!(ids.contains(decision["selected_owner_ref"].as_str().unwrap()));
+    }
+    assert!(!analysis["layout_gaps"].as_array().unwrap().is_empty());
+    for gap in analysis["layout_gaps"].as_array().unwrap() {
+        let side = gap["controller_side"].as_str().unwrap();
+        let controller = gap[format!("{side}_owner_id")].as_str().unwrap();
+        assert!(ids.contains(controller));
+        let decisions = analysis["ownership"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|decision| decision["subject_ref"] == gap["id"])
+            .collect::<Vec<_>>();
+        assert_eq!(decisions.len(), 1);
+        assert_eq!(decisions[0]["selected_owner_ref"], controller);
+    }
+}
+
+#[test]
+fn common_json_analysis_supports_nested_arrays_scalar_roots_and_explicit_enrichment() {
+    for (dialect, source) in [
+        ("json", "42"),
+        ("json", "[1,{\"x\":[2]}]"),
+        ("jsonc", "{\n // note\n \"x\":1,\n}"),
+        ("json5", "{x:'é'}"),
+    ] {
+        let mut input = request("analyze", dialect, &[source]);
+        let OperationPolicy::Analyze(policy) = &mut input.operation else { panic!() };
+        policy.comments = Some(true);
+        policy.ownership = Some(true);
+        policy.native_extensions = Some(true);
+        let (result, _) = run(input);
+        assert!(result.ok, "{dialect} {source}: {:?}", result.diagnostics);
+        let analysis = result.analysis.unwrap();
+        assert!(!analysis.extra["owners"].as_array().unwrap().is_empty());
+        assert!(
+            analysis.extra["parse_result"]["parsed"]["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|node| !node["extensions"].as_array().unwrap().is_empty())
+        );
+    }
+    for source in ["{", r#"{"x":1,"x":2}"#, "// forbidden\n{}"] {
+        let (result, _) = run(request("analyze", "json", &[source]));
+        assert!(!result.ok);
+        assert!(result.analysis.is_none());
+    }
+}
+
+#[test]
+fn common_json_analysis_reports_unclaimed_comments_and_never_merges_comment_bytes_with_code() {
+    for (source, count, unresolved) in [("{/*same*/x:1,/*same*/y:2}", 2, 0), ("{} /*tail*/", 1, 1)]
+    {
+        let (result, _) = run(request("analyze", "json5", &[source]));
+        assert!(result.ok);
+        let analysis = result.analysis.unwrap().extra;
+        assert_eq!(analysis["comment_regions"].as_array().unwrap().len(), count);
+        assert_eq!(
+            analysis["metadata"]["unresolved_comment_node_ids"].as_array().unwrap().len(),
+            unresolved
+        );
+        if unresolved == 1 {
+            assert_eq!(analysis["comment_regions"][0]["attachment_resolved"], false);
+            assert_eq!(analysis["ownership"][0]["confidence"], "unresolved");
+            assert_eq!(analysis["diagnostics"][0]["code"], "json.comment_attachment_unresolved");
+            assert_eq!(analysis["diagnostics"][0]["blocking"], false);
+        }
+        for region in analysis["comment_regions"].as_array().unwrap() {
+            let start = region["span"]["range"]["start_byte"].as_u64().unwrap() as usize;
+            let end = region["span"]["range"]["end_byte"].as_u64().unwrap() as usize;
+            assert!(matches!(&source[start..end], "/*same*/" | "/*tail*/"));
+        }
+    }
+}
+
+#[test]
+fn common_json_analysis_declares_the_existing_shared_gap_fallback() {
+    let (result, _) = run(request("analyze", "json", &["{\n \"a\":1,\n\n \"b\":2\n}"]));
+    assert!(result.ok);
+    let analysis = result.analysis.unwrap();
+    let gap = &analysis.extra["layout_gaps"][0];
+    assert_eq!(gap["before_owner_id"], "json:/a");
+    assert_eq!(gap["after_owner_id"], "json:/b");
+    assert_eq!(gap["controller_side"], "after");
+    assert_eq!(gap["fallback_controller_side"], "before");
+}
+
+#[test]
+fn common_json_analysis_rejects_tampered_decisions_and_unsupported_policies() {
+    let (result, request) = run(request("analyze", "json5", &["// note\n{x:1}\n\n"]));
+    assert!(result.ok);
+    for mutation in 0..6 {
+        let mut forged = result.clone();
+        let analysis = &mut forged.analysis.as_mut().unwrap().extra;
+        match mutation {
+            0 => analysis.get_mut("owners").unwrap()[1]["node_id"] = json!("missing"),
+            1 => {
+                analysis.get_mut("comment_regions").unwrap()[0]["source_sha256"] =
+                    json!("0".repeat(64))
+            }
+            2 => analysis.get_mut("ownership").unwrap()[0]["selected_owner_ref"] = json!("missing"),
+            3 => analysis.get_mut("attachments").unwrap()[0]["owner_id"] = json!("missing"),
+            4 => analysis.get_mut("layout_gaps").unwrap()[0]["controller_side"] = json!("after"),
+            _ => {
+                analysis.insert("comment_regions".into(), json!([]));
+            }
+        }
+        assert!(forged.validate_against(&request).is_err(), "mutation {mutation}");
+    }
+    let mut future = result.clone();
+    future.analysis.as_mut().unwrap().extra.get_mut("owners").unwrap()[0]["future"] = json!(true);
+    future.validate_against(&request).unwrap();
+    let mut unsupported = request.request().clone();
+    let OperationPolicy::Analyze(policy) = &mut unsupported.operation else { panic!() };
+    policy.tokens = Some(true);
+    let (result, _) = run(unsupported);
+    assert!(!result.ok);
+    assert!(!result.extra.contains_key("input_parses"));
 }
 
 #[test]
@@ -296,7 +460,7 @@ fn exported_facade_routes_json_and_honors_cancellation() {
     };
     let control = create_operation_control();
     control.cancel();
-    for operation in ["merge2", "diff2"] {
+    for operation in ["merge2", "diff2", "analyze"] {
         let mut request = request(operation, "json", &["{\"add\":1}", "{}"]);
         request.parser_selection.backend = Some("json.common.api".into());
         assert_eq!(

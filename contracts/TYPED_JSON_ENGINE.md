@@ -72,8 +72,8 @@ regions receive exact input-byte digests; absent alternatives remain absent.
 Unavailable native locality is not upgraded to exact locality. No fabricated
 decision IDs, resolutions, markers or conflicted output are introduced.
 
-Next: common JSON analysis with authoritative nested owner spans, broader
-generated shared JSON fixtures and actual Ruby family/Git consumer migration.
+Next: shared JSON fixtures, consumer parity review and actual Ruby family/Git
+consumer migration.
 Those adapters' prototype calls and Ruby-owned diff decisions remain open. No
 public core API signature, parser default or publication authority changed.
 
@@ -101,7 +101,7 @@ This consistency check does not authenticate a foreign parser or grant semantic
 authority to a fabricated result. Cancellation/deadline checks still surround
 execution and validation; recursive family work is not preemptible.
 
-Common analysis remains separate work: diff2's complete byte comparison does not
+Common analysis is described below: diff2's complete byte comparison does not
 pretend to resolve every comment attachment. Ruby consumer migration and shared
 generated JSON fixtures remain open.
 
@@ -126,9 +126,9 @@ it is not mislabeled as the common Slice 1024 analysis result.
 Five additional typed tests cover repeated fragments, escaped keys, Unicode/CRLF,
 native span/digest/parent consistency, nested changes, scalar roots, positional
 arrays, duplicate decoded keys, wrong roles, duplicate source IDs, and the
-outer-trivia limitation. Common analysis still needs exact comment/layout
-projection and ownership validation before consumer migration; common diff2
-now supplements this helper with complete-document comparison as described above.
+outer-trivia limitation. Common analysis now projects these facts and checks
+ownership evidence; common diff2 supplements this helper with complete-document
+comparison as described above.
 No generated export or installed artifact was changed in this step.
 JSON's 24 unit, 14 fixture and 12 typed tests pass, alongside Git/core regression
 tests (native-runtime opt-in tests were not rerun in this step) and strict Clippy.
@@ -147,13 +147,47 @@ unclaimed: the map is evidence, not a disjoint render partition.
 Existing blank-run layout decisions now have exact byte spans and digests in
 `layout_gap_sources`. Newline indexing preserves CRLF and final whitespace bytes;
 it does not discover comments or infer syntax from text. These gaps do not yet
-cover all document trivia. Common analysis still requires owner-namespace
-projection, complete comment coverage/ambiguity handling, attachment/controller
-validation. Common diff2's document summary does not supply these decisions.
+cover all document trivia. Common analysis supplies owner-namespace projection,
+native comment coverage/ambiguity reporting and attachment/controller validation.
+Common diff2's document summary does not supply these decisions.
 
 Two additional typed tests cover repeated same-line comments, multiline comments,
 unclaimed trailing comments and exact CRLF/final-whitespace gaps (14 typed tests
 total). Logs: `tmp/json-comment-provenance-{tests,clippy,workspace}.log`.
+
+## Common JSON analysis
+
+Explicit `kernel.json.nested.v1` analysis now embeds the validated native parse,
+nested owners and logical identities, native comment regions, exact blank-run
+layout gaps, attachments and ownership decisions. It requires comments,
+diagnostics and native-extension parser capabilities. Omitted analysis policy
+selects `exact-source-owners`; disabling comments/ownership/native extensions or
+requesting token analysis is unsupported and fails before parsing.
+
+The family engine resolves its native value-node owner IDs to logical owner IDs.
+One exact region per native comment avoids treating intervening code as comment
+text when the legacy family groups multiple same-line comments. Existing family
+group references remain available. Incomplete/conflicting attachment decisions
+are retained at document scope, marked unresolved and accompanied by nonblocking
+analysis diagnostics and alternatives. This is not an invented sibling attachment
+or permission to move an unresolved comment. Native parse extensions are retained
+inside the embedded parse result, not flattened into universal semantic fields.
+
+Layout follows the existing family blank-run policy, with exact source digests,
+one controller per gap and the existing opposite-side fallback when both sides
+exist. It does not claim to cover all source trivia or form a non-overlapping
+render partition. Source-preserving merges continue using their executed edit
+evidence; analysis is not itself an authorization to apply edits.
+
+The common validator reconstructs the native parse and family analysis from
+request bytes, then checks owner references, comment coverage, attachments,
+controller decisions, digests and diagnostics. Compatible unknown fields and
+passive extensions are retained. Five new common tests cover nested/scalar/array
+owners, dialects, exact comment and gap evidence, unresolved comments, explicit
+enrichment, native extensions, shared-gap fallback, malformed/duplicate-key input, tampering and
+unsupported policies; cancellation also covers analysis. Consumer parity,
+shared generated JSON fixtures and broader analysis-policy conformance remain
+open. No Ruby family adapter has been declared migrated by these core changes.
 
 ## Installed diff2 verification (2026-09-17)
 
@@ -168,6 +202,17 @@ broader downstream/platform gates remain open.
 Logs: `tmp/json-common-diff-{tests,facade,clippy,audits,python-artifact,ruby-artifact}.log`.
 Python wheel SHA-256: `6aa4f7df1d6bc13977b3b10c8bcca74b2e90531190cc2ca51d47c9d1cd465089`.
 Ruby gem SHA-256: `c5e65da7ec16ed7f386091ad1fd66449f56038b0efc8d494f386d737e01363b3`.
+
+## Installed analysis verification (2026-09-17)
+
+All 16 common JSON tests, core/JSON regressions, strict Clippy and 14 audits pass.
+The rebuilt isolated wheel passes 35 tests plus 15 existing generated fixtures;
+the isolated gem passes 31 plus 12. Both execute JSON5 analysis and check native
+owner/comment references and the unresolved-attachment diagnostic. Regeneration
+updates the input fingerprint without changing reviewed public API source files.
+Logs: `tmp/json-common-analysis-{tests,clippy,audits,python-artifact,ruby-artifact}.log`.
+Wheel SHA-256: `9acc664103c9a428d0dbae8e71ac20e4f7472adc2b1cd57757bc782fa519afdf`.
+Gem SHA-256: `d5d11261c7954780bb2975e744b60483ea6cb73a39eed845733d5a7476c97ea2`.
 
 ## Installed verification (2026-09-17)
 

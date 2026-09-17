@@ -13,6 +13,8 @@ pub struct JsonOwnerFact {
     pub path: String,
     pub kind: String,
     pub node_id: String,
+    /// Value node used by the existing family comment/layout owner policy.
+    pub value_node_id: String,
     pub parent_id: Option<String>,
     pub match_key: Option<String>,
     pub span: tree_haver::SourceSpan,
@@ -81,6 +83,7 @@ pub fn owner_analysis(
             path: path.clone(),
             kind: kind.into(),
             node_id: node_id.into(),
+            value_node_id: value.node_id.clone(),
             parent_id,
             match_key,
             span: node.span.clone(),

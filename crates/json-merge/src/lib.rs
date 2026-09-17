@@ -8,6 +8,7 @@ use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest};
 pub mod render_evidence;
 mod source_preserving;
 pub mod typed;
+pub mod typed_analysis;
 pub use source_preserving::{
     json_semantically_equivalent, merge_json_source_preserving, merge_json_three_way,
 };

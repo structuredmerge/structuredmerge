@@ -68,11 +68,11 @@ class TypedParserHostTest(unittest.TestCase):
         provider_id = "python.common.json"
         core.register_language_pack_parser(provider_id, "json")
         try:
-            def request(operation, texts):
+            def request(operation, texts, dialect="json"):
                 original = self.common_request(operation, texts)
                 return core.OperationRequest(schema=original.schema, request_id=original.request_id,
                     operation=original.operation, sources=original.sources, extensions=[], metadata={}, extra={},
-                    provider_selection=core.MergeProviderSelection(provider_id="kernel.json", family="json", dialect="json",
+                    provider_selection=core.MergeProviderSelection(provider_id="kernel.json", family="json", dialect=dialect,
                         profile_id="kernel.json.nested.v1", required_capabilities=[operation], extra={}),
                     parser_selection=core.OperationParserSelection(backend=provider_id, preference=[], required_capabilities=[], extra={}))
             limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
@@ -99,6 +99,17 @@ class TypedParserHostTest(unittest.TestCase):
             self.assertTrue(trivia.ok)
             self.assertEqual(len(trivia.changes), 1)
             self.assertEqual(trivia.changes[0].subject_ref, "json.document")
+            core.unregister_parser_provider(provider_id)
+            core.register_language_pack_parser(provider_id, "json5")
+            analysis = core.execute_operation(request("analyze", ["{} /* unclaimed */"], "json5"), limits)
+            self.assertTrue(analysis.ok)
+            self.assertIsNone(analysis.output)
+            owners = json.loads(analysis.analysis.extra["owners"])
+            comments = json.loads(analysis.analysis.extra["comment_regions"])
+            self.assertEqual(owners[0]["id"], "json:")
+            self.assertEqual(comments[0]["owner_id"], "json:")
+            self.assertFalse(comments[0]["attachment_resolved"])
+            self.assertEqual(json.loads(analysis.analysis.extra["diagnostics"])[0]["code"], "json.comment_attachment_unresolved")
             self.assertEqual(self.host.calls, 0)
         finally:
             core.unregister_parser_provider(provider_id)

@@ -20,11 +20,11 @@ RSpec.describe StructuredmergeCore do
   it "executes nested JSON common merges in Rust with render and conflict evidence" do
     provider_id = "ruby.common.json"
     described_class.register_language_pack_parser(provider_id, "json")
-    request = lambda do |operation, texts|
+    request = lambda do |operation, texts, dialect = "json"|
       original = common_request(operation, texts)
       described_class::OperationRequest.new(schema: original.schema, request_id: original.request_id,
         operation: original.operation, sources: original.sources, extensions: [], metadata: {}, extra: {},
-        provider_selection: described_class::MergeProviderSelection.new(provider_id: "kernel.json", family: "json", dialect: "json",
+        provider_selection: described_class::MergeProviderSelection.new(provider_id: "kernel.json", family: "json", dialect: dialect,
           profile_id: "kernel.json.nested.v1", required_capabilities: [operation], extra: {}),
         parser_selection: described_class::OperationParserSelection.new(backend: provider_id, preference: [], required_capabilities: [], extra: {}))
     end
@@ -50,6 +50,17 @@ RSpec.describe StructuredmergeCore do
     expect(trivia.ok).to be(true)
     expect(trivia.changes.length).to eq(1)
     expect(trivia.changes.first.subject_ref).to eq("json.document")
+    described_class.unregister_parser_provider(provider_id)
+    described_class.register_language_pack_parser(provider_id, "json5")
+    analysis = described_class.execute_operation(request.call("analyze", ["{} /* unclaimed */"], "json5"), merge_limits)
+    expect(analysis.ok).to be(true)
+    expect(analysis.output).to be_nil
+    owners = JSON.parse(analysis.analysis.extra.fetch("owners"))
+    comments = JSON.parse(analysis.analysis.extra.fetch("comment_regions"))
+    expect(owners.first.fetch("id")).to eq("json:")
+    expect(comments.first.fetch("owner_id")).to eq("json:")
+    expect(comments.first.fetch("attachment_resolved")).to be(false)
+    expect(JSON.parse(analysis.analysis.extra.fetch("diagnostics")).first.fetch("code")).to eq("json.comment_attachment_unresolved")
   ensure
     described_class.unregister_parser_provider(provider_id)
   end
