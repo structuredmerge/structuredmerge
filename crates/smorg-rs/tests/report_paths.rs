@@ -7,6 +7,58 @@ fn scratch() -> tempfile::TempDir {
 }
 
 #[test]
+fn unwritable_report_preserves_current_and_existing_report_survives_output_staging_failure() {
+    for executable in [env!("CARGO_BIN_EXE_smorg"), env!("CARGO_BIN_EXE_smorg-rs")] {
+        let dir = scratch();
+        for (name, text) in
+            [("base", "{\"a\":1}\n"), ("ours", "{\"a\":1}\n"), ("theirs", "{\"a\":2}\n")]
+        {
+            fs::write(dir.path().join(name), text).unwrap();
+        }
+        fs::create_dir(dir.path().join("report-directory")).unwrap();
+        let output = Command::new(executable)
+            .current_dir(dir.path())
+            .args([
+                "merge-driver",
+                "base",
+                "ours",
+                "theirs",
+                "file.json",
+                "--report",
+                "report-directory",
+            ])
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(3), "{output:?}");
+        assert_eq!(fs::read(dir.path().join("ours")).unwrap(), b"{\"a\":1}\n");
+
+        fs::write(dir.path().join("report"), "old report").unwrap();
+        fs::create_dir(dir.path().join("output-directory")).unwrap();
+        let output = Command::new(executable)
+            .current_dir(dir.path())
+            .args([
+                "merge-driver",
+                "base",
+                "ours",
+                "theirs",
+                "file.json",
+                "--output",
+                "output-directory",
+                "--report",
+                "report",
+            ])
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(3), "{output:?}");
+        assert_eq!(fs::read(dir.path().join("report")).unwrap(), b"old report");
+        assert_eq!(fs::read(dir.path().join("ours")).unwrap(), b"{\"a\":1}\n");
+        assert!(!fs::read_dir(dir.path()).unwrap().any(|entry| {
+            entry.unwrap().file_name().to_string_lossy().starts_with(".smorg-write-")
+        }));
+    }
+}
+
+#[test]
 fn report_paths_cannot_overwrite_sources_or_output() {
     for executable in [env!("CARGO_BIN_EXE_smorg"), env!("CARGO_BIN_EXE_smorg-rs")] {
         for report in ["base", "ours", "theirs", "./ours", "result", "./result"] {

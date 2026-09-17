@@ -402,3 +402,5 @@
 - Clean disposable Python core artifact environments on success, failure, and handled interruption; retain reports, refuse low-disk runs, and disable pip download caching.
 
 - Clean Ruby typed-core artifact installations and source-package snapshots on completion or failure while preserving reports and explicit exports.
+
+- Stage merge-driver output and reports before replacement so report failures and partial staging writes preserve current bytes; report output-commit uncertainty explicitly.

@@ -18,6 +18,7 @@ use serde_json::json;
 mod benchmark_adapter;
 mod external_command;
 mod path_safety;
+mod staged_file;
 
 const EXIT_SUCCESS: i32 = 0;
 const EXIT_UNRESOLVED_CONFLICT: i32 = 1;
@@ -278,9 +279,9 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
         &current_source,
         &other_source,
     );
+    let mut fallbacks = Vec::new();
     if !result.ok {
         print_diagnostics(stderr, &result);
-        let mut fallbacks = Vec::new();
         if result.output.is_none() && !options.strict && options.fallback != "none" {
             fallbacks.push(json!({
                 "mode": "full_file",
@@ -295,150 +296,94 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
                 &other_source,
             ));
         }
-        let report_exit = write_merge_driver_machine_report(
-            options.report_path.as_deref(),
-            &effective_path,
-            false,
-            EXIT_UNRESOLVED_CONFLICT,
-            &fallbacks,
-            &result.change_classifications,
-            &result.owned_regions,
-            result.render_report.as_ref(),
-            result.profile.as_ref(),
-            result.reparse_after_render.as_ref(),
-            result.formatting_preservation.as_ref(),
-            result.secondary_formatting_metrics.as_ref(),
-            result.default_driver_evaluation.as_ref(),
-            &result.diagnostics,
-            stderr,
-        );
-        if report_exit != EXIT_SUCCESS {
-            return report_exit;
-        }
-        if options.check_only {
-            return EXIT_UNRESOLVED_CONFLICT;
-        }
-        if let Some(output) = result.output {
-            let output_path = options.output.as_deref().unwrap_or(&options.current);
-            if let Err(error) = fs::write(output_path, output) {
-                let _ = writeln!(stderr, "write output: {error}");
+    } else if result.output.is_none() {
+        let _ = writeln!(stderr, "merge completed without output");
+        return EXIT_INTERNAL_ERROR;
+    }
+    let exit_code = if !result.ok
+        || (options.check_only
+            && options.exit_code
+            && result.output.as_deref() != Some(current_source.as_str()))
+    {
+        EXIT_UNRESOLVED_CONFLICT
+    } else {
+        EXIT_SUCCESS
+    };
+    // Finish both staged files before replacing either destination. Commit the
+    // report first so report failures cannot modify the merge destination.
+    let staged_output = if options.check_only {
+        None
+    } else if let Some(output) = &result.output {
+        let path = options.output.as_deref().unwrap_or(&options.current);
+        match staged_file::StagedFile::new(path, output.as_bytes()) {
+            Ok(staged) => Some(staged),
+            Err(error) => {
+                let _ = writeln!(stderr, "stage output: {error}");
                 return EXIT_INTERNAL_ERROR;
             }
         }
-        return EXIT_UNRESOLVED_CONFLICT;
-    }
-
-    let Some(output) = result.output else {
-        let _ = writeln!(stderr, "merge completed without output");
-        return EXIT_INTERNAL_ERROR;
+    } else {
+        None
     };
-    if options.check_only {
-        let exit_code = if options.exit_code && output != current_source {
-            EXIT_UNRESOLVED_CONFLICT
-        } else {
-            EXIT_SUCCESS
-        };
-        let report_exit = write_merge_driver_machine_report(
-            options.report_path.as_deref(),
-            &effective_path,
-            true,
-            exit_code,
-            &[],
-            &result.change_classifications,
-            &result.owned_regions,
-            result.render_report.as_ref(),
-            result.profile.as_ref(),
-            result.reparse_after_render.as_ref(),
-            result.formatting_preservation.as_ref(),
-            result.secondary_formatting_metrics.as_ref(),
-            result.default_driver_evaluation.as_ref(),
-            &result.diagnostics,
-            stderr,
-        );
-        if report_exit != EXIT_SUCCESS {
-            return report_exit;
-        }
-        if options.exit_code && output != current_source {
-            return EXIT_UNRESOLVED_CONFLICT;
-        }
-        return EXIT_SUCCESS;
-    }
-
-    let output_path = options.output.as_deref().unwrap_or(&options.current);
-    if let Err(error) = fs::write(output_path, output) {
-        let _ = writeln!(stderr, "write output: {error}");
-        return EXIT_INTERNAL_ERROR;
-    }
-    let report_exit = write_merge_driver_machine_report(
+    let staged_report = match stage_merge_driver_machine_report(
         options.report_path.as_deref(),
         &effective_path,
-        true,
-        EXIT_SUCCESS,
-        &[],
-        &result.change_classifications,
-        &result.owned_regions,
-        result.render_report.as_ref(),
-        result.profile.as_ref(),
-        result.reparse_after_render.as_ref(),
-        result.formatting_preservation.as_ref(),
-        result.secondary_formatting_metrics.as_ref(),
-        result.default_driver_evaluation.as_ref(),
-        &result.diagnostics,
-        stderr,
-    );
-    if report_exit != EXIT_SUCCESS {
-        return report_exit;
+        exit_code,
+        &fallbacks,
+        &result,
+    ) {
+        Ok(staged) => staged,
+        Err(error) => {
+            let _ = writeln!(stderr, "stage report: {error}");
+            return EXIT_INTERNAL_ERROR;
+        }
+    };
+    if let Some(report) = staged_report {
+        if let Err(error) = report.commit() {
+            let _ = writeln!(stderr, "commit report: {error}");
+            return EXIT_INTERNAL_ERROR;
+        }
     }
-
-    EXIT_SUCCESS
+    if let Some(output) = staged_output {
+        if let Err(error) = output.commit() {
+            let _ = writeln!(stderr, "commit output: {error}");
+            return EXIT_INTERNAL_ERROR;
+        }
+    }
+    exit_code
 }
 
-#[allow(clippy::too_many_arguments)]
-fn write_merge_driver_machine_report(
+fn stage_merge_driver_machine_report(
     report_path: Option<&str>,
     path_name: &str,
-    ok: bool,
     exit_code: i32,
     fallbacks: &[serde_json::Value],
-    change_classifications: &[ast_merge_git::ChangeClassification],
-    owned_regions: &[ast_merge_git::OwnedRegionReport],
-    render_report: Option<&ast_merge_git::Merge3RenderReport>,
-    profile: Option<&ast_merge_git::Merge3Profile>,
-    reparse_after_render: Option<&bool>,
-    formatting_preservation: Option<&ast_merge_git::FormattingPreservation>,
-    secondary_formatting_metrics: Option<&ast_merge_git::SecondaryFormattingMetrics>,
-    default_driver_evaluation: Option<&ast_merge_git::DefaultDriverEvaluation>,
-    diagnostics: &[ast_merge::Diagnostic],
-    stderr: &mut dyn Write,
-) -> i32 {
+    result: &MergeDriverResult,
+) -> io::Result<Option<staged_file::StagedFile>> {
     let Some(report_path) = report_path else {
-        return EXIT_SUCCESS;
+        return Ok(None);
     };
     let report = json!({
         "command": "merge-driver",
         "path_name": path_name,
-        "ok": ok,
+        "ok": result.ok,
         "exit_code": exit_code,
         "fallbacks": fallbacks,
-        "change_classifications": change_classifications,
-        "owned_regions": owned_regions,
-        "render_report": render_report,
-        "reparse_after_render": reparse_after_render,
-        "formatting_preservation": formatting_preservation,
-        "secondary_formatting_metrics": secondary_formatting_metrics,
-        "default_driver_evaluation": default_driver_evaluation,
-        "profile": profile,
-        "diagnostics": diagnostics
+        "change_classifications": result.change_classifications,
+        "owned_regions": result.owned_regions,
+        "render_report": result.render_report,
+        "reparse_after_render": result.reparse_after_render,
+        "formatting_preservation": result.formatting_preservation,
+        "secondary_formatting_metrics": result.secondary_formatting_metrics,
+        "default_driver_evaluation": result.default_driver_evaluation,
+        "profile": result.profile,
+        "diagnostics": result.diagnostics,
+        // This report precedes the output commit and cannot attest its success.
+        "output_commit_verified": false
     });
-    let Ok(source) = serde_json::to_string_pretty(&report) else {
-        let _ = writeln!(stderr, "write report: failed to serialize report");
-        return EXIT_INTERNAL_ERROR;
-    };
-    if let Err(error) = fs::write(report_path, format!("{source}\n")) {
-        let _ = writeln!(stderr, "write report: {error}");
-        return EXIT_INTERNAL_ERROR;
-    }
-    EXIT_SUCCESS
+    let mut source = serde_json::to_vec_pretty(&report).map_err(io::Error::other)?;
+    source.push(b'\n');
+    staged_file::StagedFile::new(report_path, &source).map(Some)
 }
 
 fn fallback_reason(diagnostics: &[ast_merge::Diagnostic]) -> String {
