@@ -1563,6 +1563,7 @@ dependencies = [
  "ast-crispr",
  "ast-merge",
  "ast-template",
+ "json-merge",
  "python-merge",
  "serde",
  "serde_json",

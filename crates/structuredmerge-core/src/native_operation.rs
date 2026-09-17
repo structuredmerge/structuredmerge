@@ -51,7 +51,7 @@ fn diff_span(
     })
 }
 
-fn empty_result(request: &ValidatedOperationRequest) -> OperationResult {
+pub(crate) fn empty_result(request: &ValidatedOperationRequest) -> OperationResult {
     let input = request.request();
     OperationResult {
         schema: OPERATION_RESULT_SCHEMA.into(),
@@ -95,7 +95,7 @@ fn empty_result(request: &ValidatedOperationRequest) -> OperationResult {
     }
 }
 
-fn diagnostic(
+pub(crate) fn diagnostic(
     result: &mut OperationResult,
     category: PortableCategory,
     code: &str,
@@ -134,7 +134,7 @@ fn diagnostic(
     }));
 }
 
-fn service_failure(result: &mut OperationResult, error: ServiceError) {
+pub(crate) fn service_failure(result: &mut OperationResult, error: ServiceError) {
     let category = match &error {
         ServiceError::Cancelled => PortableCategory::Cancelled,
         ServiceError::DeadlineExceeded => PortableCategory::DeadlineExceeded,
@@ -163,7 +163,7 @@ fn service_failure(result: &mut OperationResult, error: ServiceError) {
     }
 }
 
-fn retain_parses(result: &mut OperationResult, parses: &[ParsedResult]) {
+pub(crate) fn retain_parses(result: &mut OperationResult, parses: &[ParsedResult]) {
     if let Some(first) = parses.first() {
         result.profile.parser = Some(ResultParserSelection {
             requested_backend: first.selection.requested.backend_id.clone(),
@@ -242,7 +242,7 @@ fn execution_failure(result: &mut OperationResult, error: NativeMergeError) {
     }
 }
 
-fn finalize(
+pub(crate) fn finalize(
     mut result: OperationResult,
     request: &ValidatedOperationRequest,
     evidence: &ConflictEvidence,
@@ -271,6 +271,11 @@ pub fn execute_native_operation(
     snapshot: &ParserRegistrySnapshot,
     context: &ExecutionContext,
 ) -> Result<OperationResult, CoreError> {
+    if request.request().provider_selection.profile_id.as_deref()
+        == Some(crate::profiles::JSON_NESTED)
+    {
+        return crate::json_operation::execute(request, snapshot, context);
+    }
     let finish = |result, request, evidence| finalize(result, request, evidence, context);
     let mut result = empty_result(request);
     let evidence = ConflictEvidence::default();

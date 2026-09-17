@@ -204,3 +204,96 @@ fn even_noop_output_must_be_verified_and_cannot_change_bytes_identity_or_backend
         typed::merge2(&current, &incoming, JsonDialect::Json, |_| panic!("wrong roles")).is_err()
     );
 }
+
+#[test]
+fn render_evidence_covers_retained_bytes_and_actual_replacements_without_donor_claims() {
+    let parser = Parser::new("json5");
+    let current = parser.parse("// café\r\n{\r\n  x: 1\r\n}\r\n", SourceRole::Current);
+    let incoming = parser.parse("{x:2,y:'é'}", SourceRole::Incoming);
+    let execution =
+        typed::merge2_with_evidence(&incoming, &current, JsonDialect::Json5, |output| {
+            Ok(parser.parse(output, SourceRole::Output))
+        })
+        .unwrap();
+    assert!(execution.result.ok, "{:?}", execution.result.diagnostics);
+    let output = execution.result.output.unwrap();
+    let render = execution.render.unwrap();
+    assert_eq!(render.baseline, *current.source.descriptor());
+    render.validate(&current.source, &output).unwrap();
+    assert!(!render.edits.is_empty());
+    assert!(!render.retained.is_empty());
+    let mut partitions = render
+        .edits
+        .iter()
+        .map(|edit| edit.output_range.clone())
+        .chain(render.retained.iter().map(|region| region.output_range.clone()))
+        .collect::<Vec<_>>();
+    partitions.sort_by_key(|range| range.start_byte);
+    let mut end = 0;
+    for range in partitions {
+        assert_eq!(range.start_byte, end);
+        end = range.end_byte;
+    }
+    assert_eq!(end, output.len());
+    for region in &render.retained {
+        assert_eq!(
+            current.source.slice(region.source_range.clone()).unwrap(),
+            &output.as_bytes()[region.output_range.start_byte..region.output_range.end_byte]
+        );
+    }
+    for edit in &render.edits {
+        assert_eq!(
+            edit.replacement.as_bytes(),
+            &output.as_bytes()[edit.output_range.start_byte..edit.output_range.end_byte]
+        );
+    }
+    for mutation in 0..6 {
+        let mut forged = render.clone();
+        match mutation {
+            0 => forged.retained[0].sha256 = "0".repeat(64),
+            1 => forged.retained[0].output_range.end_byte += 1,
+            2 => forged.edits[0].replacement.push(' '),
+            3 => forged.edits[0].output_range.start_byte += 1,
+            4 => forged.baseline.role = SourceRole::Incoming,
+            _ => {
+                forged.retained.pop();
+            }
+        }
+        assert!(forged.validate(&current.source, &output).is_err());
+    }
+    assert!(render.validate(&incoming.source, &output).is_err());
+    assert!(render.validate(&current.source, &(output + " ")).is_err());
+}
+
+#[test]
+fn selected_input_retention_names_the_executed_role_and_failure_discards_proof() {
+    let parser = Parser::new("json");
+    let base = parser.parse(r#"{"x":1}"#, SourceRole::Base);
+    let ours = parser.parse(r#"{"x":1}"#, SourceRole::Ours);
+    let theirs = parser.parse("{\r\n\"x\":2\r\n}", SourceRole::Theirs);
+    let execution =
+        typed::merge3_with_evidence(&base, &ours, &theirs, JsonDialect::Json, |output| {
+            Ok(parser.parse(output, SourceRole::Output))
+        })
+        .unwrap();
+    let render = execution.render.unwrap();
+    assert_eq!(render.baseline.role, SourceRole::Theirs);
+    assert!(render.edits.is_empty());
+    assert_eq!(render.retained.len(), 1);
+    assert_eq!(render.retained[0].source_range.end_byte, theirs.source.bytes().len());
+    render.validate(&theirs.source, execution.result.output.as_ref().unwrap()).unwrap();
+    let failed = typed::merge3_with_evidence(&base, &ours, &theirs, JsonDialect::Json, |_| {
+        Err("parser refused verification".into())
+    })
+    .unwrap();
+    assert!(failed.result.output.is_none());
+    assert!(failed.render.is_none());
+    let changed_ours = parser.parse(r#"{"x":3}"#, SourceRole::Ours);
+    let conflict =
+        typed::merge3_with_evidence(&base, &changed_ours, &theirs, JsonDialect::Json, |_| {
+            panic!("conflict cannot render")
+        })
+        .unwrap();
+    assert_eq!(conflict.result.outcome, ThreeWayMergeOutcome::Conflict);
+    assert!(conflict.render.is_none());
+}

@@ -551,13 +551,17 @@ pub fn merge_json_source_preserving(
         Ok(document) => document,
         Err(message) => return two_way_parse_failure(message, true),
     };
-    merge_documents_two_way(template, destination, |output| parse_document(output, dialect))
+    merge_documents_two_way(template, destination, |output, _, _| parse_document(output, dialect))
 }
 
 pub(crate) fn merge_documents_two_way(
     template: JsonSyntaxDocument,
     destination: JsonSyntaxDocument,
-    mut verify: impl FnMut(&str) -> Result<JsonSyntaxDocument, String>,
+    mut verify: impl FnMut(
+        &str,
+        tree_haver::source::SourceRole,
+        &[SourceEdit],
+    ) -> Result<JsonSyntaxDocument, String>,
 ) -> MergeResult<String> {
     let mut plan = MergePlan::default();
     let expected = merge_template_value(&template.root, &destination.root, "", &mut plan);
@@ -571,18 +575,20 @@ pub(crate) fn merge_documents_two_way(
     }
 
     match render_plan(&destination.source, plan) {
-        Ok(output) => match verify(&output) {
-            Ok(rendered) if rendered.root.semantic == expected => MergeResult {
-                ok: true,
-                diagnostics: vec![],
-                output: Some(output),
-                policies: vec![],
-            },
-            Ok(_) => render_failure("source-preserving JSON render changed the planned value"),
-            Err(message) => {
-                render_failure(format!("source-preserving JSON render is invalid: {message}"))
+        Ok((output, edits)) => {
+            match verify(&output, tree_haver::source::SourceRole::Current, &edits) {
+                Ok(rendered) if rendered.root.semantic == expected => MergeResult {
+                    ok: true,
+                    diagnostics: vec![],
+                    output: Some(output),
+                    policies: vec![],
+                },
+                Ok(_) => render_failure("source-preserving JSON render changed the planned value"),
+                Err(message) => {
+                    render_failure(format!("source-preserving JSON render is invalid: {message}"))
+                }
             }
-        },
+        }
         Err(message) => render_failure(message),
     }
 }
@@ -605,27 +611,31 @@ pub fn merge_json_three_way(
         Ok(document) => document,
         Err(message) => return three_way_parse_failure("theirs", message),
     };
-    merge_documents_three_way(base, ours, theirs, |output| parse_document(output, dialect))
+    merge_documents_three_way(base, ours, theirs, |output, _, _| parse_document(output, dialect))
 }
 
 pub(crate) fn merge_documents_three_way(
     base: JsonSyntaxDocument,
     ours: JsonSyntaxDocument,
     theirs: JsonSyntaxDocument,
-    mut verify: impl FnMut(&str) -> Result<JsonSyntaxDocument, String>,
+    mut verify: impl FnMut(
+        &str,
+        tree_haver::source::SourceRole,
+        &[SourceEdit],
+    ) -> Result<JsonSyntaxDocument, String>,
 ) -> ThreeWayMergeResult<String> {
     // Even selected-input/no-op outcomes pass through output verification.
     let selected = if ours.root.semantic == theirs.root.semantic {
-        Some(&ours)
+        Some((&ours, tree_haver::source::SourceRole::Ours))
     } else if ours.root.semantic == base.root.semantic {
-        Some(&theirs)
+        Some((&theirs, tree_haver::source::SourceRole::Theirs))
     } else if theirs.root.semantic == base.root.semantic {
-        Some(&ours)
+        Some((&ours, tree_haver::source::SourceRole::Ours))
     } else {
         None
     };
-    if let Some(selected) = selected {
-        return match verify(&selected.source) {
+    if let Some((selected, role)) = selected {
+        return match verify(&selected.source, role, &[]) {
             Ok(rendered) if rendered.root.semantic == selected.root.semantic => {
                 clean_three_way(selected.source.clone())
             }
@@ -646,11 +656,11 @@ pub(crate) fn merge_documents_three_way(
     if !plan.conflicts.is_empty() {
         return conflicted_three_way(plan.conflicts);
     }
-    let output = match render_plan(&ours.source, plan) {
+    let (output, edits) = match render_plan(&ours.source, plan) {
         Ok(output) => output,
         Err(message) => return three_way_render_failure(message),
     };
-    match verify(&output) {
+    match verify(&output, tree_haver::source::SourceRole::Ours, &edits) {
         Ok(rendered) if rendered.root.semantic == expected => clean_three_way(output),
         Ok(_) => {
             three_way_render_failure("source-preserving JSON render changed the planned value")
@@ -1005,11 +1015,12 @@ fn alternative_for_member(
     )
 }
 
-fn render_plan(source: &str, mut plan: MergePlan) -> Result<String, String> {
+fn render_plan(source: &str, mut plan: MergePlan) -> Result<(String, Vec<SourceEdit>), String> {
     for additions in plan.additions.into_values() {
         plan.edits.extend(addition_edits(source, additions)?);
     }
-    apply_source_edits(source, &plan.edits).map_err(|error| error.to_string())
+    let output = apply_source_edits(source, &plan.edits).map_err(|error| error.to_string())?;
+    Ok((output, plan.edits))
 }
 
 fn addition_edits(source: &str, additions: ObjectAdditions) -> Result<Vec<SourceEdit>, String> {

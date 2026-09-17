@@ -1,5 +1,6 @@
 """Installed-wheel native callbacks and Rust-owned declaration merge tests."""
 import hashlib
+import json
 import gc
 import weakref
 import threading
@@ -63,6 +64,36 @@ class LibCSTHost:
 
 
 class TypedParserHostTest(unittest.TestCase):
+    def test_common_json_merges_execute_in_rust_with_edit_evidence_and_conflicts(self):
+        provider_id = "python.common.json"
+        core.register_language_pack_parser(provider_id, "json")
+        try:
+            def request(operation, texts):
+                original = self.common_request(operation, texts)
+                return core.OperationRequest(schema=original.schema, request_id=original.request_id,
+                    operation=original.operation, sources=original.sources, extensions=[], metadata={}, extra={},
+                    provider_selection=core.MergeProviderSelection(provider_id="kernel.json", family="json", dialect="json",
+                        profile_id="kernel.json.nested.v1", required_capabilities=[operation], extra={}),
+                    parser_selection=core.OperationParserSelection(backend=provider_id, preference=[], required_capabilities=[], extra={}))
+            limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+            directional = core.execute_operation(request("merge2", ['{"x":{"add":2}}', '{"x":{"keep":1}}']), limits)
+            self.assertTrue(directional.ok)
+            self.assertEqual(json.loads(directional.output), {"x": {"keep": 1, "add": 2}})
+            proof = json.loads(directional.render_report["evidence"])
+            self.assertEqual(proof["baseline"]["role"], "current")
+            self.assertTrue(proof["edits"])
+            self.assertTrue(directional.verification.directional_roles_preserved)
+            merged = core.execute_operation(request("merge3", ['{"a":1,"b":2}', '{"a":3,"b":2}', '{"a":1,"b":4}']), limits)
+            self.assertTrue(merged.ok)
+            self.assertEqual(json.loads(merged.output), {"a": 3, "b": 4})
+            conflict = core.execute_operation(request("merge3", ['{"a":1}', '{"a":2}', '{"a":3}']), limits)
+            self.assertFalse(conflict.ok)
+            self.assertIsNone(conflict.output)
+            self.assertEqual(len(conflict.conflicts[0].canonical.alternatives), 3)
+            self.assertEqual(self.host.calls, 0)
+        finally:
+            core.unregister_parser_provider(provider_id)
+
     def test_rust_language_pack_uses_typed_parse_and_shared_registry(self):
         provider_id = "python.typed.tslp.json"
         descriptor = core.register_language_pack_parser(provider_id, "json")

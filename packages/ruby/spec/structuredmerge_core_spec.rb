@@ -2,6 +2,7 @@
 
 require_relative "native_merge_fixture"
 require "weakref"
+require "json"
 require "tmpdir"
 require "fileutils"
 
@@ -15,6 +16,34 @@ end
 
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
+
+  it "executes nested JSON common merges in Rust with render and conflict evidence" do
+    provider_id = "ruby.common.json"
+    described_class.register_language_pack_parser(provider_id, "json")
+    request = lambda do |operation, texts|
+      original = common_request(operation, texts)
+      described_class::OperationRequest.new(schema: original.schema, request_id: original.request_id,
+        operation: original.operation, sources: original.sources, extensions: [], metadata: {}, extra: {},
+        provider_selection: described_class::MergeProviderSelection.new(provider_id: "kernel.json", family: "json", dialect: "json",
+          profile_id: "kernel.json.nested.v1", required_capabilities: [operation], extra: {}),
+        parser_selection: described_class::OperationParserSelection.new(backend: provider_id, preference: [], required_capabilities: [], extra: {}))
+    end
+    directional = described_class.execute_operation(request.call("merge2", ['{"x":{"add":2}}', '{"x":{"keep":1}}']), merge_limits)
+    expect(directional.ok).to be(true)
+    expect(JSON.parse(directional.output)).to eq("x" => {"keep" => 1, "add" => 2})
+    proof = JSON.parse(directional.render_report.fetch("evidence"))
+    expect(proof.dig("baseline", "role")).to eq("current")
+    expect(proof.fetch("edits")).not_to be_empty
+    merged = described_class.execute_operation(request.call("merge3", ['{"a":1,"b":2}', '{"a":3,"b":2}', '{"a":1,"b":4}']), merge_limits)
+    expect(merged.ok).to be(true)
+    expect(JSON.parse(merged.output)).to eq("a" => 3, "b" => 4)
+    conflict = described_class.execute_operation(request.call("merge3", ['{"a":1}', '{"a":2}', '{"a":3}']), merge_limits)
+    expect(conflict.ok).to be(false)
+    expect(conflict.output).to be_nil
+    expect(conflict.conflicts.first.canonical.alternatives.length).to eq(3)
+  ensure
+    described_class.unregister_parser_provider(provider_id)
+  end
 
   it "registers the Rust language pack in the typed TreeHaver registry" do
     provider_id = "ruby.typed.tslp.json"

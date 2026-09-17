@@ -664,6 +664,7 @@ impl OperationResult {
         for region in self.verification.retained_source_regions.iter().flatten() {
             check_region(region, request, true)?;
         }
+        crate::json_operation::validate_render(self, request)?;
         Ok(())
     }
 }

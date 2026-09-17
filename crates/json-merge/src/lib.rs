@@ -5,6 +5,7 @@ use ast_merge::{
 };
 use tree_haver::{AnalysisHandle, ParserAdapter, ParserRequest};
 
+pub mod render_evidence;
 mod source_preserving;
 pub mod typed;
 pub use source_preserving::{

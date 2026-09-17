@@ -22,11 +22,11 @@ verification returns no output. The orchestrator must use the same TreeHaver
 snapshot and propagate resource/cancellation controls; this family callback
 interface does not itself prove registry generation or preempt recursive work.
 
-Five native typed integration tests cover nested independent edits/conflicts,
+Seven native typed integration tests cover nested independent edits/conflicts,
 directional current preservation, arrays, Unicode/CRLF, JSONC/JSON5 comments,
 dialect rejection, unsuccessful parses, swapped roles, and output verification
 failure/byte/backend/role rejection. Analysis and commented merges match the
-existing engine. All JSON tests (24 unit, 14 fixture, 5 typed), five Git adapter
+existing engine. All JSON tests (24 unit, 14 fixture, 7 typed), five Git adapter
 tests, TreeHaver regression, six opt-in provider tests and strict Clippy pass.
 Logs: `tmp/typed-json-{family-regression,engine-tests,provider-regression,engine-clippy}.log`.
 
@@ -34,8 +34,68 @@ These tests uncovered and fixed a TreeHaver provider contract issue: native
 Comment-role nodes require comment index records even when optional comment
 enrichment is not requested. Enrichment controls do not suppress those facts.
 
-Next: orchestrate this path from the common typed operation facade, add canonical
-analysis/change/conflict/preservation projections, generate binding fixtures and
-migrate the Ruby family/Git consumers. Their prototype calls and Ruby-owned
-diff decisions are not considered migrated by this prerequisite. No public core
-API signature, parser default or publication authority changed here.
+## Common merge execution and preservation evidence
+
+The common `execute_operation` facade now accepts explicit profile
+`kernel.json.nested.v1`, provider `kernel.json`, family `json`, and dialect
+`json`, `jsonc` or `json5` (omission selects strict JSON). Merge2 requires
+`template-into-current` direction; both merge operations require
+`source-preserving` rendering and no fallback. Unsupported constraints, including
+unimplemented operations, version/profile requirements, policy fields, labels
+and marker-size requests, fail closed. There is no default or implicit parser
+registration. JSONC/JSON5 use the JSON5 grammar plus family dialect validation.
+
+Input parsing and output verification use one TreeHaver snapshot and execution
+context. Output parsing pins the current/ours backend; the renderer separately
+records whether current, ours or theirs supplied the actual baseline. Deadline
+and cancellation checks surround parser and family execution; recursive native
+analysis/render work is not claimed to be preemptible.
+
+`merge2_with_evidence` and `merge3_with_evidence` return the actual executed edit
+plan, baseline descriptor, exact retained source/output ranges and digests.
+Replacement ranges contain their rendered text but do not claim an unchanged
+donor-source origin. Edit replay must reproduce the complete output; retained
+regions are independently byte-checked. Even selected-source/no-op paths report
+their actual source role. Failed semantic or parse verification discards the
+proof and output. The common result validator checks the edit replay, retained
+range projection and output parse against request/output bytes.
+
+The preservation property is deliberately `exact-bytes-outside-executed-edits`,
+not preservation of every byte inside replaced owners. The existing engine may
+reformat an inline object when adding a member. This migration preserves that
+existing family behavior; it does not turn synthesized replacement text into
+donor provenance or make edit replay proof of semantic authorization.
+
+Merge3 conflicts are canonical `provider_specific` records carrying the original
+family category, path and alternatives in classification evidence. Present
+regions receive exact input-byte digests; absent alternatives remain absent.
+Unavailable native locality is not upgraded to exact locality. No fabricated
+decision IDs, resolutions, markers or conflicted output are introduced.
+
+Next: common JSON analysis/diff2 with authoritative nested owner spans, broader
+generated shared JSON fixtures and actual Ruby family/Git consumer migration.
+Those adapters' prototype calls and Ruby-owned diff decisions remain open. No
+public core API signature, parser default or publication authority changed.
+
+## Installed verification (2026-09-17)
+
+Seven common-facade JSON tests pass, including canonical present/absent conflict
+regions, root conflicts, invalid dialect syntax, unsupported constraints,
+cancelled execution, output-parser failure and tampered render/parse evidence.
+Core/JSON/Git regressions, strict Clippy, 23 existing Psych/LibCST runtime tests
+and 14 artifact/inventory audits pass. Ruby's isolated gem passes 31 tests plus
+12 existing generated fixtures; Python's isolated wheel passes 35 plus 15.
+The new JSON binding checks exercise merge2, nested merge3 and conflicts in Rust;
+shared generated JSON fixtures are still pending.
+
+The Ruby artifact test exposed an enum-map round-trip bug in Alef: unit enums
+were emitted as Symbols but only Strings were accepted on input. Local Alef
+commit `870d1e7` fixes that conversion without arbitrary `to_s` coercion;
+134 Magnus tests and the unmodified installed round-trip check pass. Regeneration
+changed native Ruby conversion bodies, not reviewed Ruby/Python API signatures.
+The fix remains local, as requested.
+
+Logs: `tmp/typed-json-{common-regression,common-clippy,native-regression,common-audits,python-artifact,ruby-artifact}.log`.
+Artifacts: Ruby SHA-256
+`53986c5814193fda2a203f86ec24b38de11ebef2f4c9c29096d15b3506dd5ed2`;
+Python `d17fb05e6604bd26624b119ec9b34303cb2b4cdfe31b6fea9d9f31bd7f4676c1`.

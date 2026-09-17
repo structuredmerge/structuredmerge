@@ -233,6 +233,8 @@
 
 - Allow the existing nested JSON/JSONC/JSON5 merge engine to consume typed TreeHaver facts and caller-supplied output verification, including no-op results; retain native comment indexing without optional enrichment.
 
+- Execute explicit nested JSON/JSONC/JSON5 merge2 and merge3 requests through the typed common facade with shared TreeHaver selection, canonical conflict records, mandatory output verification and replay-checked render evidence.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

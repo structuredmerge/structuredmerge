@@ -4,6 +4,12 @@ use crate::{JsonAnalysis, JsonDialect, source_preserving::*};
 use ast_merge::{MergeResult, ThreeWayMergeResult};
 use tree_haver::{NormalizedTreeNode, service::ParsedResult, source::SourceRole};
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct JsonMergeExecution<T> {
+    pub result: T,
+    pub render: Option<crate::render_evidence::JsonRenderEvidence>,
+}
+
 fn document(parsed: &ParsedResult, dialect: JsonDialect) -> Result<JsonSyntaxDocument, String> {
     let output = parsed.document.output();
     if !output.ok || output.source != *parsed.source.descriptor() {
@@ -94,24 +100,52 @@ pub fn merge2(
     incoming: &ParsedResult,
     current: &ParsedResult,
     dialect: JsonDialect,
-    mut parse_output: impl FnMut(&str) -> Result<ParsedResult, String>,
+    parse_output: impl FnMut(&str) -> Result<ParsedResult, String>,
 ) -> Result<MergeResult<String>, String> {
+    Ok(merge2_with_evidence(incoming, current, dialect, parse_output)?.result)
+}
+
+pub fn merge2_with_evidence(
+    incoming: &ParsedResult,
+    current: &ParsedResult,
+    dialect: JsonDialect,
+    mut parse_output: impl FnMut(&str) -> Result<ParsedResult, String>,
+) -> Result<JsonMergeExecution<MergeResult<String>>, String> {
     require_role(incoming, SourceRole::Incoming)?;
     require_role(current, SourceRole::Current)?;
     if incoming.source.descriptor().source_id == current.source.descriptor().source_id {
         return Err("typed JSON inputs must have distinct source IDs".into());
     }
+    let mut render = None;
     let mut result = merge_documents_two_way(
         document(incoming, dialect)?,
         document(current, dialect)?,
-        |source| {
-            verify_output(source, parse_output(source)?, current, &[incoming, current], dialect)
+        |source, role, edits| {
+            if role != SourceRole::Current {
+                return Err("invalid directional render baseline".into());
+            }
+            let document = verify_output(
+                source,
+                parse_output(source)?,
+                current,
+                &[incoming, current],
+                dialect,
+            )?;
+            render = Some(crate::render_evidence::JsonRenderEvidence::from_edits(
+                &current.source,
+                source,
+                edits,
+            )?);
+            Ok(document)
         },
     );
     if result.ok {
         result.policies.push(crate::destination_wins_array_policy());
     }
-    Ok(result)
+    if !result.ok {
+        render = None;
+    }
+    Ok(JsonMergeExecution { result, render })
 }
 
 pub fn merge3(
@@ -119,8 +153,18 @@ pub fn merge3(
     ours: &ParsedResult,
     theirs: &ParsedResult,
     dialect: JsonDialect,
-    mut parse_output: impl FnMut(&str) -> Result<ParsedResult, String>,
+    parse_output: impl FnMut(&str) -> Result<ParsedResult, String>,
 ) -> Result<ThreeWayMergeResult<String>, String> {
+    Ok(merge3_with_evidence(base, ours, theirs, dialect, parse_output)?.result)
+}
+
+pub fn merge3_with_evidence(
+    base: &ParsedResult,
+    ours: &ParsedResult,
+    theirs: &ParsedResult,
+    dialect: JsonDialect,
+    mut parse_output: impl FnMut(&str) -> Result<ParsedResult, String>,
+) -> Result<JsonMergeExecution<ThreeWayMergeResult<String>>, String> {
     require_role(base, SourceRole::Base)?;
     require_role(ours, SourceRole::Ours)?;
     require_role(theirs, SourceRole::Theirs)?;
@@ -128,10 +172,29 @@ pub fn merge3(
     if ids[0] == ids[1] || ids[0] == ids[2] || ids[1] == ids[2] {
         return Err("typed JSON inputs must have distinct source IDs".into());
     }
-    Ok(merge_documents_three_way(
+    let mut render = None;
+    let result = merge_documents_three_way(
         document(base, dialect)?,
         document(ours, dialect)?,
         document(theirs, dialect)?,
-        |source| verify_output(source, parse_output(source)?, ours, &[base, ours, theirs], dialect),
-    ))
+        |source, role, edits| {
+            let baseline = match role {
+                SourceRole::Ours => ours,
+                SourceRole::Theirs => theirs,
+                _ => return Err("invalid three-way render baseline".into()),
+            };
+            let document =
+                verify_output(source, parse_output(source)?, ours, &[base, ours, theirs], dialect)?;
+            render = Some(crate::render_evidence::JsonRenderEvidence::from_edits(
+                &baseline.source,
+                source,
+                edits,
+            )?);
+            Ok(document)
+        },
+    );
+    if result.outcome != ast_merge::ThreeWayMergeOutcome::Clean {
+        render = None;
+    }
+    Ok(JsonMergeExecution { result, render })
 }
