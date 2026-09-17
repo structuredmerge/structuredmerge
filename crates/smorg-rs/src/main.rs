@@ -16,6 +16,7 @@ use plain_merge::merge_text;
 use serde_json::json;
 
 mod benchmark_adapter;
+mod external_command;
 
 const EXIT_SUCCESS: i32 = 0;
 const EXIT_UNRESOLVED_CONFLICT: i32 = 1;
@@ -107,7 +108,20 @@ struct MergeDriverResult {
 }
 
 fn main() {
-    let args = env::args().skip(1).collect::<Vec<_>>();
+    let native_args = env::args_os().skip(1).collect::<Vec<_>>();
+    if let Some(code) =
+        external_command::dispatch(&native_args, env!("CARGO_BIN_NAME") == "smorg-rs")
+    {
+        std::process::exit(code);
+    }
+    let args =
+        match native_args.into_iter().map(|arg| arg.into_string()).collect::<Result<Vec<_>, _>>() {
+            Ok(args) => args,
+            Err(_) => {
+                eprintln!("smorg: built-in command arguments must be UTF-8");
+                std::process::exit(EXIT_USER_ERROR);
+            }
+        };
     let mut stdout = io::stdout();
     let mut stderr = io::stderr();
     std::process::exit(run(&args, &mut stdout, &mut stderr));
@@ -120,6 +134,7 @@ fn run(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
     };
 
     match command.as_str() {
+        "benchmark-provider-merge3" => benchmark_adapter::run_merge3_files(&args[1..], stderr),
         "benchmark-provider-diff" => benchmark_adapter::run_diff_files(&args[1..], stdout, stderr),
         "benchmark-provider-merge2" => {
             benchmark_adapter::run_merge2_files(&args[1..], stdout, stderr)
@@ -146,6 +161,15 @@ fn run(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
 fn print_usage(out: &mut dyn Write) {
     let _ = writeln!(out, "smorg: StructuredMerge kernel CLI (compatibility alias: smorg-rs)");
     let _ = writeln!(out, "Both executable names accept the commands below.");
+    let _ = writeln!(out, "External dispatch: smorg NAME ARGS... executes smorg-NAME on PATH.");
+    let _ = writeln!(
+        out,
+        "Explicit benchmark merge: smorg benchmark-provider-merge3 BASE OURS THEIRS PATH"
+    );
+    let _ = writeln!(
+        out,
+        "Unlabelled positional benchmark arguments remain supported only by smorg-rs."
+    );
     let _ = writeln!(out, "usage: smorg-rs benchmark-provider-session");
     let _ = writeln!(out, "       smorg-rs benchmark-provider-merge2 INCOMING CURRENT PATH");
     let _ = writeln!(out, "       smorg-rs benchmark-provider-diff BEFORE AFTER PATH");

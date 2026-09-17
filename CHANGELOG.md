@@ -297,6 +297,8 @@
 
 - Expose a typed, source-free operation profile catalog across Rust, Ruby and Python with declared operation sets, dialects and syntax limits; availability remains unprobed and default authority remains false.
 
+- Dispatch smorg NAME to smorg-NAME on PATH with OS-native arguments and no implicit Unix shell fallback; add explicit benchmark-provider-merge3 while retaining positional benchmark compatibility in smorg-rs.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

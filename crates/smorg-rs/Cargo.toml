@@ -30,6 +30,9 @@ yaml-merge = { version = "0.2.0", path = "../yaml-merge" }
 [dev-dependencies]
 tempfile = "3"
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [[bin]]
 name = "smorg"
 path = "src/main.rs"

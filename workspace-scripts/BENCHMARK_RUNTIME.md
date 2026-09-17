@@ -6,6 +6,11 @@ its runtime dependencies and JSON structural oracle through ENV-driven nomono.
 It neither loads nor installs `structuredmerge_host_prototype`. Nomono must
 already be installed, as required for local-path bundle bootstrap.
 
+Use the `smorg-rs` compatibility executable for the retained harness's unlabelled
+positional merge3 calls. Canonical `smorg` reserves unknown command names for
+external dispatch; its explicit form is `benchmark-provider-merge3`. This does
+not change the kernel providers measured by the existing harness.
+
 Run from the kernel repository with a clean Ruby checkout pinned to the revision
 being evaluated. Keep the generated lockfile and raw results in kernel `tmp/`,
 not in the user's Ruby development bundle:

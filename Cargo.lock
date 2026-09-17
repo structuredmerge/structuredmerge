@@ -1518,6 +1518,7 @@ dependencies = [
  "generic-merge",
  "go-merge",
  "json-merge",
+ "libc",
  "markdown-merge",
  "plain-merge",
  "rbs-merge",

@@ -138,8 +138,15 @@ smorg-rs languages --gitattributes
 ```
 
 This naming change does not approve a default Git-driver switch or establish
-registry/platform release readiness. External subcommand dispatch is not yet
-implemented. The source directory remains `crates/smorg-rs` while path-based
+registry/platform release readiness. `smorg NAME ARGS...` runs `smorg-NAME` on
+PATH, passing arguments and standard streams without a shell. Built-in commands
+take precedence; missing executables fail explicitly. Language suffixes (`rb`,
+`go`, `ts`, `py`) select native-layer CLIs, while `cloud` names the SaaS client.
+These commands are not bundled merely because dispatch supports their names.
+The canonical benchmark merge entry point is `smorg benchmark-provider-merge3`;
+the old unlabelled positional form remains supported only by `smorg-rs`.
+See the spec repository's `CLI_DISPATCH_CONTRACT.md` for routing and exit rules.
+The source directory remains `crates/smorg-rs` while path-based
 benchmark mappings and consumers migrate.
 
 `merge-driver` updates Git's `%A` file by default, or writes to `--output` when
