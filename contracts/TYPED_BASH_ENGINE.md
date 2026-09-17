@@ -103,3 +103,26 @@ headers/footers, multi-owner additions, no-op verification and rejected placemen
 Bash/core regressions, strict Clippy, reviewed API baselines and 14 audits pass.
 Logs: `tmp/bash-merge2-{tests,regressions,clippy,generation,audits}.log`.
 Installed-artifact/shared-fixture and Ruby consumer gates remain next, not passed.
+
+## Shared installed binding verification (2026-09-17)
+
+Fixtures revision `8b52ce8` adds eleven shared cases across analyze, diff2, merge2
+and merge3. Test-only adapters register explicit Bash parsers and construct typed
+requests; no matching/rendering or expected-output logic is embedded in adapters.
+Alef generates four test files per language. Cases assert native owner references,
+rejected unsupported syntax, owner/trivia-only diff, current preference, comments,
+empty-current insertion, rejected anchor order, independent merges, canonical
+conflict presence and fresh no-op verification with exact Unicode bytes.
+
+Rebuilt isolated artifacts pass Python **35 runtime + 46 generated** tests and
+Ruby **31 runtime + 43 generated** tests. Both execute the same eleven Bash cases.
+Wheel SHA-256: `0a345cc06b2dcd65954da6fbeabab739be5c3604e85a6fca09d05b8a79731629`.
+Gem SHA-256: `fda56ed1711ca7c70521ae4da2ffc807e39e70d7474418ffc6b93f52a7fcc976`.
+Logs: `tmp/bash-shared-{generation,bindings,python-build,ruby-build,python-artifact,ruby-artifact,audits}.log`.
+Reviewed API baselines and all 14 audits pass. Optional `poly fmt` is unavailable;
+generation does not prove the formatter gate or independent clean reproducibility.
+
+Next: actual Ruby Bash consumer migration and broader analysis/result-verifier
+conformance. These local Linux artifact checks do not approve broad family parity,
+source-gem, multi-platform, hosted/downstream or publication gates. The Bash legacy
+exports remain unmigrated; no default switch, package publication or Alef push.

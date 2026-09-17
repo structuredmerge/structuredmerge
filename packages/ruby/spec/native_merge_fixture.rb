@@ -132,9 +132,9 @@ module NativeMergeFixture
     run_yaml_common("analyze", [source])
   end
 
-  def run_json_common(operation, dialect, sources, git_options = nil)
-    provider_id = "ruby.fixture.json"
-    StructuredmergeCore.register_language_pack_parser(provider_id, (dialect == "json") ? "json" : "json5")
+  def run_json_common(operation, dialect, sources, git_options = nil, family = "json")
+    provider_id = "ruby.fixture.#{family}"
+    StructuredmergeCore.register_language_pack_parser(provider_id, family == "bash" ? "bash" : ((dialect == "json") ? "json" : "json5"))
     begin
       original = common_request(operation, sources)
       policy = if git_options
@@ -145,8 +145,8 @@ module NativeMergeFixture
       end
       request = StructuredmergeCore::OperationRequest.new(schema: original.schema, request_id: original.request_id,
         operation: policy, sources: original.sources, extensions: [], metadata: {}, extra: {},
-        provider_selection: StructuredmergeCore::MergeProviderSelection.new(provider_id: git_options ? "kernel.git.json" : "kernel.json", family: "json", dialect: dialect,
-          profile_id: git_options ? "kernel.git.json.v1" : "kernel.json.nested.v1", required_capabilities: [operation], extra: {}),
+        provider_selection: StructuredmergeCore::MergeProviderSelection.new(provider_id: family == "bash" ? "kernel.bash" : (git_options ? "kernel.git.json" : "kernel.json"), family: family, dialect: dialect,
+          profile_id: family == "bash" ? "kernel.bash.owners.v1" : (git_options ? "kernel.git.json.v1" : "kernel.json.nested.v1"), required_capabilities: [operation], extra: {}),
         parser_selection: StructuredmergeCore::OperationParserSelection.new(backend: provider_id, preference: [], required_capabilities: [], extra: {}))
       StructuredmergeCore.execute_operation(request, merge_limits)
     ensure
@@ -172,6 +172,22 @@ module NativeMergeFixture
 
   def run_git_common_merge3(dialect, base, ours, theirs, marker_size, ours_label)
     run_json_common("merge3", dialect, [base, ours, theirs], [marker_size, ours_label])
+  end
+
+  def run_bash_common_analyze(source)
+    run_json_common("analyze", "bash", [source], nil, "bash")
+  end
+
+  def run_bash_common_diff(before, after)
+    run_json_common("diff2", "bash", [before, after], nil, "bash")
+  end
+
+  def run_bash_common_merge2(incoming, current)
+    run_json_common("merge2", "bash", [incoming, current], nil, "bash")
+  end
+
+  def run_bash_common_merge3(base, ours, theirs)
+    run_json_common("merge3", "bash", [base, ours, theirs], nil, "bash")
   end
 
   def run_yaml_common_diff(before, after)
