@@ -34,7 +34,28 @@ no-op/whole-source output verification, unsupported wrappers, opaque binding-pat
 identity, wrong/mixed parsers, and output identity/bytes/backend/service failures.
 These checks do not authenticate arbitrary foreign parser claims.
 
-Common TypeScript operations with explicit dialect selection, directional merge2,
-shared fixtures, installed bindings and Ruby consumer migration remain next.
+## Common operations and dialect selection
+
+`kernel.typescript.owners.v1` selects `kernel.typescript` for analyze, diff2 and
+merge3. Family identity stays `typescript`; omitted/`typescript` dialect selects
+the TypeScript grammar and `tsx` selects the TSX grammar. Parser selection,
+execution and output verification use that requested grammar. An explicitly
+selected TypeScript-only backend cannot satisfy TSX. Embedded analysis validation
+checks the requested grammar against parser evidence and reruns owner projection.
+Unknown dialects and a `tsx` family alias are rejected, not silently normalized.
+
+Diff2 includes exact whole-owner changes and a complete-source summary for changed
+import/comment/layout bytes; overlapping summaries are not edit instructions.
+Merge3 retains the native generic engine's decisions and canonical owner conflicts,
+including its membership behavior. Clean results require a fresh matching output
+parse, including no-ops. Custom marker policies and merge2 currently fail closed.
+
+Six common tests cover both dialects, native merge3 parity and canonical conflicts,
+native identity/dialect tampering, owner/import/comment diffs, JSX analysis/diff/
+merge and output reparsing, wrong/missing backend selection, cancellation, default
+dialect selection, unsupported policies and merge2. These are source-level common
+API tests, not installed package or foreign-parser authentication gates.
+
+Directional merge2, shared fixtures, installed bindings and Ruby consumer migration remain next.
 Full-language/golden-master/downstream, native compiler provider, platform/ABI,
 publication and default-authority gates remain separate.

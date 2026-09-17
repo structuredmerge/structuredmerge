@@ -8,6 +8,17 @@ pub(crate) const GIT_JSON: &str = "kernel.git.json.v1";
 pub(crate) const BASH_OWNERS: &str = "kernel.bash.owners.v1";
 pub(crate) const GO_OWNERS: &str = "kernel.go.owners.v1";
 pub(crate) const RUST_OWNERS: &str = "kernel.rust.owners.v1";
+pub(crate) const TYPESCRIPT_OWNERS: &str = "kernel.typescript.owners.v1";
+
+pub(crate) fn native_language<'a>(family: &'a str, dialect: Option<&str>) -> Option<&'a str> {
+    match (family, dialect) {
+        ("typescript", None | Some("typescript")) => Some("typescript"),
+        ("typescript", Some("tsx")) => Some("tsx"),
+        (_, None) => Some(family),
+        ("bash" | "go" | "rust", Some(dialect)) if dialect == family => Some(family),
+        _ => None,
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct NativeMergeProfile {

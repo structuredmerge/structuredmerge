@@ -299,6 +299,9 @@ pub fn execute_native_operation(
         Some(crate::profiles::BASH_OWNERS) => ("bash", "kernel.bash", bash_merge::typed::owners),
         Some(crate::profiles::GO_OWNERS) => ("go", "kernel.go", go_merge::typed::owners),
         Some(crate::profiles::RUST_OWNERS) => ("rust", "kernel.rust", rust_merge::typed::owners),
+        Some(crate::profiles::TYPESCRIPT_OWNERS) => {
+            ("typescript", "kernel.typescript", typescript_merge::typed::owners)
+        }
         _ => {
             diagnostic(
                 &mut result,
@@ -313,11 +316,8 @@ pub fn execute_native_operation(
     };
     if input.provider_selection.provider_id.as_deref().is_some_and(|id| id != provider)
         || input.provider_selection.family.as_deref().is_some_and(|name| name != family)
-        || input
-            .provider_selection
-            .dialect
-            .as_deref()
-            .is_some_and(|dialect| !matches!(family, "bash" | "go" | "rust") || dialect != family)
+        || crate::profiles::native_language(family, input.provider_selection.dialect.as_deref())
+            .is_none()
         || !input.provider_selection.extra.is_empty()
         || input.parser_selection.profile_id.is_some()
         || input.parser_selection.language_version.is_some()
@@ -333,6 +333,9 @@ pub fn execute_native_operation(
         );
         return finish(result, request, &evidence);
     }
+    let language =
+        crate::profiles::native_language(family, input.provider_selection.dialect.as_deref())
+            .expect("selection checked above");
     let analyzer = if family == "go" && input.operation.kind() == OperationKind::Merge2 {
         go_merge::directional::owners as Analyzer
     } else if family == "rust" && input.operation.kind() == OperationKind::Merge2 {
@@ -351,7 +354,7 @@ pub fn execute_native_operation(
         OperationPolicy::Analyze(policy) => crate::native_analysis_projection::supports(policy),
         OperationPolicy::Merge3(policy) => {
             policy.render_policy == "source-preserving"
-                && (!matches!(family, "bash" | "go" | "rust")
+                && (!matches!(family, "bash" | "go" | "rust" | "typescript")
                     || (policy.labels.is_none() && policy.conflict_marker_size.is_none()))
                 && policy.extra.is_empty()
                 && policy.fallback_policy.as_deref().is_none_or(|policy| policy == "none")
@@ -408,7 +411,7 @@ pub fn execute_native_operation(
                 descriptor: source.descriptor().clone(),
                 bytes: source.bytes().to_vec(),
             },
-            language: family.into(),
+            language: language.into(),
             dialect: None,
             selection: ParserSelection {
                 backend_id: input.parser_selection.backend.clone(),
@@ -462,6 +465,7 @@ pub fn execute_native_operation(
             "bash" => bash_merge::typed::analysis(&parsed[0]),
             "go" => go_merge::typed::analysis(&parsed[0]),
             "rust" => rust_merge::typed::analysis(&parsed[0]),
+            "typescript" => typescript_merge::typed::analysis(&parsed[0]),
             _ => unreachable!("profile already selected"),
         }
         .and_then(|analysis| {
@@ -492,7 +496,7 @@ pub fn execute_native_operation(
     }
     if input.operation.kind() == OperationKind::Diff2 {
         match ast_merge::typed_diff::diff_native_sources_with_evidence(
-            family,
+            language,
             parses,
             &TreeHaverParseService::default(),
             snapshot,
@@ -531,9 +535,9 @@ pub fn execute_native_operation(
                     });
                 }
                 // Exact owner comparisons alone omit comments/layout changes.
-                // Bash/Go/Rust profiles include a complete-byte summary too;
+                // Named declaration profiles include a complete-byte summary too;
                 // it overlaps owner changes and is not an executable edit.
-                if matches!(family, "bash" | "go" | "rust")
+                if matches!(family, "bash" | "go" | "rust" | "typescript")
                     && execution.input_parses[0].source.bytes()
                         != execution.input_parses[1].source.bytes()
                 {
@@ -580,7 +584,7 @@ pub fn execute_native_operation(
     if input.operation.kind() == OperationKind::Merge2 {
         use ast_merge::typed_merge2::{DirectionalFailureStage, merge_directional_native_sources};
         let execution = match merge_directional_native_sources(
-            family,
+            language,
             parses,
             &TreeHaverParseService::default(),
             snapshot,
@@ -727,7 +731,7 @@ pub fn execute_native_operation(
     }
     let executed = if matches!(family, "go" | "rust") {
         ast_merge::typed_merge::merge_native_sources_with_engine(
-            family,
+            language,
             parses.clone(),
             &TreeHaverParseService::default(),
             snapshot,
@@ -743,7 +747,7 @@ pub fn execute_native_operation(
         )
     } else {
         merge_native_sources_with_evidence(
-            family,
+            language,
             parses.clone(),
             &TreeHaverParseService::default(),
             snapshot,

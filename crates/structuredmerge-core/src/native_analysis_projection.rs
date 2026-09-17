@@ -27,9 +27,15 @@ pub(crate) fn validate_embedded(
         Some(crate::profiles::BASH_OWNERS) => ("bash", "kernel.bash"),
         Some(crate::profiles::GO_OWNERS) => ("go", "kernel.go"),
         Some(crate::profiles::RUST_OWNERS) => ("rust", "kernel.rust"),
+        Some(crate::profiles::TYPESCRIPT_OWNERS) => ("typescript", "kernel.typescript"),
         _ => return Ok(()), // Other profiles need their own analysis validator.
     };
     let analysis = result.analysis.as_ref().ok_or(Invalid)?;
+    let language = crate::profiles::native_language(
+        family,
+        request.request().provider_selection.dialect.as_deref(),
+    )
+    .ok_or(Invalid)?;
     let crate::operation::OperationPolicy::Analyze(policy) = &request.request().operation else {
         return Err(Invalid);
     };
@@ -37,12 +43,6 @@ pub(crate) fn validate_embedded(
         || !result.ok
         || result.provider.family.as_deref() != Some(family)
         || result.provider.provider_id.as_deref() != Some(provider)
-        || request
-            .request()
-            .provider_selection
-            .dialect
-            .as_deref()
-            .is_some_and(|dialect| !matches!(family, "bash" | "go" | "rust") || dialect != family)
         || !request.request().provider_selection.extra.is_empty()
         || request
             .request()
@@ -74,7 +74,7 @@ pub(crate) fn validate_embedded(
         || parser.requested_backend != selection.backend
         || parser.selection_mode.as_deref()
             != Some(if selection.backend.is_some() { "explicit" } else { "policy" })
-        || !core.backend.languages.iter().any(|language| language == family)
+        || !core.backend.languages.iter().any(|supported| supported == language)
         || !core
             .backend
             .contracts
@@ -128,6 +128,7 @@ pub(crate) fn validate_embedded(
         "bash" => bash_merge::typed::analysis(&parsed),
         "go" => go_merge::typed::analysis(&parsed),
         "rust" => rust_merge::typed::analysis(&parsed),
+        "typescript" => typescript_merge::typed::analysis(&parsed),
         _ => unreachable!(),
     }
     .map_err(|_| Invalid)?;
@@ -246,7 +247,9 @@ pub(crate) fn project(
     analysis.validate(parsed)?;
     // Bash retains native comments in the embedded parse and exact layout gaps.
     // This exact-owner profile does not request semantic comment attachment.
-    if !matches!(family, "bash" | "go" | "rust") && !parsed.document.output().comments.is_empty() {
+    if !matches!(family, "bash" | "go" | "rust" | "typescript")
+        && !parsed.document.output().comments.is_empty()
+    {
         return Err("native comment attachment requires another analysis policy".into());
     }
     let mut owners = vec![];

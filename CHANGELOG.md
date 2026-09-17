@@ -271,6 +271,8 @@
 
 - Add typed TypeScript/TSX declaration analysis and source-preserving merge3 over validated TreeHaver facts, retaining native wrapper spans and fresh output verification without host merge logic.
 
+- Expose typed TypeScript/TSX analysis, diff2 and verified merge3 through the common kernel API with explicit grammar selection and dialect-bound analysis validation.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
