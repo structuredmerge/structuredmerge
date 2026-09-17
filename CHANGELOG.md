@@ -390,3 +390,5 @@
 - Validate successful common native merge parse evidence against input/output bytes, selected candidates and one registry snapshot, rejecting forged or missing output parse records.
 
 - Validate successful native merge source partitions against input and output bytes, require preservation claims, and reject inconsistent retained-source projections.
+
+- Derive the typed Rust release dependency closure from Cargo metadata, validate it in CI and before release commands, and provide a side-effect-free release inventory listing.

@@ -21,7 +21,7 @@ PUBLISH_RETRY_BUFFER_SECONDS = 10
 RELEASE_CONFIRM_TIMEOUT_SECONDS = 15 * 60
 RELEASE_CONFIRM_POLL_SECONDS = 15
 
-CRATES = [
+LEGACY_CRATES = [
   ["tree-haver", "tree-haver"],
   ["ast-merge", "ast-merge"],
   ["plain-merge", "plain-merge"],
@@ -41,6 +41,15 @@ CRATES = [
   ["pulldown-cmark-merge", "pulldown-cmark-merge"],
 ].freeze
 
+# Preserve legacy leaf releases while deriving typed roots and their complete
+# dependency-first closure from Cargo metadata. Never substitute a hand-maintained
+# list for the facade's transitive implementation dependencies.
+TYPED_CRATES = JSON.parse(File.read(File.join(RUST_REPO, "contracts/typed-release-inventory.json")))
+  .fetch("dependency_first_order").map do |item|
+    [File.basename(File.dirname(item.fetch("manifest"))), item.fetch("package")]
+  end.freeze
+CRATES = (TYPED_CRATES + LEGACY_CRATES.reject { |_, name| TYPED_CRATES.any? { |_, typed| typed == name } }).freeze
+
 options = {
   push: true,
   push_git: false,
@@ -50,6 +59,10 @@ options = {
 
 parser = OptionParser.new do |opts|
   opts.banner = "Usage: release_rust_crates.rb [options]"
+
+  opts.on("--list", "Validate the local inventory and list selected crates without packaging, network, or publication") do
+    options[:list] = true
+  end
 
   opts.on("--push", "Publish each crate to crates.io after local validation (default)") do
     options[:push] = true
@@ -253,6 +266,8 @@ end
 
 raise "Could not find Rust repo at #{RUST_REPO}" unless Dir.exist?(RUST_REPO)
 
+capture!(["python", File.join(RUST_REPO, "workspace-scripts/check_typed_release_inventory.py")], chdir: RUST_REPO)
+
 all_crates = CRATES.map do |crate_dir_name, expected_name|
   crate_dir = File.join(RUST_REPO, "crates", crate_dir_name)
   cargo_toml = File.join(crate_dir, "Cargo.toml")
@@ -283,6 +298,11 @@ end
 
 versions = crates.map { |crate| crate[:version] }.uniq
 tag_name = versions.one? ? "v#{versions.first}" : nil
+
+if options[:list]
+  puts JSON.pretty_generate(crates.map { |crate| crate.slice(:dir_name, :name, :version) })
+  exit
+end
 
 puts "Selected Rust crates: #{crates.map { |crate| crate[:name] }.join(", ")}"
 puts "Crate versions: #{versions.join(", ")}"

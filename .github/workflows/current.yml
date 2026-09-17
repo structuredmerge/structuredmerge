@@ -127,6 +127,8 @@ jobs:
         run: python -m unittest discover -s workspace-scripts/tests -v
       - name: Verify typed Ruby and Python API review baselines
         run: python workspace-scripts/check_typed_api_baselines.py
+      - name: Check typed publication dependency closure
+        run: python workspace-scripts/check_typed_release_inventory.py
       - name: Build checked-in generated core binding
         run: python -m maturin build --locked --out ../../tmp/core-wheels --profile dev
         working-directory: packages/python

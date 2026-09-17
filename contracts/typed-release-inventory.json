@@ -1,0 +1,212 @@
+{
+  "schema": "structuredmerge.typed-release-inventory/v1",
+  "roots": [
+    "structuredmerge-core",
+    "smorg"
+  ],
+  "scope": "all declared normal/build path dependencies; all targets and optional features; dev-only edges excluded",
+  "publication_authorized": false,
+  "registry_state_checked": false,
+  "dependency_first_order": [
+    {
+      "package": "tree-haver",
+      "version": "0.2.0",
+      "manifest": "crates/tree-haver/Cargo.toml",
+      "local_dependencies": []
+    },
+    {
+      "package": "ast-merge",
+      "version": "0.2.0",
+      "manifest": "crates/ast-merge/Cargo.toml",
+      "local_dependencies": [
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "ast-crispr",
+      "version": "0.2.0",
+      "manifest": "crates/ast-crispr/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge"
+      ]
+    },
+    {
+      "package": "json-merge",
+      "version": "0.2.0",
+      "manifest": "crates/json-merge/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "ast-merge-git",
+      "version": "0.2.0",
+      "manifest": "crates/ast-merge-git/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "json-merge",
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "markdown-merge",
+      "version": "0.2.0",
+      "manifest": "crates/markdown-merge/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "ruby-merge",
+      "version": "0.2.0",
+      "manifest": "crates/ruby-merge/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "structuredmerge-toml-merge",
+      "version": "0.2.0",
+      "manifest": "crates/toml-merge/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "ast-template",
+      "version": "0.2.0",
+      "manifest": "crates/ast-template/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "markdown-merge",
+        "ruby-merge",
+        "structuredmerge-toml-merge"
+      ]
+    },
+    {
+      "package": "bash-merge",
+      "version": "0.2.0",
+      "manifest": "crates/bash-merge/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "go-merge",
+      "version": "0.2.0",
+      "manifest": "crates/go-merge/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "python-merge",
+      "version": "0.2.0",
+      "manifest": "crates/python-merge/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "rust-merge",
+      "version": "0.2.0",
+      "manifest": "crates/rust-merge/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "typescript-merge",
+      "version": "0.2.0",
+      "manifest": "crates/typescript-merge/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "yaml-merge",
+      "version": "0.2.0",
+      "manifest": "crates/yaml-merge/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "structuredmerge-core",
+      "version": "0.2.0",
+      "manifest": "crates/structuredmerge-core/Cargo.toml",
+      "local_dependencies": [
+        "ast-crispr",
+        "ast-merge",
+        "ast-merge-git",
+        "ast-template",
+        "bash-merge",
+        "go-merge",
+        "json-merge",
+        "python-merge",
+        "rust-merge",
+        "tree-haver",
+        "typescript-merge",
+        "yaml-merge"
+      ]
+    },
+    {
+      "package": "generic-merge",
+      "version": "0.2.0",
+      "manifest": "crates/generic-merge/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "plain-merge",
+      "version": "0.2.0",
+      "manifest": "crates/plain-merge/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "rbs-merge",
+      "version": "0.2.0",
+      "manifest": "crates/rbs-merge/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "tree-haver"
+      ]
+    },
+    {
+      "package": "smorg",
+      "version": "0.2.0",
+      "manifest": "crates/smorg-rs/Cargo.toml",
+      "local_dependencies": [
+        "ast-merge",
+        "ast-merge-git",
+        "bash-merge",
+        "generic-merge",
+        "go-merge",
+        "json-merge",
+        "markdown-merge",
+        "plain-merge",
+        "rbs-merge",
+        "ruby-merge",
+        "rust-merge",
+        "structuredmerge-toml-merge",
+        "typescript-merge",
+        "yaml-merge"
+      ]
+    }
+  ]
+}
