@@ -301,6 +301,8 @@
 
 - Add an installed-executable real Git merge gate over every canonical JSON driver case; it exposes the unresolved delete/edit review-rendering gap without skipping that fixture.
 
+- Run the installed smorg and smorg-rs real-Git gate in Linux CI with pinned canonical fixtures and retained failure evidence, separate from publication and default approval.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

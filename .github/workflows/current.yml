@@ -20,6 +20,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  installed-kernel-cli:
+    name: Installed kernel CLI real-Git gate (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TREE_HAVER_LANGUAGE_PACK_CACHE_DIR: ${{ github.workspace }}/tmp/typed-tslp-cache
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout canonical Git fixtures
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: structuredmerge/structuredmerge-fixtures
+          ref: 93276c5a54fe6fb6bd3cc0c44aa63880fc9a0a19
+          path: shared-fixtures
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: stable
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+      - name: Install both kernel executables from this checkout
+        shell: bash
+        run: |
+          mkdir -p tmp
+          export TMPDIR="$PWD/tmp"
+          cargo install --path crates/smorg-rs --root "$PWD/tmp/cli-install" --debug --locked
+      - name: Verify installed canonical executable through real Git
+        run: >-
+          python workspace-scripts/check_installed_cli_git.py tmp/cli-install/bin/smorg
+          --fixtures shared-fixtures/diagnostics/slice-951-git-driver-json-integration/git-driver-json-integration.json
+      - name: Verify installed compatibility alias through real Git
+        if: ${{ !cancelled() }}
+        run: >-
+          python workspace-scripts/check_installed_cli_git.py tmp/cli-install/bin/smorg-rs
+          --fixtures shared-fixtures/diagnostics/slice-951-git-driver-json-integration/git-driver-json-integration.json
+      - name: Retain Git gate evidence even on failure
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: installed-kernel-cli-git-linux
+          include-hidden-files: true
+          path: |
+            tmp/installed-cli-git-*/report.json
+            tmp/installed-cli-git-*/**/.git/driver-report.json
+            tmp/installed-cli-git-*/**/.git/merge-stdout
+            tmp/installed-cli-git-*/**/.git/merge-stderr
+          if-no-files-found: warn
+
   typed-core-python-artifact:
     name: Typed core Python installed artifact (${{ matrix.python }})
     runs-on: ubuntu-latest

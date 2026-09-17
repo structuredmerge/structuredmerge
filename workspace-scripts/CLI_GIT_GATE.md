@@ -26,3 +26,10 @@ An absent ours owner is represented by an empty side in an appended review block
 the original ours bytes remain outside that block. The report distinguishes this
 placement from an owned-region conflict. Other unsupported CLI families, full portable CLI conformance,
 platform installation, registry distribution and default approval remain separate.
+
+The `installed-kernel-cli` job in `.github/workflows/current.yml` installs this
+checkout with Cargo and runs the gate against both executable names on Linux.
+It checks out an immutable fixture revision and uploads digest-bearing reports
+plus driver reports and merge stdout/stderr on success or failure. It does not
+publish binaries, invoke Alef, or infer macOS/Windows conformance. A local run is
+not evidence that the hosted workflow has executed; that remains a separate gate.
