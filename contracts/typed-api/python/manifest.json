@@ -1,10 +1,10 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "python",
-  "review_reason": "Reviewed additive typed operation profile catalog and declaration DTOs; existing entry points unchanged",
+  "review_reason": "Correct LineEndings and ParseOptions constructor declarations: Rust defaults allow omission, not explicit None; runtime signatures and typed values remain unchanged.",
   "files": {
     "structuredmerge_core/__init__.py": "4048dbecd2a48ccd38fb6ad0f487fcb47e97fcff2d59345695287cb62366f2a7",
-    "structuredmerge_core/_native.pyi": "c096e27360a6c05e3361b60f22e0ed99fffb37e73dfb635ace4a893b161f17f5",
+    "structuredmerge_core/_native.pyi": "9bf5c1b2cae1b215f3e65474600cf73094021dc148a3d732415ed38393da74a3",
     "structuredmerge_core/api.py": "141f155ad77d54a2532e68090a6f480adbeae87993bb5c322456faf41f9eb94c",
     "structuredmerge_core/exceptions.py": "25e61ce52e2e192df977a5f2ba7473dd6012e064c4bba38b05c15dc043201a29",
     "structuredmerge_core/options.py": "7de7598c211b0a2847fa9357fb60ddcc9e872f6044bf3f2ca496971e30990d25",

@@ -406,3 +406,5 @@
 - Clean Ruby typed-core artifact installations and source-package snapshots on completion or failure while preserving reports and explicit exports.
 
 - Stage merge-driver output and reports before replacement so report failures and partial staging writes preserve current bytes; report output-commit uncertainty explicitly.
+
+- Correct generated Python LineEndings and ParseOptions constructor declarations: omission uses Rust defaults, while explicit None is rejected. Audit installed constructor and method signatures through native and public exports.

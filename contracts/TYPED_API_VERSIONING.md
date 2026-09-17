@@ -51,8 +51,18 @@ native extension. The Python installed gate also compares every top-level
 function's parameter names, order, positional/keyword modes, and default values
 against both the installed native module and public facade using runtime
 signature introspection. Local Linux CPython 3.14.2 evidence covers all 31
-declared functions. It does not yet prove constructor/method signatures, type
-annotation equivalence, unlisted export coverage, or semantic compatibility.
+declared functions, 152 constructors and 170 other methods through both exports.
+Method checks compare caller-supplied arguments, excluding implicit receivers.
+This does not prove type annotation equivalence, unlisted export coverage, or
+general semantic compatibility.
+
+The expanded check found an actual declaration error: `LineEndings` and
+`ParseOptions` advertised `None` constructor values that the native extension
+rejects. Local Alef `4065247` now emits non-nullable types with unspecified Rust
+defaults (`= ...`); nullable arguments retain `= None`. This corrects unreleased
+type declarations, not runtime behavior. Installed tests also exercise omission,
+explicit values, and rejection of `None` for all seven affected fields. The
+generator fix remains local and does not establish upstream-only generation.
 
 Removing operations, fields, accepted inputs or enum values; changing argument
 order, required fields, error codes or semantics; and narrowing support require

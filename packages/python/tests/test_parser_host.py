@@ -691,33 +691,85 @@ class TypedParserHostTest(unittest.TestCase):
             if isinstance(node, ast.FunctionDef):
                 self.assertTrue(callable(getattr(native, node.name)))
 
+    @staticmethod
+    def declared_parameters(declaration):
+        args = declaration.args
+        positional = args.posonlyargs + args.args
+        defaults = [inspect.Parameter.empty] * (len(positional) - len(args.defaults))
+        defaults += [ast.literal_eval(value) for value in args.defaults]
+        expected = []
+        for index, (argument, default) in enumerate(zip(positional, defaults)):
+            kind = (inspect.Parameter.POSITIONAL_ONLY if index < len(args.posonlyargs)
+                    else inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            expected.append((argument.arg, kind, default))
+        if args.vararg:
+            expected.append((args.vararg.arg, inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.empty))
+        for argument, default in zip(args.kwonlyargs, args.kw_defaults):
+            expected.append((argument.arg, inspect.Parameter.KEYWORD_ONLY,
+                             inspect.Parameter.empty if default is None else ast.literal_eval(default)))
+        if args.kwarg:
+            expected.append((args.kwarg.arg, inspect.Parameter.VAR_KEYWORD, inspect.Parameter.empty))
+        return expected
+
     def test_installed_function_signatures_match_native_declarations(self):
         declarations = ast.parse((Path(core.__file__).parent / "_native.pyi").read_text(encoding="utf-8"))
         functions = [node for node in declarations.body if isinstance(node, ast.FunctionDef)]
         self.assertTrue(functions)
         for declaration in functions:
             with self.subTest(function=declaration.name):
-                args = declaration.args
-                positional = args.posonlyargs + args.args
-                defaults = [inspect.Parameter.empty] * (len(positional) - len(args.defaults))
-                defaults += [ast.literal_eval(value) for value in args.defaults]
-                expected = []
-                for index, (argument, default) in enumerate(zip(positional, defaults)):
-                    kind = (inspect.Parameter.POSITIONAL_ONLY if index < len(args.posonlyargs)
-                            else inspect.Parameter.POSITIONAL_OR_KEYWORD)
-                    expected.append((argument.arg, kind, default))
-                if args.vararg:
-                    expected.append((args.vararg.arg, inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.empty))
-                for argument, default in zip(args.kwonlyargs, args.kw_defaults):
-                    expected.append((argument.arg, inspect.Parameter.KEYWORD_ONLY,
-                                     inspect.Parameter.empty if default is None else ast.literal_eval(default)))
-                if args.kwarg:
-                    expected.append((args.kwarg.arg, inspect.Parameter.VAR_KEYWORD, inspect.Parameter.empty))
+                expected = self.declared_parameters(declaration)
                 for module in (native, core):
                     signature = inspect.signature(getattr(module, declaration.name))
                     actual = [(parameter.name, parameter.kind, parameter.default)
                               for parameter in signature.parameters.values()]
                     self.assertEqual(actual, expected, f"{module.__name__}.{declaration.name}")
+
+    def test_installed_constructor_and_method_signatures_match_native_declarations(self):
+        declarations = ast.parse((Path(core.__file__).parent / "_native.pyi").read_text(encoding="utf-8"))
+        checked = 0
+        for declaration in declarations.body:
+            if not isinstance(declaration, ast.ClassDef):
+                continue
+            if any(isinstance(base, ast.Name) and base.id == "TypedDict" for base in declaration.bases):
+                continue
+            for member in declaration.body:
+                if not isinstance(member, ast.FunctionDef):
+                    continue
+                expected = self.declared_parameters(member)
+                has_receiver = bool(expected and expected[0][0] in ("self", "cls"))
+                if has_receiver:
+                    expected = expected[1:]
+                for module in (native, core):
+                    with self.subTest(module=module.__name__, cls=declaration.name, method=member.name):
+                        exported = getattr(module, declaration.name)
+                        function = exported if member.name == "__init__" else getattr(exported, member.name)
+                        parameters = list(inspect.signature(function).parameters.values())
+                        # Compare caller-supplied arguments, not the implicit
+                        # receiver in an unbound native method descriptor.
+                        if has_receiver and member.name != "__init__" and parameters and parameters[0].name in ("self", "cls"):
+                            parameters = parameters[1:]
+                        actual = [(parameter.name, parameter.kind, parameter.default) for parameter in parameters]
+                        self.assertEqual(actual, expected)
+                checked += 1
+        self.assertGreater(checked, 0)
+
+    def test_rust_default_constructors_allow_omission_but_reject_none(self):
+        for module in (native, core):
+            for name, defaults in (
+                ("LineEndings", {"lf": 0, "crlf": 0, "bare_cr": 0}),
+                ("ParseOptions", {"comments": False, "tokens": False,
+                                  "diagnostics": False, "native_extensions": False}),
+            ):
+                constructor = getattr(module, name)
+                value = constructor()
+                for field, expected in defaults.items():
+                    with self.subTest(module=module.__name__, cls=name, field=field):
+                        self.assertEqual(getattr(value, field), expected)
+                        self.assertIs(type(getattr(value, field)), type(expected))
+                        with self.assertRaises(TypeError):
+                            constructor(**{field: None})
+                        explicit = True if isinstance(expected, bool) else 3
+                        self.assertEqual(getattr(constructor(**{field: explicit}), field), explicit)
 
     def test_native_source_roles_are_hashable_and_agree_with_integer_equality(self):
         roles = ["SOURCE", "BEFORE", "AFTER", "INCOMING", "CURRENT", "BASE", "OURS", "THEIRS", "OUTPUT"]
