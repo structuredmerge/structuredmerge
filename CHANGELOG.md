@@ -351,6 +351,8 @@
 
 - Add an explicit typed merge-driver lane with cached-only parser selection, kernel-owned merge results, bounded inputs, and staged conflict/output policies; retain legacy entry points during migration.
 
+- Add bounded real-Git verification for explicit typed CLI merges, including conflict policies, cold grammars, parser failures, quoted paths, index preservation, and guaranteed disposable-repository cleanup.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

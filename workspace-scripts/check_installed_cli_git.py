@@ -19,7 +19,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary", type=Path)
     parser.add_argument("--fixtures", type=Path, required=True)
+    parser.add_argument("--typed", action="store_true", help="exercise the explicit typed merge lane")
+    parser.add_argument("--grammar-library", type=Path, help="existing JSON grammar; typed mode never downloads")
     args = parser.parse_args()
+    if args.typed:
+        if not args.grammar_library:
+            parser.error("--typed requires --grammar-library")
+        from typed_cli_git import run
+        return run(args.binary, args.fixtures, args.grammar_library)
+    if args.grammar_library:
+        parser.error("--grammar-library requires --typed")
     binary = args.binary.resolve(strict=True)
     fixture = args.fixtures.resolve(strict=True)
     root = Path(__file__).resolve().parent.parent

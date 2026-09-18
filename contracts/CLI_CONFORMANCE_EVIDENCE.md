@@ -160,3 +160,41 @@ artifact availability, portable positive operation cases, installed real-Git
 validation of this new lane, native CLIs, and platform/distribution gates.
 Profiles needing native facts are not made supported by registering TSLP.
 This is not full CLI conformance, package publication, or default promotion.
+
+## Typed lane exercised through real Git
+
+The existing real-Git gate now has a separate `--typed` mode, driven by fixtures
+`conformance/cli-v1/typed-git.json`. Both retained binaries above pass all six
+cases: independent edits, default leave-ours conflict, explicit conflict write,
+delete/edit conflict write, malformed ours, and missing local grammar.
+
+Git 2.55.0 actually invokes the copied executable through a repository-local
+driver command. Executable and logical paths exercise shell quoting; the logical
+path is a Unicode/apostrophe-containing `.txt` filename. The driver report must
+retain that path, typed profile/provider identity and merge3 operation, with no
+fallback. Conflict cases require canonical unresolved-conflict evidence, not
+just a nonzero status or marker bytes. Clean stage-0 output and all unresolved
+base/ours/theirs index stages are verified against source bytes. HEAD and all
+branch blobs remain unchanged under `git merge --no-commit --no-ff`.
+
+The parser-error and cold-cache cases demonstrate Git exit 1 with reported driver
+exit 2 and `outcome: error`, not a manufactured conflict. Both preserve ours.
+Real-Git runs are distinct from the preceding direct-process tests; copied local
+executables are not proof of registry/release-archive installation.
+
+Current reports:
+
+- `tmp/typed-cli-git-m46wv8y4/report.json` (`smorg`, 6/6);
+- `tmp/typed-cli-git-blzj4ojv/report.json` (`smorg-rs`, 6/6);
+- fixture SHA-256 `835d920857e0de82bc00198277805c6784cd8b86b5c671209a04171cfab7dfa3`;
+- `tmp/typed-cli-git-tooling.log`: all 45 tooling tests pass, including four new
+  gate tests for fixture rejection and cleanup on success, case failure and
+  report-write failure.
+
+No compilation was needed: binary and grammar hashes are the same as above.
+Each case's temporary repository, executable copy and grammar copy was removed
+before the next case; only small evidence remains. Free space is 134 GiB.
+See `workspace-scripts/CLI_GIT_GATE.md` for reproduction and bounded-resource
+policy. This closes initial local POSIX real-Git evidence for the explicit JSON
+lane, not hosted integration, packaging/distribution, other languages/platforms,
+full report conformance, typed diff or default-selection authority.
