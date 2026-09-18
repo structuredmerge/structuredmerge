@@ -132,6 +132,7 @@ pub(crate) fn execute(
     request: &ValidatedOperationRequest,
     snapshot: &ParserRegistrySnapshot,
     context: &ExecutionContext,
+    service: &TreeHaverParseService,
 ) -> Result<OperationResult, CoreError> {
     let mut result = empty_result(request);
     let evidence = ConflictEvidence::default();
@@ -243,7 +244,6 @@ pub(crate) fn execute(
             extra: Metadata::new(),
         });
     }
-    let service = TreeHaverParseService::default();
     let parses = match service.parse_batch(requests.clone(), snapshot, context) {
         Ok(parses) => parses,
         Err(error) => {

@@ -144,6 +144,29 @@ fn compiled_batch_executes_all_json_operations_with_kernel_ownership() {
     assert_eq!(result.results.len(), 4);
     assert!(result.results.iter().all(|r| r.ok), "{:?}", result.results);
     assert!(result.selections.iter().all(|s| s.provider_generation == providers.generation()));
+    let mut policy_request = request.clone();
+    for item in &mut policy_request.items {
+        item.operation.provider_selection.dialect = Some("json".into());
+        item.operation.parser_selection.backend = None;
+        item.operation.parser_selection.preference = vec!["json.cached".into()];
+    }
+    let policy_result = execute(
+        "kernel.json",
+        policy_request,
+        &limits,
+        &control,
+        &context,
+        &providers,
+        &parsers.snapshot().unwrap(),
+    )
+    .unwrap();
+    for result in &policy_result.results {
+        assert!(result.ok, "{:?}", result.diagnostics);
+        let parser = result.profile.parser.as_ref().unwrap();
+        assert_eq!(parser.requested_backend, None);
+        assert_eq!(parser.selected_backend.as_deref(), Some("json.cached"));
+        assert_eq!(parser.selection_mode.as_deref(), Some("policy"));
+    }
     limits.max_response_bytes = 1;
     assert_eq!(
         execute(
@@ -159,6 +182,118 @@ fn compiled_batch_executes_all_json_operations_with_kernel_ownership() {
         .code,
         "resource.limit"
     );
+}
+
+#[test]
+fn compiled_dispatch_does_not_probe_or_execute_an_alternate_after_negotiation() {
+    struct TransientParser {
+        descriptor: ParserProviderDescriptor,
+        first_probe_only: bool,
+        probes: AtomicUsize,
+        calls: AtomicUsize,
+    }
+    impl ParserProvider for TransientParser {
+        fn descriptor(&self) -> &ParserProviderDescriptor {
+            &self.descriptor
+        }
+        fn probe(&self, _: &ParserProbeRequest) -> Result<ParserProbeResult, ProviderFault> {
+            let count = self.probes.fetch_add(1, Ordering::SeqCst);
+            let available = !self.first_probe_only || count == 0;
+            Ok(ParserProbeResult { available, loadable: available })
+        }
+        fn parse_batch(
+            &self,
+            _: Vec<ParseRequest>,
+            _: &ExecutionContext,
+        ) -> Result<Vec<ParseOutput>, ProviderFault> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Err(ProviderFault {
+                code: "test.unexpected_parse".into(),
+                message: "must not execute a substitute".into(),
+            })
+        }
+    }
+    for (family, profile) in [
+        ("json", "kernel.json.nested.v1"),
+        ("go", "kernel.go.owners.v1"),
+        ("bash", "kernel.bash.owners.v1"),
+    ] {
+        for operation in ["analyze", "diff2", "merge2", "merge3"] {
+            let provider = format!("kernel.{family}");
+            let parsers = ParserRegistry::default();
+            let make = |id: &str, first_probe_only| {
+                Arc::new(TransientParser {
+                    descriptor:
+                        tree_haver::language_pack_provider::LanguagePackProvider::new_cached_only(
+                            id.into(),
+                            family.into(),
+                        )
+                        .unwrap()
+                        .descriptor()
+                        .clone(),
+                    first_probe_only,
+                    probes: AtomicUsize::new(0),
+                    calls: AtomicUsize::new(0),
+                })
+            };
+            let primary = make("a.primary", true);
+            let alternate = make("z.alternate", false);
+            parsers.register(primary.clone()).unwrap();
+            parsers.register(alternate.clone()).unwrap();
+            let mut request = kernel_request(operation);
+            request.items[0].parser_language = family.into();
+            request.items[0].operation.provider_selection.provider_id = Some(provider.clone());
+            request.items[0].operation.provider_selection.family = Some(family.into());
+            request.items[0].operation.provider_selection.profile_id = Some(profile.into());
+            request.items[0].parse_options = crate::profiles::operation_parse_options(
+                profile,
+                request.items[0].operation.operation.kind(),
+            );
+            request.items[0].operation.parser_selection.backend = None;
+            request.items[0].operation.parser_selection.preference = vec!["a.primary".into()];
+            let limits = limits();
+            let control = OperationControl::new();
+            let context = limits.parse.clone().controlled_context(&control).unwrap();
+            let unpinned = request.items[0]
+                .operation
+                .clone()
+                .validate(context.max_input_bytes, |_, _| panic!("inline test sources"))
+                .unwrap();
+            let result = execute(
+                &provider,
+                request,
+                &limits,
+                &control,
+                &context,
+                &registry().snapshot().unwrap(),
+                &parsers.snapshot().unwrap(),
+            )
+            .unwrap();
+            assert!(!result.results[0].ok, "{operation}");
+            assert!(!result.results[0].diagnostics.is_empty());
+            assert_eq!(primary.calls.load(Ordering::SeqCst), 0, "{operation}");
+            assert_eq!(alternate.calls.load(Ordering::SeqCst), 0, "{operation}");
+            assert!(primary.probes.load(Ordering::SeqCst) >= 2);
+            assert_eq!(
+                alternate.probes.load(Ordering::SeqCst),
+                1,
+                "only negotiation may probe the alternate: {operation}"
+            );
+            // Sensitivity control: ordinary source selection without a prior
+            // workflow decision is allowed to consider the available alternate.
+            // The spy faults immediately, so no actual parsing takes place.
+            crate::native_operation::execute_native_operation(
+                &unpinned,
+                &parsers.snapshot().unwrap(),
+                &context,
+            )
+            .unwrap();
+            assert!(
+                alternate.calls.load(Ordering::SeqCst) > 0,
+                "control did not exercise an alternate: {family}/{operation}"
+            );
+        }
+    }
 }
 
 fn descriptor() -> MergeProviderDescriptor {

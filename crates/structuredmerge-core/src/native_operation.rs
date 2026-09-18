@@ -279,11 +279,27 @@ pub fn execute_native_operation(
     snapshot: &ParserRegistrySnapshot,
     context: &ExecutionContext,
 ) -> Result<OperationResult, CoreError> {
+    execute_native_operation_with_service(
+        request,
+        snapshot,
+        context,
+        &TreeHaverParseService::default(),
+    )
+}
+
+/// Registry-negotiated dispatch supplies conjunctive parser constraints without
+/// rewriting the caller's requested backend or explicit/policy provenance.
+pub(crate) fn execute_native_operation_with_service(
+    request: &ValidatedOperationRequest,
+    snapshot: &ParserRegistrySnapshot,
+    context: &ExecutionContext,
+    service: &TreeHaverParseService,
+) -> Result<OperationResult, CoreError> {
     if matches!(
         request.request().provider_selection.profile_id.as_deref(),
         Some(crate::profiles::JSON_NESTED | crate::profiles::GIT_JSON)
     ) {
-        return crate::json_operation::execute(request, snapshot, context);
+        return crate::json_operation::execute(request, snapshot, context, service);
     }
     let finish = |result, request, evidence| finalize(result, request, evidence, context);
     let mut result = empty_result(request);
@@ -441,7 +457,7 @@ pub fn execute_native_operation(
     }
     if input.operation.kind() == OperationKind::Analyze {
         let expected_source = parses[0].source.descriptor.clone();
-        let parsed = TreeHaverParseService::default().parse_batch(parses, snapshot, context);
+        let parsed = service.parse_batch(parses, snapshot, context);
         if let Err(error) = context.check() {
             service_failure(&mut result, error);
             return finish(result, request, &evidence);
@@ -505,12 +521,7 @@ pub fn execute_native_operation(
     }
     if input.operation.kind() == OperationKind::Diff2 {
         match ast_merge::typed_diff::diff_native_sources_with_evidence(
-            language,
-            parses,
-            &TreeHaverParseService::default(),
-            snapshot,
-            context,
-            analyzer,
+            language, parses, service, snapshot, context, analyzer,
         ) {
             Ok(execution) => {
                 retain_parses(&mut result, &execution.input_parses);
@@ -595,7 +606,7 @@ pub fn execute_native_operation(
         let execution = match merge_directional_native_sources(
             language,
             parses,
-            &TreeHaverParseService::default(),
+            service,
             snapshot,
             context,
             analyzer,
@@ -744,7 +755,7 @@ pub fn execute_native_operation(
         ast_merge::typed_merge::merge_native_sources_with_engine(
             language,
             parses.clone(),
-            &TreeHaverParseService::default(),
+            service,
             snapshot,
             context,
             ast_merge::typed_merge::NativeOwnerEngine {
@@ -760,7 +771,7 @@ pub fn execute_native_operation(
         merge_native_sources_with_evidence(
             language,
             parses.clone(),
-            &TreeHaverParseService::default(),
+            service,
             snapshot,
             context,
             analyzer,
@@ -820,6 +831,7 @@ pub fn execute_native_operation(
                     snapshot,
                     context,
                     analyzer,
+                    service,
                 ) {
                     execution_failure(&mut result, error);
                     result.extra.insert(
@@ -920,6 +932,7 @@ fn reparse_selected_output(
     snapshot: &ParserRegistrySnapshot,
     context: &ExecutionContext,
     analyzer: Analyzer,
+    service: &TreeHaverParseService,
 ) -> Result<(), NativeMergeError> {
     let selection = execution
         .rendered
@@ -943,9 +956,8 @@ fn reparse_selected_output(
     )
     .map_err(|error| NativeMergeError::Parse(ServiceError::Source(error)))?;
     parse.selection.backend_id = Some(selected.backend.id.clone());
-    let mut parsed = TreeHaverParseService::default()
-        .parse_batch(vec![parse], snapshot, context)
-        .map_err(NativeMergeError::Parse)?;
+    let mut parsed =
+        service.parse_batch(vec![parse], snapshot, context).map_err(NativeMergeError::Parse)?;
     context.check().map_err(NativeMergeError::Parse)?;
     let parsed = parsed.pop().ok_or(NativeMergeError::InvalidInputs)?;
     let accepted = parsed.document.output().ok

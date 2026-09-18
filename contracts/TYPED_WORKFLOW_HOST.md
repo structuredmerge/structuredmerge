@@ -164,3 +164,63 @@ changed parser identity fails closed but preflight/stale-snapshot envelopes rema
 open. Common single-operation host dispatch, family defaults, delegation,
 broader compiled-provider batch coverage and other runtime/platform gates remain.
 Nothing is published or pushed upstream; the local-only Alef constraint remains.
+
+## Parser pinning before execution
+
+Compiled batches previously re-ran ordinary parser selection in the native
+engine and checked identity only after execution. A backend that became
+unavailable after negotiation could therefore cause an alternate callback before
+the final rejection. Dispatch now supplies a conjunctive selected-backend
+constraint to the existing TreeHaver service, including output verification.
+The registry snapshot and caller's requested backend/preference/policy metadata
+are preserved; pinning is not implemented by rewriting the operation request.
+An unavailable pinned backend produces failure without probing/executing an
+alternate during dispatch. The final identity check remains defense in depth.
+
+Compiled semantic dialects now map to parser languages with a null parser
+dialect, matching native execution and capability observations. This fixes
+explicit JSON dialect requests being incorrectly rejected or passed as a
+different parser query. Unsupported non-null parser dialects still reject.
+
+Verification for this change:
+
+- 16 core unit tests pass: `tmp/parser-pin-core-tests.log`. Transient-provider
+  tests cover analyze/diff2/merge2/merge3 across JSON, Go and Bash, asserting no
+  alternate probe or parse after negotiation. Unpinned controls demonstrate that
+  each alternate would otherwise be considered. These fault tests do not claim
+  Go/Bash parsing or semantic parity. Real cached JSON tests cover all four
+  successful operations, explicit semantic dialects, and preserved policy mode.
+- All 128 CLI tests and 74 tooling tests pass:
+  `tmp/parser-pin-cli-tests.log`, `tmp/parser-pin-tooling.log`.
+- Both real-Git merge and modified/added/deleted diff gates pass:
+  `tmp/typed-cli-git-ar9vnvbg/report.json`,
+  `tmp/typed-cli-git-jbzynt0q/report.json`.
+- Rebuilt installed CPython 3.14.2 wheel: 58 boundary tests, 113 generated tests,
+  114 test-app tests; `tmp/core-python-artifact-5amqgvbt/report.json`.
+- Rebuilt installed MRI 4.0.6 gem: 51 boundary examples and 110/110 generated
+  and test-app examples; `tmp/core-ruby-artifact-20260918-2583017-jsbfwt/report.json`.
+- The new installed tests execute kernel-owned analysis batches over native
+  LibCST/Psych and verify requested-backend absence, selected parser identity,
+  policy selection mode and no default approval. This adds installed compiled
+  batch evidence; it is not the full provider/operation/platform matrix.
+- Alef verification, unchanged Ruby/Python API baselines and the 20-crate release
+  inventory pass. No generated public API change was required.
+
+Current artifacts supersede the preceding registry binaries/wheel/extension:
+
+- `tmp/parser-pin-bin/smorg`, SHA-256
+  `2c01b8d52f94a3bdd8c00994d4b14b41971a124e3380247e4383e4e29323977f`.
+- `tmp/parser-pin-bin/smorg-rs`, SHA-256
+  `4967128ce4ed9e7897d77a3e508aec1f10e5ea8453764135866d58fb773d9681`.
+- `tmp/parser-pin-wheels/structuredmerge_core-0.2.0-cp310-abi3-manylinux_2_34_x86_64.whl`,
+  SHA-256 `a9bdf8a95851133caf4b44f28c66d4ef416b55b0815f9a94b36761715a21e4fa`.
+- `packages/ruby/lib/structuredmerge_core_rb.so`, SHA-256
+  `cebe4541114d6e3114c7712439dd79161c549705782711c609cb436c86c321ee`.
+
+The 4.9 GiB build target, 39 MiB temporary build environment, superseded CLI
+pair and prior registry wheel are removed after verification. Installed consumers
+and real-Git workspaces are cleaned by their runners; current artifacts and small
+reports remain. The same single-job/resource guards apply. Nothing is published
+or pushed upstream. Pinning prevents substitution, not changes in the selected
+provider's behavior; authenticated availability, portable preflight/staleness
+reports, liveness guarantees and default policies remain unfinished.

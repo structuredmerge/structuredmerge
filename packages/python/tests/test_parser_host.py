@@ -21,6 +21,25 @@ from libcst_facts import LibCSTHost
 
 
 class TypedParserHostTest(unittest.TestCase):
+    def test_compiled_batch_preserves_policy_selection_over_native_parser(self):
+        original = self.common_request("analyze", ["a = 1\n"])
+        operation = native.OperationRequest(schema=original.schema, request_id=original.request_id,
+            operation=original.operation, sources=original.sources, provider_selection=original.provider_selection,
+            parser_selection=native.OperationParserSelection(preference=["python.libcst"], required_capabilities=[], extra={}),
+            extensions=[], metadata={}, extra={})
+        item = native.WorkflowOperation(operation=operation, parser_language="python",
+            parse_options=native.ParseOptions(comments=False, tokens=False, diagnostics=False, native_extensions=True))
+        _, _, _, limits = self.workflow_fixture()
+        result = core.execute_workflow_batch("kernel.python", native.WorkflowBatchRequest(items=[item]), limits)
+        self.assertEqual(result.execution_owner, native.WorkflowExecutionOwner.KERNEL)
+        self.assertFalse(result.approved_as_default)
+        self.assertTrue(result.results[0].ok)
+        parser = result.results[0].profile.parser
+        self.assertIsNone(parser.requested_backend)
+        self.assertEqual(parser.selected_backend, "python.libcst")
+        self.assertEqual(parser.selection_mode, "policy")
+        self.assertEqual(self.host.calls, 1)
+
     def test_compiled_workflows_are_listed_and_cannot_be_retired_by_hosts(self):
         inventory = core.workflow_registry_inventory()
         profiles = core.operation_profile_catalog().profiles

@@ -322,7 +322,9 @@ fn execute(
             let dialect = item.operation.provider_selection.dialect.as_deref();
             if crate::profiles::profile_parser_language(&profile.family, dialect)
                 != Some(item.parser_language.as_str())
-                || item.parser_dialect.as_deref() != dialect
+                // Native profiles map semantic dialect to parser language;
+                // their TreeHaver query has no separate parser dialect.
+                || item.parser_dialect.is_some()
                 || item.parse_options
                     != crate::profiles::operation_parse_options(
                         &profile.id,
@@ -358,8 +360,6 @@ fn execute(
         let mut results = Vec::new();
         for (value, selection) in validated.iter().zip(&selections) {
             context.check().map_err(CoreError::from)?;
-            let result =
-                crate::native_operation::execute_native_operation(value, parsers, context)?;
             let selected = selection
                 .candidates
                 .iter()
@@ -370,6 +370,15 @@ fn execute(
                 .unwrap()
                 .selected_backend
                 .as_ref();
+            let service = TreeHaverParseService::default()
+                .with_constraints(ParserConstraints {
+                    allowed_backend_ids: vec![selected.unwrap().clone()],
+                    ..ParserConstraints::default()
+                })
+                .map_err(CoreError::from)?;
+            let result = crate::native_operation::execute_native_operation_with_service(
+                value, parsers, context, &service,
+            )?;
             if result.provider.provider_id.as_deref() != Some(provider_id)
                 || result
                     .profile

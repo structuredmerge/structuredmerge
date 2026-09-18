@@ -20,6 +20,28 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  it "keeps compiled batch parser pinning distinct from requested policy selection" do
+    core = described_class
+    core.register_parser_host(TypedPsychHost.new)
+    original = common_request("analyze", ["a: one\n"])
+    operation = core::OperationRequest.new(schema: original.schema, request_id: original.request_id,
+      operation: original.operation, sources: original.sources, provider_selection: original.provider_selection,
+      parser_selection: core::OperationParserSelection.new(preference: ["ruby.typed.psych"], required_capabilities: [], extra: {}),
+      extensions: [], metadata: {}, extra: {})
+    item = core::WorkflowOperation.new(operation: operation, parser_language: "yaml", parser_dialect: nil,
+      parse_options: core::ParseOptions.new(comments: false, tokens: false, diagnostics: false, native_extensions: true))
+    result = core.execute_workflow_batch("kernel.yaml", core::WorkflowBatchRequest.new(items: [item]), workflow_limits)
+    expect(result.execution_owner).to eq(:kernel)
+    expect(result.approved_as_default).to be(false)
+    expect(result.results.first.ok).to be(true)
+    parser = result.results.first.profile.parser
+    expect(parser.requested_backend).to be_nil
+    expect(parser.selected_backend).to eq("ruby.typed.psych")
+    expect(parser.selection_mode).to eq("policy")
+  ensure
+    core.unregister_parser_provider("ruby.typed.psych") if core
+  end
+
   it "lists compiled workflows without granting host retirement authority" do
     inventory = described_class.workflow_registry_inventory
     profiles = described_class.operation_profile_catalog.profiles

@@ -476,3 +476,5 @@
 - Make CLI Git installation scope-aware and ownership-safe, preserve user configuration, and report partial failures without claiming complete driver setup.
 
 - Normalize Git external-diff absent sides without opening devices and compare validated zero-byte JSON documents through kernel owner semantics, with real-Git added/deleted regression coverage.
+
+- Pin negotiated compiled-workflow parsers before dispatch and output verification, fail without alternate probing when availability changes, and preserve policy-selection provenance and semantic/parser dialect separation.
