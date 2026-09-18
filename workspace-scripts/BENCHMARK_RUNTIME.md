@@ -165,3 +165,54 @@ its passing result is not broad native merge effectiveness evidence. Preserve th
 existing Python adapter runs for the other supported families. Record the Ruby,
 Psych, gem, launcher, driver and helper revisions/digests with raw reports; no
 speed ranking, publication or default-authority decision follows from this gate.
+
+## Registry-guard wheel safety refresh (2026-09-18)
+
+The retained Slice 1023 harness and its official `LocalBenchmarkReport` pass
+safety, preservation and reliability for the installed Python debug wheel built
+with the registry-guard implementation. Micro selects 16 cases: 11 execute and
+5 are unsupported. Affected-dev selects 24: 12 execute and 12 are unsupported.
+Both reports have `hard_gate_failed: false`, no candidate false-auto-merge IDs,
+no preservation violations/unverified IDs and no reliability error IDs.
+Unsupported cases remain coverage gaps, not successes. Aggregate effectiveness
+counts include baseline adapters and must not be attributed to the candidate.
+
+The changed path supplied to both runs was
+`crates/structuredmerge-core/src/workflow.rs`. This uses the ordinary common
+operation adapter, not the new guarded-call API: it is neither a registry-guard
+overhead measurement nor a speed ranking. Dedicated core/installed-boundary
+tests cover the guard. The Ruby/Psych adapter was not rerun in this refresh.
+
+Provenance:
+
+- Kernel: `fe639e495984068ec3094c99e63925fc7f5ea6a1`.
+- Ruby harness: `adaa8ecd7cb8a2c87f077a6806482f8502105db5`, MRI 4.0.6.
+  Pre-existing root and six gem lockfile modifications were preserved; this is
+  not a clean-checkout claim. Harness source was unchanged.
+- Fixtures: `be4bf25d59bceac6a4adcc27dea081a2bab4c798`; corpus digest
+  `a7d443e631362a2581b37ad5c7475bc262aa9e0a4964b57245c4a7612cc6f252`.
+- Installed wheel SHA-256:
+  `faccc73f37bad6b6f6b4c222421697dafc23590383444454069bc8aa74ceef53`;
+  LibCST 1.9.0. Candidate Rust TSLP is 1.17.0; the benchmark Ruby bundle
+  uses TSLP 1.20.0. These are distinct dependency contexts.
+- Bundle lock SHA-256:
+  `40724c2297d8837e5a008033cf79a53a5c08ef6f9391953fa55f92bc595d9d6c`.
+- Python adapter SHA-256:
+  `a2feb69d8bbf6e392071e1cd253497e193d72893cad5604ad3aa8d432a4ec73e`.
+- LibCST helper SHA-256:
+  `fd6d3f7dc8d04a3697efbebc01e5d1f0097fc5f92b12457c6b55f0e5975cf77e`.
+
+Local raw results and official reports remain in `tmp/benchmark-runtime/`:
+
+| File | SHA-256 |
+| --- | --- |
+| `registry-guard-micro.json` | `6885a27ba1b1a454b71a13aaaac2985c0b207a1c0afcf4ed2aa143e605d6efa9` |
+| `registry-guard-micro-report.json` | `3265c1a611bcb30e6f2faf2b1f13183a7a47a4c5b5bb548dff19a99da2c0a2c0` |
+| `registry-guard-dev.json` | `51648031359467c04a923db6ce34bfe272a3d1d313d2cad825a98a341ef92928` |
+| `registry-guard-dev-report.json` | `294e146ae7aa0662c0ea0694c0010c7376d135e871de73dc8ec52cd9d744b54b` |
+
+The small local runner `tmp/registry-guard-benchmark.py` pins the wheel and invokes
+the existing harness, with bounded subprocess capture, deadlines, no core dumps
+and a live 20 GiB disk reserve. Its two temporary-directory contexts removed the
+installed environment and harness case directories. Only small evidence files
+and the already verified artifacts remain; no compiler build was needed.
