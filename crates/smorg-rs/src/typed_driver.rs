@@ -32,19 +32,136 @@ impl Drop for Registration {
 pub(super) fn run_merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> i32 {
     match merge(options, stderr) {
         Ok(code) => code,
-        Err((code, message)) => {
-            let _ = writeln!(stderr, "typed merge-driver: {message}");
-            code
+        Err(failure) => {
+            let _ = writeln!(stderr, "typed merge-driver: {}", failure.message);
+            if let (Some(diagnostic), Some(path)) = (&failure.diagnostic, &options.report_path) {
+                // Common argument/path preflight has already accepted this destination.
+                // An empty query never probes providers or acquires a grammar.
+                let reported =
+                    capability_manifest(vec![], limits()).map_err(internal).and_then(|manifest| {
+                        write_report(
+                            path,
+                            &report(
+                                &manifest.kernel_version,
+                                failure.exit_code,
+                                "error",
+                                None,
+                                vec![diagnostic.as_ref().clone()],
+                            ),
+                        )
+                    });
+                if let Err(error) = reported {
+                    let _ = writeln!(stderr, "cannot write typed error report: {}", error.message);
+                    return 3;
+                }
+            }
+            failure.exit_code
         }
     }
 }
 
-type Failure = (i32, String);
+struct Failure {
+    exit_code: i32,
+    message: String,
+    // Only failures before a validated operation result may use a null envelope.
+    diagnostic: Option<Box<PortableDiagnostic>>,
+}
 fn invalid(message: impl ToString) -> Failure {
-    (2, message.to_string())
+    Failure { exit_code: 2, message: message.to_string(), diagnostic: None }
 }
 fn internal(message: impl ToString) -> Failure {
-    (3, message.to_string())
+    Failure { exit_code: 3, message: message.to_string(), diagnostic: None }
+}
+
+fn rejected(category: PortableCategory, code: &str, message: impl ToString) -> Failure {
+    let message = message.to_string();
+    Failure {
+        exit_code: 2,
+        message: message.clone(),
+        diagnostic: Some(Box::new(PortableDiagnostic {
+            schema: DIAGNOSTIC_SCHEMA.into(),
+            id: "cli.failure".into(),
+            sequence: 0,
+            severity: DiagnosticSeverity::Error,
+            category,
+            code: code.into(),
+            message,
+            blocking: true,
+            operation: Some(OperationKind::Merge3),
+            request_id: Some("cli.merge3".into()),
+            source_refs: vec![],
+            subject_refs: None,
+            cause_ids: vec![],
+            related_ids: vec![],
+            origin: DiagnosticOrigin {
+                layer: DiagnosticLayer::Adapter,
+                provider_id: None,
+                backend_id: None,
+                package: Some(env!("CARGO_PKG_NAME").into()),
+                package_version: Some(env!("CARGO_PKG_VERSION").into()),
+                native_code: None,
+                extra: BTreeMap::new(),
+            },
+            data: BTreeMap::new(),
+            extensions: vec![],
+            metadata: BTreeMap::new(),
+            extra: BTreeMap::new(),
+        })),
+    }
+}
+
+fn selection(message: impl ToString) -> Failure {
+    rejected(PortableCategory::SelectionError, "cli.selection_rejected", message)
+}
+
+fn source_failure(message: impl ToString) -> Failure {
+    rejected(PortableCategory::InvalidRequest, "cli.source_rejected", message)
+}
+
+fn kernel_failure(error: CoreError) -> Failure {
+    // Classify stable error codes, never human text. Unknown codes are opaque
+    // origin evidence, not permission to invent a more specific category.
+    let category = match error.code.as_str() {
+        "request.invalid"
+        | "operation.invalid_request"
+        | "source.invalid"
+        | "source.unresolved_reference" => PortableCategory::InvalidRequest,
+        "capability.unknown_profile" | "selection.no_parser" => PortableCategory::SelectionError,
+        "resource.limit" => PortableCategory::ResourceLimit,
+        "execution.cancelled" => PortableCategory::Cancelled,
+        "execution.deadline_exceeded" => PortableCategory::DeadlineExceeded,
+        _ => PortableCategory::InternalError,
+    };
+    let mut failure = rejected(category, "cli.kernel_rejected", &error.message);
+    if category == PortableCategory::InternalError {
+        failure.exit_code = 3;
+    }
+    failure.diagnostic.as_mut().unwrap().origin.native_code = Some(error.code);
+    failure
+}
+
+fn report(
+    kernel_version: &str,
+    code: i32,
+    outcome: &str,
+    result: Option<&OperationResult>,
+    diagnostics: Vec<PortableDiagnostic>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "schema": "structuredmerge.cli-report/v1", "command": "merge-driver",
+        "cli": {"executable": env!("CARGO_BIN_NAME"), "package": env!("CARGO_PKG_NAME"),
+            "version": env!("CARGO_PKG_VERSION"), "kernel_version": kernel_version,
+            "cli_contract": "structuredmerge.cli/v1"},
+        "outcome": outcome, "exit_code": code, "operation_result": result,
+        "availability": null, "conflict_review": null, "git_install": null,
+        "diagnostics": diagnostics, "output_commit_verified": false,
+    })
+}
+
+fn write_report(path: &str, report: &serde_json::Value) -> Result<(), Failure> {
+    let mut bytes = serde_json::to_vec(report).map_err(internal)?;
+    bytes.push(b'\n');
+    StagedFile::new(path, &bytes).map_err(internal)?.commit().map_err(internal)
 }
 
 fn merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> Result<i32, Failure> {
@@ -88,11 +205,11 @@ fn merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> Result<i32, Fa
         .profiles
         .iter()
         .find(|p| &p.id == profile_id)
-        .ok_or_else(|| invalid("unknown typed profile"))?;
+        .ok_or_else(|| selection("unknown typed profile"))?;
     if &profile.provider_id != provider
         || options.family.as_ref().is_some_and(|f| f != &profile.family)
     {
-        return Err(invalid("provider/family constraints do not match the selected profile"));
+        return Err(selection("provider/family constraints do not match the selected profile"));
     }
     // In this standalone process no providers have been registered yet. Ask the
     // kernel for its parser request; do not duplicate its dialect/language map.
@@ -110,14 +227,14 @@ fn merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> Result<i32, Fa
         }],
         limits(),
     )
-    .map_err(invalid)?;
+    .map_err(kernel_failure)?;
     let language = &manifest.observations[0]
         .parser_request
         .as_ref()
-        .ok_or_else(|| invalid("profile does not declare the requested operation/dialect"))?
+        .ok_or_else(|| selection("profile does not declare the requested operation/dialect"))?
         .language;
     if backend != &format!("kernel.tslp.{language}") {
-        return Err(invalid("backend is not an explicitly supported cached kernel parser"));
+        return Err(selection("backend is not an explicitly supported cached kernel parser"));
     }
     let mut remaining = INPUT_BUDGET;
     let mut sources = BTreeMap::new();
@@ -126,20 +243,25 @@ fn merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> Result<i32, Fa
         (SourceRole::Ours, "ours", &options.current),
         (SourceRole::Theirs, "theirs", &options.other),
     ] {
-        if !std::fs::metadata(path).map_err(invalid)?.is_file() {
-            return Err(invalid("sources must be regular files"));
+        if !std::fs::metadata(path).map_err(source_failure)?.is_file() {
+            return Err(source_failure("sources must be regular files"));
         }
-        let file = File::open(path).map_err(invalid)?;
-        if !file.metadata().map_err(invalid)?.is_file() {
-            return Err(invalid("sources must be regular files"));
+        let file = File::open(path).map_err(source_failure)?;
+        if !file.metadata().map_err(source_failure)?.is_file() {
+            return Err(source_failure("sources must be regular files"));
         }
         let mut bytes = Vec::new();
-        file.take(remaining + 1).read_to_end(&mut bytes).map_err(invalid)?;
+        file.take(remaining + 1).read_to_end(&mut bytes).map_err(source_failure)?;
         if bytes.len() as u64 > remaining {
-            return Err(invalid("aggregate source size exceeds 8 MiB"));
+            return Err(rejected(
+                PortableCategory::ResourceLimit,
+                "cli.source_limit",
+                "aggregate source size exceeds 8 MiB",
+            ));
         }
         remaining -= bytes.len() as u64;
-        let source = source_input(id.into(), role, SourceEncoding::Utf8, bytes).map_err(invalid)?;
+        let source =
+            source_input(id.into(), role, SourceEncoding::Utf8, bytes).map_err(source_failure)?;
         sources.insert(
             role,
             OperationSource {
@@ -163,7 +285,8 @@ fn merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> Result<i32, Fa
     let mut required_capabilities = options.required_capabilities.clone();
     required_capabilities.sort();
     required_capabilities.dedup();
-    register_cached_language_pack_parser(backend.clone(), language.clone()).map_err(invalid)?;
+    register_cached_language_pack_parser(backend.clone(), language.clone())
+        .map_err(kernel_failure)?;
     let _registration = Registration(backend.clone());
     let result = execute_operation(
         OperationRequest {
@@ -200,7 +323,7 @@ fn merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> Result<i32, Fa
         },
         limits(),
     )
-    .map_err(invalid)?;
+    .map_err(kernel_failure)?;
     let conflict = result.conflicts.iter().any(|c| c.unresolved());
     for diagnostic in &result.diagnostics {
         let (code, message) = match diagnostic {
@@ -238,22 +361,52 @@ fn merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> Result<i32, Fa
         .map(|text| StagedFile::new(output_path, text.as_bytes()))
         .transpose()
         .map_err(internal)?;
-    let report = serde_json::json!({
-        "schema": "structuredmerge.cli-report/v1", "command": "merge-driver",
-        "cli": {"executable": env!("CARGO_BIN_NAME"), "package": env!("CARGO_PKG_NAME"),
-            "version": env!("CARGO_PKG_VERSION"), "kernel_version": manifest.kernel_version,
-            "cli_contract": "structuredmerge.cli/v1"},
-        "outcome": outcome, "exit_code": code, "operation_result": result,
-        "availability": null, "conflict_review": null, "git_install": null,
-        "diagnostics": [], "output_commit_verified": false,
-    });
+    let report = report(&manifest.kernel_version, code, outcome, Some(&result), vec![]);
     if let Some(path) = &options.report_path {
-        let mut bytes = serde_json::to_vec(&report).map_err(internal)?;
-        bytes.push(b'\n');
-        StagedFile::new(path, &bytes).map_err(internal)?.commit().map_err(internal)?;
+        write_report(path, &report)?;
     }
     if let Some(staged) = staged_output {
         staged.commit().map_err(internal)?;
     }
     Ok(code)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kernel_failure_classification_uses_codes_not_messages() {
+        for (native, category, exit) in [
+            ("operation.invalid_request", PortableCategory::InvalidRequest, 2),
+            ("selection.no_parser", PortableCategory::SelectionError, 2),
+            ("resource.limit", PortableCategory::ResourceLimit, 2),
+            ("execution.cancelled", PortableCategory::Cancelled, 2),
+            ("execution.deadline_exceeded", PortableCategory::DeadlineExceeded, 2),
+            ("future.unrecognized", PortableCategory::InternalError, 3),
+        ] {
+            let failure = kernel_failure(CoreError {
+                code: native.into(),
+                message: "merge conflict parse error success".into(),
+            });
+            assert_eq!(failure.exit_code, exit);
+            let diagnostic = failure.diagnostic.unwrap();
+            assert_eq!(diagnostic.category, category);
+            assert_eq!(diagnostic.origin.native_code.as_deref(), Some(native));
+            validate_diagnostics(
+                &[&diagnostic],
+                "cli.merge3",
+                OperationKind::Merge3,
+                &SourceMap::default(),
+                |_| false,
+            )
+            .unwrap();
+            let value = report("test-kernel", exit, "error", None, vec![*diagnostic]);
+            assert!(value["operation_result"].is_null());
+            assert_eq!(value["outcome"], "error");
+            assert_eq!(value["cli"]["kernel_version"], "test-kernel");
+        }
+        assert!(invalid("bad syntax").diagnostic.is_none());
+        assert!(internal("failed commit").diagnostic.is_none());
+    }
 }

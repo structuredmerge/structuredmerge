@@ -198,3 +198,51 @@ See `workspace-scripts/CLI_GIT_GATE.md` for reproduction and bounded-resource
 policy. This closes initial local POSIX real-Git evidence for the explicit JSON
 lane, not hosted integration, packaging/distribution, other languages/platforms,
 full report conformance, typed diff or default-selection authority.
+
+## Typed rejection reports without fabricated results
+
+After complete argument and path preflight, profile/provider/family/dialect or
+backend rejection, invalid/unreadable/non-regular source files, source-size
+limits, and typed kernel failures now write a requested CLI error report. Its
+`operation_result` is null, `outcome` is error, and the adapter diagnostic uses
+the canonical Slice 1028 shape. The diagnostic names the CLI package/version as
+origin, not the requested provider/backend as if either had executed. Empty
+capability queries obtain the linked kernel version without parser probes.
+
+Stable kernel error codes select diagnostic categories; human message text
+does not. Original kernel codes remain opaque origin evidence. Unknown kernel
+failure codes conservatively produce an internal error (exit 3), not a made-up
+parse/selection/conflict classification. Known request, selection, resource,
+cancellation and deadline failures return exit 2 with the corresponding category.
+
+Malformed arguments, incomplete typed selectors, unsupported CLI option
+combinations, and unsafe report/output aliases still reject without writes.
+This intentionally protects existing report sentinels before a valid report
+destination and invocation are established. Report staging/commit failure returns
+3 and preserves sources. Once a validated operation result exists, it remains
+the normal nested result; later write failures never overwrite it with a fake
+pre-execution null result or claim output-commit success. Complete transport for
+all post-execution adapter failures remains a separate gap.
+
+Local verification: 100 standard CLI tests plus two explicitly enabled warm
+tests pass (102 total); all 45 tooling tests pass. Tests deserialize adapter
+diagnostics into the typed kernel and call its canonical diagnostic validator.
+They cover nonexistent/directory/invalid-UTF-8/oversized sources, explicit
+selection errors, malformed invocations, hardlink report aliases and failed
+error-report staging. Both updated binaries still pass all six real-Git cases.
+
+- Test logs: `tmp/typed-error-tests-final.log`, `tmp/typed-error-tooling.log`.
+- Real-Git reports: `tmp/typed-cli-git-gy05yzcd/report.json` (`smorg`) and
+  `tmp/typed-cli-git-e5s5riro/report.json` (`smorg-rs`).
+- Portable discovery remains 19/20: fixtures
+  `tmp/cli-conformance-3mn013ll/report.json` and
+  `tmp/cli-conformance-46iddar6/report.json`; `languages --json` remains red.
+- Current `tmp/typed-error-bin/smorg` SHA-256:
+  `0c03ccdf77907bc6a2d8faa2ab826d92b79f5e94bff145af733149f5a747a4e2`.
+- Current `tmp/typed-error-bin/smorg-rs` SHA-256:
+  `a09894c0cae90cbd5ea4e83d0232c4cbc3328b4db5e41f477bafebc9ed0c1032`.
+
+The 2.5 GiB bounded compiler target and superseded 47 MiB `typed-cli-bin` pair
+were removed; their historical reports retain hashes. Current binary pair and
+small evidence remain. No generated API changed, no package was published, and
+no default authority or full CLI conformance is claimed.

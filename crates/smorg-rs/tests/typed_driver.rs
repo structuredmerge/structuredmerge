@@ -82,6 +82,33 @@ fn args() -> Vec<&'static str> {
     ]
 }
 
+fn error_report(dir: &Path, category: &str, code: &str) {
+    let bytes = fs::read(dir.join("report")).unwrap();
+    assert!(bytes.ends_with(b"\n"));
+    let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(value["schema"], "structuredmerge.cli-report/v1");
+    assert_eq!(value["outcome"], "error");
+    assert_eq!(value["exit_code"], 2);
+    assert!(value["operation_result"].is_null());
+    assert_eq!(value["output_commit_verified"], false);
+    assert_eq!(value["diagnostics"].as_array().unwrap().len(), 1);
+    assert_eq!(value["diagnostics"][0]["category"], category);
+    assert_eq!(value["diagnostics"][0]["code"], code);
+    let diagnostic: structuredmerge_core::PortableDiagnostic =
+        serde_json::from_value(value["diagnostics"][0].clone()).unwrap();
+    assert!(diagnostic.blocking);
+    assert!(diagnostic.origin.provider_id.is_none());
+    assert!(diagnostic.origin.backend_id.is_none());
+    structuredmerge_core::validate_diagnostics(
+        &[&diagnostic],
+        "cli.merge3",
+        structuredmerge_core::OperationKind::Merge3,
+        &structuredmerge_core::SourceMap::default(),
+        |_| false,
+    )
+    .unwrap();
+}
+
 #[test]
 fn explicit_selection_rejects_constraints_without_legacy_fallback_or_writes() {
     for bin in BINS {
@@ -106,7 +133,11 @@ fn explicit_selection_rejects_constraints_without_legacy_fallback_or_writes() {
             assert_eq!(output.status.code(), Some(2), "{option}: {output:?}");
             assert!(!output.stderr.is_empty());
             assert_eq!(fs::read_to_string(dir.path().join("ours")).unwrap(), "{\"a\":2,\"b\":1}\n");
-            assert_eq!(fs::read_to_string(dir.path().join("report")).unwrap(), "sentinel");
+            if ["--provider", "--backend", "--profile", "--family", "--dialect"].contains(&option) {
+                error_report(dir.path(), "selection_error", "cli.selection_rejected");
+            } else {
+                assert_eq!(fs::read_to_string(dir.path().join("report")).unwrap(), "sentinel");
+            }
             assert_eq!(fs::read_dir(dir.path().join("cache")).unwrap().count(), 0);
         }
         for extra in [
@@ -120,6 +151,72 @@ fn explicit_selection_rejects_constraints_without_legacy_fallback_or_writes() {
             invocation.extend(extra);
             assert_eq!(run(bin, dir.path(), &invocation).status.code(), Some(2));
             assert_eq!(fs::read_to_string(dir.path().join("report")).unwrap(), "sentinel");
+        }
+    }
+}
+
+#[test]
+fn pre_execution_source_errors_report_without_a_fabricated_operation_result() {
+    for bin in BINS {
+        for scenario in ["missing", "directory", "utf8", "limit"] {
+            let dir = fixture(None);
+            match scenario {
+                "missing" => fs::remove_file(dir.path().join("base")).unwrap(),
+                "directory" => {
+                    fs::remove_file(dir.path().join("base")).unwrap();
+                    fs::create_dir(dir.path().join("base")).unwrap();
+                }
+                "utf8" => fs::write(dir.path().join("base"), [255]).unwrap(),
+                _ => fs::File::create(dir.path().join("base"))
+                    .unwrap()
+                    .set_len(8 * 1024 * 1024 + 1)
+                    .unwrap(),
+            }
+            let output = run(bin, dir.path(), &args());
+            assert_eq!(output.status.code(), Some(2), "{scenario}: {output:?}");
+            assert!(!output.stderr.is_empty());
+            error_report(
+                dir.path(),
+                if scenario == "limit" { "resource_limit" } else { "invalid_request" },
+                if scenario == "limit" { "cli.source_limit" } else { "cli.source_rejected" },
+            );
+            assert_eq!(fs::read_to_string(dir.path().join("ours")).unwrap(), "{\"a\":2,\"b\":1}\n");
+            assert_eq!(fs::read_dir(dir.path().join("cache")).unwrap().count(), 0);
+        }
+    }
+}
+
+#[test]
+fn rejected_selection_still_obeys_report_alias_and_staging_safety() {
+    for bin in BINS {
+        for scenario in ["alias", "directory", "malformed"] {
+            let dir = fixture(None);
+            let mut invocation = args();
+            invocation[1] = "not-a-provider";
+            match scenario {
+                "alias" => {
+                    fs::remove_file(dir.path().join("report")).unwrap();
+                    fs::hard_link(dir.path().join("ours"), dir.path().join("report")).unwrap();
+                }
+                "directory" => {
+                    fs::remove_file(dir.path().join("report")).unwrap();
+                    fs::create_dir(dir.path().join("report")).unwrap();
+                }
+                _ => invocation.extend(["--provider", "duplicate"]),
+            }
+            let output = run(bin, dir.path(), &invocation);
+            assert_eq!(
+                output.status.code(),
+                Some(if scenario == "directory" { 3 } else { 2 }),
+                "{output:?}"
+            );
+            assert_eq!(fs::read_to_string(dir.path().join("ours")).unwrap(), "{\"a\":2,\"b\":1}\n");
+            if scenario == "malformed" {
+                assert_eq!(fs::read_to_string(dir.path().join("report")).unwrap(), "sentinel");
+            }
+            assert!(!fs::read_dir(dir.path()).unwrap().any(|entry| {
+                entry.unwrap().file_name().to_string_lossy().starts_with(".smorg-write-")
+            }));
         }
     }
 }
