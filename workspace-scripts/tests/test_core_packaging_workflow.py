@@ -69,6 +69,18 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         self.assertIn("tmp/typed-cli-git-*/report.json", upload["with"]["path"])
         self.assertIn("tmp/cli-grammar-auth.log", upload["with"]["path"])
 
+    def test_every_fixture_consumer_uses_the_reviewed_published_revision(self):
+        consumers = {}
+        for name, job in self.jobs.items():
+            for step in job.get("steps", []):
+                checkout = step.get("with", {})
+                if checkout.get("repository") == "structuredmerge/structuredmerge-fixtures":
+                    consumers[name] = checkout["ref"]
+        self.assertEqual(set(consumers), {"installed-kernel-cli", "check", "ruby-bindings"})
+        for name, revision in consumers.items():
+            with self.subTest(job=name):
+                self.assertEqual(revision, "c7028ab01249f297c5c55bc3e5321226ff825d39")
+
     def test_export_compiles_then_packages_verifies_and_uploads_only_core(self):
         steps = self.jobs["ruby-package"]["steps"]
         commands = [step.get("run", "") for step in steps]

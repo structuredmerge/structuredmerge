@@ -496,3 +496,5 @@
 - Require complete compiled parser/workflow declarations for non-development CLI manifest assembly, and expose strict shared inventory checks in integrity and signature verification.
 
 - Run cross-language tooling audits in the installed CLI CI job with pinned shared fixtures, explicit Ruby setup, real manifest tests for both executables, retained logs, and disposable build cleanup.
+
+- Align all kernel CI fixture checkouts with the reviewed published revision containing current CLI conformance cases.
