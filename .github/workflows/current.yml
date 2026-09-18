@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: structuredmerge/structuredmerge-fixtures
-          ref: 93276c5a54fe6fb6bd3cc0c44aa63880fc9a0a19
+          ref: c7028ab01249f297c5c55bc3e5321226ff825d39
           path: shared-fixtures
       - name: Place tooling fixtures beside kernel
         shell: bash
@@ -87,6 +87,27 @@ jobs:
         run: >-
           python workspace-scripts/check_installed_cli_git.py tmp/cli-install/bin/smorg-rs
           --fixtures ../fixtures/diagnostics/slice-951-git-driver-json-integration/git-driver-json-integration.json
+      - name: Verify prepared grammar byte authentication
+        # The preceding legacy integration tests prepare JSON through TSLP's
+        # normal public loader. These checks neither acquire nor infer a path.
+        env:
+          SMORG_TEST_GRAMMAR: ${{ github.workspace }}/tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so
+          SMORG_TEST_ARTIFACT: ${{ github.workspace }}/tmp/cli-install/bin/smorg
+        shell: bash
+        run: |
+          ulimit -c 0
+          test -f "$SMORG_TEST_GRAMMAR"
+          python -m unittest discover -s workspace-scripts/tests -p test_authenticate_cli_artifact_manifest.py -v 2>&1 | tee tmp/cli-grammar-auth.log
+      - name: Verify installed typed canonical merge and diff through real Git
+        run: >-
+          python workspace-scripts/check_installed_cli_git.py tmp/cli-install/bin/smorg
+          --typed --fixtures ../fixtures/conformance/cli-v1/typed-git.json
+          --grammar-library tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so
+      - name: Verify installed typed compatibility merge and diff through real Git
+        run: >-
+          python workspace-scripts/check_installed_cli_git.py tmp/cli-install/bin/smorg-rs
+          --typed --fixtures ../fixtures/conformance/cli-v1/typed-git.json
+          --grammar-library tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so
       - name: Retain Git gate evidence even on failure
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -96,6 +117,10 @@ jobs:
           path: |
             tmp/cli-tooling.log
             tmp/cli-manifest-alias.log
+            tmp/cli-grammar-auth.log
+            tmp/typed-cli-git-*/report.json
+            tmp/typed-cli-git-*/*/driver-report.json
+            tmp/typed-cli-git-*/*/diff-report.json
             tmp/installed-cli-git-*/report.json
             tmp/installed-cli-git-*/*/driver-report.json
             tmp/installed-cli-git-*/*/merge-stdout

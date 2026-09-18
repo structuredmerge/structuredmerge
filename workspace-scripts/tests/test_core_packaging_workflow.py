@@ -27,7 +27,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         ruby_index = next(i for i, step in enumerate(steps) if step.get("uses", "").startswith("ruby/setup-ruby@"))
         build_index = next(i for i, command in enumerate(commands) if "cargo install --path" in command)
         audits = [(i, step) for i, step in enumerate(steps) if "unittest discover" in step.get("run", "")]
-        self.assertEqual(len(audits), 2)
+        self.assertEqual(len(audits), 3)
         self.assertEqual({step["env"]["SMORG_TEST_ARTIFACT"].rsplit("/", 1)[1] for _, step in audits}, {"smorg", "smorg-rs"})
         self.assertLess(fixture_index, move_index)
         for index, step in audits:
@@ -45,6 +45,29 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         self.assertIn("rm -r -- tmp/cli-target", cleanup["run"])
         self.assertIn("rm -r -- tmp/cli-install", cleanup["run"])
         self.assertNotIn("rm -r -- tmp\n", cleanup["run"])
+
+    def test_typed_git_ci_uses_published_fixtures_and_exact_prepared_grammar(self):
+        steps = self.jobs["installed-kernel-cli"]["steps"]
+        fixtures = next(step for step in steps
+                        if step.get("with", {}).get("repository") == "structuredmerge/structuredmerge-fixtures")
+        self.assertEqual(fixtures["with"]["ref"], "c7028ab01249f297c5c55bc3e5321226ff825d39")
+        grammar = "tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so"
+        legacy = [i for i, step in enumerate(steps) if "slice-951-git-driver-json-integration" in step.get("run", "")]
+        typed = [(i, step) for i, step in enumerate(steps) if "--typed --fixtures" in step.get("run", "")]
+        self.assertEqual(len(legacy), 2)
+        self.assertEqual(len(typed), 2)
+        for index, step in typed:
+            self.assertLess(max(legacy), index)
+            self.assertIn("--grammar-library " + grammar, step["run"])
+            self.assertIn("../fixtures/conformance/cli-v1/typed-git.json", step["run"])
+        auth_index, auth = next((i, step) for i, step in enumerate(steps) if "SMORG_TEST_GRAMMAR" in step.get("env", {}))
+        self.assertLess(max(legacy), auth_index)
+        self.assertIn('test -f "$SMORG_TEST_GRAMMAR"', auth["run"])
+        self.assertTrue(auth["env"]["SMORG_TEST_GRAMMAR"].endswith(grammar))
+        self.assertIn('name = "tree-sitter-language-pack"\nversion = "1.17.0"', (self.root / "Cargo.lock").read_text())
+        upload = next(step for step in steps if step.get("uses", "").startswith("actions/upload-artifact@"))
+        self.assertIn("tmp/typed-cli-git-*/report.json", upload["with"]["path"])
+        self.assertIn("tmp/cli-grammar-auth.log", upload["with"]["path"])
 
     def test_export_compiles_then_packages_verifies_and_uploads_only_core(self):
         steps = self.jobs["ruby-package"]["steps"]

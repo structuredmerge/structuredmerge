@@ -373,6 +373,8 @@
 
 - Add strict declared-asset byte verification and per-provider asset evidence to CLI manifest integrity and signature checks without inferring linkage or runtime availability.
 
+- Wire both typed CLI real-Git gates and prepared-grammar authentication into Linux CI using published fixtures and the exact locally prepared TSLP library, without typed-operation acquisition.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

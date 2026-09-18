@@ -16,7 +16,11 @@ removes only that job's target and installation directories after evidence
 collection, including failure paths. Python installed-wheel matrix coverage is
 unchanged. The optional real-grammar authentication test still requires an
 explicit `SMORG_TEST_GRAMMAR`; this job does not acquire a grammar merely to make
-that test green. Synthetic signed-asset tests run regardless.
+that test green during the initial audits. After the existing legacy real-Git
+tests prepare JSON, a separate required step supplies the exact locked-version
+library path and executes the real-grammar authentication test; absence is a
+failure, not permission to skip or download. Synthetic signed-asset tests run
+regardless. See `workspace-scripts/CLI_GIT_GATE.md` for the typed Git CI follow-up.
 
 Local verification uses retained binaries: 93 tooling tests (one optional
 grammar-input skip) and 38 manifest tests against the alias (the same skip).

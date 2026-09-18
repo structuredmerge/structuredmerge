@@ -107,7 +107,22 @@ and legacy Git gates; logs are `tmp/cli-git-resource-{smorg,smorg-rs}.log`,
 No compiler run is needed for this tooling change. Per-run repositories and
 captures are removed; retained evidence is small. Hosted execution remains unproven.
 
-The existing legacy mode and its CI invocation remain separate. The typed
-fixture history must be integrated and hosted grammar provisioning decided
-before adding this mode to CI. Neither mode proves full portable CLI conformance,
-all platforms, distribution readiness or default authority.
+The installed Linux CI job now runs both modes separately. It pins published
+fixtures `c7028ab01249f297c5c55bc3e5321226ff825d39`. The preceding legacy tests
+prepare JSON through TSLP's public loader; the subsequent typed gates receive
+the exact locked-1.17.0 Linux cache library path and fail if it is absent. They
+never acquire a grammar. A separate signed-asset test checks that prepared
+file's bytes, without claiming identity of a retained loaded object. Both typed
+executable names cover all six merge cases plus modified/added/deleted diffs,
+and their report JSON is retained by CI.
+
+Local revalidation passed for both retained binaries:
+`tmp/typed-cli-git-wabj4ek9/report.json` and
+`tmp/typed-cli-git-3jvkaslo/report.json`; transient Git workspaces and copies were
+removed by the runner. All 94 tooling tests and workflow lint pass. Fixtures
+publication included 23 verified signed commits, 14 fixture-tool unit tests,
+seven validated provider snapshots, and syntax checks of tracked JSON files.
+This does not assert that every new native fixture was executed during that
+publication review. No kernel workflow was dispatched or claimed green remotely.
+Neither mode proves full portable CLI conformance, all platforms, distribution
+readiness or default authority.
