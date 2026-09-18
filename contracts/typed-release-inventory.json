@@ -203,6 +203,7 @@
         "rbs-merge",
         "ruby-merge",
         "rust-merge",
+        "structuredmerge-core",
         "structuredmerge-toml-merge",
         "typescript-merge",
         "yaml-merge"

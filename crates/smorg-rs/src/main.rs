@@ -136,6 +136,7 @@ fn run(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
     };
 
     match command.as_str() {
+        "--version" => run_version(&args[1..], stdout, stderr),
         "benchmark-provider-merge3" => benchmark_adapter::run_merge3_files(&args[1..], stderr),
         "benchmark-provider-diff" => benchmark_adapter::run_diff_files(&args[1..], stdout, stderr),
         "benchmark-provider-merge2" => {
@@ -163,6 +164,7 @@ fn run(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
 fn print_usage(out: &mut dyn Write) {
     let _ = writeln!(out, "smorg: StructuredMerge kernel CLI (compatibility alias: smorg-rs)");
     let _ = writeln!(out, "Both executable names accept the commands below.");
+    let _ = writeln!(out, "Version identity: smorg --version [--json]");
     let _ = writeln!(out, "External dispatch: smorg NAME ARGS... executes smorg-NAME on PATH.");
     let _ = writeln!(
         out,
@@ -194,6 +196,59 @@ fn print_usage(out: &mut dyn Write) {
         out,
         "       smorg-rs git install [--scope local|global|include-file] [--profile semantic-diff|builtin-diff] [--check] [--undo] [--dry-run] [--json]"
     );
+}
+
+fn run_version(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
+    if !args.is_empty() && args != ["--json"] {
+        let _ = writeln!(stderr, "--version accepts only an optional --json flag");
+        return EXIT_USER_ERROR;
+    }
+    // An empty query list inventories only: no probes, source parsing, grammar
+    // acquisition or merge execution. Read the linked facade's version, not a
+    // duplicate CLI constant or a source-checkout manifest at runtime.
+    let manifest = match structuredmerge_core::capability_manifest(
+        Vec::new(),
+        structuredmerge_core::ParseLimits {
+            max_batch_items: 1,
+            max_input_bytes: 1,
+            max_nodes: 1,
+            max_diagnostics: 1,
+            timeout_millis: None,
+        },
+    ) {
+        Ok(manifest) => manifest,
+        Err(error) => {
+            let _ = writeln!(stderr, "cannot obtain linked kernel identity: {error}");
+            return EXIT_INTERNAL_ERROR;
+        }
+    };
+    let result = if args.is_empty() {
+        writeln!(
+            stdout,
+            "{} {} (kernel {})",
+            env!("CARGO_BIN_NAME"),
+            env!("CARGO_PKG_VERSION"),
+            manifest.kernel_version
+        )
+    } else {
+        let value = json!({
+            "schema": "structuredmerge.cli-version/v1",
+            "executable": env!("CARGO_BIN_NAME"),
+            "package": env!("CARGO_PKG_NAME"),
+            "version": env!("CARGO_PKG_VERSION"),
+            "kernel_version": manifest.kernel_version,
+            "cli_contract": "structuredmerge.cli/v1",
+        });
+        serde_json::to_writer(&mut *stdout, &value)
+            .map_err(io::Error::other)
+            .and_then(|()| writeln!(stdout))
+    };
+    if let Err(error) = result {
+        let _ = writeln!(stderr, "cannot write version identity: {error}");
+        EXIT_INTERNAL_ERROR
+    } else {
+        EXIT_SUCCESS
+    }
 }
 
 fn run_benchmark_provider_session(stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
@@ -1401,6 +1456,24 @@ fn print_diagnostics(stderr: &mut dyn Write, result: &MergeDriverResult) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn version_output_failure_is_an_internal_error_not_success() {
+        struct Unwritable;
+        impl Write for Unwritable {
+            fn write(&mut self, _bytes: &[u8]) -> io::Result<usize> {
+                Err(io::Error::new(io::ErrorKind::BrokenPipe, "injected output failure"))
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        for args in [vec![], vec!["--json".to_string()]] {
+            let mut stderr = Vec::new();
+            assert_eq!(run_version(&args, &mut Unwritable, &mut stderr), EXIT_INTERNAL_ERROR);
+            assert!(String::from_utf8(stderr).unwrap().contains("cannot write version identity"));
+        }
+    }
     use serde_json::Value;
     use std::sync::{Mutex, MutexGuard, OnceLock};
     use std::time::{SystemTime, UNIX_EPOCH};

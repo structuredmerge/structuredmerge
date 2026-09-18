@@ -343,6 +343,8 @@
 
 - Allow isolated Python core artifact gates to run all boundary and generated suites against an independently installed LibCST provider wheel, with separate provenance from the retained conformance adapter.
 
+- Expose human and JSON version identity for smorg and smorg-rs using the linked typed kernel, with strict version arguments and no parser or grammar loading.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

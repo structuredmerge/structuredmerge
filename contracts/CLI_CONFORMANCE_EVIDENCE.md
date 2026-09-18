@@ -48,3 +48,40 @@ gates. Existing legacy merge/fallback implementations were not migrated by
 these argument fixes. Shared fixture and kernel changes must be integrated
 together before hosted tests can consume the new manifest. No package was
 published and no default authority changed.
+
+## Linked-kernel version identity
+
+Both binaries now implement `--version` and `--version --json`. The JSON retains
+each executable's own name, package identity/version, the actual linked typed
+kernel's version and target CLI contract. An empty typed capability query obtains
+kernel identity without parsing, probing or grammar acquisition. The version
+contract identifier is not a full-conformance claim. Extra arguments fail with
+exit 2 even through the compatibility alias; output failures produce exit 3.
+
+`smorg` now depends on `structuredmerge-core` by registry version plus workspace
+path. Cargo updated its lock entry and the owning release-inventory script
+updated the dependency edge; the required closure still contains 20 crates.
+No generated public API changed and no new package publication is authorized.
+
+Local verification: 94 Rust CLI tests and 41 tooling tests pass. Real-process
+version tests use an empty PATH, verify exact executable/package/kernel identities
+and ensure no grammar cache or other files appear. The portable suite now passes
+19/20 for both names; only `languages --json` remains red. Reports:
+
+- fixtures `tmp/cli-conformance-xdp724vj/report.json` (canonical);
+- fixtures `tmp/cli-conformance-id4pq6qk/report.json` (compatibility);
+- kernel `tmp/cli-discovery-tests-final.log` and `tmp/cli-discovery-script-tests.log`;
+- current canonical binary `tmp/cli-discovery-bin/smorg`, SHA-256
+  `9fb535ffd7523040cadd9b942be7811736d293277fad66508c50a9aab6d1350a`;
+- current alias `tmp/cli-discovery-bin/smorg-rs`, SHA-256
+  `b471cd292c264f68c71d0610990eef11660374c94ef738e0d78d6273d97e6f32`.
+
+The earlier `cli-contract-bin` pair is superseded and removed; its reports above
+retain provenance. The new 2.5 GiB compiler target and scratch Cargo metadata were
+also removed. Keep the small current pair and reports, not per-run build trees.
+
+The existing typed capability manifest alone does not meet Slice 1032's artifact,
+asset, health and preflight-staleness requirements. `languages --json` must not be
+made green merely by labeling that source-free declaration/observation report as
+complete runtime availability. Full typed CLI operation routing and the other
+shared contract/platform gates remain open.

@@ -2,6 +2,62 @@
 use std::process::Command;
 
 #[test]
+fn version_identifies_each_binary_and_linked_kernel_without_external_tools() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tmp");
+    std::fs::create_dir_all(&root).unwrap();
+    let dir = tempfile::tempdir_in(root).unwrap();
+    for (executable, name) in
+        [(env!("CARGO_BIN_EXE_smorg"), "smorg"), (env!("CARGO_BIN_EXE_smorg-rs"), "smorg-rs")]
+    {
+        let invoke = |args: &[&str]| {
+            Command::new(executable)
+                .args(args)
+                .current_dir(dir.path())
+                .env("PATH", dir.path())
+                .env("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR", dir.path().join("grammars"))
+                .output()
+                .unwrap()
+        };
+        let output = invoke(&["--version", "--json"]);
+        assert_eq!(output.status.code(), Some(0), "{output:?}");
+        assert!(output.stderr.is_empty());
+        assert!(output.stdout.ends_with(b"\n"));
+        let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(value["schema"], "structuredmerge.cli-version/v1");
+        assert_eq!(value["executable"], name);
+        assert_eq!(value["package"], "smorg");
+        assert_eq!(value["version"], env!("CARGO_PKG_VERSION"));
+        let linked = structuredmerge_core::capability_manifest(
+            Vec::new(),
+            structuredmerge_core::ParseLimits {
+                max_batch_items: 1,
+                max_input_bytes: 1,
+                max_nodes: 1,
+                max_diagnostics: 1,
+                timeout_millis: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(value["kernel_version"], linked.kernel_version);
+        assert_eq!(value["cli_contract"], "structuredmerge.cli/v1");
+        let text = invoke(&["--version"]);
+        assert_eq!(text.status.code(), Some(0));
+        assert!(String::from_utf8(text.stdout).unwrap().starts_with(&format!("{name} ")));
+        for invalid in [
+            vec!["--version", "--unknown"],
+            vec!["--version", "--json", "--json"],
+            vec!["--version", "base", "ours", "theirs", "a.json"],
+        ] {
+            let output = invoke(&invalid);
+            assert_eq!(output.status.code(), Some(2), "{invalid:?}: {output:?}");
+            assert!(output.stdout.is_empty());
+            assert!(!output.stderr.is_empty());
+        }
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+}
+
+#[test]
 fn option_terminators_named_sources_and_empty_git_prefixes_remain_valid() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tmp");
     std::fs::create_dir_all(&root).unwrap();

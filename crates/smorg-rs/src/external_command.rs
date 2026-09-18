@@ -14,6 +14,7 @@ pub fn dispatch(args: &[OsString], legacy_positional: bool) -> Option<i32> {
                 | "help"
                 | "-h"
                 | "--help"
+                | "--version"
                 | "benchmark-provider-session"
                 | "benchmark-provider-diff"
                 | "benchmark-provider-merge2"

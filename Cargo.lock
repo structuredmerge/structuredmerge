@@ -1527,6 +1527,7 @@ dependencies = [
  "same-file",
  "serde",
  "serde_json",
+ "structuredmerge-core",
  "structuredmerge-toml-merge",
  "tempfile",
  "typescript-merge",
