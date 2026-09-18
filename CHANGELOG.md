@@ -379,6 +379,8 @@
 
 - Add a bounded Python source-to-installed-wheel gate with Cargo-owned lock pruning, Maturin repackaging, dependency-pin checks, and guaranteed temporary build cleanup.
 
+- Verify an independently installed psych-merge ParserHost through the full Ruby binding, generated e2e and test-app artifact gates, keeping the conformance projector as a separately reported mode.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

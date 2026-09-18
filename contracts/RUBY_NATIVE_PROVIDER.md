@@ -70,9 +70,48 @@ temporary lock locally and records it. The checked-in spec lives at Ruby
   spec, and removes its consumer and gem home in teardown. Run with core dumps
   disabled and the plan's free-space checks; it does not compile Rust.
 
-The new provider has not yet replaced the retained Psych conformance helper in
-the full generated Ruby/kernel gate. That migration, full downstream suites,
-hosted CI, other Ruby/platform combinations, package publication and default
-authority remain open. No Alef change, Rust rebuild, push or publication occurred.
+Full downstream suites, hosted CI, other Ruby/platform combinations, package
+publication and default authority remain open. No Alef change, Rust rebuild,
+push or publication occurred.
 Temporary installations were removed after each run; intermediate gem copies
 were removed after verification, retaining the final package and small reports.
+
+## Full installed binding gate
+
+The existing artifact checker now accepts an explicit independent provider:
+
+```sh
+ruby workspace-scripts/check_core_ruby_artifact.rb \
+  --provider-gem /absolute/path/to/psych-merge-7.1.9.gem
+```
+
+It verifies the archive identity/entry point, installs the local core/provider
+and their declared dependencies into an isolated gem home, and declares Psych
+5.5.x in the temporary bundle. It does not copy the conformance projector in this
+mode. The helper supplies counters/batch observations and aliases the provider
+ID to `ruby.typed.psych` for existing fixtures, but delegates native parsing and
+probing to the installed adapter. Package/parser provenance is retained. This
+fixture alias is not a new production registration API; the native-layer tests
+above independently cover the production ID `ruby.psych`.
+
+MRI 4.0.6/Psych 5.5.0 passes all 53 boundary, 110 generated e2e and 110 generated
+app tests in this mode, plus linkage, RBS and API-baseline checks. The core and
+provider hashes are the same as above. Report and resolved dependency lock:
+`tmp/core-ruby-artifact-20260918-2768447-nuqp9u/`; log:
+`tmp/psych-installed-full.log`. Unlike the initial nine-example consumer gate,
+this run does not use shared installed Ruby dependencies or sibling source paths.
+Core/provider remain local artifacts, so it is not their registry-install gate.
+
+The default checker retains the conformance-only mode as a separate regression
+oracle. It also passes 53/110/110 tests with an intentionally inherited installed
+mode flag, proving that the runner clears it unless `--provider-gem` is supplied.
+Report: `tmp/core-ruby-artifact-20260918-2770481-d4ae59/report.json`; log:
+`tmp/psych-conformance-regression.log`. Reports explicitly distinguish modes and
+record both fixture/production identities for independent-provider runs.
+
+All 107 tooling tests pass, including invalid argument combinations, wrong
+provider archives and missing-provider rejection without projector fallback.
+Log: `tmp/psych-provider-tooling.log`. Both runs removed their package, consumer
+and gem-home directories; only reports and the independent-mode bundle lock
+remain. These are local Linux runtime results, not hosted CI or the complete
+Ruby ABI/platform matrix.

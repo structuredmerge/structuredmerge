@@ -13,13 +13,20 @@ require "rubygems/package"
 require "tmpdir"
 require_relative "artifact_workspace"
 
-usage = "usage: check_core_ruby_artifact.rb [--package-only OUTPUT_DIRECTORY]"
+usage = "usage: check_core_ruby_artifact.rb [--package-only OUTPUT_DIRECTORY | --provider-gem PSYCH_GEM]"
 if ARGV == ["--help"]
   puts usage
   exit
 end
-abort usage unless ARGV.empty? || (ARGV.length == 2 && ARGV[0] == "--package-only" && !ARGV[1].empty?)
-export_directory = File.expand_path(ARGV[1]) unless ARGV.empty?
+abort usage unless ARGV.empty? || (ARGV.length == 2 && %w[--package-only --provider-gem].include?(ARGV[0]) && !ARGV[1].empty?)
+export_directory = File.expand_path(ARGV[1]) if ARGV[0] == "--package-only"
+provider_gem = File.realpath(ARGV[1]) if ARGV[0] == "--provider-gem"
+if provider_gem
+  provider_archive = Gem::Package.new(provider_gem)
+  provider_archive.verify
+  abort "expected a psych-merge provider gem" unless provider_archive.spec.name == "psych-merge"
+  abort "provider gem lacks the typed parser host" unless provider_archive.contents.include?("lib/psych/merge/core_parser_host.rb")
+end
 
 root = File.expand_path("..", __dir__)
 package_root = File.join(root, "packages/ruby")
@@ -121,9 +128,17 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
     gem "rspec", "~> 3.0"
     gem "rbs", ">= 3.0"
   GEMFILE
+  if provider_gem
+    File.open(File.join(consumer, "Gemfile"), "a") do |file|
+      file.puts "gem 'psych-merge', '= #{provider_archive.spec.version}'"
+      file.puts "gem 'psych', '~> 5.5.0'"
+    end
+  end
   FileUtils.cp(File.join(package_root, "spec/structuredmerge_core_spec.rb"), File.join(consumer, "core_spec.rb"))
   FileUtils.cp(File.join(package_root, "spec/native_merge_fixture.rb"), File.join(consumer, "native_merge_fixture.rb"))
-  FileUtils.cp(File.join(root, "crates/yaml-merge/tests/support/psych_facts.rb"), File.join(consumer, "psych_facts.rb"))
+  unless provider_gem
+    FileUtils.cp(File.join(root, "crates/yaml-merge/tests/support/psych_facts.rb"), File.join(consumer, "psych_facts.rb"))
+  end
   FileUtils.cp_r(File.join(root, "e2e/ruby/spec"), File.join(consumer, "generated"))
   test_app = File.join(consumer, "test_app")
   FileUtils.cp_r(File.join(root, "test_apps/ruby"), test_app)
@@ -137,6 +152,8 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
     "BUNDLE_USER_HOME" => File.join(consumer, ".bundle-user"),
     "BUNDLE_PATH" => nil, "RUBYLIB" => nil, "RUBYOPT" => nil,
     "STRUCTUREDMERGE_PSYCH_FACTS" => File.join(consumer, "psych_facts.rb"),
+    # Never inherit installed-provider mode accidentally in the default gate.
+    "STRUCTUREDMERGE_PSYCH_INSTALLED" => provider_gem ? "1" : nil,
     "STRUCTUREDMERGE_EXPECT_GEM_HOME" => gem_home,
     "TREE_HAVER_LANGUAGE_PACK_CACHE_DIR" => ENV.fetch("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR", File.join(root, "tmp/typed-tslp-cache")),
   )
@@ -148,6 +165,10 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
   run.call(RbConfig.ruby, File.join(root, "workspace-scripts/check_ruby_linkage.rb"), artifact)
   run.call(RbConfig.ruby, "-S", "gem", "install", artifact, "--no-document",
     "--clear-sources", "--source", "https://rubygems.org")
+  if provider_gem
+    run.call(RbConfig.ruby, "-S", "gem", "install", provider_gem, "--no-document",
+      "--clear-sources", "--source", "https://rubygems.org")
+  end
   run.call(RbConfig.ruby, "-S", "bundle", "install", "--jobs", "4")
   run.call(RbConfig.ruby, "-S", "bundle", "exec", "rbs", "-I",
     File.join(gem_home, "gems", spec.full_name, "sig"), "validate")
@@ -163,10 +184,18 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
     "type_declarations" => "validated",
     "api_review_baseline" => "ruby source surface matched",
     "generated_e2e_tests" => "passed",
-    "generated_test_app" => "passed with local gem and copied native-provider support",
+    "generated_test_app" => provider_gem ? "passed with local gems and independent provider" : "passed with local gem and copied native-provider support",
+    "native_provider_mode" => provider_gem ? "installed-provider" : "conformance-adapter",
     "registry_install" => "not_run",
     "publication_gate" => false, "source_gem_gate" => false,
   }
+  if provider_gem
+    report["provider_artifact"] = provider_gem
+    report["provider_sha256"] = Digest::SHA256.file(provider_gem).hexdigest
+    report["fixture_provider_id"] = "ruby.typed.psych"
+    report["production_provider_id"] = "ruby.psych"
+    FileUtils.cp(File.join(consumer, "Gemfile.lock"), File.join(stage, "Gemfile.lock"))
+  end
   File.write(File.join(stage, "report.json"), JSON.pretty_generate(report) + "\n")
   puts JSON.generate(report)
 end

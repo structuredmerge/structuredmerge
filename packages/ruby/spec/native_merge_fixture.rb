@@ -3,58 +3,89 @@
 # Test-only native provider and request setup. Merge semantics remain in Rust.
 require "structuredmerge_core"
 require "digest"
-require ENV.fetch("STRUCTUREDMERGE_PSYCH_FACTS") {
-  File.expand_path("../../../crates/yaml-merge/tests/support/psych_facts.rb", __dir__)
-}
+if ENV["STRUCTUREDMERGE_PSYCH_INSTALLED"] == "1"
+  require "psych/merge/core_parser_host"
+  installed = Gem.loaded_specs.fetch("psych-merge").full_gem_path
+  expected = File.expand_path(ENV.fetch("STRUCTUREDMERGE_EXPECT_GEM_HOME")) + File::SEPARATOR
+  raise "Psych adapter must come from the installed gem" unless File.realpath(installed).start_with?(File.realpath(expected) + File::SEPARATOR)
 
-class TypedPsychHost
-  attr_reader :calls, :received_batch
+  # Test instrumentation only. Preserve the existing fixture ID while retaining
+  # the installed adapter's package/parser provenance and callback implementation.
+  class TypedPsychHost < Psych::Merge::CoreParserHost
+    attr_reader :calls, :received_batch
 
-  def initialize
-    @calls = 0
+    def initialize
+      @calls = 0
+    end
+
+    def descriptor
+      original = super
+      fields = %i[id family runtime package package_version parser parser_version grammar grammar_version
+        languages dialects contracts capabilities probe_id priority metadata extensions]
+      values = fields.to_h { |field| [field, original.public_send(field)] }
+      StructuredmergeCore::ParserProviderDescriptor.new(**values.merge(id: "ruby.typed.psych"))
+    end
+
+    def parse_batch(request)
+      @calls += 1
+      @received_batch = request
+      super
+    end
   end
+else
+  require ENV.fetch("STRUCTUREDMERGE_PSYCH_FACTS") {
+    File.expand_path("../../../crates/yaml-merge/tests/support/psych_facts.rb", __dir__)
+  }
 
-  def descriptor
-    StructuredmergeCore::ParserProviderDescriptor.new(
-      id: "ruby.typed.psych", family: "native", runtime: RUBY_ENGINE,
-      package: "psych", package_version: Psych::VERSION,
-      parser: "psych", parser_version: Psych::VERSION,
-      grammar: nil, grammar_version: nil, languages: ["yaml"], dialects: [],
-      contracts: ["structuredmerge.parse-result/v1"],
-      capabilities: ["diagnostics", "native_extensions", "source_spans"], probe_id: "psych.available",
-      priority: 0, metadata: {}, extensions: []
-    )
-  end
+  class TypedPsychHost
+    attr_reader :calls, :received_batch
 
-  def probe_batch(request)
-    raise "untyped probe callback" unless request.is_a?(StructuredmergeCore::ProbeBatchRequest)
-    StructuredmergeCore::ProbeBatchResult.new(items: request.items.map do |_item|
-      StructuredmergeCore::ParserProbeResult.new(available: true, loadable: true)
-    end)
-  end
+    def initialize
+      @calls = 0
+    end
 
-  def parse_batch(request)
-    @received_batch = request
-    @calls += 1
-    raise "untyped parse callback" unless request.is_a?(StructuredmergeCore::ParseBatchRequest)
-    StructuredmergeCore::ParseBatchResult.new(items: request.items.map do |item|
-      source = item.source
-      descriptor = source.descriptor
-      endings = descriptor.line_endings
-      # Adapt native typed fields to the existing test-only AST projector;
-      # no JSON string or merge operation crosses the generated callback.
-      facts = project({
-        "request_id" => item.request_id,
-        "source" => {"bytes" => source.bytes, "descriptor" => {
-          "source_id" => descriptor.source_id, "role" => descriptor.role.to_s,
-          "byte_length" => descriptor.byte_length, "sha256" => descriptor.sha256,
-          "encoding" => descriptor.encoding.to_s, "bom" => descriptor.bom,
-          "line_endings" => {"lf" => endings.lf, "crlf" => endings.crlf, "bare_cr" => endings.bare_cr},
-          "final_newline" => descriptor.final_newline
-        }}
-      })
-      StructuredmergeCore::ParseOutput.new(**facts)
-    end)
+    def descriptor
+      StructuredmergeCore::ParserProviderDescriptor.new(
+        id: "ruby.typed.psych", family: "native", runtime: RUBY_ENGINE,
+        package: "psych", package_version: Psych::VERSION,
+        parser: "psych", parser_version: Psych::VERSION,
+        grammar: nil, grammar_version: nil, languages: ["yaml"], dialects: [],
+        contracts: ["structuredmerge.parse-result/v1"],
+        capabilities: ["diagnostics", "native_extensions", "source_spans"], probe_id: "psych.available",
+        priority: 0, metadata: {}, extensions: []
+      )
+    end
+
+    def probe_batch(request)
+      raise "untyped probe callback" unless request.is_a?(StructuredmergeCore::ProbeBatchRequest)
+      StructuredmergeCore::ProbeBatchResult.new(items: request.items.map do |_item|
+        StructuredmergeCore::ParserProbeResult.new(available: true, loadable: true)
+      end)
+    end
+
+    def parse_batch(request)
+      @received_batch = request
+      @calls += 1
+      raise "untyped parse callback" unless request.is_a?(StructuredmergeCore::ParseBatchRequest)
+      StructuredmergeCore::ParseBatchResult.new(items: request.items.map do |item|
+        source = item.source
+        descriptor = source.descriptor
+        endings = descriptor.line_endings
+        # Adapt native typed fields to the existing test-only AST projector;
+        # no JSON string or merge operation crosses the generated callback.
+        facts = project({
+          "request_id" => item.request_id,
+          "source" => {"bytes" => source.bytes, "descriptor" => {
+            "source_id" => descriptor.source_id, "role" => descriptor.role.to_s,
+            "byte_length" => descriptor.byte_length, "sha256" => descriptor.sha256,
+            "encoding" => descriptor.encoding.to_s, "bom" => descriptor.bom,
+            "line_endings" => {"lf" => endings.lf, "crlf" => endings.crlf, "bare_cr" => endings.bare_cr},
+            "final_newline" => descriptor.final_newline
+          }}
+        })
+        StructuredmergeCore::ParseOutput.new(**facts)
+      end)
+    end
   end
 end
 
