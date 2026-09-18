@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "workspace-scripts"))
 import authenticate_cli_artifact_manifest as auth
 import assemble_cli_artifact_manifest as assembler
+import check_cli_artifact_manifest as checker
 sys.path.pop(0)
 
 
@@ -173,6 +174,26 @@ class ManifestAuthenticationTest(unittest.TestCase):
     def test_authorized_signature_does_not_excuse_missing_inventory(self):
         with self.assertRaisesRegex(auth.Rejected, "inventory is required"):
             self.authenticate(require_complete_inventory=True)
+
+    def test_authorized_signature_does_not_excuse_unchecked_assets(self):
+        with self.assertRaisesRegex(auth.Rejected, "every declared asset"):
+            self.authenticate(require_all_assets=True)
+        result = self.authenticate(require_all_assets=True, assets={"json": self.asset})
+        self.assertTrue(result["signature_verified"])
+        self.assertTrue(result["integrity"]["asset_evidence"]["all_declared_bytes_verified"])
+        self.assertFalse(result["runtime_availability_checked"])
+
+    @unittest.skipUnless(os.environ.get("SMORG_TEST_GRAMMAR"), "requires explicitly supplied grammar file")
+    def test_real_grammar_bytes_authenticate_without_loading(self):
+        grammar = Path(os.environ["SMORG_TEST_GRAMMAR"])
+        expected = checker.digest_file(grammar)[0]
+        self.manifest["grammar_assets"][0]["digest"] = expected
+        self.path.write_text(json.dumps(self.manifest))
+        self.sign()
+        result = self.authenticate(require_all_assets=True, assets={"json": grammar})
+        self.assertEqual(result["integrity"]["assets"][0]["digest"], expected)
+        self.assertTrue(result["integrity"]["asset_evidence"]["all_declared_bytes_verified"])
+        self.assertFalse(result["integrity"]["asset_evidence"]["runtime_loading_verified"])
 
     def test_cli_optimized_success_and_failure(self):
         args = [sys.executable, "-O", str(ROOT / "workspace-scripts/authenticate_cli_artifact_manifest.py"),

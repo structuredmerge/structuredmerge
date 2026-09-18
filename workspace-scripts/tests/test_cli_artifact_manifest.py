@@ -112,6 +112,60 @@ class ArtifactManifestTest(unittest.TestCase):
         self.asset.unlink()
         self.assertEqual(self.check()["assets"][0]["byte_integrity"], "not_checked")
 
+    def test_complete_asset_evidence_is_explicit_and_separate_from_runtime(self):
+        self.write()
+        report = self.check()["asset_evidence"]
+        self.assertEqual(report["unchecked_asset_ids"], ["json"])
+        self.assertFalse(report["all_declared_bytes_verified"])
+        self.assertEqual(report["provider_requirements"][0]["byte_integrity"], "not_checked")
+        with self.assertRaises(checker.Rejected) as caught:
+            self.check(require_all_assets=True)
+        self.assertEqual(caught.exception.code, "artifact.asset_evidence_incomplete")
+        report = self.check(assets={"json": self.asset}, require_all_assets=True)["asset_evidence"]
+        self.assertTrue(report["all_declared_bytes_verified"])
+        self.assertEqual(report["checked"], 1)
+        self.assertEqual(report["provider_requirements"][0]["byte_integrity"], "matched")
+        for field in ("linkage_verified", "runtime_loading_verified", "requirement_completeness_verified"):
+            self.assertFalse(report[field])
+
+    def test_empty_asset_requirements_do_not_prove_asset_independence(self):
+        self.manifest["built_in_provider_descriptors"][0]["asset_requirements"] = []
+        self.manifest["grammar_assets"] = []
+        self.write()
+        report = self.check(require_all_assets=True)["asset_evidence"]
+        self.assertTrue(report["all_declared_bytes_verified"])
+        self.assertEqual(report["declared"], 0)
+        self.assertEqual(report["provider_requirements"][0]["byte_integrity"], "no_declared_requirements")
+        self.assertFalse(report["requirement_completeness_verified"])
+
+    def test_asset_evidence_maps_both_provider_kinds_and_all_sources_without_linkage_claim(self):
+        workflow = copy.deepcopy(self.manifest["built_in_provider_descriptors"][0])
+        workflow.update(kind="workflow", descriptor={"provider_id": workflow["id"]})
+        self.manifest["built_in_provider_descriptors"].insert(0, workflow)
+        for source in ("linked", "bundled", "external"):
+            self.manifest["grammar_assets"][0]["source"] = source
+            self.write()
+            report = self.check(assets={"json": self.asset}, require_all_assets=True)
+            evidence = report["asset_evidence"]
+            self.assertEqual([p["kind"] for p in evidence["provider_requirements"]], ["parser", "workflow"])
+            self.assertTrue(all(p["declared_requirements"] == ["json"] for p in evidence["provider_requirements"]))
+            self.assertFalse(evidence["linkage_verified"])
+
+    def test_all_asset_cli_gate_rejects_omission_and_accepts_explicit_bytes(self):
+        self.write()
+        args = [sys.executable, "-O", str(SCRIPT), "--manifest", str(self.path),
+                "--artifact", str(self.binary), "--target", "test-target", "--profile", "standalone",
+                "--require-all-assets"]
+        for supplied in (False, True):
+            result = subprocess.run(args + (["--asset", "json", str(self.asset)] if supplied else []),
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0 if supplied else 2)
+            report = json.loads(result.stdout)
+            if not supplied:
+                self.assertEqual(report["code"], "artifact.asset_evidence_incomplete")
+            else:
+                self.assertTrue(report["asset_evidence"]["all_declared_bytes_verified"])
+
     def test_binary_asset_and_manifest_tampering_are_rejected(self):
         self.write()
         pinned = checker.digest_file(self.path)[0]

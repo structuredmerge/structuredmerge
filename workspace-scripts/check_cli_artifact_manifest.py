@@ -157,7 +157,7 @@ def validate(manifest):
 
 
 def check(manifest_path, artifact, expected_target, expected_profile, assets=None, expected_manifest_digest=None,
-          require_complete_inventory=False):
+          require_complete_inventory=False, require_all_assets=False):
     require(manifest_path.is_file() and manifest_path.stat().st_size <= MAX_MANIFEST, "manifest exceeds size budget or is not a file")
     with manifest_path.open("rb") as stream:
         raw = stream.read(MAX_MANIFEST + 1)
@@ -176,6 +176,10 @@ def check(manifest_path, artifact, expected_target, expected_profile, assets=Non
     assets = assets or {}
     declared = {entry["id"]: entry for entry in manifest["grammar_assets"]}
     require(assets.keys() <= declared.keys(), "verification input names an undeclared asset")
+    unchecked = sorted(declared.keys() - assets.keys())
+    require(not require_all_assets or not unchecked,
+            "explicit byte evidence is required for every declared asset",
+            "artifact.asset_evidence_incomplete")
     checks = []
     remaining = MAX_TOTAL - size
     for identity, entry in sorted(declared.items()):
@@ -186,10 +190,24 @@ def check(manifest_path, artifact, expected_target, expected_profile, assets=Non
             require(digest == entry["digest"], "asset bytes differ from manifest", "grammar.asset_corrupt")
             item.update(byte_integrity="matched", byte_length=count)
         checks.append(item)
+    provider_assets = []
+    for provider in sorted(manifest["built_in_provider_descriptors"], key=lambda p: (p["kind"], p["id"])):
+        requirements = sorted(provider["asset_requirements"])
+        missing = sorted(set(requirements) - assets.keys())
+        provider_assets.append({"id": provider["id"], "kind": provider["kind"],
+                                "declared_requirements": requirements,
+                                "unchecked_requirements": missing,
+                                "byte_integrity": "not_checked" if missing else
+                                    ("matched" if requirements else "no_declared_requirements")})
     return {"schema": "structuredmerge.cli-artifact-integrity-check/v1", "passed": True,
             "scope": "candidate-shape-and-explicit-byte-integrity",
             "manifest_digest": manifest_digest, "artifact_digest": actual, "artifact_byte_length": size,
             "declared_target": manifest["target"], "declared_profile": manifest["profile"], "assets": checks,
+            "asset_evidence": {"declared": len(declared), "checked": len(assets),
+                               "unchecked_asset_ids": unchecked, "all_declared_bytes_verified": not unchecked,
+                               "provider_requirements": provider_assets,
+                               "requirement_completeness_verified": False, "linkage_verified": False,
+                               "runtime_loading_verified": False},
             "manifest_digest_pinned": expected_manifest_digest is not None,
             "compiled_inventory_coverage": coverage,
             "signature_verified": False, "build_provenance_verified": False,
@@ -205,13 +223,15 @@ def main():
     parser.add_argument("--profile", choices=("standalone", "embedded_host", "explicit_sidecar"), required=True)
     parser.add_argument("--manifest-digest")
     parser.add_argument("--require-complete-inventory", action="store_true")
+    parser.add_argument("--require-all-assets", action="store_true",
+                        help="require explicit matching bytes for every declared asset, not runtime/linkage proof")
     parser.add_argument("--asset", nargs=2, action="append", default=[], metavar=("ID", "FILE"))
     args = parser.parse_args()
     try:
         require(len({identity for identity, _ in args.asset}) == len(args.asset), "duplicate asset input")
         result = check(args.manifest, args.artifact, args.target, args.profile,
                        {identity: Path(path) for identity, path in args.asset}, args.manifest_digest,
-                       args.require_complete_inventory)
+                       args.require_complete_inventory, args.require_all_assets)
     except (Rejected, OSError, ValueError, KeyError, TypeError, RecursionError) as error:
         result = {"schema": "structuredmerge.cli-artifact-integrity-check/v1", "passed": False,
                   "scope": "candidate-shape-and-explicit-byte-integrity",

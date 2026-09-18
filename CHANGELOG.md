@@ -371,6 +371,8 @@
 
 - Add opt-in detached SSH authentication for CLI candidate manifests with explicit digest-pinned trust inputs, bounded verification, and no implied runtime or publication authority.
 
+- Add strict declared-asset byte verification and per-provider asset evidence to CLI manifest integrity and signature checks without inferring linkage or runtime availability.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

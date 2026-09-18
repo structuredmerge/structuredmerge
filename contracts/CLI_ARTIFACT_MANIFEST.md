@@ -68,6 +68,40 @@ verification scratch are removed. No compiler or package installation is run.
 
 ## Candidate integrity checker
 
+### Declared asset byte evidence
+
+Both integrity and authentication commands accept `--require-all-assets`.
+This requires a caller-supplied `--asset ID FILE` for every declared asset and
+matching digests under the existing per-file and total byte budgets. Omission
+fails with `artifact.asset_evidence_incomplete`, not `grammar.asset_missing`:
+the checker has no evidence that an omitted file is absent from the machine.
+The default inspection mode continues to report omitted files as unchecked.
+Asset locators are never followed, grammars never loaded, and nothing downloaded.
+
+The integrity report's `asset_evidence` records declaration/check counts,
+sorted unchecked asset IDs, and per-provider declared/unchecked requirements.
+Provider records are sorted by kind and stable ID. Their byte-integrity states
+are `matched`, `not_checked`, or `no_declared_requirements`; the last state must
+not be interpreted as proof of an asset-free provider. The boolean
+`all_declared_bytes_verified` is scoped to the declarations and is vacuously
+true when there are none; the counts remain explicit.
+
+`requirement_completeness_verified`, `linkage_verified`, and
+`runtime_loading_verified` remain false. Hashing a caller-supplied library cannot
+prove that it is the copy bundled, linked, cached or loaded by a runtime. Nor
+can it prove that operator declarations include every required grammar. The
+same restriction applies to all three asset source labels. These byte checks
+compose with signature and complete-inventory checks without becoming parser
+availability or permission to execute.
+
+Verification: 92 tooling tests pass in `tmp/manifest-assets-tooling.log`, with
+explicit retained CLI and cached JSON grammar inputs. New tests exercise strict
+omission rejection, per-kind provider evidence, empty requirements, every source
+label, optimized-Python CLI behavior, and signed manifests with missing or
+matched asset inputs. The real cached JSON library is hashed and authenticated
+as a declared file without loading it. Disposable keys and verification scratch
+are removed; no compiler output, grammar acquisition or installation is created.
+
 ### Compiled declaration completeness
 
 Candidate assembly now requires complete typed provider declarations outside
