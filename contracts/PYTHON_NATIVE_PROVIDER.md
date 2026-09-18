@@ -42,3 +42,24 @@ This closes the copied-provider dependency for this scoped Python path, not the
 full native-layer or release gates. Hosted CI, broader platform/runtime evidence,
 released-package installation, CLI implementation, other native providers
 and publication remain open. Alef fixes remain local-only, as instructed.
+
+## Registry-guard integration refresh (2026-09-18)
+
+The independent facade exposes the generated selection-report and guarded
+workflow calls as direct aliases. Source-built installed native-layer artifacts
+pass three core-only and sixteen native-enabled tests on Linux CPython 3.10.19
+and 3.14.2. New cases exercise all four operations with Rust ownership, stale
+parser retirement/re-registration with identical descriptor bytes, explicit
+re-observation and cancellation before native callbacks. These do not grant
+default authority, authenticated preflight or a loaded-asset lease.
+
+The current core wheel SHA-256 is
+`faccc73f37bad6b6f6b4c222421697dafc23590383444454069bc8aa74ceef53`.
+Its separate full installed-provider gate passes 60 boundary, 113 generated e2e
+and 114 app tests on CPython 3.14.2, using provider wheel SHA-256
+`0959da7221df74e27a8b2118bef7dadf9e8591d1359fc2d0e9eb3e17b09babe7`.
+Report: `tmp/core-python-artifact-t2ofaeo6/report.json`; log:
+`tmp/guarded-independent-provider.log`. The native-layer `VERIFICATION.md`
+records both facade artifact sets. The full current kernel suite was not rerun
+on 3.10 here. Temporary environments were removed; no compiler build, package
+publication or hosted-CI success is claimed.
