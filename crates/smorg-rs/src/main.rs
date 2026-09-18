@@ -1,8 +1,9 @@
+#[cfg(test)]
+use std::process::Command;
 use std::{
     env, fs,
     io::{self, Write},
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use ast_merge::{
@@ -19,6 +20,7 @@ mod benchmark_adapter;
 mod build_info;
 mod conflict_review;
 mod external_command;
+mod git_install;
 mod path_safety;
 mod staged_file;
 mod typed_driver;
@@ -784,38 +786,13 @@ fn run_git(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i
     if subcommand != "install" {
         return git_install_usage(stderr);
     }
+    if args[1..] == ["--help"] || args[1..] == ["-h"] {
+        return if writeln!(stdout, "usage: smorg git install [--scope local|global|include-file] [--profile semantic-diff|builtin-diff] [--check|--undo] [--dry-run] [--json]").is_ok() { 0 } else { 3 };
+    }
     let Some(options) = parse_git_install_options(&args[1..], stderr) else {
         return EXIT_USER_ERROR;
     };
-    let step = execute_git_install(&options);
-    let ok = step["status"] == "succeeded" || step["status"] == "planned";
-    let report = json!({
-        "report_version": 1,
-        "ok": ok,
-        "profile": options.profile.as_str(),
-        "scope": options.scope.as_str(),
-        "install_steps": [step],
-        "missing": if ok { json!([]) } else { json!(["git_drivers"]) },
-    });
-    if options.json {
-        let _ = writeln!(stdout, "{}", serde_json::to_string_pretty(&report).unwrap());
-    } else {
-        let _ = writeln!(
-            stdout,
-            "git install: {} {} {}",
-            report["install_steps"][0]["status"].as_str().unwrap_or("failed"),
-            options.profile.as_str(),
-            options.scope.as_str(),
-        );
-        if let Some(diagnostics) = report["install_steps"][0]["diagnostics"].as_array() {
-            for diagnostic in diagnostics {
-                if let Some(message) = diagnostic["message"].as_str() {
-                    let _ = writeln!(stdout, "  {message}");
-                }
-            }
-        }
-    }
-    if ok { EXIT_SUCCESS } else { EXIT_USER_ERROR }
+    git_install::run(&options, stdout, stderr)
 }
 
 fn git_install_usage(stderr: &mut dyn Write) -> i32 {
@@ -836,7 +813,12 @@ fn parse_git_install_options(args: &[String], stderr: &mut dyn Write) -> Option<
         json: false,
     };
     let mut index = 0;
+    let mut seen = std::collections::BTreeSet::new();
     while index < args.len() {
+        if !seen.insert(args[index].as_str()) {
+            let _ = writeln!(stderr, "duplicate git install option {:?}", args[index]);
+            return None;
+        }
         match args[index].as_str() {
             "--scope" => {
                 index += 1;
@@ -872,128 +854,11 @@ fn parse_git_install_options(args: &[String], stderr: &mut dyn Write) -> Option<
         }
         index += 1;
     }
+    if options.check && (options.undo || options.dry_run) {
+        let _ = writeln!(stderr, "--check cannot be combined with --undo or --dry-run");
+        return None;
+    }
     Some(options)
-}
-
-fn execute_git_install(options: &GitInstallOptions) -> serde_json::Value {
-    if options.check {
-        return check_git_install(options);
-    }
-    if options.undo {
-        return undo_git_install(options);
-    }
-    match options.scope {
-        GitInstallScope::Local => configure_local_git_attributes(options),
-        GitInstallScope::Global => configure_global_git_driver(options),
-        GitInstallScope::IncludeFile => configure_include_file_git_driver(options),
-    }
-}
-
-fn check_git_install(options: &GitInstallOptions) -> serde_json::Value {
-    let actual = fs::read_to_string(".gitattributes").unwrap_or_default();
-    let expected = git_attribute_lines(options.profile);
-    let missing = expected
-        .iter()
-        .filter(|line| !actual.contains(*line))
-        .map(|line| {
-            json!({
-                "key": "missing_gitattributes_line",
-                "message": format!(".gitattributes is missing {line}"),
-            })
-        })
-        .collect::<Vec<_>>();
-    git_install_step(
-        if missing.is_empty() { "succeeded" } else { "failed" },
-        options,
-        Some(".gitattributes"),
-        missing,
-    )
-}
-
-fn undo_git_install(options: &GitInstallOptions) -> serde_json::Value {
-    if !options.dry_run && options.scope == GitInstallScope::Local {
-        let source = fs::read_to_string(".gitattributes").unwrap_or_default();
-        let managed = [semantic_git_attribute_lines(), builtin_git_attribute_lines()].concat();
-        let remaining = source
-            .lines()
-            .filter(|line| !managed.contains(&line.trim().to_string()))
-            .filter(|line| !line.trim().is_empty())
-            .collect::<Vec<_>>();
-        if remaining.is_empty() {
-            let _ = fs::remove_file(".gitattributes");
-        } else {
-            let _ = fs::write(".gitattributes", format!("{}\n", remaining.join("\n")));
-        }
-    }
-    git_install_step(
-        if options.dry_run { "planned" } else { "succeeded" },
-        options,
-        (options.scope == GitInstallScope::Local).then_some(".gitattributes"),
-        vec![],
-    )
-}
-
-fn configure_local_git_attributes(options: &GitInstallOptions) -> serde_json::Value {
-    if !options.dry_run {
-        merge_git_attribute_lines(&git_attribute_lines(options.profile));
-    }
-    git_install_step(
-        if options.dry_run { "planned" } else { "succeeded" },
-        options,
-        Some(".gitattributes"),
-        forge_diagnostics(),
-    )
-}
-
-fn configure_include_file_git_driver(options: &GitInstallOptions) -> serde_json::Value {
-    let config_path = ".git/smorg/config";
-    if !options.dry_run {
-        let _ = fs::create_dir_all(".git/smorg");
-        let _ = fs::write(config_path, git_config_source(options.profile));
-        let _ =
-            Command::new("git").args(["config", "--local", "include.path", config_path]).status();
-    }
-    git_install_step(
-        if options.dry_run { "planned" } else { "succeeded" },
-        options,
-        Some(config_path),
-        forge_diagnostics(),
-    )
-}
-
-fn configure_global_git_driver(options: &GitInstallOptions) -> serde_json::Value {
-    if !options.dry_run {
-        let command = if options.profile == GitInstallProfile::BuiltinDiff {
-            "cat"
-        } else {
-            "smorg-rs diff-driver"
-        };
-        let _ = Command::new("git")
-            .args(["config", "--global", "diff.smorg-rs.command", command])
-            .status();
-    }
-    git_install_step(
-        if options.dry_run { "planned" } else { "succeeded" },
-        options,
-        None,
-        forge_diagnostics(),
-    )
-}
-
-fn git_install_step(
-    status: &str,
-    options: &GitInstallOptions,
-    path: Option<&str>,
-    diagnostics: Vec<serde_json::Value>,
-) -> serde_json::Value {
-    json!({
-        "name": "git_drivers",
-        "status": status,
-        "profile": options.profile.as_str(),
-        "scope": options.scope.as_str(),
-        "path": path,
-        "diagnostics": diagnostics,
-    })
 }
 
 fn git_attribute_lines(profile: GitInstallProfile) -> Vec<String> {
@@ -1019,32 +884,17 @@ fn builtin_git_attribute_lines() -> Vec<String> {
     ]
 }
 
-fn merge_git_attribute_lines(lines: &[String]) {
-    let source = fs::read_to_string(".gitattributes").unwrap_or_default();
-    let mut merged = source
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
-    for line in lines {
-        if !merged.contains(line) {
-            merged.push(line.clone());
-        }
-    }
-    let _ = fs::write(".gitattributes", format!("{}\n", merged.join("\n")));
-}
-
-fn git_config_source(profile: GitInstallProfile) -> String {
-    let command =
-        if profile == GitInstallProfile::BuiltinDiff { "cat" } else { "smorg-rs diff-driver" };
-    format!("[diff \"smorg-rs\"]\n\tcommand = {command}\n")
-}
-
 fn forge_diagnostics() -> Vec<serde_json::Value> {
-    vec![json!({
-        "key": "forge_ignores_external_diff_drivers",
-        "message": "Git hosting forges generally ignore external diff drivers; install them locally.",
-    })]
+    let mut diagnostic = typed_driver::adapter_diagnostic(
+        structuredmerge_core::PortableCategory::UnsupportedFeature,
+        "git.forge_ignores_external_diff_drivers",
+        "Git hosting forges generally ignore external diff drivers; install them locally.".into(),
+    );
+    diagnostic.severity = structuredmerge_core::DiagnosticSeverity::Warning;
+    diagnostic.blocking = false;
+    let mut value = serde_json::to_value(diagnostic).unwrap();
+    value["key"] = json!("forge_ignores_external_diff_drivers");
+    vec![value]
 }
 
 impl GitInstallScope {

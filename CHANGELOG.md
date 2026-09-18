@@ -470,3 +470,5 @@
 - Write canonical typed CLI error reports for selection/source rejection and kernel failures without fabricating operation results; preserve no-write behavior for malformed invocations and unsafe report paths.
 
 - Bound real-Git gate subprocess capture, file writes, deadlines, and live disk reserve; disable child core dumps and clean legacy disposable repositories while retaining compact CI evidence.
+
+- Make CLI Git installation scope-aware and ownership-safe, preserve user configuration, and report partial failures without claiming complete driver setup.

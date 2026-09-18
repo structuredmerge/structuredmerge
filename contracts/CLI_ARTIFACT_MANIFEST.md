@@ -173,7 +173,7 @@ make this observation tool POSIX-only.
 
 ```sh
 python3 workspace-scripts/assemble_cli_artifact_manifest.py \
-  --artifact tmp/conflict-review-bin/smorg \
+  --artifact tmp/git-install-bin/smorg \
   --declarations tmp/cli-manifest-assembly-declarations.json \
   --artifact-id smorg.local-candidate \
   --execute-local-artifact --allow-development-build \
@@ -278,3 +278,6 @@ Subsequent conflict-review work superseded `compiled-provider-bin` as well.
 Current retained executable hashes and verification are recorded in
 `contracts/CLI_CONFLICT_REVIEW.md`; the inventory and candidate formats above
 remain unchanged by that command implementation.
+
+Owned Git-install work subsequently superseded the conflict-review binary pair.
+See `contracts/CLI_GIT_INSTALL.md` for current retained binary hashes and checks.
