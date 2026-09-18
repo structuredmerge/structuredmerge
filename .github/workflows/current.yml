@@ -66,9 +66,9 @@ jobs:
           include-hidden-files: true
           path: |
             tmp/installed-cli-git-*/report.json
-            tmp/installed-cli-git-*/**/.git/driver-report.json
-            tmp/installed-cli-git-*/**/.git/merge-stdout
-            tmp/installed-cli-git-*/**/.git/merge-stderr
+            tmp/installed-cli-git-*/*/driver-report.json
+            tmp/installed-cli-git-*/*/merge-stdout
+            tmp/installed-cli-git-*/*/merge-stderr
           if-no-files-found: warn
 
   typed-core-python-artifact:

@@ -464,3 +464,5 @@
 - Reject ambiguous merge source forms, duplicate options and excess positional arguments before writes; validate diff path options and support read-only per-command help and option terminators.
 
 - Write canonical typed CLI error reports for selection/source rejection and kernel failures without fabricating operation results; preserve no-write behavior for malformed invocations and unsafe report paths.
+
+- Bound real-Git gate subprocess capture, file writes, deadlines, and live disk reserve; disable child core dumps and clean legacy disposable repositories while retaining compact CI evidence.

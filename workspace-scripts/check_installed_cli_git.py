@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Run canonical JSON fixtures through real Git merges and an installed CLI."""
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
 import shlex
-import subprocess
+import shutil
 import tempfile
 
 
@@ -31,27 +30,36 @@ def main():
         parser.error("--grammar-library requires --typed")
     binary = args.binary.resolve(strict=True)
     fixture = args.fixtures.resolve(strict=True)
+    from typed_cli_git import command, digest, CAPTURE_LIMIT
+    require(os.name == "posix", "installed Git gate currently requires POSIX resource limits")
+    require(binary.is_file() and binary.stat().st_size <= 128 * 1024**2, "binary exceeds 128 MiB")
+    require(fixture.is_file() and fixture.stat().st_size <= 1024**2, "fixture exceeds 1 MiB")
+    cases = json.loads(fixture.read_text())["cases"]
+    require(0 < len(cases) <= 100, "fixture suite must contain 1..100 cases")
     root = Path(__file__).resolve().parent.parent
     (root / "tmp").mkdir(exist_ok=True)
+    require(shutil.disk_usage(root).free >= 21 * 1024**3, "requires 20 GiB reserve plus 1 GiB job budget")
     stage = Path(tempfile.mkdtemp(prefix="installed-cli-git-", dir=root / "tmp"))
     env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
                GIT_TERMINAL_PROMPT="0", GIT_EDITOR="true", LC_ALL="C")
     env.setdefault("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR", str(root / "tmp/typed-tslp-cache"))
     results = []
-    for index, case in enumerate(json.loads(fixture.read_text())["cases"]):
-        repo = stage / str(index)
+    for index, case in enumerate(cases):
+        repo = stage / f"work-{index}"
         repo.mkdir()
+        evidence = stage / str(index)
+        evidence.mkdir()
+        env["TMPDIR"] = str(repo)
 
         def git(*arguments, check=True):
-            output = subprocess.run(["git", *arguments], cwd=repo, env=env,
-                                    capture_output=True, timeout=30, check=False)
+            output = command(["git", *arguments], cwd=repo, env=env, timeout=30)
             if check and output.returncode:
                 raise RuntimeError((arguments, output.returncode, output.stderr.decode()))
             return output
 
         try:
-            git("init", "-b", "main")
+            git("init", "--template=", "-b", "main")
             git("config", "user.name", "Installed CLI test")
             git("config", "user.email", "installed-cli@example.invalid")
             git("config", "core.hooksPath", str(stage / "no-hooks"))
@@ -74,9 +82,13 @@ def main():
             source.write_bytes(case["ours_source"].encode())
             git("commit", "-am", "ours")
             merged = git("merge", "--no-edit", "other", check=False)
-            (repo / ".git/merge-stdout").write_bytes(merged.stdout)
-            (repo / ".git/merge-stderr").write_bytes(merged.stderr)
-            report = json.loads((repo / ".git/driver-report.json").read_text())
+            (evidence / "merge-stdout").write_bytes(merged.stdout)
+            (evidence / "merge-stderr").write_bytes(merged.stderr)
+            report_path = repo / ".git/driver-report.json"
+            require(report_path.stat().st_size < CAPTURE_LIMIT, "driver report exceeds 1 MiB")
+            report_bytes = report_path.read_bytes()
+            (evidence / "driver-report.json").write_bytes(report_bytes)
+            report = json.loads(report_bytes)
             require(report["path_name"] == str(path), report)
             expected = case["expected"]
             require(merged.returncode == expected["exit_code"], merged.stderr.decode())
@@ -103,8 +115,12 @@ def main():
             results.append({"case": case["case_id"], "passed": True})
         except Exception as error:
             results.append({"case": case["case_id"], "passed": False, "error": str(error)})
-    report = {"binary": str(binary), "sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
-              "fixture": str(fixture), "fixture_sha256": hashlib.sha256(fixture.read_bytes()).hexdigest(),
+        finally:
+            # These are this invocation's disposable repositories only. Preserve
+            # compact evidence separately even when assertions/report writes fail.
+            shutil.rmtree(repo)
+    report = {"binary": str(binary), "sha256": digest(binary),
+              "fixture": str(fixture), "fixture_sha256": digest(fixture),
               "results": results, "publication_gate": False, "default_approved": False}
     (stage / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))

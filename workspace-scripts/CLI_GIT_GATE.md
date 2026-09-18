@@ -16,8 +16,11 @@ exit codes, output, diagnostics, clean commit/index state and unresolved index
 stages, including preservation of ours on parse failure. Git's `%P` placeholder
 is already shell-quoted; adding another quote layer changes the logical path.
 
-Repository state, driver reports, merge stdout/stderr and a digest-bearing gate
-report remain under kernel `tmp/installed-cli-git-*`. Global/system Git config and
+Driver reports, merge stdout/stderr and a digest-bearing gate report remain under
+kernel `tmp/installed-cli-git-*`. Disposable repositories are removed per case,
+even on assertion or evidence-write failure. Evidence lives in numbered directories
+outside the removed repositories; CI upload paths match that layout.
+Global/system Git config and
 inherited Git environment overrides are excluded; no user Git configuration or
 repository is changed. All validation remains active under Python optimization.
 
@@ -77,6 +80,28 @@ caps artifacts at 128 MiB each and source fixtures at 16 KiB each, and enforces
 20-second process-group timeouts. Inputs/executables are trusted local test
 artifacts, not a sandbox. Isolated grammar/cache directories and a monitored
 proxy detect acquisition regressions without claiming network isolation.
+
+Both modes now use a shared POSIX command observer. Standard output/error each
+have a 1 MiB acceptance budget, with file-backed capture instead of unbounded
+in-memory pipes. An inherited 8 MiB per-file hard limit bounds writes between
+checks; core dumps are disabled. The observer checks free space during execution,
+not just between cases, kills the process group on timeout, output excess or a
+20 GiB reserve breach, and retires descendants when the leader exits. Legacy
+commands retain a 30-second deadline; typed commands use 20 seconds. Input is
+limited to 1 MiB. Capture scratch is outside the Git worktree so `git add .`
+cannot stage it, and is removed on success, launch failure and observation failure.
+Per-file limits and polling do not constitute an aggregate quota or a sandbox for
+hostile executables; only trusted local artifacts belong in these gates.
+
+Local resource-safety verification passes all 71 tooling tests. New tests cover
+both output streams flooding, deadlines, live reserve breach, inherited limits,
+descendant retirement, launch failure, capture exclusion from Git staging, and
+legacy cleanup on command/report failure. Evidence:
+`tmp/cli-git-resource-tooling.log`. Both executable names pass typed merge/diff
+and legacy Git gates; logs are `tmp/cli-git-resource-{smorg,smorg-rs}.log`,
+`tmp/cli-git-resource-legacy.log`, and `tmp/cli-git-resource-legacy-smorg-rs.log`.
+No compiler run is needed for this tooling change. Per-run repositories and
+captures are removed; retained evidence is small. Hosted execution remains unproven.
 
 The existing legacy mode and its CI invocation remain separate. The typed
 fixture history must be integrated and hosted grammar provisioning decided

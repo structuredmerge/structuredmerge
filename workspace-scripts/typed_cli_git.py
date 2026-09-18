@@ -9,8 +9,21 @@ import signal
 import socket
 import subprocess
 import tempfile
+import time
 
 from check_installed_cli_git import require
+
+RESERVE = 20 * 1024**3
+CAPTURE_LIMIT = 1024**2
+FILE_LIMIT = 8 * 1024**2
+
+
+def child_limits():
+    import resource
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    # This bounds each regular file written by Git and its driver descendants,
+    # not total storage. The live free-space check remains necessary.
+    resource.setrlimit(resource.RLIMIT_FSIZE, (FILE_LIMIT, FILE_LIMIT))
 
 
 def digest(path):
@@ -36,23 +49,38 @@ def validate_cases(cases):
                 expected.get("provider_conflicted_output") is True, "output assertion required")
 
 
-def command(argv, cwd, env, data=None):
-    with subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.PIPE,
-                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          start_new_session=True) as process:
-        try:
-            stdout, stderr = process.communicate(data, timeout=20)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.communicate()
-            raise RuntimeError("process exceeded 20-second gate deadline")
-        finally:
-            # Retire descendants even if the observed leader already exited.
+def command(argv, cwd, env, data=None, timeout=20):
+    require(os.name == "posix", "Git observation requires POSIX resource limits")
+    require(data is None or len(data) <= CAPTURE_LIMIT, "command input exceeds 1 MiB")
+    require(shutil.disk_usage(cwd).free >= RESERVE, "disk reserve reached")
+    # File-backed capture avoids unbounded communicate() memory and a blocked
+    # stdin pipe. Capture scratch is removed even when launch or collection fails.
+    # Keep captures outside the Git worktree: `git add .` must never stage them.
+    with tempfile.TemporaryDirectory(prefix="command-", dir=cwd.parent) as temporary:
+        scratch = Path(temporary)
+        incoming, outgoing, errors = [scratch / name for name in ("stdin", "stdout", "stderr")]
+        incoming.write_bytes(data or b"")
+        with incoming.open("rb") as stdin, outgoing.open("wb") as stdout, errors.open("wb") as stderr:
+            process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=stdin,
+                stdout=stdout, stderr=stderr, start_new_session=True, preexec_fn=child_limits)
+            started = time.monotonic()
             try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-    return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
+                while process.poll() is None:
+                    require(time.monotonic() - started < timeout, "process exceeded gate deadline")
+                    require(shutil.disk_usage(cwd).free >= RESERVE, "disk reserve reached")
+                    require(outgoing.stat().st_size < CAPTURE_LIMIT and errors.stat().st_size < CAPTURE_LIMIT,
+                            "command output exceeds 1 MiB capture budget")
+                    time.sleep(0.01)
+            finally:
+                # Retire descendants even if the observed leader already exited.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait()
+        require(outgoing.stat().st_size < CAPTURE_LIMIT and errors.stat().st_size < CAPTURE_LIMIT,
+                "command output exceeds 1 MiB capture budget")
+        return subprocess.CompletedProcess(argv, process.returncode, outgoing.read_bytes(), errors.read_bytes())
 
 
 def import_history(git, case, path):
@@ -218,8 +246,9 @@ def run(binary, fixture, grammar):
               "binary_sha256": digest(binary), "fixture_sha256": digest(fixture),
               "grammar_sha256": digest(grammar), "results": [], "publication_gate": False,
               "full_cli_conformance": False, "default_approved": False}
-    report["git_version"] = subprocess.run(["git", "--version"], capture_output=True,
-                                           text=True, check=True, timeout=10).stdout.strip()
+    version = command(["git", "--version"], stage, dict(os.environ), timeout=10)
+    require(version.returncode == 0, "git --version failed")
+    report["git_version"] = version.stdout.decode().strip()
     try:
         for index, case in enumerate(cases["cases"]):
             evidence = stage / str(index)
