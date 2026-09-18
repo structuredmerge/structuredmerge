@@ -16,6 +16,7 @@ use plain_merge::merge_text;
 use serde_json::json;
 
 mod benchmark_adapter;
+mod build_info;
 mod external_command;
 mod path_safety;
 mod staged_file;
@@ -273,6 +274,7 @@ fn run_version(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) 
             "version": env!("CARGO_PKG_VERSION"),
             "kernel_version": manifest.kernel_version,
             "cli_contract": "structuredmerge.cli/v1",
+            "build": build_info::value(),
         });
         serde_json::to_writer(&mut *stdout, &value)
             .map_err(io::Error::other)

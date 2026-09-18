@@ -357,6 +357,8 @@
 
 - Add bounded, read-only CLI artifact-manifest integrity checks as an availability prerequisite, keeping signatures, build provenance, provider validity, and runtime availability explicitly unverified.
 
+- Embed Cargo build target/profile/features and explicitly declared source identity in CLI version JSON without runtime checkout discovery or provenance/availability claims.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

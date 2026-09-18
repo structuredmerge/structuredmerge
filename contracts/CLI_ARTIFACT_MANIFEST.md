@@ -107,3 +107,57 @@ kind-specific typed descriptor checks, verified asset/linkage evidence, immutabl
 runtime snapshots and bounded probes, and pinned preflight execution. Only then
 connect the complete evidence to `languages --json`; the existing discovery gate
 remains 19/20, deliberately not made green with a declaration-only list.
+
+## Embedded build identity
+
+The CLI now includes optional `structuredmerge.cli-build/v1` metadata under
+`build` in `--version --json`. Cargo's build script generates Rust constants in
+its target-local `OUT_DIR`; there are no new build dependencies, Git subprocesses,
+timestamps, source-tree scans or runtime checkout reads. The constants record
+Cargo's target/host, profile, optimization/debug settings, package feature
+environment flags and sorted target features. They are build-system inputs, not
+a complete effective rustc-argument or transitive dependency-feature inventory.
+
+Build automation may explicitly supply `SMORG_BUILD_REVISION` (a full lowercase
+40- or 64-character Git object ID) and `SMORG_BUILD_SOURCE_STATE` (`unknown`,
+`clean`, or `dirty`). Clean/dirty requires an explicit revision. The build script
+validates syntax, not the existence or correctness of the claimed source commit.
+Absent inputs remain null/unknown with origin `unspecified`; explicit inputs have
+origin `build-environment`. `source.verified` and `provenance_verified` always
+remain false. The current checkout is deliberately not used to fill missing
+identity in exported, packaged or registry builds.
+
+Cargo watches both source-identity variables and the build helper. Local testing
+built once with the observed pre-change revision and a declared dirty state,
+then rebuilt in the same target with those inputs removed. The second build
+correctly regenerated null/unknown instead of reusing stale values. Changing
+environment variables when running either executable cannot alter the embedded
+identity; version tests run without external tools and cause no grammar writes.
+
+Verification:
+
+- All 109 CLI tests pass in both builds, including the three explicitly enabled
+  warm grammar tests. Three build-rendering tests cover absent/invalid identity,
+  complete Git IDs, Cargo fields, deterministic feature ordering and escaping.
+- All 55 tooling tests pass; publication dependency inventory remains 20 crates.
+- Both retained binaries pass six real-Git merge cases and the external-diff
+  check. Reports: `tmp/typed-cli-git-lyodr7mm/report.json` and
+  `tmp/typed-cli-git-0lz38vpi/report.json`.
+- Portable discovery stays 19/20: fixtures
+  `tmp/cli-conformance-_t3pjbkm/report.json` and
+  `tmp/cli-conformance-49sokgkv/report.json`.
+- Logs: `tmp/cli-build-identity-tests.log`,
+  `tmp/cli-build-identity-default-tests.log`, `tmp/cli-build-identity-tooling.log`.
+- Version observations: `tmp/cli-build-identity-declared.json` and
+  `tmp/cli-build-identity-default.json`. The retained binary pair is the latter,
+  with explicitly unknown source identity, not a source-attested release.
+- `tmp/cli-build-identity-bin/smorg` SHA-256:
+  `e5495ec9fc6b7e36c05f4028e65ab4d532031cb467658f9dd85fa2541e9ac35f`.
+- `tmp/cli-build-identity-bin/smorg-rs` SHA-256:
+  `28a7c1e727b2d4d41fbefb320405708c1032de678dc808ec769976dcf0782bbb`.
+
+The bounded compiler target and superseded `typed-diff-bin` pair are removed after
+verification. Current binaries and small evidence remain. This implements the
+build-identity input, not complete manifest emission/authentication, asset linkage,
+provider availability, preflight pinning or default authority. No package was
+published and no upstream/local-only Alef policy changed.

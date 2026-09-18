@@ -40,6 +40,27 @@ fn version_identifies_each_binary_and_linked_kernel_without_external_tools() {
         .unwrap();
         assert_eq!(value["kernel_version"], linked.kernel_version);
         assert_eq!(value["cli_contract"], "structuredmerge.cli/v1");
+        let build = &value["build"];
+        assert_eq!(build["schema"], "structuredmerge.cli-build/v1");
+        for key in ["target", "host", "cargo_profile", "cargo_opt_level", "cargo_debug"] {
+            assert!(!build[key].as_str().unwrap().is_empty());
+        }
+        assert!(build["cargo_feature_flags"].is_array());
+        assert!(build["target_features"].is_array());
+        assert_eq!(build["provenance_verified"], false);
+        assert_eq!(build["source"]["verified"], false);
+        let altered = Command::new(executable)
+            .args(["--version", "--json"])
+            .current_dir(dir.path())
+            .env("PATH", dir.path())
+            .env("TARGET", "runtime-cannot-change-build-target")
+            .env("SMORG_BUILD_REVISION", "invalid-runtime-value")
+            .env("SMORG_BUILD_SOURCE_STATE", "clean")
+            .output()
+            .unwrap();
+        assert!(altered.status.success());
+        let altered: serde_json::Value = serde_json::from_slice(&altered.stdout).unwrap();
+        assert_eq!(altered["build"], *build);
         let text = invoke(&["--version"]);
         assert_eq!(text.status.code(), Some(0));
         assert!(String::from_utf8(text.stdout).unwrap().starts_with(&format!("{name} ")));
