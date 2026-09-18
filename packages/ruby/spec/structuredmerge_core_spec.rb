@@ -658,9 +658,24 @@ RSpec.describe StructuredmergeCore do
     described_class.unregister_parser_provider(provider_id)
   end
 
-  it "registers the Rust language pack in the typed TreeHaver registry" do
+  it "registers cached-only grammars without acquisition or replacement" do
+    provider_id = "ruby.typed.cached.missing"
+    descriptor = described_class.register_cached_language_pack_parser(provider_id, "not-a-real-grammar")
+    begin
+      expect(JSON.parse(descriptor.metadata.fetch("grammar_policy"))).to eq("cached-only")
+      expect { described_class.register_language_pack_parser(provider_id, "json") }.to raise_error(RuntimeError, /DuplicateId/)
+      query = described_class::ParserSelectionRequest.new(language: "not-a-real-grammar", dialect: nil,
+        selection: described_class::ParserSelection.new(backend_id: provider_id, preference: [], required_capabilities: []),
+        options: described_class::ParseOptions.new(comments: false, tokens: false, diagnostics: false, native_extensions: false))
+      expect(described_class.parser_selection_report(query, merge_limits).selected_backend).to be_nil
+    ensure
+      described_class.unregister_parser_provider(provider_id)
+    end
+  end
+
+  it "registers the cached-only Rust language pack in the typed TreeHaver registry" do
     provider_id = "ruby.typed.tslp.json"
-    descriptor = described_class.register_language_pack_parser(provider_id, "json")
+    descriptor = described_class.register_cached_language_pack_parser(provider_id, "json")
     begin
       expect(descriptor.runtime).to eq("rust")
       expect(descriptor.languages).to eq(["json"])

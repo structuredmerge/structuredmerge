@@ -347,6 +347,8 @@
 
 - Add an explicit cached-only TreeHaver language-pack provider mode that refuses implicit grammar acquisition, with isolated cold/corrupt-cache and pinned warm-grammar tests.
 
+- Expose explicit cached-only language-pack parser registration in the typed Rust facade and generated Ruby/Python bindings, preserving legacy registration and shared registry lifetime semantics.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

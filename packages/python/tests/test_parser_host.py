@@ -601,9 +601,25 @@ class TypedParserHostTest(unittest.TestCase):
         finally:
             core.unregister_parser_provider(provider_id)
 
+    def test_cached_language_pack_registration_fails_closed_without_acquisition(self):
+        provider_id = "python.typed.cached.missing"
+        descriptor = core.register_cached_language_pack_parser(provider_id, "not-a-real-grammar")
+        try:
+            self.assertEqual(json.loads(descriptor.metadata["grammar_policy"]), "cached-only")
+            with self.assertRaisesRegex(RuntimeError, "DuplicateId"):
+                core.register_language_pack_parser(provider_id, "json")
+            query = core.ParserSelectionRequest(language="not-a-real-grammar",
+                selection=core.ParserSelection(backend_id=provider_id, preference=[], required_capabilities=[]),
+                options=core.ParseOptions())
+            report = core.parser_selection_report(query, core.ParseLimits(max_batch_items=1,
+                max_input_bytes=0, max_nodes=0, max_diagnostics=0))
+            self.assertIsNone(report.selected_backend)
+        finally:
+            core.unregister_parser_provider(provider_id)
+
     def test_rust_language_pack_uses_typed_parse_and_shared_registry(self):
         provider_id = "python.typed.tslp.json"
-        descriptor = core.register_language_pack_parser(provider_id, "json")
+        descriptor = core.register_cached_language_pack_parser(provider_id, "json")
         try:
             self.assertEqual(descriptor.runtime, "rust")
             self.assertEqual(descriptor.languages, ["json"])

@@ -253,6 +253,25 @@ pub fn register_language_pack_parser(
 ) -> Result<ParserProviderDescriptor, CoreError> {
     let provider = tree_haver::language_pack_provider::LanguagePackProvider::new(id, language)
         .map_err(|error| CoreError { code: error.code, message: error.message })?;
+    register_language_pack_provider(provider)
+}
+
+/// Register a Rust-owned parser restricted to usable local or already-loaded
+/// grammars. Missing or unusable grammars fail closed without acquisition during
+/// probe/parse. Registration itself does not load grammars or replace providers.
+pub fn register_cached_language_pack_parser(
+    id: String,
+    language: String,
+) -> Result<ParserProviderDescriptor, CoreError> {
+    let provider =
+        tree_haver::language_pack_provider::LanguagePackProvider::new_cached_only(id, language)
+            .map_err(|error| CoreError { code: error.code, message: error.message })?;
+    register_language_pack_provider(provider)
+}
+
+fn register_language_pack_provider(
+    provider: tree_haver::language_pack_provider::LanguagePackProvider,
+) -> Result<ParserProviderDescriptor, CoreError> {
     let descriptor = provider.descriptor().clone();
     registry().register(Arc::new(provider)).map_err(|error| CoreError {
         code: "registration".into(),
