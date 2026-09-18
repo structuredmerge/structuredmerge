@@ -26,6 +26,141 @@ fn selection_query() -> MergeSelectionRequest {
     }
 }
 
+fn registry_expectation(fixture: &Fixture) -> WorkflowRegistryExpectation {
+    let providers = fixture.providers.snapshot().unwrap();
+    let parsers = fixture.parsers.snapshot().unwrap();
+    WorkflowRegistryExpectation {
+        provider_generation: providers.generation(),
+        provider_digest: providers.digest().into(),
+        parser_generation: parsers.generation(),
+        parser_digest: parsers.digest().into(),
+    }
+}
+
+fn guarded_run(
+    fixture: &Fixture,
+    expected: &WorkflowRegistryExpectation,
+    limits: WorkflowLimits,
+    control: &OperationControl,
+) -> Result<WorkflowExecution, CoreError> {
+    let context = limits.parse.clone().controlled_context(control)?;
+    execute_at_registry(
+        "test.host",
+        request(),
+        expected,
+        &limits,
+        control,
+        &context,
+        (&fixture.providers.snapshot().unwrap(), &fixture.parsers.snapshot().unwrap()),
+    )
+}
+
+#[test]
+fn registry_guard_checks_each_identity_before_probes_or_callbacks() {
+    for field in ["provider_generation", "provider_digest", "parser_generation", "parser_digest"] {
+        let fixture = fixture(Behavior::Good);
+        let mut expected = registry_expectation(&fixture);
+        match field {
+            "provider_generation" => expected.provider_generation += 1,
+            "provider_digest" => expected.provider_digest.push('0'),
+            "parser_generation" => expected.parser_generation += 1,
+            _ => expected.parser_digest.push('0'),
+        }
+        let failure =
+            guarded_run(&fixture, &expected, limits(), &OperationControl::new()).unwrap_err();
+        assert_eq!(failure.code, "workflow.registry_stale", "{field}");
+        assert_eq!(fixture.parser.probes.load(Ordering::SeqCst), 0);
+        assert_eq!(fixture.parser.calls.load(Ordering::SeqCst), 0);
+        assert_eq!(fixture.host.calls.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[test]
+fn registry_guard_rejects_reregistration_but_current_expectation_executes() {
+    for kind in ["workflow", "parser"] {
+        let fixture = fixture(Behavior::Good);
+        let expected = registry_expectation(&fixture);
+        if kind == "workflow" {
+            fixture.providers.unregister("test.host", expected.provider_generation).unwrap();
+            fixture
+                .providers
+                .register(descriptor(), Arc::new(WorkflowExecutor::Host(fixture.host.clone())))
+                .unwrap();
+        } else {
+            fixture.parsers.unregister("test.parser", expected.parser_generation).unwrap();
+            fixture.parsers.register(fixture.parser.clone()).unwrap();
+        }
+        assert_eq!(
+            guarded_run(&fixture, &expected, limits(), &OperationControl::new()).unwrap_err().code,
+            "workflow.registry_stale"
+        );
+        assert_eq!(fixture.parser.probes.load(Ordering::SeqCst), 0);
+        assert_eq!(fixture.host.calls.load(Ordering::SeqCst), 0);
+        let current = registry_expectation(&fixture);
+        let result = guarded_run(&fixture, &current, limits(), &OperationControl::new()).unwrap();
+        assert_eq!(result.selections[0].provider_generation, current.provider_generation);
+        assert_eq!(result.selections[0].parser_generation, current.parser_generation);
+        assert_eq!(fixture.host.calls.load(Ordering::SeqCst), 1);
+        assert!(!result.approved_as_default);
+    }
+}
+
+#[test]
+fn registry_guard_respects_cancellation_and_combined_request_budget() {
+    for cancelled in [false, true] {
+        let fixture = fixture(Behavior::Good);
+        let expected = registry_expectation(&fixture);
+        let control = OperationControl::new();
+        let mut limits = limits();
+        if cancelled {
+            control.cancel();
+        } else {
+            // Each individual input fits, but the combined guarded request does not.
+            limits.max_request_bytes = serde_json::to_vec(&request())
+                .unwrap()
+                .len()
+                .max(serde_json::to_vec(&expected).unwrap().len());
+        }
+        let failure = guarded_run(&fixture, &expected, limits, &control).unwrap_err();
+        assert_eq!(failure.code, if cancelled { "execution.cancelled" } else { "resource.limit" });
+        assert_eq!(fixture.parser.probes.load(Ordering::SeqCst), 0);
+        assert_eq!(fixture.host.calls.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[test]
+fn registry_guard_executes_captured_handles_not_later_live_state() {
+    let fixture = fixture(Behavior::Good);
+    let expected = registry_expectation(&fixture);
+    let providers = fixture.providers.snapshot().unwrap();
+    let parsers = fixture.parsers.snapshot().unwrap();
+    fixture.providers.unregister("test.host", expected.provider_generation).unwrap();
+    fixture.parsers.unregister("test.parser", expected.parser_generation).unwrap();
+    let limits = limits();
+    let control = OperationControl::new();
+    let context = limits.parse.clone().controlled_context(&control).unwrap();
+    let result = execute_at_registry(
+        "test.host",
+        request(),
+        &expected,
+        &limits,
+        &control,
+        &context,
+        (&providers, &parsers),
+    )
+    .unwrap();
+    assert_eq!(result.selections[0].provider_generation, expected.provider_generation);
+    assert_eq!(result.selections[0].parser_generation, expected.parser_generation);
+    assert_eq!(fixture.host.calls.load(Ordering::SeqCst), 1);
+    let probes = fixture.parser.probes.load(Ordering::SeqCst);
+    assert_eq!(
+        guarded_run(&fixture, &expected, limits, &control).unwrap_err().code,
+        "workflow.registry_stale"
+    );
+    assert_eq!(fixture.parser.probes.load(Ordering::SeqCst), probes);
+    assert_eq!(fixture.host.calls.load(Ordering::SeqCst), 1);
+}
+
 #[test]
 fn source_free_workflow_observation_matches_execution_selection_without_execution() {
     let fixture = fixture(Behavior::Good);
@@ -291,6 +426,23 @@ fn compiled_batch_executes_all_json_operations_with_kernel_ownership() {
     )
     .unwrap();
     assert_eq!(observations, result.selections);
+    let expected = WorkflowRegistryExpectation {
+        provider_generation: observations[0].provider_generation,
+        provider_digest: observations[0].provider_digest.clone(),
+        parser_generation: observations[0].parser_generation,
+        parser_digest: observations[0].parser_digest.clone(),
+    };
+    let guarded = execute_at_registry(
+        "kernel.json",
+        request.clone(),
+        &expected,
+        &limits,
+        &control,
+        &context,
+        (&providers, &parsers.snapshot().unwrap()),
+    )
+    .unwrap();
+    assert_eq!(guarded, result);
     let mut policy_request = request.clone();
     for item in &mut policy_request.items {
         item.operation.provider_selection.dialect = Some("json".into());

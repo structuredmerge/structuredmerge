@@ -8,13 +8,13 @@ use std::{collections::BTreeSet, error::Error, fmt};
 pub mod host;
 pub use host::*;
 pub mod workflow;
-pub use ast_merge::{provider_registry, provider_selection};
 pub use ast_merge::provider_registry::{
     MergeParserRequirements, MergeProviderDescriptor, MergeProviderInventory, MergeProviderRole,
 };
 pub use ast_merge::provider_selection::{
     MergeSelectionCandidate, MergeSelectionReport, MergeSelectionRequest,
 };
+pub use ast_merge::{provider_registry, provider_selection};
 pub use workflow::*;
 pub mod merge;
 pub use ast_merge;
@@ -60,8 +60,8 @@ pub use ast_crispr::{CrisprLimitConstraint, CrisprLimitOperator, CrisprLimitRepo
 pub use structural::*;
 mod templates;
 pub use templates::*;
-mod capabilities;
 pub mod artifact_inventory;
+mod capabilities;
 mod profiles;
 pub use capabilities::*;
 pub use profiles::{

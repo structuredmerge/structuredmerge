@@ -375,6 +375,8 @@
 
 - Wire both typed CLI real-Git gates and prepared-grammar authentication into Linux CI using published fixtures and the exact locally prepared TSLP library, without typed-operation acquisition.
 
+- Add explicit provider/parser registry generation and digest expectations for guarded workflow execution in Rust and generated Ruby/Python APIs, rejecting stale state before probes or callbacks without claiming full preflight authority.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

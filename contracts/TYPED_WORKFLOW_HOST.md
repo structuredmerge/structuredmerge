@@ -1,5 +1,54 @@
 # Typed WorkflowHost implementation status
 
+## Explicit registry-state guard
+
+`WorkflowRegistryExpectation` and `execute_workflow_batch_at_registry` (plus its
+controlled variant) let callers require the provider/parser generations and
+digests seen in an earlier observation. They reject any mismatch with
+`workflow.registry_stale` before probes, parsing or callbacks, then use those
+same captured handles for normal execution. The combined typed request and
+expectation are subject to the request-byte budget. Cancellation and existing
+execution/result limits still apply.
+
+Once snapshots are accepted, later mutation does not invalidate their retained
+handles; later calls see the changed generation. Capturing two registries is not
+a cross-registry transaction. A matching expectation is not authentication,
+host-health validation, an asset identity lease or full portable preflight.
+Runtime probes and normal selection still run; no report is reused as authority.
+Existing execution APIs and default-approval behavior remain unchanged.
+Registry generations are instance-local; this is not cross-process replay
+protection for coincidentally equal descriptors and counters.
+
+The generated Ruby/Python surfaces add one DTO and two functions, without changing
+existing signatures. Core tests cover all four mismatch fields, re-registration,
+combined request budgets, cancellation, matching execution and captured-handle
+lifetime after retirement. Installed-boundary tests exercise successful guarded
+execution, retirement rejection and controlled cancellation.
+
+Verification for this slice:
+
+- All 23 core unit tests pass, including guarded/unguarded equality for all four
+  real cached-JSON operations: `tmp/registry-guard-core.log`.
+- CPython 3.14.2/LibCST 1.9.0 installed artifact: 60 boundary tests, 113 generated
+  tests and 114 test-app tests; `tmp/core-python-artifact-qwip68xp/report.json`.
+- MRI 4.0.6 installed artifact: 53 boundary examples and 110/110 generated/app
+  examples; `tmp/core-ruby-artifact-20260918-2698037-xp3nj8/report.json`.
+- All 94 tooling tests, API review baselines, the 20-crate inventory, workspace
+  format check and local Alef verification pass. Formatting the core re-export
+  order required refreshing generation input metadata; generated binding bytes
+  remained identical, verified by `tmp/registry-guard-generated.sha256`.
+
+The current wheel is
+`tmp/registry-guard-wheels/structuredmerge_core-0.2.0-cp310-abi3-manylinux_2_34_x86_64.whl`,
+SHA-256 `faccc73f37bad6b6f6b4c222421697dafc23590383444454069bc8aa74ceef53`.
+The retained Ruby extension is `packages/ruby/lib/structuredmerge_core_rb.so`,
+SHA-256 `36c417fc5f8399c655468483db28143569610df9858fc31004f98d9d6cd65467`.
+The 4.8 GiB compiler target, temporary build environment and superseded core wheel
+are removed after verification. Runners remove their installed consumers;
+current artifacts and small reports remain. The existing CLI pair is unchanged.
+No package publication, upstream Alef push, cross-platform runtime claim or
+full preflight approval is implied.
+
 `structuredmerge_core::workflow` implements the initial Rust boundary specified
 by the spec repository's `TYPED_WORKFLOW_HOST_CONTRACT.md`. It uses
 `ast_merge::provider_registry` and `provider_selection`; no prototype dependency

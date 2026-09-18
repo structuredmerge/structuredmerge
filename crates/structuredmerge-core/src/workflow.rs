@@ -33,6 +33,14 @@ pub struct WorkflowOperation {
 pub struct WorkflowBatchRequest {
     pub items: Vec<WorkflowOperation>,
 }
+/// Caller-required registry state, not authentication or a grammar identity lease.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorkflowRegistryExpectation {
+    pub provider_generation: u64,
+    pub provider_digest: String,
+    pub parser_generation: u64,
+    pub parser_digest: String,
+}
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct PreparedWorkflowOperation {
     pub operation: OperationRequest,
@@ -289,6 +297,76 @@ pub fn execute_workflow_batch_controlled(
         .snapshot()
         .map_err(|_| error("registry", "parser registry unavailable"))?;
     execute(&provider_id, request, &limits, control, &context, &providers, &parsers)
+}
+
+/// Reject changed registry state before probes or execution; not full preflight.
+pub fn execute_workflow_batch_at_registry(
+    provider_id: String,
+    request: WorkflowBatchRequest,
+    expected: WorkflowRegistryExpectation,
+    limits: WorkflowLimits,
+) -> Result<WorkflowExecution, CoreError> {
+    execute_workflow_batch_at_registry_controlled(
+        provider_id,
+        request,
+        expected,
+        limits,
+        &OperationControl::new(),
+    )
+}
+
+/// Controlled registry-state guard, not authentication or loaded-asset validation.
+pub fn execute_workflow_batch_at_registry_controlled(
+    provider_id: String,
+    request: WorkflowBatchRequest,
+    expected: WorkflowRegistryExpectation,
+    limits: WorkflowLimits,
+    control: &OperationControl,
+) -> Result<WorkflowExecution, CoreError> {
+    let context = limits.parse.clone().controlled_context(control)?;
+    context.check().map_err(CoreError::from)?;
+    bounded(&expected, limits.max_request_bytes)?;
+    let providers = registry().snapshot().map_err(registration_error)?;
+    let parsers = crate::host::registry()
+        .snapshot()
+        .map_err(|_| error("registry", "parser registry unavailable"))?;
+    execute_at_registry(
+        &provider_id,
+        request,
+        &expected,
+        &limits,
+        control,
+        &context,
+        (&providers, &parsers),
+    )
+}
+
+fn execute_at_registry(
+    provider_id: &str,
+    request: WorkflowBatchRequest,
+    expected: &WorkflowRegistryExpectation,
+    limits: &WorkflowLimits,
+    control: &OperationControl,
+    context: &ExecutionContext,
+    snapshots: (&MergeProviderSnapshot<WorkflowExecutor>, &ParserRegistrySnapshot),
+) -> Result<WorkflowExecution, CoreError> {
+    context.check().map_err(CoreError::from)?;
+    // Count both typed inputs together, without building a serialized buffer.
+    bounded(&(&request, expected), limits.max_request_bytes)?;
+    let (providers, parsers) = snapshots;
+    if expected.provider_generation != providers.generation()
+        || expected.provider_digest != providers.digest()
+        || expected.parser_generation != parsers.generation()
+        || expected.parser_digest != parsers.digest()
+    {
+        return Err(error(
+            "workflow.registry_stale",
+            "registry state differs from caller expectation",
+        ));
+    }
+    // The captured handles, not another snapshot or a new registry lookup, are
+    // used throughout execution. Later mutation affects only subsequent calls.
+    execute(provider_id, request, limits, control, context, providers, parsers)
 }
 
 fn execute(

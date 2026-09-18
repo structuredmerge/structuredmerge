@@ -20,6 +20,33 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  it "guards workflow execution with the caller's captured registry identities" do
+    core = described_class
+    parser = TypedPsychHost.new
+    core.register_parser_host(parser)
+    host = TypedWorkflowHost.new
+    generation = core.register_workflow_host(host)
+    retired = false
+    workflows = core.workflow_registry_inventory
+    parsers = core.parser_registry_inventory
+    expected = core::WorkflowRegistryExpectation.new(provider_generation: workflows.generation,
+      provider_digest: workflows.descriptor_digest, parser_generation: parsers.generation, parser_digest: parsers.descriptor_digest)
+    result = core.execute_workflow_batch_at_registry("ruby.psych.workflow", workflow_request, expected, workflow_limits)
+    expect(result.selections.first.provider_generation).to eq(generation)
+    expect(result.approved_as_default).to be(false)
+    expect(host.calls.length).to eq(1)
+    core.unregister_workflow_host("ruby.psych.workflow", generation)
+    retired = true
+    expect { core.execute_workflow_batch_at_registry("ruby.psych.workflow", workflow_request, expected, workflow_limits) }.to raise_error(RuntimeError, /workflow.registry_stale/)
+    control = core.create_operation_control
+    control.cancel
+    expect { core.execute_workflow_batch_at_registry_controlled("ruby.psych.workflow", workflow_request, expected, workflow_limits, control) }.to raise_error(RuntimeError, /execution.cancelled/)
+    expect(host.calls.length).to eq(1)
+  ensure
+    core.unregister_workflow_host("ruby.psych.workflow", generation) if generation && !retired
+    core.unregister_parser_provider("ruby.typed.psych") if core
+  end
+
   it "observes workflow selection without execution through a probe-time retirement" do
     core = described_class
     parser = TypedPsychHost.new

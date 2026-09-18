@@ -21,6 +21,35 @@ from libcst_facts import LibCSTHost
 
 
 class TypedParserHostTest(unittest.TestCase):
+    def test_registry_guard_executes_matching_state_and_rejects_retirement(self):
+        Host, provider_id, request, limits = self.workflow_fixture()
+        host = Host()
+        generation = core.register_workflow_host(host)
+        retired = False
+        try:
+            workflows = core.workflow_registry_inventory()
+            parsers = core.parser_registry_inventory()
+            expected = native.WorkflowRegistryExpectation(provider_generation=workflows.generation,
+                provider_digest=workflows.descriptor_digest, parser_generation=parsers.generation, parser_digest=parsers.descriptor_digest)
+            result = core.execute_workflow_batch_at_registry(provider_id, request, expected, limits)
+            self.assertEqual(result.selections[0].provider_generation, generation)
+            self.assertFalse(result.approved_as_default)
+            self.assertEqual(len(host.calls), 1)
+            parse_calls = self.host.calls
+            core.unregister_workflow_host(provider_id, generation)
+            retired = True
+            with self.assertRaisesRegex(RuntimeError, "workflow.registry_stale"):
+                core.execute_workflow_batch_at_registry(provider_id, request, expected, limits)
+            control = core.create_operation_control()
+            control.cancel()
+            with self.assertRaisesRegex(RuntimeError, "execution.cancelled"):
+                core.execute_workflow_batch_at_registry_controlled(provider_id, request, expected, limits, control)
+            self.assertEqual(len(host.calls), 1)
+            self.assertEqual(self.host.calls, parse_calls)
+        finally:
+            if not retired:
+                core.unregister_workflow_host(provider_id, generation)
+
     def test_source_free_workflow_reports_retain_snapshots_across_probe_retirement(self):
         Host, provider_id, request, limits = self.workflow_fixture()
         host = Host()
