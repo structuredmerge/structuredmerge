@@ -143,3 +143,15 @@ the corrected isolated example (one example, zero failures). This diagnostic
 uses shared installed test dependencies, not a new full isolated suite result.
 Report: `tmp/ruby-cold-cache-report.json`. The temporary core installation and
 fresh grammar cache are removed in teardown; no Rust compilation was needed.
+
+The full installed-provider gate subsequently passed with a new, empty grammar
+cache and isolated Ruby dependency installation: 53 boundary / 110 generated /
+110 app examples, linkage, API baseline and RBS validation. This run uses kernel
+`dd99a8e` and the same core/provider artifact hashes above, on MRI 4.0.6 with
+Psych 5.5.0. Report and resolved lock:
+`tmp/core-ruby-artifact-20260918-2799047-yfs2fj/`; log:
+`tmp/ruby-provider-cold-cache.log`. Grammar acquisition is intentionally allowed
+during explicit preparation and acquisition-enabled tests; this is not an
+offline or hermetic-network gate. The disposable package, consumer, gem home
+and fresh grammar cache were removed. Hosted CI and platform coverage remain
+unproven.
