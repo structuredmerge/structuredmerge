@@ -355,6 +355,8 @@
 
 - Route explicit diff-driver selections through typed kernel diff2 with cached-only grammars, bounded sources, JSON/file reports, kernel-derived change exits, and real-Git external-diff verification.
 
+- Add bounded, read-only CLI artifact-manifest integrity checks as an availability prerequisite, keeping signatures, build provenance, provider validity, and runtime availability explicitly unverified.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
