@@ -115,3 +115,20 @@ Log: `tmp/psych-provider-tooling.log`. Both runs removed their package, consumer
 and gem-home directories; only reports and the independent-mode bundle lock
 remain. These are local Linux runtime results, not hosted CI or the complete
 Ruby ABI/platform matrix.
+
+## Ruby CI wiring (local, not yet hosted)
+
+The Ruby `current.yml` core-artifact producer now packages `psych-merge` from
+the Ruby candidate revision and requires the full `--provider-gem` gate before
+exporting the core to downstream jobs. It reuses the existing core compilation,
+limits Cargo to one job with incremental compilation disabled, preserves gate
+logs/reports, and removes its explicit compiler target in an `always()` step.
+No package is published and provider defaults are unchanged.
+
+All 11 Ruby workflow/dependency structural tests and actionlint pass locally.
+Replaying the exact packaging step produced the same provider SHA-256 recorded
+above; the disposable packaging directory was removed. Replay report:
+`ruby/tmp/worktrees/typed-core-main/tmp/psych-ci-package-report.json`.
+The workflow requires the kernel's new checker to be available on its checked-out
+main branch. These local histories have not been pushed for this slice, and
+there is no hosted CI result yet.
