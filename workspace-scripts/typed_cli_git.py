@@ -197,6 +197,7 @@ def check_case(binary, grammar, case, work, evidence):
         for role in ("base", "ours", "theirs"):
             require(git("show", f"{role}:{path}").stdout == case[role].encode(), role)
         diff_verified = False
+        absent_side_diff_verified = False
         if expected["git_exit"] == 0:
             # Use Git's actual external-diff protocol, not synthetic positional
             # arguments. Git controls its temporary source files and hashes.
@@ -212,6 +213,25 @@ def check_case(binary, grammar, case, work, evidence):
             require(diff["operation_result"]["provider"]["provider_id"] == "kernel.json", diff)
             require(diff["operation_result"]["request_forwarding"]["path_name"] == path, diff)
             require(diff["operation_result"]["diff"]["change_ids"], diff)
+            # A real empty tree lets Git supply its own absent-side token for
+            # both directions without changing the worktree or index.
+            empty_tree = git("hash-object", "-w", "-t", "tree", "--stdin", data=b"").stdout.decode().strip()
+            for direction, left, right in (("added", empty_tree, "ours"),
+                                           ("deleted", "ours", empty_tree)):
+                compared = git("diff", "--ext-diff", left, right, "--", path)
+                (evidence / f"diff-{direction}-report.json").write_bytes(compared.stdout)
+                diff = json.loads(compared.stdout)
+                require(diff["command"] == "diff-driver" and diff["outcome"] == "changed", diff)
+                result_diff = diff["operation_result"]
+                require(result_diff["ok"] is True and result_diff["operation"] == "diff2", diff)
+                require(result_diff["provider"]["provider_id"] == "kernel.json", diff)
+                require(result_diff["request_forwarding"]["path_name"] == path, diff)
+                require(result_diff["diff"]["change_ids"], diff)
+                empty_index = 0 if direction == "added" else 1
+                source = result_diff["input_parses"][empty_index]["parsed"]["source"]
+                require(source["byte_length"] == 0 and source["sha256"] == hashlib.sha256(b"").hexdigest(), diff)
+                require(any(change["classification"] == direction for change in result_diff["changes"]), diff)
+            absent_side_diff_verified = True
             require((repo / path).read_bytes() == actual, "external diff changed worktree")
             require(git("show", f":0:{path}").stdout == actual, "external diff changed index")
             require(git("rev-parse", "HEAD").stdout == before_head, "external diff changed HEAD")
@@ -226,7 +246,7 @@ def check_case(binary, grammar, case, work, evidence):
             raise AssertionError("unexpected proxy connection")
         require(not list(repo.glob(".smorg-write-*")), "staging debris")
         return {"git_exit": merged.returncode, "driver_exit": report["exit_code"], "outcome": report["outcome"],
-                "git_diff_verified": diff_verified}
+                "git_diff_verified": diff_verified, "git_absent_side_diff_verified": absent_side_diff_verified}
 
 
 def run(binary, fixture, grammar):

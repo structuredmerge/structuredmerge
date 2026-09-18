@@ -472,3 +472,5 @@
 - Bound real-Git gate subprocess capture, file writes, deadlines, and live disk reserve; disable child core dumps and clean legacy disposable repositories while retaining compact CI evidence.
 
 - Make CLI Git installation scope-aware and ownership-safe, preserve user configuration, and report partial failures without claiming complete driver setup.
+
+- Normalize Git external-diff absent sides without opening devices and compare validated zero-byte JSON documents through kernel owner semantics, with real-Git added/deleted regression coverage.

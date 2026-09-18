@@ -64,6 +64,7 @@ struct PathSettings {
 
 #[derive(Debug, Default)]
 struct DiffDriverOptions {
+    git_protocol: bool,
     path_name: Option<String>,
     old_path: String,
     new_path: String,
@@ -1049,6 +1050,7 @@ fn parse_diff_driver_options(args: &[String], stderr: &mut dyn Write) -> Option<
                 && [0, 1, 4].iter().all(|index| !positionals[*index].is_empty()) =>
         {
             Some(DiffDriverOptions {
+                git_protocol: true,
                 path_name: path_name.or_else(|| Some(positionals[0].clone())),
                 old_path: positionals[1].clone(),
                 new_path: positionals[4].clone(),

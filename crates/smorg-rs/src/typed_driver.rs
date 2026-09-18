@@ -309,18 +309,30 @@ fn select_parser(
 fn read_sources(
     roles: &[(SourceRole, &str, &str)],
 ) -> Result<BTreeMap<SourceRole, OperationSource>, Failure> {
+    read_sources_with_git_null(roles, false)
+}
+
+fn read_sources_with_git_null(
+    roles: &[(SourceRole, &str, &str)],
+    git_protocol: bool,
+) -> Result<BTreeMap<SourceRole, OperationSource>, Failure> {
     let mut remaining = INPUT_BUDGET;
     let mut sources = BTreeMap::new();
     for &(role, id, path) in roles {
-        if !std::fs::metadata(path).map_err(source_failure)?.is_file() {
-            return Err(source_failure("sources must be regular files"));
-        }
-        let file = File::open(path).map_err(source_failure)?;
-        if !file.metadata().map_err(source_failure)?.is_file() {
-            return Err(source_failure("sources must be regular files"));
-        }
+        // Git's external-diff protocol uses this literal for an absent side.
+        // Normalize the protocol token, never open a device or infer absence
+        // from a missing path, hash, mode, symlink, or filesystem alias.
         let mut bytes = Vec::new();
-        file.take(remaining + 1).read_to_end(&mut bytes).map_err(source_failure)?;
+        if !(git_protocol && path == "/dev/null") {
+            if !std::fs::metadata(path).map_err(source_failure)?.is_file() {
+                return Err(source_failure("sources must be regular files"));
+            }
+            let file = File::open(path).map_err(source_failure)?;
+            if !file.metadata().map_err(source_failure)?.is_file() {
+                return Err(source_failure("sources must be regular files"));
+            }
+            file.take(remaining + 1).read_to_end(&mut bytes).map_err(source_failure)?;
+        }
         if bytes.len() as u64 > remaining {
             return Err(rejected(
                 PortableCategory::ResourceLimit,
@@ -509,10 +521,13 @@ fn diff(
         OperationKind::Diff2,
     )?;
     let language = &manifest.observations[0].parser_request.as_ref().unwrap().language;
-    let sources = read_sources(&[
-        (SourceRole::Before, "before", &options.old_path),
-        (SourceRole::After, "after", &options.new_path),
-    ])?;
+    let sources = read_sources_with_git_null(
+        &[
+            (SourceRole::Before, "before", &options.old_path),
+            (SourceRole::After, "after", &options.new_path),
+        ],
+        options.git_protocol,
+    )?;
     let mut capabilities = options.required_capabilities.clone();
     capabilities.sort();
     capabilities.dedup();
@@ -608,6 +623,25 @@ fn diff(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn git_null_is_an_empty_protocol_source_not_a_device_read() {
+        let roles = [(SourceRole::Before, "before", "/dev/null")];
+        let sources =
+            read_sources_with_git_null(&roles, true).unwrap_or_else(|e| panic!("{}", e.message));
+        let source = &sources[&SourceRole::Before];
+        assert_eq!(source.byte_length, 0);
+        assert_eq!(source.bytes.as_deref(), Some([].as_slice()));
+        assert_eq!(
+            source.sha256,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert!(read_sources(&roles).is_err());
+        assert!(
+            read_sources_with_git_null(&[(SourceRole::Before, "before", "/dev/./null")], true)
+                .is_err()
+        );
+    }
 
     #[test]
     fn diff_json_write_failure_returns_internal_error() {

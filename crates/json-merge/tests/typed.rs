@@ -120,6 +120,31 @@ fn exact_owner_diff_classifies_nested_changes_without_fragment_relocation() {
 }
 
 #[test]
+fn zero_byte_diff_sides_have_no_owners_without_relaxing_analysis() {
+    let parser = Parser::new("json");
+    for (before, after, classification) in
+        [("", "{\"a\":1}", "added"), ("{\"a\":1}", "", "deleted")]
+    {
+        let before = parser.parse(before, SourceRole::Before);
+        let after = parser.parse(after, SourceRole::After);
+        let changes = typed::diff_owner_sources(&before, &after, JsonDialect::Json).unwrap();
+        assert_eq!(changes.len(), 2);
+        for change in changes {
+            assert_eq!(change.classification, classification);
+            assert_eq!(change.before.is_none(), classification == "added");
+            assert_eq!(change.after.is_none(), classification == "deleted");
+        }
+    }
+    let empty = parser.parse("", SourceRole::Before);
+    let empty_after = parser.parse("", SourceRole::After);
+    assert!(typed::diff_owner_sources(&empty, &empty_after, JsonDialect::Json).unwrap().is_empty());
+    assert!(typed::owner_analysis(&empty, JsonDialect::Json).is_err());
+    assert!(typed::diff_owner_sources(&empty, &empty_after, JsonDialect::Json5).is_err());
+    let whitespace = parser.parse(" \n", SourceRole::After);
+    assert!(typed::diff_owner_sources(&empty, &whitespace, JsonDialect::Json).is_err());
+}
+
+#[test]
 fn exact_owner_diff_includes_scalar_roots_and_uses_positional_array_identity() {
     let parser = Parser::new("json");
     for (left, right) in [("1", "2"), ("{}", "[]"), ("true", "false")] {

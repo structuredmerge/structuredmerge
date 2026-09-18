@@ -159,6 +159,8 @@ fn typed_diff_uses_kernel_changes_and_git_roles_without_mutation() {
             "formatting",
             "git-seven",
             "git-nine",
+            "git-added",
+            "git-deleted",
             "human",
             "parse-error",
             "capability",
@@ -187,6 +189,16 @@ fn typed_diff_uses_kernel_changes_and_git_roles_without_mutation() {
                     "not-a-file-new-hash",
                     "100644",
                 ]);
+                if mode == "git-added" {
+                    invocation[10] = "/dev/null";
+                    invocation[11] = ".";
+                    invocation[12] = ".";
+                }
+                if mode == "git-deleted" {
+                    invocation[13] = "/dev/null";
+                    invocation[14] = ".";
+                    invocation[15] = ".";
+                }
                 if mode == "git-nine" {
                     invocation.extend(["", "not-a-file-prefix/"]);
                 }
@@ -225,6 +237,23 @@ fn typed_diff_uses_kernel_changes_and_git_roles_without_mutation() {
             let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
             assert_eq!(value["command"], "diff-driver");
             assert_eq!(value["operation_result"]["operation"], "diff2");
+            if ["git-added", "git-deleted"].contains(&mode) {
+                let index = if mode == "git-added" { 0 } else { 1 };
+                let source = &value["operation_result"]["input_parses"][index]["parsed"]["source"];
+                assert_eq!(source["byte_length"], 0);
+                assert_eq!(
+                    source["sha256"],
+                    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                );
+                let classification = if mode == "git-added" { "added" } else { "deleted" };
+                assert!(
+                    value["operation_result"]["changes"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|c| c["classification"] == classification)
+                );
+            }
             assert_eq!(
                 value["operation_result"]["request_forwarding"]["path_name"],
                 "logical '雪.txt"

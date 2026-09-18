@@ -173,7 +173,7 @@ make this observation tool POSIX-only.
 
 ```sh
 python3 workspace-scripts/assemble_cli_artifact_manifest.py \
-  --artifact tmp/git-install-bin/smorg \
+  --artifact tmp/git-null-bin/smorg \
   --declarations tmp/cli-manifest-assembly-declarations.json \
   --artifact-id smorg.local-candidate \
   --execute-local-artifact --allow-development-build \
@@ -281,3 +281,6 @@ remain unchanged by that command implementation.
 
 Owned Git-install work subsequently superseded the conflict-review binary pair.
 See `contracts/CLI_GIT_INSTALL.md` for current retained binary hashes and checks.
+
+Git absent-side diff work subsequently superseded that pair; current hashes and
+checks are in `contracts/CLI_GIT_ABSENT_SIDES.md`. Manifest formats are unchanged.

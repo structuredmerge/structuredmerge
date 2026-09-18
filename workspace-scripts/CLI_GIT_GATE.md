@@ -43,7 +43,7 @@ Use an already built/installed binary and an explicitly supplied existing JSON
 grammar. The gate does not build, download, or publish either artifact:
 
 ```sh
-python3 workspace-scripts/check_installed_cli_git.py tmp/git-install-bin/smorg \
+python3 workspace-scripts/check_installed_cli_git.py tmp/git-null-bin/smorg \
   --typed --fixtures ../fixtures/conformance/cli-v1/typed-git.json \
   --grammar-library tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so
 ```
@@ -61,7 +61,11 @@ For the clean case it also registers the typed external-diff command and invokes
 kernel provider identity and nonempty typed diff2 change IDs. The worktree,
 stage-0 index and HEAD must remain unchanged. `git_diff_verified` records this
 separately in the gate report; conflict/error cases do not claim diff coverage.
-This checks modified-file protocol invocation, not added/deleted-file handling.
+It also compares an actual empty Git tree against `ours` in both directions,
+letting Git supply the absent-side protocol token. Added/deleted reports require
+the zero-byte source digest and corresponding kernel owner classifications.
+`git_absent_side_diff_verified` records these checks separately. This currently
+proves the explicit JSON profile, not absent-side behavior for every provider.
 
 The gate checks the stage-0 index for a clean merge and all three unresolved
 stages otherwise, plus unchanged HEAD and branch source blobs. There is no merge

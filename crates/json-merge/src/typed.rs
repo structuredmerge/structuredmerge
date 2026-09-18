@@ -172,15 +172,13 @@ pub fn diff_owner_sources(
     if before.source.descriptor().source_id == after.source.descriptor().source_id {
         return Err("JSON diff source IDs must be distinct".into());
     }
-    let left = owner_analysis(before, dialect)?;
-    let right = owner_analysis(after, dialect)?;
+    let left = diff_owners(before, dialect)?;
+    let right = diff_owners(after, dialect)?;
     let left = left
-        .owners
         .into_iter()
         .map(|owner| (owner.path.clone(), owner))
         .collect::<std::collections::BTreeMap<_, _>>();
     let right = right
-        .owners
         .into_iter()
         .map(|owner| (owner.path.clone(), owner))
         .collect::<std::collections::BTreeMap<_, _>>();
@@ -218,6 +216,33 @@ pub fn diff_owner_sources(
         });
     }
     Ok(changes)
+}
+
+// A zero-byte document has no JSON owners for source comparison. This is
+// deliberately diff-only: analyze and merge still require a JSON value. Keep
+// parser/language and native-root evidence checks even for the empty side.
+fn diff_owners(parsed: &ParsedResult, dialect: JsonDialect) -> Result<Vec<JsonOwnerFact>, String> {
+    if !parsed.source.bytes().is_empty() {
+        return Ok(owner_analysis(parsed, dialect)?.owners);
+    }
+    if !parsed.backend.languages.iter().any(|language| language == parser_language(dialect)) {
+        return Err("typed JSON input uses an incompatible parser language".into());
+    }
+    let nodes = parsed.normalized_nodes()?;
+    let root =
+        parsed.document.output().root_id.as_deref().ok_or("typed JSON input omitted its root")?;
+    let native = parsed.document.node(root).ok_or("unresolved empty JSON root")?;
+    if nodes.len() != 1
+        || native.native_type != "document"
+        || native.missing
+        || native.has_error
+        || !native.children.is_empty()
+        || native.span.range.start_byte != 0
+        || native.span.range.end_byte != 0
+    {
+        return Err("empty JSON diff requires an empty native document".into());
+    }
+    Ok(vec![])
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
