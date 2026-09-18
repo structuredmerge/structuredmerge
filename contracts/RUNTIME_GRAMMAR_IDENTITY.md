@@ -7,6 +7,18 @@ The kernel locks `tree-sitter-language-pack` 1.17.0, crates.io checksum
 This audit concerns that dependency, not an assertion about upstream HEAD or a
 newer release. No dependency source, lockfile or parser implementation was edited.
 
+Follow-up read-only upstream inspection on 2026-09-18 checked main at
+[`e147e2d04bbce6eebb92eee66ecd948c94f26722`](https://github.com/xberg-io/tree-sitter-language-pack/tree/e147e2d04bbce6eebb92eee66ecd948c94f26722).
+Its public `crates/ts-pack-core/src/lib.rs` and `src/registry.rs` interfaces still
+return languages/parsers without a loaded-library identity receipt. The loader
+still retains `HashMap<PathBuf, libloading::Library>` and caches languages by
+name. That source includes a newer load-time ABI compatibility check, but an ABI
+check is not byte identity. GitHub's latest release endpoint reported v1.20.0,
+published 2026-09-14; this observation is not a claim that v1.20.0 was installed
+or tested. A dependency bump is therefore not justified as a fix for this gap
+by the inspected main interface. No clone, download of grammar assets, dependency
+update, upstream issue or pull request was performed.
+
 In that package's `src/registry.rs`:
 
 - `LanguageRegistry::get_language` returns an already-cached dynamic language
