@@ -132,3 +132,14 @@ above; the disposable packaging directory was removed. Replay report:
 The workflow requires the kernel's new checker to be available on its checked-out
 main branch. These local histories have not been pushed for this slice, and
 there is no hosted CI result yet.
+
+Fresh-cache follow-up found a test-order dependency in the core's cached-only
+JSON example: running it alone with an empty language-pack cache failed with
+`selection.no_parser`. Its setup now explicitly parses through a separate
+acquisition-enabled provider and unregisters it before testing the cached-only
+provider. Registration alone is lazy and does not prepare the grammar. The
+unchanged installed core artifact reproduces the original failure and passes
+the corrected isolated example (one example, zero failures). This diagnostic
+uses shared installed test dependencies, not a new full isolated suite result.
+Report: `tmp/ruby-cold-cache-report.json`. The temporary core installation and
+fresh grammar cache are removed in teardown; no Rust compilation was needed.

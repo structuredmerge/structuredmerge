@@ -779,20 +779,30 @@ RSpec.describe StructuredmergeCore do
   end
 
   it "registers the cached-only Rust language pack in the typed TreeHaver registry" do
+    # Acquire explicitly during setup: this example must also run alone or first
+    # in a randomized suite on a fresh runner. The provider under test stays
+    # cached-only; acquisition is not a fallback in its parse path.
+    preparation_id = "ruby.typed.tslp.json.prepare"
     provider_id = "ruby.typed.tslp.json"
+    request = lambda do |text, backend = provider_id|
+      source = merge_requests([text], roles: ["source"]).first.source
+      described_class::ParseRequest.new(schema: "structuredmerge.parse-request/v1", request_id: "json",
+        source: source, language: "json", dialect: nil,
+        selection: described_class::ParserSelection.new(backend_id: backend, preference: [], required_capabilities: []),
+        options: described_class::ParseOptions.new(comments: true, diagnostics: true, tokens: false, native_extensions: true),
+        metadata: {}, extra: {})
+    end
+    described_class.register_language_pack_parser(preparation_id, "json")
+    begin
+      expect(described_class.parse_sources([request.call("{}", preparation_id)], merge_limits).first.parsed.ok).to be(true)
+    ensure
+      described_class.unregister_parser_provider(preparation_id)
+    end
     descriptor = described_class.register_cached_language_pack_parser(provider_id, "json")
     begin
       expect(descriptor.runtime).to eq("rust")
       expect(descriptor.languages).to eq(["json"])
       expect { described_class.register_language_pack_parser(provider_id, "python") }.to raise_error(RuntimeError, /DuplicateId/)
-      request = lambda do |text|
-        source = merge_requests([text], roles: ["source"]).first.source
-        described_class::ParseRequest.new(schema: "structuredmerge.parse-request/v1", request_id: "json",
-          source: source, language: "json", dialect: nil,
-          selection: described_class::ParserSelection.new(backend_id: provider_id, preference: [], required_capabilities: []),
-          options: described_class::ParseOptions.new(comments: true, diagnostics: true, tokens: false, native_extensions: true),
-          metadata: {}, extra: {})
-      end
       result = described_class.parse_sources([request.call("// note\r\n{\"é\": [true]}")], merge_limits).first
       expect(result.backend.id).to eq(provider_id)
       expect(result.selection.selected_backend).to eq(provider_id)
