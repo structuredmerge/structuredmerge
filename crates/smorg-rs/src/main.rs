@@ -17,6 +17,7 @@ use serde_json::json;
 
 mod benchmark_adapter;
 mod build_info;
+mod conflict_review;
 mod external_command;
 mod path_safety;
 mod staged_file;
@@ -81,6 +82,7 @@ struct ConflictDiffOptions {
     path_name: Option<String>,
     file_path: String,
     exit_code: bool,
+    json: bool,
 }
 
 #[derive(Debug)]
@@ -104,13 +106,6 @@ enum GitInstallScope {
 enum GitInstallProfile {
     SemanticDiff,
     BuiltinDiff,
-}
-
-#[derive(Debug, Eq, PartialEq)]
-struct ConflictRegion {
-    start_line: usize,
-    separator_line: usize,
-    end_line: usize,
 }
 
 #[derive(Debug)]
@@ -226,7 +221,10 @@ fn print_usage(out: &mut dyn Write) {
         out,
         "       smorg-rs diff-driver PATH OLD-FILE OLD-HEX OLD-MODE NEW-FILE NEW-HEX NEW-MODE [OLD-PREFIX NEW-PREFIX]"
     );
-    let _ = writeln!(out, "       smorg-rs conflicts diff [--path-name PATH] [--exit-code] FILE");
+    let _ = writeln!(
+        out,
+        "       smorg-rs conflicts diff [--path-name PATH] [--exit-code] [--json] FILE"
+    );
     let _ = writeln!(out, "       smorg-rs languages --gitattributes");
     let _ = writeln!(
         out,
@@ -1293,24 +1291,22 @@ fn run_conflicts(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write
 }
 
 fn run_conflicts_diff(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
+    if args == ["--help"] || args == ["-h"] {
+        return if writeln!(
+            stdout,
+            "usage: smorg conflicts diff [--path-name PATH] [--exit-code] [--json] FILE"
+        )
+        .is_ok()
+        {
+            0
+        } else {
+            3
+        };
+    }
     let Some(options) = parse_conflicts_diff_options(args, stderr) else {
         return EXIT_USER_ERROR;
     };
-    let source = match fs::read_to_string(&options.file_path) {
-        Ok(source) => source,
-        Err(error) => {
-            let _ = writeln!(stderr, "read conflicted file: {error}");
-            return EXIT_USER_ERROR;
-        }
-    };
-    let effective_path = options.path_name.clone().unwrap_or_else(|| options.file_path.clone());
-    let settings = load_path_settings(&effective_path);
-    let regions = find_conflict_regions(&source, settings.conflict_marker_size);
-    print_conflict_diff(stdout, &effective_path, &regions);
-    if options.exit_code && !regions.is_empty() {
-        return EXIT_UNRESOLVED_CONFLICT;
-    }
-    EXIT_SUCCESS
+    conflict_review::run(&options, stdout, stderr)
 }
 
 fn parse_conflicts_diff_options(
@@ -1319,15 +1315,30 @@ fn parse_conflicts_diff_options(
 ) -> Option<ConflictDiffOptions> {
     let mut path_name = None;
     let mut exit_code = false;
+    let mut json = false;
+    let mut seen = std::collections::BTreeSet::new();
     let mut positionals = Vec::new();
     let mut index = 0;
     while index < args.len() {
+        if args[index] == "--" {
+            positionals.extend(args[index + 1..].iter().cloned());
+            break;
+        }
+        if args[index].starts_with("--") && !seen.insert(args[index].as_str()) {
+            let _ = writeln!(stderr, "duplicate conflicts diff option {:?}", args[index]);
+            return None;
+        }
         match args[index].as_str() {
             "--path-name" => {
                 index += 1;
+                if args.get(index).is_none_or(|value| value.is_empty() || value.starts_with("--")) {
+                    let _ = writeln!(stderr, "--path-name requires a nonempty value");
+                    return None;
+                }
                 path_name = args.get(index).cloned();
             }
             "--exit-code" => exit_code = true,
+            "--json" => json = true,
             value if value.starts_with("--") => {
                 let _ = writeln!(stderr, "unknown conflicts diff option {value:?}");
                 return None;
@@ -1337,55 +1348,11 @@ fn parse_conflicts_diff_options(
         index += 1;
     }
 
-    if positionals.len() != 1 {
+    if positionals.len() != 1 || positionals[0].is_empty() {
         let _ = writeln!(stderr, "conflicts diff requires exactly one file path");
         return None;
     }
-    Some(ConflictDiffOptions { path_name, file_path: positionals[0].clone(), exit_code })
-}
-
-fn find_conflict_regions(source: &str, marker_size: usize) -> Vec<ConflictRegion> {
-    let marker_size = marker_size.max(1);
-    let start_prefix = "<".repeat(marker_size);
-    let separator_prefix = "=".repeat(marker_size);
-    let end_prefix = ">".repeat(marker_size);
-    let mut regions = Vec::new();
-    let mut current: Option<ConflictRegion> = None;
-
-    for (index, line) in source.split('\n').enumerate() {
-        let line_number = index + 1;
-        if line.starts_with(&start_prefix) {
-            current =
-                Some(ConflictRegion { start_line: line_number, separator_line: 0, end_line: 0 });
-        } else if line.starts_with(&separator_prefix) {
-            if let Some(region) = current.as_mut() {
-                if region.separator_line == 0 {
-                    region.separator_line = line_number;
-                }
-            }
-        } else if line.starts_with(&end_prefix) {
-            if let Some(mut region) = current.take() {
-                region.end_line = line_number;
-                regions.push(region);
-            }
-        }
-    }
-    regions
-}
-
-fn print_conflict_diff(stdout: &mut dyn Write, path_name: &str, regions: &[ConflictRegion]) {
-    let _ = writeln!(stdout, "conflicts {path_name}");
-    let _ = writeln!(stdout, "count {}", regions.len());
-    for (index, region) in regions.iter().enumerate() {
-        let _ = writeln!(
-            stdout,
-            "conflict {} lines {}-{} separator {}",
-            index + 1,
-            region.start_line,
-            region.end_line,
-            region.separator_line
-        );
-    }
+    Some(ConflictDiffOptions { path_name, file_path: positionals[0].clone(), exit_code, json })
 }
 
 impl MergeDriverOptions {

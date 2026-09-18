@@ -173,7 +173,7 @@ make this observation tool POSIX-only.
 
 ```sh
 python3 workspace-scripts/assemble_cli_artifact_manifest.py \
-  --artifact tmp/compiled-provider-bin/smorg \
+  --artifact tmp/conflict-review-bin/smorg \
   --declarations tmp/cli-manifest-assembly-declarations.json \
   --artifact-id smorg.local-candidate \
   --execute-local-artifact --allow-development-build \
@@ -273,3 +273,8 @@ Verification evidence:
 The 2.5 GiB compiler target and superseded 47 MiB `cli-build-identity-bin` pair
 are removed after verification. Current binaries and small evidence remain;
 earlier build-identity hashes above are historical, not the retained pair.
+
+Subsequent conflict-review work superseded `compiled-provider-bin` as well.
+Current retained executable hashes and verification are recorded in
+`contracts/CLI_CONFLICT_REVIEW.md`; the inventory and candidate formats above
+remain unchanged by that command implementation.

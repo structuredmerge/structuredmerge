@@ -7,6 +7,7 @@ use ast_merge::{
 use json_merge::{JsonDialect, merge_json_three_way};
 use serde::{Deserialize, Serialize};
 
+pub mod conflict_review;
 pub mod typed;
 
 pub const PACKAGE_NAME: &str = "ast-merge-git";

@@ -363,6 +363,8 @@
 
 - Expose the linked typed-kernel compiled provider inventory in CLI version JSON; preserve exact workflow/parser descriptors in candidate assembly and reject declaration drift without implying runtime availability.
 
+- Implement read-only conflicts diff JSON through ast-merge-git with exact source digests and ours/base/theirs byte ranges; reject malformed markers and bound input/region sizes.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

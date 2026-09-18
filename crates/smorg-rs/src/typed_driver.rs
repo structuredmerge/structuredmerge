@@ -100,35 +100,43 @@ fn rejected(category: PortableCategory, code: &str, message: impl ToString) -> F
     Failure {
         exit_code: 2,
         message: message.clone(),
-        diagnostic: Some(Box::new(PortableDiagnostic {
-            schema: DIAGNOSTIC_SCHEMA.into(),
-            id: "cli.failure".into(),
-            sequence: 0,
-            severity: DiagnosticSeverity::Error,
-            category,
-            code: code.into(),
-            message,
-            blocking: true,
-            operation: None,
-            request_id: None,
-            source_refs: vec![],
-            subject_refs: None,
-            cause_ids: vec![],
-            related_ids: vec![],
-            origin: DiagnosticOrigin {
-                layer: DiagnosticLayer::Adapter,
-                provider_id: None,
-                backend_id: None,
-                package: Some(env!("CARGO_PKG_NAME").into()),
-                package_version: Some(env!("CARGO_PKG_VERSION").into()),
-                native_code: None,
-                extra: BTreeMap::new(),
-            },
-            data: BTreeMap::new(),
-            extensions: vec![],
-            metadata: BTreeMap::new(),
+        diagnostic: Some(Box::new(adapter_diagnostic(category, code, message))),
+    }
+}
+
+pub(super) fn adapter_diagnostic(
+    category: PortableCategory,
+    code: &str,
+    message: String,
+) -> PortableDiagnostic {
+    PortableDiagnostic {
+        schema: DIAGNOSTIC_SCHEMA.into(),
+        id: "cli.failure".into(),
+        sequence: 0,
+        severity: DiagnosticSeverity::Error,
+        category,
+        code: code.into(),
+        message,
+        blocking: true,
+        operation: None,
+        request_id: None,
+        source_refs: vec![],
+        subject_refs: None,
+        cause_ids: vec![],
+        related_ids: vec![],
+        origin: DiagnosticOrigin {
+            layer: DiagnosticLayer::Adapter,
+            provider_id: None,
+            backend_id: None,
+            package: Some(env!("CARGO_PKG_NAME").into()),
+            package_version: Some(env!("CARGO_PKG_VERSION").into()),
+            native_code: None,
             extra: BTreeMap::new(),
-        })),
+        },
+        data: BTreeMap::new(),
+        extensions: vec![],
+        metadata: BTreeMap::new(),
+        extra: BTreeMap::new(),
     }
 }
 
