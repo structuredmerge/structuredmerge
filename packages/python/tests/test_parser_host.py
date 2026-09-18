@@ -725,19 +725,27 @@ class TypedParserHostTest(unittest.TestCase):
 
     def test_rust_language_pack_uses_typed_parse_and_shared_registry(self):
         provider_id = "python.typed.tslp.json"
+        def request(text, backend=provider_id):
+            source = self.merge_requests([text], roles=[core.SourceRole.SOURCE])[0].source
+            return core.ParseRequest(schema="structuredmerge.parse-request/v1", request_id="json",
+                source=source, language="json", dialect=None,
+                selection=core.ParserSelection(backend_id=backend, preference=[], required_capabilities=[]),
+                options=core.ParseOptions(comments=True, diagnostics=True, native_extensions=True), metadata={}, extra={})
+        limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
+        # Explicit acquisition in setup makes the cached-only test independent
+        # of suite order and old caches. Registration alone is lazy.
+        preparation_id = "python.typed.tslp.json.prepare"
+        core.register_language_pack_parser(preparation_id, "json")
+        try:
+            self.assertTrue(core.parse_sources([request('{}', preparation_id)], limits)[0].parsed.ok)
+        finally:
+            core.unregister_parser_provider(preparation_id)
         descriptor = core.register_cached_language_pack_parser(provider_id, "json")
         try:
             self.assertEqual(descriptor.runtime, "rust")
             self.assertEqual(descriptor.languages, ["json"])
             with self.assertRaisesRegex(Exception, "DuplicateId"):
                 core.register_language_pack_parser(provider_id, "python")
-            def request(text):
-                source = self.merge_requests([text], roles=[core.SourceRole.SOURCE])[0].source
-                return core.ParseRequest(schema="structuredmerge.parse-request/v1", request_id="json",
-                    source=source, language="json", dialect=None,
-                    selection=core.ParserSelection(backend_id=provider_id, preference=[], required_capabilities=[]),
-                    options=core.ParseOptions(comments=True, diagnostics=True, native_extensions=True), metadata={}, extra={})
-            limits = core.ParseLimits(max_batch_items=3, max_input_bytes=10000, max_nodes=1000, max_diagnostics=20)
             parsed = core.parse_sources([request('// note\r\n{"é": [true]}')], limits)[0]
             self.assertEqual(parsed.backend.id, provider_id)
             self.assertEqual(parsed.selection.selected_backend, provider_id)

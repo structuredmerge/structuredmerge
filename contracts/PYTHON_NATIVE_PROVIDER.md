@@ -63,3 +63,22 @@ Report: `tmp/core-python-artifact-t2ofaeo6/report.json`; log:
 records both facade artifact sets. The full current kernel suite was not rerun
 on 3.10 here. Temporary environments were removed; no compiler build, package
 publication or hosted-CI success is claimed.
+
+## Fresh-cache verification
+
+The Python cached-only JSON parser example, like its Ruby counterpart, previously
+depended on another test preparing the grammar. Running it alone against an empty
+cache reproduced `selection.no_parser`. Its setup now explicitly parses through
+a separate acquisition-enabled provider and unregisters that provider before
+testing cached-only registration. Registration alone is lazy. The unchanged
+installed core wheel fails the original isolated example and passes the corrected
+one; evidence is in `tmp/python-cold-cache-report.json`.
+
+The complete independent-provider gate then passed 60 boundary / 113 generated /
+114 app tests on CPython 3.14.2 with a fresh grammar cache and isolated dependency
+installation. Artifact hashes are unchanged from the registry-guard refresh
+above. Report: `tmp/core-python-artifact-3ox1nrdf/report.json`; log:
+`tmp/python-provider-cold-cache.log`. Explicit acquisition-enabled tests may use
+the network: this is not an offline gate. Disposable environments, consumers and
+grammar caches were removed; no compiler build, publication, hosted CI or broader
+runtime/platform result is implied.
