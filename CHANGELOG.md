@@ -345,6 +345,8 @@
 
 - Expose human and JSON version identity for smorg and smorg-rs using the linked typed kernel, with strict version arguments and no parser or grammar loading.
 
+- Add an explicit cached-only TreeHaver language-pack provider mode that refuses implicit grammar acquisition, with isolated cold/corrupt-cache and pinned warm-grammar tests.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

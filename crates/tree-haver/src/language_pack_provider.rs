@@ -1,6 +1,7 @@
 //! Explicit typed TreeHaver provider for the existing Rust language pack.
-//! Construction never loads a grammar. Probe/parse may use the language pack's
-//! configured cache/download behavior; registration is not default selection.
+//! Construction never loads a grammar. `new` retains the language pack's
+//! configured cache/download behavior; `new_cached_only` forbids acquisition.
+//! Registration is not default selection or asset-provenance verification.
 use crate::{
     ByteRange, NodeRole, SourcePoint, SourceSpan,
     parsed::{
@@ -16,6 +17,7 @@ use crate::{
 
 pub struct LanguagePackProvider {
     descriptor: ParserProviderDescriptor,
+    cached_only: bool,
 }
 
 fn fault(code: &str, message: impl Into<String>) -> ProviderFault {
@@ -38,6 +40,7 @@ impl LanguagePackProvider {
             return Err(fault("request.invalid", "provider ID and language must not be empty"));
         }
         Ok(Self {
+            cached_only: false,
             descriptor: ParserProviderDescriptor {
                 id: id.clone(),
                 family: "tree-sitter".into(),
@@ -66,6 +69,34 @@ impl LanguagePackProvider {
         })
     }
 
+    /// Restrict probing and parsing to grammars already usable in this process
+    /// or in TSLP's configured local library/cache directories. Never acquire a
+    /// missing grammar. Construction itself does not configure or load TSLP.
+    pub fn new_cached_only(id: String, language: String) -> Result<Self, ProviderFault> {
+        let mut provider = Self::new(id, language)?;
+        provider.cached_only = true;
+        provider.descriptor.metadata.insert("grammar_policy".into(), "cached-only".into());
+        Ok(provider)
+    }
+
+    fn parser(&self, language: &str) -> Result<tree_sitter_language_pack::Parser, ProviderFault> {
+        crate::ensure_language_pack_language(language)
+            .map_err(|e| fault("parser.unavailable", e))?;
+        // TSLP 1.17's public has_parser never downloads. Success loads/pins the
+        // Language in its process registry; get_parser then uses that same
+        // cached Language. Cache-file removal/configure/clean_cache do not
+        // evict loaded Languages. Do not replace this with has_language (which
+        // also accepts known-but-uninstalled grammar names) or a file stat.
+        if self.cached_only && !tree_sitter_language_pack::has_parser(language) {
+            return Err(fault(
+                "parser.local_unavailable",
+                "no usable local grammar; cached-only policy forbids acquisition",
+            ));
+        }
+        tree_sitter_language_pack::get_parser(language)
+            .map_err(|e| fault("parser.unavailable", e.to_string()))
+    }
+
     fn parse(
         &self,
         request: ParseRequest,
@@ -86,10 +117,7 @@ impl LanguagePackProvider {
             .map_err(|e| fault("source.invalid", e.to_string()))?;
         let text = std::str::from_utf8(source.bytes())
             .map_err(|e| fault("source.invalid", e.to_string()))?;
-        crate::ensure_language_pack_language(&request.language)
-            .map_err(|e| fault("parser.unavailable", e))?;
-        let mut parser = tree_sitter_language_pack::get_parser(&request.language)
-            .map_err(|e| fault("parser.unavailable", e.to_string()))?;
+        let mut parser = self.parser(&request.language)?;
         let tree =
             parser.parse(text).ok_or_else(|| fault("parser.failed", "parser returned no tree"))?;
         context.check().map_err(|e| fault("execution.interrupted", format!("{e:?}")))?;
@@ -213,10 +241,7 @@ impl ParserProvider for LanguagePackProvider {
         if request.language != self.descriptor.languages[0] || request.dialect.is_some() {
             return Ok(ParserProbeResult { available: false, loadable: false });
         }
-        crate::ensure_language_pack_language(&request.language)
-            .map_err(|e| fault("parser.unavailable", e))?;
-        tree_sitter_language_pack::get_parser(&request.language)
-            .map_err(|e| fault("parser.unavailable", e.to_string()))?;
+        self.parser(&request.language)?;
         Ok(ParserProbeResult { available: true, loadable: true })
     }
 

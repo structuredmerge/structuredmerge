@@ -53,6 +53,112 @@ fn registry() -> ParserRegistrySnapshot {
     registry.snapshot().unwrap()
 }
 
+fn isolated_cached_only(mode: &str, grammar: Option<&std::path::Path>) {
+    use std::{
+        fs,
+        net::TcpListener,
+        process::Command,
+        time::{Duration, Instant},
+    };
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tmp");
+    fs::create_dir_all(&root).unwrap();
+    let dir = tempfile::tempdir_in(&root).unwrap();
+    let libs = dir.path().join("libs");
+    let cache = dir.path().join("cache");
+    fs::create_dir(&libs).unwrap();
+    fs::create_dir(&cache).unwrap();
+    let library = libs.join(tree_sitter_language_pack::registry::library_file_name("json"));
+    if let Some(grammar) = grammar {
+        fs::copy(grammar, &library).unwrap();
+    } else if mode == "corrupt" {
+        fs::write(&library, "not a grammar library").unwrap();
+    }
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let proxy = format!("http://{}", listener.local_addr().unwrap());
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "cached_only_isolated_child", "--nocapture"])
+        .env("TREE_HAVER_CACHE_ONLY_CHILD", mode)
+        .env("TREE_SITTER_LANGUAGE_PACK_LIBS_DIR", &libs)
+        .env("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR", &cache)
+        .env("TREE_SITTER_LANGUAGE_PACK_CACHE_DIR", &cache)
+        .env("HTTPS_PROXY", &proxy)
+        .env("HTTP_PROXY", &proxy)
+        .env("ALL_PROXY", &proxy)
+        .env("https_proxy", &proxy)
+        .env("http_proxy", &proxy)
+        .env("all_proxy", &proxy)
+        .env_remove("NO_PROXY")
+        .env_remove("no_proxy")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let started = Instant::now();
+    while child.try_wait().unwrap().is_none() {
+        if started.elapsed() > Duration::from_secs(5) {
+            child.kill().unwrap();
+            let output = child.wait_with_output().unwrap();
+            panic!("cached-only child timed out: {output:?}");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success(), "{mode}: {output:?}");
+    assert!(
+        matches!(listener.accept(), Err(error) if error.kind() == std::io::ErrorKind::WouldBlock),
+        "unexpected network proxy connection"
+    );
+    assert_eq!(fs::read_dir(cache).unwrap().count(), 0, "no grammar/cache acquisition");
+}
+
+#[test]
+fn cached_only_cold_and_corrupt_grammars_do_not_acquire() {
+    isolated_cached_only("cold", None);
+    isolated_cached_only("corrupt", None);
+}
+
+#[test]
+#[ignore = "requires an explicitly supplied existing JSON grammar, never downloads"]
+fn cached_only_warm_grammar_survives_cache_file_removal() {
+    let grammar = std::env::var_os("TREE_HAVER_CACHED_JSON_LIBRARY")
+        .expect("supply a preinstalled grammar library");
+    isolated_cached_only("warm", Some(std::path::Path::new(&grammar)));
+}
+
+#[test]
+fn cached_only_isolated_child() {
+    let Ok(mode) = std::env::var("TREE_HAVER_CACHE_ONLY_CHILD") else { return };
+    let parser =
+        LanguagePackProvider::new_cached_only("typed.tslp.json".into(), "json".into()).unwrap();
+    assert_eq!(parser.descriptor().metadata["grammar_policy"], "cached-only");
+    let probe = parser.probe(&ParserProbeRequest { language: "json".into(), dialect: None });
+    if mode != "warm" {
+        assert_eq!(probe.unwrap_err().code, "parser.local_unavailable");
+        assert_eq!(
+            parser.parse_batch(vec![request("{}", "cold")], &context()).unwrap_err().code,
+            "parser.local_unavailable"
+        );
+        return;
+    }
+    assert!(probe.unwrap().available);
+    let libs = std::env::var_os("TREE_SITTER_LANGUAGE_PACK_LIBS_DIR").unwrap();
+    std::fs::remove_file(
+        std::path::Path::new(&libs)
+            .join(tree_sitter_language_pack::registry::library_file_name("json")),
+    )
+    .unwrap();
+    let registry = ParserRegistry::default();
+    registry.register(Arc::new(parser)).unwrap();
+    let text = "{\r\n  \"é\": true\r\n}";
+    let results = TreeHaverParseService::default()
+        .parse_batch(vec![request(text, "warm")], &registry.snapshot().unwrap(), &context())
+        .unwrap();
+    assert!(results[0].document.output().ok);
+    assert_eq!(results[0].document.output().source.byte_length, text.len() as u64);
+    assert_eq!(results[0].selection.selected_backend.as_deref(), Some("typed.tslp.json"));
+}
+
 #[test]
 fn unsupported_selection_and_controls_fail_without_grammar_loading() {
     assert!(LanguagePackProvider::new("".into(), "json".into()).is_err());
