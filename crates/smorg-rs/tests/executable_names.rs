@@ -2,6 +2,97 @@
 use std::process::Command;
 
 #[test]
+fn option_terminators_named_sources_and_empty_git_prefixes_remain_valid() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tmp");
+    std::fs::create_dir_all(&root).unwrap();
+    let dir = tempfile::tempdir_in(root).unwrap();
+    for name in ["--base.json", "--ours.json", "--theirs.json"] {
+        std::fs::write(dir.path().join(name), b"{\"a\":1}\n").unwrap();
+    }
+    for executable in [env!("CARGO_BIN_EXE_smorg"), env!("CARGO_BIN_EXE_smorg-rs")] {
+        for args in [
+            vec![
+                "merge-driver",
+                "--strict",
+                "--",
+                "--base.json",
+                "--ours.json",
+                "--theirs.json",
+                "a.json",
+            ],
+            vec![
+                "merge-driver",
+                "--ancestor",
+                "./--base.json",
+                "--current",
+                "./--ours.json",
+                "--other",
+                "./--theirs.json",
+                "--path-name",
+                "a.json",
+            ],
+            vec!["diff-driver", "--", "--base.json", "--ours.json"],
+            vec![
+                "diff-driver",
+                "a.json",
+                "./--base.json",
+                "0000000",
+                "100644",
+                "./--ours.json",
+                "0000000",
+                "100644",
+                "",
+                "",
+            ],
+            vec!["merge-driver", "--help"],
+            vec!["diff-driver", "--help"],
+        ] {
+            let output =
+                Command::new(executable).args(&args).current_dir(dir.path()).output().unwrap();
+            assert_eq!(output.status.code(), Some(0), "{args:?}: {output:?}");
+            assert_eq!(std::fs::read(dir.path().join("--ours.json")).unwrap(), b"{\"a\":1}\n");
+        }
+    }
+}
+
+#[test]
+fn shared_cli_argument_rejections_preserve_every_input() {
+    let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../fixtures/conformance/cli-v1/manifest.json");
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(manifest_path).unwrap()).unwrap();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tmp");
+    std::fs::create_dir_all(&root).unwrap();
+    for executable in [env!("CARGO_BIN_EXE_smorg"), env!("CARGO_BIN_EXE_smorg-rs")] {
+        for case in manifest["cases"].as_array().unwrap() {
+            // Discovery reports have separate, still-open implementation gates.
+            if case["expect"]["exit_code"] != 2 {
+                continue;
+            }
+            let dir = tempfile::tempdir_in(&root).unwrap();
+            for (name, text) in manifest["files"].as_object().unwrap() {
+                std::fs::write(dir.path().join(name), text.as_str().unwrap()).unwrap();
+            }
+            let args: Vec<_> =
+                case["argv"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+            let output =
+                Command::new(executable).args(args).current_dir(dir.path()).output().unwrap();
+            assert_eq!(output.status.code(), Some(2), "{}: {output:?}", case["id"]);
+            assert!(output.stdout.is_empty(), "{}: {output:?}", case["id"]);
+            assert!(!output.stderr.is_empty(), "{}: {output:?}", case["id"]);
+            for (name, text) in manifest["files"].as_object().unwrap() {
+                assert_eq!(
+                    std::fs::read(dir.path().join(name)).unwrap(),
+                    text.as_str().unwrap().as_bytes(),
+                    "{}: {name}",
+                    case["id"]
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn malformed_merge_options_never_write_current() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tmp");
     std::fs::create_dir_all(&root).unwrap();

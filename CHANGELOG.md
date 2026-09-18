@@ -442,3 +442,5 @@
 - Common-operation diagnostics classify source and parser-result resource limits consistently as resource_limit, while preserving opaque provider-native error codes and failure evidence.
 
 - Keep test-only Psych native byte-span projection consistent across BOM column conventions in Psych 5.3.1 and 5.5.0 without preprocessing source bytes.
+
+- Reject ambiguous merge source forms, duplicate options and excess positional arguments before writes; validate diff path options and support read-only per-command help and option terminators.

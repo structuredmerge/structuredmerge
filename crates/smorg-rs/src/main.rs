@@ -209,6 +209,10 @@ fn run_benchmark_provider_session(stdout: &mut dyn Write, stderr: &mut dyn Write
 }
 
 fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
+    if args == ["--help"] || args == ["-h"] {
+        print_usage(stdout);
+        return EXIT_SUCCESS;
+    }
     let Some(options) = parse_merge_driver_options(args, stderr) else {
         return EXIT_USER_ERROR;
     };
@@ -434,9 +438,25 @@ fn parse_merge_driver_options(
     let mut profile_report = false;
     let mut require_profile_status = None;
     let mut positionals = Vec::new();
+    let mut seen_options = std::collections::BTreeSet::new();
 
     let mut index = 0;
     while index < args.len() {
+        if args[index] == "--" {
+            positionals.extend(args[index + 1..].iter().cloned());
+            break;
+        }
+        if args[index].starts_with("--") {
+            let key = if args[index].starts_with("--fallback=") {
+                "--fallback"
+            } else {
+                args[index].as_str()
+            };
+            if !seen_options.insert(key) {
+                let _ = writeln!(stderr, "duplicate merge-driver option {key:?}");
+                return None;
+            }
+        }
         if matches!(
             args[index].as_str(),
             "--ancestor"
@@ -506,10 +526,26 @@ fn parse_merge_driver_options(
         index += 1;
     }
 
-    ancestor = ancestor.or_else(|| positionals.first().cloned());
-    current = current.or_else(|| positionals.get(1).cloned());
-    other = other.or_else(|| positionals.get(2).cloned());
-    path_name = path_name.or_else(|| positionals.get(3).cloned());
+    let named_sources = ancestor.is_some() || current.is_some() || other.is_some();
+    if named_sources {
+        if ancestor.is_none() || current.is_none() || other.is_none() || !positionals.is_empty() {
+            let _ = writeln!(stderr, "provide all three named sources without positional sources");
+            return None;
+        }
+    } else {
+        if !(3..=4).contains(&positionals.len()) || positionals.iter().any(String::is_empty) {
+            let _ = writeln!(stderr, "merge-driver requires BASE OURS THEIRS and optional PATH");
+            return None;
+        }
+        if positionals.len() == 4 && path_name.is_some() {
+            let _ = writeln!(stderr, "logical path cannot be both positional and --path-name");
+            return None;
+        }
+        ancestor = positionals.first().cloned();
+        current = positionals.get(1).cloned();
+        other = positionals.get(2).cloned();
+        path_name = path_name.or_else(|| positionals.get(3).cloned());
+    }
 
     if !["none", "line", "local", "full-file"].contains(&fallback.as_str()) {
         let _ = writeln!(stderr, "unsupported fallback mode {fallback:?}");
@@ -887,6 +923,10 @@ impl GitInstallProfile {
 }
 
 fn run_diff_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
+    if args == ["--help"] || args == ["-h"] {
+        print_usage(stdout);
+        return EXIT_SUCCESS;
+    }
     let Some(options) = parse_diff_driver_options(args, stderr) else {
         return EXIT_USER_ERROR;
     };
@@ -915,8 +955,20 @@ fn parse_diff_driver_options(args: &[String], stderr: &mut dyn Write) -> Option<
     let mut positionals = Vec::new();
     let mut index = 0;
     while index < args.len() {
+        if args[index] == "--" {
+            positionals.extend(args[index + 1..].iter().cloned());
+            break;
+        }
         match args[index].as_str() {
             "--path-name" => {
+                if path_name.is_some()
+                    || args
+                        .get(index + 1)
+                        .is_none_or(|value| value.is_empty() || value.starts_with("--"))
+                {
+                    let _ = writeln!(stderr, "diff-driver requires one nonempty --path-name value");
+                    return None;
+                }
                 index += 1;
                 path_name = args.get(index).cloned();
             }
@@ -930,16 +982,21 @@ fn parse_diff_driver_options(args: &[String], stderr: &mut dyn Write) -> Option<
     }
 
     match positionals.len() {
-        2 => Some(DiffDriverOptions {
+        2 if positionals.iter().all(|value| !value.is_empty()) => Some(DiffDriverOptions {
             path_name,
             old_path: positionals[0].clone(),
             new_path: positionals[1].clone(),
         }),
-        7 | 9 => Some(DiffDriverOptions {
-            path_name: path_name.or_else(|| Some(positionals[0].clone())),
-            old_path: positionals[1].clone(),
-            new_path: positionals[4].clone(),
-        }),
+        7 | 9
+            if path_name.is_none()
+                && [0, 1, 4].iter().all(|index| !positionals[*index].is_empty()) =>
+        {
+            Some(DiffDriverOptions {
+                path_name: path_name.or_else(|| Some(positionals[0].clone())),
+                old_path: positionals[1].clone(),
+                new_path: positionals[4].clone(),
+            })
+        }
         _ => {
             let _ = writeln!(stderr, "diff-driver requires either 2, 7, or 9 positional arguments");
             None
