@@ -8,7 +8,7 @@ use std::{
 use core::*;
 use structuredmerge_core as core;
 
-use crate::{MergeDriverOptions, path_safety, staged_file::StagedFile};
+use crate::{DiffDriverOptions, MergeDriverOptions, path_safety, staged_file::StagedFile};
 
 const INPUT_BUDGET: u64 = 8 * 1024 * 1024;
 
@@ -32,32 +32,54 @@ impl Drop for Registration {
 pub(super) fn run_merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> i32 {
     match merge(options, stderr) {
         Ok(code) => code,
-        Err(failure) => {
-            let _ = writeln!(stderr, "typed merge-driver: {}", failure.message);
-            if let (Some(diagnostic), Some(path)) = (&failure.diagnostic, &options.report_path) {
-                // Common argument/path preflight has already accepted this destination.
-                // An empty query never probes providers or acquires a grammar.
-                let reported =
-                    capability_manifest(vec![], limits()).map_err(internal).and_then(|manifest| {
-                        write_report(
-                            path,
-                            &report(
-                                &manifest.kernel_version,
-                                failure.exit_code,
-                                "error",
-                                None,
-                                vec![diagnostic.as_ref().clone()],
-                            ),
-                        )
-                    });
-                if let Err(error) = reported {
-                    let _ = writeln!(stderr, "cannot write typed error report: {}", error.message);
-                    return 3;
+        Err(failure) => finish_failure(
+            failure,
+            OperationKind::Merge3,
+            options.report_path.as_deref(),
+            None,
+            stderr,
+        ),
+    }
+}
+
+fn finish_failure(
+    failure: Failure,
+    operation: OperationKind,
+    path: Option<&str>,
+    stdout: Option<&mut dyn Write>,
+    stderr: &mut dyn Write,
+) -> i32 {
+    let _ = writeln!(stderr, "typed driver: {}", failure.message);
+    if let Some(diagnostic) = &failure.diagnostic {
+        if path.is_none() && stdout.is_none() {
+            return failure.exit_code;
+        }
+        // Common argument/path preflight has already accepted this destination.
+        // An empty query never probes providers or acquires a grammar.
+        let reported =
+            capability_manifest(vec![], limits()).map_err(internal).and_then(|manifest| {
+                let value = report(
+                    operation,
+                    &manifest.kernel_version,
+                    failure.exit_code,
+                    "error",
+                    None,
+                    vec![diagnostic.as_ref().clone()],
+                );
+                if let Some(path) = path {
+                    write_report(path, &value)?;
                 }
-            }
-            failure.exit_code
+                if let Some(stdout) = stdout {
+                    write_json(stdout, &value)?;
+                }
+                Ok(())
+            });
+        if let Err(error) = reported {
+            let _ = writeln!(stderr, "cannot write typed error report: {}", error.message);
+            return 3;
         }
     }
+    failure.exit_code
 }
 
 struct Failure {
@@ -87,8 +109,8 @@ fn rejected(category: PortableCategory, code: &str, message: impl ToString) -> F
             code: code.into(),
             message,
             blocking: true,
-            operation: Some(OperationKind::Merge3),
-            request_id: Some("cli.merge3".into()),
+            operation: None,
+            request_id: None,
             source_refs: vec![],
             subject_refs: None,
             cause_ids: vec![],
@@ -141,14 +163,24 @@ fn kernel_failure(error: CoreError) -> Failure {
 }
 
 fn report(
+    operation: OperationKind,
     kernel_version: &str,
     code: i32,
     outcome: &str,
     result: Option<&OperationResult>,
-    diagnostics: Vec<PortableDiagnostic>,
+    mut diagnostics: Vec<PortableDiagnostic>,
 ) -> serde_json::Value {
+    let (command, request_id) = match operation {
+        OperationKind::Diff2 => ("diff-driver", "cli.diff2"),
+        OperationKind::Merge3 => ("merge-driver", "cli.merge3"),
+        _ => unreachable!("CLI supports only merge3 and diff2 here"),
+    };
+    for diagnostic in &mut diagnostics {
+        diagnostic.operation = Some(operation);
+        diagnostic.request_id = Some(request_id.into());
+    }
     serde_json::json!({
-        "schema": "structuredmerge.cli-report/v1", "command": "merge-driver",
+        "schema": "structuredmerge.cli-report/v1", "command": command,
         "cli": {"executable": env!("CARGO_BIN_NAME"), "package": env!("CARGO_PKG_NAME"),
             "version": env!("CARGO_PKG_VERSION"), "kernel_version": kernel_version,
             "cli_contract": "structuredmerge.cli/v1"},
@@ -156,6 +188,11 @@ fn report(
         "availability": null, "conflict_review": null, "git_install": null,
         "diagnostics": diagnostics, "output_commit_verified": false,
     })
+}
+
+fn write_json(stdout: &mut dyn Write, value: &serde_json::Value) -> Result<(), Failure> {
+    serde_json::to_writer(&mut *stdout, value).map_err(internal)?;
+    stdout.write_all(b"\n").map_err(internal)
 }
 
 fn write_report(path: &str, report: &serde_json::Value) -> Result<(), Failure> {
@@ -189,9 +226,8 @@ fn merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> Result<i32, Fa
     if options.require_profile_status.as_deref().is_some_and(|s| s != "available") {
         return Err(invalid("typed profiles have no recommended/default authority"));
     }
-    let write_conflict = match options.conflict_policy.as_deref().unwrap_or("leave-ours") {
-        "leave-ours" => false,
-        "write" => true,
+    match options.conflict_policy.as_deref().unwrap_or("leave-ours") {
+        "leave-ours" | "write" => {}
         _ => return Err(invalid("--conflict-policy must be leave-ours or write")),
     };
     let output_path = options.output.as_deref().unwrap_or(&options.current);
@@ -200,15 +236,38 @@ fn merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> Result<i32, Fa
     {
         return Err(invalid("output path aliases base or theirs"));
     }
+    let manifest = select_parser(
+        provider,
+        backend,
+        profile_id,
+        options.family.as_ref(),
+        options.dialect.as_ref(),
+        OperationKind::Merge3,
+    )?;
+    let language = manifest.observations[0].parser_request.as_ref().unwrap().language.clone();
+    let sources = read_sources(&[
+        (SourceRole::Base, "base", &options.ancestor),
+        (SourceRole::Ours, "ours", &options.current),
+        (SourceRole::Theirs, "theirs", &options.other),
+    ])?;
+    merge_sources(options, stderr, manifest, language, sources)
+}
+
+fn select_parser(
+    provider: &str,
+    backend: &str,
+    profile_id: &str,
+    family: Option<&String>,
+    dialect: Option<&String>,
+    operation: OperationKind,
+) -> Result<CapabilityManifest, Failure> {
     let catalog = operation_profile_catalog();
     let profile = catalog
         .profiles
         .iter()
-        .find(|p| &p.id == profile_id)
+        .find(|p| p.id == profile_id)
         .ok_or_else(|| selection("unknown typed profile"))?;
-    if &profile.provider_id != provider
-        || options.family.as_ref().is_some_and(|f| f != &profile.family)
-    {
+    if profile.provider_id != provider || family.is_some_and(|f| f != &profile.family) {
         return Err(selection("provider/family constraints do not match the selected profile"));
     }
     // In this standalone process no providers have been registered yet. Ask the
@@ -216,11 +275,11 @@ fn merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> Result<i32, Fa
     // This is NOT an availability lease or source-specific execution evidence.
     let manifest = capability_manifest(
         vec![CapabilityQuery {
-            profile_id: profile_id.clone(),
-            operation: OperationKind::Merge3,
-            dialect: options.dialect.clone(),
+            profile_id: profile_id.to_string(),
+            operation,
+            dialect: dialect.cloned(),
             parser_selection: ParserSelection {
-                backend_id: Some(backend.clone()),
+                backend_id: Some(backend.to_string()),
                 preference: vec![],
                 required_capabilities: vec![],
             },
@@ -236,13 +295,15 @@ fn merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> Result<i32, Fa
     if backend != &format!("kernel.tslp.{language}") {
         return Err(selection("backend is not an explicitly supported cached kernel parser"));
     }
+    Ok(manifest)
+}
+
+fn read_sources(
+    roles: &[(SourceRole, &str, &str)],
+) -> Result<BTreeMap<SourceRole, OperationSource>, Failure> {
     let mut remaining = INPUT_BUDGET;
     let mut sources = BTreeMap::new();
-    for (role, id, path) in [
-        (SourceRole::Base, "base", &options.ancestor),
-        (SourceRole::Ours, "ours", &options.current),
-        (SourceRole::Theirs, "theirs", &options.other),
-    ] {
+    for &(role, id, path) in roles {
         if !std::fs::metadata(path).map_err(source_failure)?.is_file() {
             return Err(source_failure("sources must be regular files"));
         }
@@ -280,6 +341,22 @@ fn merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> Result<i32, Fa
             },
         );
     }
+    Ok(sources)
+}
+
+fn merge_sources(
+    options: &MergeDriverOptions,
+    stderr: &mut dyn Write,
+    manifest: CapabilityManifest,
+    language: String,
+    sources: BTreeMap<SourceRole, OperationSource>,
+) -> Result<i32, Failure> {
+    // Selection, policy and path validation happened before reading sources.
+    let provider = options.provider_id.as_ref().unwrap();
+    let backend = options.backend_id.as_ref().unwrap();
+    let profile_id = options.profile_id.as_ref().unwrap();
+    let output_path = options.output.as_deref().unwrap_or(&options.current);
+    let write_conflict = options.conflict_policy.as_deref() == Some("write");
     let ours = sources[&SourceRole::Ours].bytes.as_ref().unwrap().clone();
     // Wire capabilities are a sorted set; CLI flag order is not semantic.
     let mut required_capabilities = options.required_capabilities.clone();
@@ -361,7 +438,14 @@ fn merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> Result<i32, Fa
         .map(|text| StagedFile::new(output_path, text.as_bytes()))
         .transpose()
         .map_err(internal)?;
-    let report = report(&manifest.kernel_version, code, outcome, Some(&result), vec![]);
+    let report = report(
+        OperationKind::Merge3,
+        &manifest.kernel_version,
+        code,
+        outcome,
+        Some(&result),
+        vec![],
+    );
     if let Some(path) = &options.report_path {
         write_report(path, &report)?;
     }
@@ -371,9 +455,174 @@ fn merge(options: &MergeDriverOptions, stderr: &mut dyn Write) -> Result<i32, Fa
     Ok(code)
 }
 
+pub(super) fn run_diff(
+    options: &DiffDriverOptions,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> i32 {
+    match diff(options, stdout, stderr) {
+        Ok(code) => code,
+        Err(failure) => finish_failure(
+            failure,
+            OperationKind::Diff2,
+            options.report_path.as_deref(),
+            if options.json { Some(stdout) } else { None },
+            stderr,
+        ),
+    }
+}
+
+fn diff(
+    options: &DiffDriverOptions,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> Result<i32, Failure> {
+    let provider = options
+        .provider_id
+        .as_ref()
+        .ok_or_else(|| invalid("--provider is required for typed execution"))?;
+    let backend = options
+        .backend_id
+        .as_ref()
+        .ok_or_else(|| invalid("--backend is required for typed execution"))?;
+    let profile = options
+        .profile_id
+        .as_ref()
+        .ok_or_else(|| invalid("--profile is required for typed execution"))?;
+    if options.require_profile_status.as_deref().is_some_and(|s| s != "available") {
+        return Err(invalid("typed profiles have no recommended/default authority"));
+    }
+    let manifest = select_parser(
+        provider,
+        backend,
+        profile,
+        options.family.as_ref(),
+        options.dialect.as_ref(),
+        OperationKind::Diff2,
+    )?;
+    let language = &manifest.observations[0].parser_request.as_ref().unwrap().language;
+    let sources = read_sources(&[
+        (SourceRole::Before, "before", &options.old_path),
+        (SourceRole::After, "after", &options.new_path),
+    ])?;
+    let mut capabilities = options.required_capabilities.clone();
+    capabilities.sort();
+    capabilities.dedup();
+    register_cached_language_pack_parser(backend.clone(), language.clone())
+        .map_err(kernel_failure)?;
+    let _registration = Registration(backend.clone());
+    let result = execute_operation(
+        OperationRequest {
+            schema: OPERATION_SCHEMA.into(),
+            request_id: "cli.diff2".into(),
+            operation: OperationPolicy::Diff2(DiffPolicy {
+                comparison_profile: Some("exact-source-owners".into()),
+                equivalence: Some(vec!["exact-source".into()]),
+                source_preservation_evidence: Some(true),
+                extra: BTreeMap::new(),
+            }),
+            provider_selection: MergeProviderSelection {
+                provider_id: Some(provider.clone()),
+                family: options.family.clone(),
+                dialect: options.dialect.clone(),
+                profile_id: Some(profile.clone()),
+                required_capabilities: capabilities,
+                extra: BTreeMap::new(),
+            },
+            parser_selection: OperationParserSelection {
+                backend: Some(backend.clone()),
+                preference: vec![],
+                required_capabilities: vec![],
+                profile_id: None,
+                language_version: None,
+                extra: BTreeMap::new(),
+            },
+            sources,
+            path_name: Some(options.effective_path()),
+            extensions: vec![],
+            metadata: BTreeMap::new(),
+            extra: BTreeMap::new(),
+        },
+        limits(),
+    )
+    .map_err(kernel_failure)?;
+    for diagnostic in &result.diagnostics {
+        let (code, message) = match diagnostic {
+            DiagnosticRecord::Canonical(d) => (&d.code, &d.message),
+            DiagnosticRecord::Migration(d) => (&d.code, &d.message),
+        };
+        writeln!(stderr, "{code}: {message}").map_err(internal)?;
+    }
+    // Changed is a kernel comparison result, not an adapter byte comparison or
+    // filename/line heuristic. A failed operation is never reported as changed.
+    let changed = result.diff.as_ref().is_some_and(|d| !d.change_ids.is_empty());
+    if result.ok && result.diff.is_none() {
+        return Err(internal("successful diff supplied no comparison result"));
+    }
+    let (code, outcome) = if !result.ok {
+        (2, "error")
+    } else if changed {
+        (if options.exit_code { 1 } else { 0 }, "changed")
+    } else {
+        (0, "clean")
+    };
+    let value = report(
+        OperationKind::Diff2,
+        &manifest.kernel_version,
+        code,
+        outcome,
+        Some(&result),
+        vec![],
+    );
+    if let Some(path) = &options.report_path {
+        write_report(path, &value)?;
+    }
+    if options.json {
+        write_json(stdout, &value)?;
+    } else {
+        writeln!(stdout, "structured-diff {}\nstatus {outcome}", options.effective_path())
+            .map_err(internal)?;
+        if result.ok {
+            for change in &result.changes {
+                writeln!(
+                    stdout,
+                    "{} {}",
+                    change.classification,
+                    change.path.as_deref().unwrap_or(&change.id)
+                )
+                .map_err(internal)?;
+            }
+        }
+    }
+    Ok(code)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn diff_json_write_failure_returns_internal_error() {
+        struct Closed;
+        impl Write for Closed {
+            fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+                Err(std::io::ErrorKind::BrokenPipe.into())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let options = DiffDriverOptions {
+            provider_id: Some("missing".into()),
+            backend_id: Some("kernel.tslp.json".into()),
+            profile_id: Some("kernel.json.nested.v1".into()),
+            json: true,
+            ..DiffDriverOptions::default()
+        };
+        let mut stderr = Vec::new();
+        assert_eq!(run_diff(&options, &mut Closed, &mut stderr), 3);
+        assert!(String::from_utf8(stderr).unwrap().contains("cannot write typed error report"));
+    }
 
     #[test]
     fn kernel_failure_classification_uses_codes_not_messages() {
@@ -401,7 +650,14 @@ mod tests {
                 |_| false,
             )
             .unwrap();
-            let value = report("test-kernel", exit, "error", None, vec![*diagnostic]);
+            let value = report(
+                OperationKind::Merge3,
+                "test-kernel",
+                exit,
+                "error",
+                None,
+                vec![*diagnostic],
+            );
             assert!(value["operation_result"].is_null());
             assert_eq!(value["outcome"], "error");
             assert_eq!(value["cli"]["kernel_version"], "test-kernel");

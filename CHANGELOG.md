@@ -353,6 +353,8 @@
 
 - Add bounded real-Git verification for explicit typed CLI merges, including conflict policies, cold grammars, parser failures, quoted paths, index preservation, and guaranteed disposable-repository cleanup.
 
+- Route explicit diff-driver selections through typed kernel diff2 with cached-only grammars, bounded sources, JSON/file reports, kernel-derived change exits, and real-Git external-diff verification.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

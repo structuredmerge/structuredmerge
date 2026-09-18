@@ -58,11 +58,21 @@ struct PathSettings {
     require_profile_status: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct DiffDriverOptions {
     path_name: Option<String>,
     old_path: String,
     new_path: String,
+    provider_id: Option<String>,
+    backend_id: Option<String>,
+    profile_id: Option<String>,
+    family: Option<String>,
+    dialect: Option<String>,
+    required_capabilities: Vec<String>,
+    require_profile_status: Option<String>,
+    report_path: Option<String>,
+    json: bool,
+    exit_code: bool,
 }
 
 #[derive(Debug)]
@@ -194,6 +204,10 @@ fn print_usage(out: &mut dyn Write) {
         "       smorg-rs merge-driver --ancestor %O --current %A --other %B --path-name %P"
     );
     let _ = writeln!(out, "       smorg-rs diff-driver [--path-name PATH] OLD NEW");
+    let _ = writeln!(
+        out,
+        "Typed diff: --provider ID --backend kernel.tslp.LANGUAGE --profile ID [--json] [--report FILE] [--exit-code]"
+    );
     let _ = writeln!(
         out,
         "Typed merge lane: --provider ID --backend kernel.tslp.LANGUAGE --profile ID"
@@ -1060,6 +1074,29 @@ fn run_diff_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wri
         return EXIT_USER_ERROR;
     };
 
+    if options.provider_id.is_some()
+        || options.backend_id.is_some()
+        || options.profile_id.is_some()
+        || options.family.is_some()
+        || options.dialect.is_some()
+        || !options.required_capabilities.is_empty()
+        || options.require_profile_status.is_some()
+        || options.report_path.is_some()
+        || options.json
+        || options.exit_code
+    {
+        if let Some(report) = &options.report_path {
+            match path_safety::report_is_distinct(report, &[&options.old_path, &options.new_path]) {
+                Ok(true) => {}
+                result => {
+                    let _ = writeln!(stderr, "unsafe diff report path: {result:?}");
+                    return EXIT_USER_ERROR;
+                }
+            }
+        }
+        return typed_driver::run_diff(&options, stdout, stderr);
+    }
+
     let old_source = match fs::read_to_string(&options.old_path) {
         Ok(source) => source,
         Err(error) => {
@@ -1081,6 +1118,8 @@ fn run_diff_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wri
 
 fn parse_diff_driver_options(args: &[String], stderr: &mut dyn Write) -> Option<DiffDriverOptions> {
     let mut path_name = None;
+    let mut options = DiffDriverOptions::default();
+    let mut seen = std::collections::BTreeSet::new();
     let mut positionals = Vec::new();
     let mut index = 0;
     while index < args.len() {
@@ -1088,7 +1127,44 @@ fn parse_diff_driver_options(args: &[String], stderr: &mut dyn Write) -> Option<
             positionals.extend(args[index + 1..].iter().cloned());
             break;
         }
+        let flag = args[index].as_str();
+        if flag.starts_with("--") && flag != "--require-capability" && !seen.insert(flag) {
+            let _ = writeln!(stderr, "duplicate diff-driver option {flag}");
+            return None;
+        }
+        if matches!(
+            flag,
+            "--provider"
+                | "--backend"
+                | "--profile"
+                | "--family"
+                | "--dialect"
+                | "--require-capability"
+                | "--require-profile-status"
+                | "--report"
+        ) {
+            let Some(value) = args.get(index + 1).filter(|v| !v.is_empty() && !v.starts_with("--"))
+            else {
+                let _ = writeln!(stderr, "diff-driver option {flag} requires a value");
+                return None;
+            };
+            match flag {
+                "--provider" => options.provider_id = Some(value.clone()),
+                "--backend" => options.backend_id = Some(value.clone()),
+                "--profile" => options.profile_id = Some(value.clone()),
+                "--family" => options.family = Some(value.clone()),
+                "--dialect" => options.dialect = Some(value.clone()),
+                "--require-capability" => options.required_capabilities.push(value.clone()),
+                "--require-profile-status" => options.require_profile_status = Some(value.clone()),
+                "--report" => options.report_path = Some(value.clone()),
+                _ => unreachable!(),
+            }
+            index += 2;
+            continue;
+        }
         match args[index].as_str() {
+            "--json" => options.json = true,
+            "--exit-code" => options.exit_code = true,
             "--path-name" => {
                 if path_name.is_some()
                     || args
@@ -1115,6 +1191,7 @@ fn parse_diff_driver_options(args: &[String], stderr: &mut dyn Write) -> Option<
             path_name,
             old_path: positionals[0].clone(),
             new_path: positionals[1].clone(),
+            ..options
         }),
         7 | 9
             if path_name.is_none()
@@ -1124,6 +1201,7 @@ fn parse_diff_driver_options(args: &[String], stderr: &mut dyn Write) -> Option<
                 path_name: path_name.or_else(|| Some(positionals[0].clone())),
                 old_path: positionals[1].clone(),
                 new_path: positionals[4].clone(),
+                ..options
             })
         }
         _ => {

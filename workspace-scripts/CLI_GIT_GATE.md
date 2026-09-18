@@ -40,7 +40,7 @@ Use an already built/installed binary and an explicitly supplied existing JSON
 grammar. The gate does not build, download, or publish either artifact:
 
 ```sh
-python3 workspace-scripts/check_installed_cli_git.py tmp/typed-error-bin/smorg \
+python3 workspace-scripts/check_installed_cli_git.py tmp/typed-diff-bin/smorg \
   --typed --fixtures ../fixtures/conformance/cli-v1/typed-git.json \
   --grammar-library tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so
 ```
@@ -52,6 +52,13 @@ edits, leave-ours conflicts, explicit conflict writes, delete/edit conflicts,
 parse failure and a cold grammar cache. Every case requires a driver report;
 driver errors must remain errors, even though Git returns 1 and leaves unmerged
 index stages for both driver exit 1 and driver exit 2.
+
+For the clean case it also registers the typed external-diff command and invokes
+`git diff --ext-diff base ours`. The diff report must retain the logical path,
+kernel provider identity and nonempty typed diff2 change IDs. The worktree,
+stage-0 index and HEAD must remain unchanged. `git_diff_verified` records this
+separately in the gate report; conflict/error cases do not claim diff coverage.
+This checks modified-file protocol invocation, not added/deleted-file handling.
 
 The gate checks the stage-0 index for a clean merge and all three unresolved
 stages otherwise, plus unchanged HEAD and branch source blobs. There is no merge

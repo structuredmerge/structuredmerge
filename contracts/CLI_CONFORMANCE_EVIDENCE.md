@@ -246,3 +246,63 @@ The 2.5 GiB bounded compiler target and superseded 47 MiB `typed-cli-bin` pair
 were removed; their historical reports retain hashes. Current binary pair and
 small evidence remain. No generated API changed, no package was published, and
 no default authority or full CLI conformance is claimed.
+
+## Explicit typed diff-driver lane
+
+`diff-driver` now accepts explicit provider/backend/profile constraints with
+optional family, dialect, required capabilities and available-profile status.
+Example (an existing cached JSON grammar is required):
+
+```sh
+smorg diff-driver --provider kernel.json --backend kernel.tslp.json \
+  --profile kernel.json.nested.v1 --json --exit-code BEFORE AFTER
+```
+
+Typed selection, bounded exact-byte source reading, cached registration and
+adapter reporting are shared with merge-driver. The operation is typed diff2
+with before/after roles and the exact-source-owners comparison. Changed/clean
+comes from kernel diff change IDs, including document-level formatting changes,
+not CLI line/byte heuristics. Errors are never changed outcomes. The default
+successful exit is 0; `--exit-code` requests 1 for changes, while errors remain
+2 and I/O/serialization failures 3. No source writes or merge/fallback paths
+are available. Unsupported capabilities do not claim provider execution.
+
+`--json` writes one CLI report to stdout; `--report FILE` stages the same report
+to a separate checked destination. Both may be used together. Human output is
+a summary of the kernel's change classifications/paths, not a fabricated
+unified patch. Canonical adapter failures carry diff2/cli.diff2 context and null
+operation results. Unsafe aliases and malformed arguments still cause no writes.
+Ordinary compatibility diff invocations remain unchanged until migration gates.
+
+Local evidence: 103 standard CLI tests and all three explicitly enabled warm
+tests pass (106 total), plus all 45 tooling tests. Both binaries exercise
+unchanged, changed, formatting-only, parser-error and unsupported-capability
+cases; stdout/file JSON equality; human summaries; and seven/nine-argument Git
+forms with nonexistent metadata paths, empty prefixes and Unicode logical paths.
+Cold grammar, invalid selection, malformed options, report aliases and broken
+JSON output retain error/no-write behavior. The real-Git gate additionally
+invokes external diff in its clean case and verifies unchanged worktree/index/
+HEAD; all six merge cases still pass per executable.
+
+- Rust log: `tmp/typed-diff-verified.log` (earlier `typed-diff-tests.log` retains
+  the diagnosed overly strict provider-identity assertion for rejected capability).
+- Tooling log: `tmp/typed-diff-tooling.log`.
+- Real-Git reports: `tmp/typed-cli-git-obyxemoj/report.json` and
+  `tmp/typed-cli-git-mgnlli7_/report.json`; each has one `git_diff_verified: true`.
+- Portable discovery/argument subset remains 19/20: fixtures
+  `tmp/cli-conformance-5degdwoe/report.json` and
+  `tmp/cli-conformance-8fpn2qlr/report.json`. `languages --json` remains red.
+- Current `tmp/typed-diff-bin/smorg` SHA-256:
+  `b4fb712c466b7e650fef4739f9808138792f9dc2a2f4b24c0c407cdc6cf6604e`.
+- Current `tmp/typed-diff-bin/smorg-rs` SHA-256:
+  `ae61deabd13c9c1891f7166d1cbc61b6896d8114cba8079735fe8b47090312bf`.
+
+The bounded 2.5 GiB build target and superseded `typed-error-bin` pair are removed
+after verification. Reports and the current pair remain; disposable Git test
+repositories/install copies are removed per case. No package or default change.
+
+Still open: added/deleted-file empty-side normalization (non-regular sources such
+as `/dev/null` currently reject), broader family/platform/encoding evidence,
+typed default/project selection, complete post-execution failure transport,
+artifact availability, hosted and registry/distribution gates. Modified-file Git
+protocol evidence does not close the entire Phase 5 exit gate.

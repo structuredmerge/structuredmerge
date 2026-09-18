@@ -28,11 +28,15 @@ fn fixture(grammar: Option<&Path>) -> tempfile::TempDir {
 }
 
 fn run(bin: &str, dir: &Path, args: &[&str]) -> Output {
+    run_command(bin, dir, "merge-driver", args)
+}
+
+fn run_command(bin: &str, dir: &Path, command: &str, args: &[&str]) -> Output {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let proxy = format!("http://{}", listener.local_addr().unwrap());
     let mut child = Command::new(bin)
-        .arg("merge-driver")
+        .arg(command)
         .args(args)
         .current_dir(dir)
         .env("TMPDIR", dir)
@@ -63,6 +67,197 @@ fn run(bin: &str, dir: &Path, args: &[&str]) -> Output {
         "unexpected proxy connection"
     );
     output
+}
+
+fn diff_args() -> Vec<&'static str> {
+    vec![
+        "--provider",
+        "kernel.json",
+        "--backend",
+        "kernel.tslp.json",
+        "--profile",
+        "kernel.json.nested.v1",
+        "--json",
+        "--report",
+        "report",
+        "base",
+        "ours",
+    ]
+}
+
+#[test]
+fn typed_diff_cold_errors_and_invalid_invocations_are_read_only() {
+    for bin in BINS {
+        for scenario in
+            ["cold", "provider", "merge-only-profile", "duplicate", "missing", "report-alias"]
+        {
+            let dir = fixture(None);
+            let before = fs::read(dir.path().join("base")).unwrap();
+            let after = fs::read(dir.path().join("ours")).unwrap();
+            let mut invocation = diff_args();
+            match scenario {
+                "provider" => invocation[1] = "missing",
+                "merge-only-profile" => {
+                    invocation[1] = "kernel.git.json";
+                    invocation[5] = "kernel.git.json.v1";
+                }
+                "duplicate" => invocation.push("--json"),
+                "missing" => {
+                    invocation.extend(["--dialect", "--json"]);
+                }
+                "report-alias" => invocation[8] = "ours",
+                _ => {}
+            }
+            let output = run_command(bin, dir.path(), "diff-driver", &invocation);
+            assert_eq!(output.status.code(), Some(2), "{scenario}: {output:?}");
+            assert!(!output.stderr.is_empty());
+            assert_eq!(fs::read(dir.path().join("base")).unwrap(), before);
+            assert_eq!(fs::read(dir.path().join("ours")).unwrap(), after);
+            if ["duplicate", "missing", "report-alias"].contains(&scenario) {
+                assert!(output.stdout.is_empty());
+                assert_eq!(fs::read_to_string(dir.path().join("report")).unwrap(), "sentinel");
+            } else {
+                let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+                assert_eq!(fs::read(dir.path().join("report")).unwrap(), output.stdout);
+                assert_eq!(value["command"], "diff-driver");
+                assert_eq!(value["outcome"], "error");
+                if scenario == "cold" {
+                    assert_eq!(value["operation_result"]["operation"], "diff2");
+                    assert_eq!(value["operation_result"]["ok"], false);
+                } else {
+                    assert!(value["operation_result"].is_null());
+                    let diagnostic: structuredmerge_core::PortableDiagnostic =
+                        serde_json::from_value(value["diagnostics"][0].clone()).unwrap();
+                    assert_eq!(
+                        diagnostic.operation,
+                        Some(structuredmerge_core::OperationKind::Diff2)
+                    );
+                    assert_eq!(diagnostic.request_id.as_deref(), Some("cli.diff2"));
+                    structuredmerge_core::validate_diagnostics(
+                        &[&diagnostic],
+                        "cli.diff2",
+                        structuredmerge_core::OperationKind::Diff2,
+                        &structuredmerge_core::SourceMap::default(),
+                        |_| false,
+                    )
+                    .unwrap();
+                }
+            }
+            assert_eq!(fs::read_dir(dir.path().join("cache")).unwrap().count(), 0);
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires explicitly supplied existing JSON grammar; never downloads"]
+fn typed_diff_uses_kernel_changes_and_git_roles_without_mutation() {
+    let grammar = PathBuf::from(std::env::var_os("SMORG_TEST_JSON_GRAMMAR").unwrap());
+    for bin in BINS {
+        for mode in [
+            "unchanged",
+            "changed",
+            "formatting",
+            "git-seven",
+            "git-nine",
+            "human",
+            "parse-error",
+            "capability",
+        ] {
+            let dir = fixture(Some(&grammar));
+            if mode == "unchanged" {
+                fs::copy(dir.path().join("base"), dir.path().join("ours")).unwrap();
+            }
+            if mode == "formatting" {
+                fs::write(dir.path().join("ours"), "{\r\n  \"a\":1,\"b\":1\r\n}\r\n").unwrap();
+            }
+            if mode == "parse-error" {
+                fs::write(dir.path().join("ours"), "{broken").unwrap();
+            }
+            let before = fs::read(dir.path().join("base")).unwrap();
+            let after = fs::read(dir.path().join("ours")).unwrap();
+            let mut invocation = diff_args();
+            if mode.starts_with("git-") {
+                invocation.truncate(9);
+                invocation.extend([
+                    "logical '雪.txt",
+                    "base",
+                    "not-a-file-old-hash",
+                    "100644",
+                    "ours",
+                    "not-a-file-new-hash",
+                    "100644",
+                ]);
+                if mode == "git-nine" {
+                    invocation.extend(["", "not-a-file-prefix/"]);
+                }
+            } else {
+                invocation.extend(["--path-name", "logical '雪.txt"]);
+            }
+            invocation.extend([
+                "--exit-code",
+                "--require-capability",
+                "diff2",
+                "--require-capability",
+                "diff2",
+            ]);
+            if mode == "human" {
+                invocation.remove(6);
+            }
+            if mode == "capability" {
+                invocation.extend(["--require-capability", "not-supported"]);
+            }
+            let output = run_command(bin, dir.path(), "diff-driver", &invocation);
+            let error = ["parse-error", "capability"].contains(&mode);
+            assert_eq!(
+                output.status.code(),
+                Some(if error {
+                    2
+                } else if mode == "unchanged" {
+                    0
+                } else {
+                    1
+                }),
+                "{mode}: {output:?}"
+            );
+            assert_eq!(fs::read(dir.path().join("base")).unwrap(), before);
+            assert_eq!(fs::read(dir.path().join("ours")).unwrap(), after);
+            let bytes = fs::read(dir.path().join("report")).unwrap();
+            let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(value["command"], "diff-driver");
+            assert_eq!(value["operation_result"]["operation"], "diff2");
+            assert_eq!(
+                value["operation_result"]["request_forwarding"]["path_name"],
+                "logical '雪.txt"
+            );
+            if !error {
+                assert_eq!(
+                    value["operation_result"]["provider"]["provider_id"], "kernel.json",
+                    "{mode}"
+                );
+            }
+            assert_eq!(
+                value["outcome"],
+                if error {
+                    "error"
+                } else if mode == "unchanged" {
+                    "clean"
+                } else {
+                    "changed"
+                }
+            );
+            if mode == "human" {
+                assert!(String::from_utf8(output.stdout).unwrap().contains("status changed"));
+            } else {
+                assert_eq!(output.stdout, bytes);
+            }
+            if !error {
+                assert_eq!(
+                    value["operation_result"]["diff"]["change_ids"].as_array().unwrap().is_empty(),
+                    mode == "unchanged"
+                );
+            }
+        }
+    }
 }
 
 fn args() -> Vec<&'static str> {

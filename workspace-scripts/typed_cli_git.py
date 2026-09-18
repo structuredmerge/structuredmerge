@@ -168,6 +168,26 @@ def check_case(binary, grammar, case, work, evidence):
         require(git("rev-parse", "HEAD").stdout == before_head, "no-commit changed HEAD")
         for role in ("base", "ours", "theirs"):
             require(git("show", f"{role}:{path}").stdout == case[role].encode(), role)
+        diff_verified = False
+        if expected["git_exit"] == 0:
+            # Use Git's actual external-diff protocol, not synthetic positional
+            # arguments. Git controls its temporary source files and hashes.
+            (repo / ".git/info/attributes").write_text("*.txt merge=typed-test diff=typed-test\n")
+            git("config", "diff.typed-test.command", shlex.quote(str(executable)) +
+                " diff-driver --provider kernel.json --backend kernel.tslp.json "
+                "--profile kernel.json.nested.v1 --json")
+            compared = git("diff", "--ext-diff", "base", "ours", "--", path)
+            (evidence / "diff-report.json").write_bytes(compared.stdout)
+            diff = json.loads(compared.stdout)
+            require(diff["command"] == "diff-driver" and diff["outcome"] == "changed", diff)
+            require(diff["operation_result"]["operation"] == "diff2", diff)
+            require(diff["operation_result"]["provider"]["provider_id"] == "kernel.json", diff)
+            require(diff["operation_result"]["request_forwarding"]["path_name"] == path, diff)
+            require(diff["operation_result"]["diff"]["change_ids"], diff)
+            require((repo / path).read_bytes() == actual, "external diff changed worktree")
+            require(git("show", f":0:{path}").stdout == actual, "external diff changed index")
+            require(git("rev-parse", "HEAD").stdout == before_head, "external diff changed HEAD")
+            diff_verified = True
         require(not list(cache.iterdir()), "grammar acquisition cache was modified")
         try:
             connection, _ = listener.accept()
@@ -177,7 +197,8 @@ def check_case(binary, grammar, case, work, evidence):
             connection.close()
             raise AssertionError("unexpected proxy connection")
         require(not list(repo.glob(".smorg-write-*")), "staging debris")
-        return {"git_exit": merged.returncode, "driver_exit": report["exit_code"], "outcome": report["outcome"]}
+        return {"git_exit": merged.returncode, "driver_exit": report["exit_code"], "outcome": report["outcome"],
+                "git_diff_verified": diff_verified}
 
 
 def run(binary, fixture, grammar):
