@@ -173,7 +173,7 @@ make this observation tool POSIX-only.
 
 ```sh
 python3 workspace-scripts/assemble_cli_artifact_manifest.py \
-  --artifact tmp/parser-pin-bin/smorg \
+  --artifact tmp/workflow-query-bin/smorg \
   --declarations tmp/cli-manifest-assembly-declarations.json \
   --artifact-id smorg.local-candidate \
   --execute-local-artifact --allow-development-build \
@@ -291,3 +291,7 @@ integration does not authenticate the compiled declarations or manifest.
 
 Parser-pinning verification subsequently superseded those binaries; the latest
 artifact hashes are in the parser-pinning section of `TYPED_WORKFLOW_HOST.md`.
+
+Source-free workflow-query work superseded those artifacts; current hashes are in
+the source-free observation section of `TYPED_WORKFLOW_HOST.md`. These typed
+observations do not replace authenticated manifest/runtime availability evidence.

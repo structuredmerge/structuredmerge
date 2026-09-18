@@ -43,7 +43,7 @@ Use an already built/installed binary and an explicitly supplied existing JSON
 grammar. The gate does not build, download, or publish either artifact:
 
 ```sh
-python3 workspace-scripts/check_installed_cli_git.py tmp/parser-pin-bin/smorg \
+python3 workspace-scripts/check_installed_cli_git.py tmp/workflow-query-bin/smorg \
   --typed --fixtures ../fixtures/conformance/cli-v1/typed-git.json \
   --grammar-library tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so
 ```

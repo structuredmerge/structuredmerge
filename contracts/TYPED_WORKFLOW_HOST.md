@@ -224,3 +224,64 @@ reports remain. The same single-job/resource guards apply. Nothing is published
 or pushed upstream. Pinning prevents substitution, not changes in the selected
 provider's behavior; authenticated availability, portable preflight/staleness
 reports, liveness guarantees and default policies remain unfinished.
+
+## Source-free unified-registry observation
+
+`workflow_selection_reports` and `workflow_selection_reports_controlled` expose
+the existing merge/parser selector using existing typed queries, reports, limits
+and control. They capture one provider/parser snapshot pair for the entire batch,
+validate every query before probes, and share compiled-profile query validation
+with execution. They never parse source or execute workflows. Registered parser
+probe policy still applies and can load/acquire grammars; offline callers must
+use cached-only registrations. These reports do not establish authenticated
+availability, host health, source-specific support, defaults or a preflight lease.
+
+Query count and serialized request/response bounds include empty responses.
+Control is checked before/during/after observation. Serialization checks bound
+accepted/accumulated output, not arbitrary intermediate or callback allocations;
+deadlines are cooperative. Reentrant mutation affects later calls, not the current
+batch. The original reports retain both registry generations/digests and all
+selector candidate/rejection evidence. No parallel registry or ranking policy is
+introduced. No CLI availability gate is declared complete by this API addition.
+
+Verification:
+
+- All 19 core unit tests pass in `tmp/workflow-query-core-tests.log`. New tests
+  compare observation/execution traces, exercise malformed/compiled queries and
+  count/request/response/empty-response budgets before probes where applicable,
+  cancellation, source-free behavior and captured snapshots after retirement.
+  The real cached JSON test compares traces for all four operations.
+- All 128 CLI tests and 74 tooling tests pass:
+  `tmp/workflow-query-cli-tests.log`, `tmp/workflow-query-tooling.log`.
+- Both real-Git merge and modified/added/deleted diff gates pass:
+  `tmp/typed-cli-git-fc4yjzmp/report.json`,
+  `tmp/typed-cli-git-oo6o901k/report.json`.
+- Installed CPython 3.14.2/LibCST 1.9.0: 59 boundary tests, 113 generated tests,
+  114 test-app tests; `tmp/core-python-artifact-gvcsxs38/report.json`.
+- Installed MRI 4.0.6: 52 boundary examples and 110/110 generated/test-app
+  examples; `tmp/core-ruby-artifact-20260918-2599621-t4aqy5/report.json`.
+- Both runtimes retire a workflow from inside a parser probe, prove both
+  in-flight queries retain the captured workflow, and prove a later query sees
+  it absent. They verify no parse/workflow calls, no repeated descriptor callback,
+  and cancellation through the new controlled function.
+- Alef generated and verified the two additive functions. Existing type shapes
+  and function signatures remain unchanged; API baselines were reviewed and
+  refreshed by their owning tool. The 20-crate release inventory passes.
+
+Current artifacts supersede the preceding parser-pinning artifacts:
+
+- `tmp/workflow-query-bin/smorg`, SHA-256
+  `5f81b28441babc0bb00ccd0c53d4c9b3b52e7dd088d74108b71622a9d4cc676e`.
+- `tmp/workflow-query-bin/smorg-rs`, SHA-256
+  `048c3b660a78ca29fd5fd81992bc3391279d726ff8cff046625a943471f51506`.
+- `tmp/workflow-query-wheels/structuredmerge_core-0.2.0-cp310-abi3-manylinux_2_34_x86_64.whl`,
+  SHA-256 `c734552d8da48ef0420ab76464c73f5dfac5c2b216966a65da3591c9d6ff1d92`.
+- `packages/ruby/lib/structuredmerge_core_rb.so`, SHA-256
+  `8dfad084568bc659a6c7a32568275709c75c5d28967a48146361409caa8cf9e9`.
+
+The 4.9 GiB target, 39 MiB temporary build environment and superseded
+parser-pinning CLI pair/wheel are removed after verification. Runners clean their
+installed consumers and Git workspaces; only current artifacts and small reports
+remain. Single-job builds retain the 30 GiB free-space/8 GiB target guard and
+disabled core dumps. Nothing is published or pushed upstream. Full portable
+capability/availability/preflight envelopes and their trust policies remain open.

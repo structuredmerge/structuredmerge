@@ -21,6 +21,44 @@ from libcst_facts import LibCSTHost
 
 
 class TypedParserHostTest(unittest.TestCase):
+    def test_source_free_workflow_reports_retain_snapshots_across_probe_retirement(self):
+        Host, provider_id, request, limits = self.workflow_fixture()
+        host = Host()
+        generation = core.register_workflow_host(host)
+        def descriptor_must_be_cached():
+            raise AssertionError("source-free selection must use the cached workflow descriptor")
+        host.descriptor = descriptor_must_be_cached
+        query = native.MergeSelectionRequest(provider_id=provider_id, family="python", operation="analyze",
+            profile="python.libcst.analysis.v1", required_capabilities=["analyze"], required_preservation=[],
+            parser=native.ParserSelectionRequest(language="python", options=request.items[0].parse_options,
+                selection=native.ParserSelection(backend_id="python.libcst", preference=[], required_capabilities=[])))
+        retired = []
+        original_probe = self.host.probe_batch
+        def retire_during_probe(batch):
+            if not retired:
+                retired.append(core.unregister_workflow_host(provider_id, generation))
+            return original_probe(batch)
+        self.host.probe_batch = retire_during_probe
+        try:
+            reports = core.workflow_selection_reports([query, query], limits)
+            self.assertEqual(len(reports), 2)
+            self.assertTrue(all(r.selected_provider == provider_id and r.provider_generation == generation for r in reports))
+            self.assertEqual(reports[0].provider_digest, reports[1].provider_digest)
+            self.assertEqual(reports[0].parser_digest, reports[1].parser_digest)
+            self.assertEqual(self.host.calls, 0)
+            self.assertEqual(host.calls, [])
+            later = core.workflow_selection_reports([query], limits)[0]
+            self.assertIsNone(later.selected_provider)
+            self.assertIn("unknown_explicit_provider", later.rejections)
+            control = core.create_operation_control()
+            control.cancel()
+            with self.assertRaisesRegex(RuntimeError, "execution.cancelled"):
+                core.workflow_selection_reports_controlled([query], limits, control)
+        finally:
+            self.host.probe_batch = original_probe
+            if not retired:
+                core.unregister_workflow_host(provider_id, generation)
+
     def test_compiled_batch_preserves_policy_selection_over_native_parser(self):
         original = self.common_request("analyze", ["a = 1\n"])
         operation = native.OperationRequest(schema=original.schema, request_id=original.request_id,

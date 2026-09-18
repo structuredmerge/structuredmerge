@@ -20,6 +20,47 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  it "observes workflow selection without execution through a probe-time retirement" do
+    core = described_class
+    parser = TypedPsychHost.new
+    core.register_parser_host(parser)
+    host = TypedWorkflowHost.new
+    generation = core.register_workflow_host(host)
+    host.define_singleton_method(:descriptor) { raise "selection must use the cached workflow descriptor" }
+    query = core::MergeSelectionRequest.new(provider_id: "ruby.psych.workflow", family: "yaml", operation: "analyze",
+      profile: "ruby.psych.analysis.v1", required_capabilities: ["analyze"], required_preservation: [],
+      parser: core::ParserSelectionRequest.new(language: "yaml", options: workflow_request.items.first.parse_options,
+        selection: core::ParserSelection.new(backend_id: "ruby.typed.psych", preference: [], required_capabilities: [])))
+    retired = false
+    original_probe = parser.method(:probe_batch)
+    parser.define_singleton_method(:probe_batch) do |batch|
+      unless retired
+        core.unregister_workflow_host("ruby.psych.workflow", generation)
+        retired = true
+      end
+      original_probe.call(batch)
+    end
+    original_parse = parser.method(:parse_batch)
+    parse_calls = 0
+    parser.define_singleton_method(:parse_batch) { |batch| parse_calls += 1; original_parse.call(batch) }
+    reports = core.workflow_selection_reports([query, query], workflow_limits)
+    expect(reports.map(&:selected_provider)).to eq(["ruby.psych.workflow"] * 2)
+    expect(reports.map(&:provider_generation)).to eq([generation] * 2)
+    expect(reports.map(&:provider_digest).uniq.length).to eq(1)
+    expect(reports.map(&:parser_digest).uniq.length).to eq(1)
+    expect(parse_calls).to eq(0)
+    expect(host.calls).to be_empty
+    later = core.workflow_selection_reports([query], workflow_limits).first
+    expect(later.selected_provider).to be_nil
+    expect(later.rejections).to include("unknown_explicit_provider")
+    control = core.create_operation_control
+    control.cancel
+    expect { core.workflow_selection_reports_controlled([query], workflow_limits, control) }.to raise_error(RuntimeError, /execution.cancelled/)
+  ensure
+    core.unregister_workflow_host("ruby.psych.workflow", generation) if generation && !retired
+    core.unregister_parser_provider("ruby.typed.psych") if core
+  end
+
   it "keeps compiled batch parser pinning distinct from requested policy selection" do
     core = described_class
     core.register_parser_host(TypedPsychHost.new)

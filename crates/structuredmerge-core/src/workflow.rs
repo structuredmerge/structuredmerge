@@ -140,6 +140,105 @@ pub fn workflow_registry_inventory() -> Result<MergeProviderInventory, CoreError
     registry().snapshot().map(|snapshot| snapshot.inventory()).map_err(registration_error)
 }
 
+/// Source-free selection observations, not availability or preflight approval.
+/// Probes follow registered parser policy and may load/acquire grammars: callers
+/// requiring offline behavior must register cached-only providers. This is not
+/// host health, authenticated availability, execution approval or a preflight lease.
+pub fn workflow_selection_reports(
+    queries: Vec<MergeSelectionRequest>,
+    limits: WorkflowLimits,
+) -> Result<Vec<MergeSelectionReport>, CoreError> {
+    workflow_selection_reports_controlled(queries, limits, &OperationControl::new())
+}
+
+/// Controlled source-free selection observations, not preflight approval.
+pub fn workflow_selection_reports_controlled(
+    queries: Vec<MergeSelectionRequest>,
+    limits: WorkflowLimits,
+    control: &OperationControl,
+) -> Result<Vec<MergeSelectionReport>, CoreError> {
+    let context = limits.parse.clone().controlled_context(control)?;
+    context.check().map_err(CoreError::from)?;
+    let providers = registry().snapshot().map_err(registration_error)?;
+    let parsers = crate::host::registry()
+        .snapshot()
+        .map_err(|_| error("registry", "parser registry unavailable"))?;
+    observe_selection(queries, &limits, &context, &providers, &parsers)
+}
+
+fn observe_selection(
+    queries: Vec<MergeSelectionRequest>,
+    limits: &WorkflowLimits,
+    context: &ExecutionContext,
+    providers: &MergeProviderSnapshot<WorkflowExecutor>,
+    parsers: &ParserRegistrySnapshot,
+) -> Result<Vec<MergeSelectionReport>, CoreError> {
+    context.check().map_err(CoreError::from)?;
+    if queries.len() > limits.max_operations {
+        return Err(error("resource.limit", "workflow selection queries exceed operation limit"));
+    }
+    bounded(&queries, limits.max_request_bytes)?;
+    // Validate the entire batch before any provider probe.
+    for query in &queries {
+        context.check().map_err(CoreError::from)?;
+        validate_selection_query(query, providers)?;
+    }
+    let mut reports = Vec::new();
+    for query in &queries {
+        reports.push(
+            negotiate_merge_provider(
+                query,
+                providers,
+                parsers,
+                &TreeHaverParseService::default(),
+                context,
+            )
+            .map_err(CoreError::from)?,
+        );
+        context.check().map_err(CoreError::from)?;
+        bounded(&reports, limits.max_response_bytes)?;
+    }
+    context.check().map_err(CoreError::from)?;
+    bounded(&reports, limits.max_response_bytes)?;
+    Ok(reports)
+}
+
+fn validate_selection_query(
+    query: &MergeSelectionRequest,
+    providers: &MergeProviderSnapshot<WorkflowExecutor>,
+) -> Result<(), CoreError> {
+    query.validate().map_err(CoreError::from)?;
+    let Some(id) = query.provider_id.as_deref() else { return Ok(()) };
+    if !providers.provider(id).is_some_and(|p| matches!(p.as_ref(), WorkflowExecutor::Kernel)) {
+        return Ok(());
+    }
+    let profile = crate::operation_profile_catalog()
+        .profiles
+        .into_iter()
+        .find(|p| p.provider_id == id && Some(&p.id) == query.profile.as_ref())
+        .ok_or_else(|| {
+            error("workflow.invalid_request", "compiled workflow requires its explicit profile")
+        })?;
+    let operation = match query.operation.as_str() {
+        "analyze" => OperationKind::Analyze,
+        "diff2" => OperationKind::Diff2,
+        "merge2" => OperationKind::Merge2,
+        "merge3" => OperationKind::Merge3,
+        _ => unreachable!("query was validated"),
+    };
+    if crate::profiles::profile_parser_language(&profile.family, query.dialect.as_deref())
+        != Some(query.parser.language.as_str())
+        || query.parser.dialect.is_some()
+        || query.parser.options != crate::profiles::operation_parse_options(&profile.id, operation)
+    {
+        return Err(error(
+            "workflow.invalid_request",
+            "compiled workflow parser query differs from its profile",
+        ));
+    }
+    Ok(())
+}
+
 /// The common facade retains explicit compiled-profile semantics, but resolves
 /// its executor through the same registry as batches. Host workflows need the
 /// batch API's explicit parser query; never infer that query from a host name.
@@ -299,44 +398,8 @@ fn execute(
                 },
             },
         };
-        query.validate().map_err(CoreError::from)?;
+        validate_selection_query(&query, providers)?;
         queries.push(query);
-    }
-    // Compiled execution uses profile-owned parser options. Validate every
-    // supplied query before probes, rather than silently ignoring host fields.
-    if matches!(executor.as_ref(), WorkflowExecutor::Kernel) {
-        for item in &request.items {
-            let profile = crate::operation_profile_catalog()
-                .profiles
-                .into_iter()
-                .find(|p| {
-                    p.provider_id == provider_id
-                        && Some(&p.id) == item.operation.provider_selection.profile_id.as_ref()
-                })
-                .ok_or_else(|| {
-                    error(
-                        "workflow.invalid_request",
-                        "compiled workflow requires its explicit profile",
-                    )
-                })?;
-            let dialect = item.operation.provider_selection.dialect.as_deref();
-            if crate::profiles::profile_parser_language(&profile.family, dialect)
-                != Some(item.parser_language.as_str())
-                // Native profiles map semantic dialect to parser language;
-                // their TreeHaver query has no separate parser dialect.
-                || item.parser_dialect.is_some()
-                || item.parse_options
-                    != crate::profiles::operation_parse_options(
-                        &profile.id,
-                        item.operation.operation.kind(),
-                    )
-            {
-                return Err(error(
-                    "workflow.invalid_request",
-                    "compiled workflow parser query differs from its profile",
-                ));
-            }
-        }
     }
     let mut selections = vec![];
     for query in &queries {

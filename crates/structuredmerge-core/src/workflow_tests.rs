@@ -4,6 +4,144 @@ use serde_json::json;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tree_haver::service::{ParserProvider, ParserRegistry, ProviderFault};
 
+fn selection_query() -> MergeSelectionRequest {
+    MergeSelectionRequest {
+        provider_id: Some("test.host".into()),
+        family: "test".into(),
+        operation: "analyze".into(),
+        dialect: None,
+        profile: Some("test.analysis.v1".into()),
+        required_capabilities: vec![],
+        required_preservation: vec![],
+        parser: ParserSelectionRequest {
+            language: "test".into(),
+            dialect: None,
+            options: ParseOptions::default(),
+            selection: ParserSelection {
+                backend_id: Some("test.parser".into()),
+                preference: vec![],
+                required_capabilities: vec![],
+            },
+        },
+    }
+}
+
+#[test]
+fn source_free_workflow_observation_matches_execution_selection_without_execution() {
+    let fixture = fixture(Behavior::Good);
+    let control = OperationControl::new();
+    let mut limits = limits();
+    limits.parse.max_input_bytes = 0;
+    let context = limits.parse.clone().controlled_context(&control).unwrap();
+    let reports = observe_selection(
+        vec![selection_query()],
+        &limits,
+        &context,
+        &fixture.providers.snapshot().unwrap(),
+        &fixture.parsers.snapshot().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(reports[0].selected_provider.as_deref(), Some("test.host"));
+    assert_eq!(fixture.parser.probes.load(Ordering::SeqCst), 1);
+    assert_eq!(fixture.parser.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(fixture.host.calls.load(Ordering::SeqCst), 0);
+    limits.parse.max_input_bytes = 10000;
+    let execution = run(&fixture, request(), limits, &control).unwrap();
+    assert_eq!(reports, execution.selections);
+}
+
+#[test]
+fn workflow_observation_validates_whole_batch_and_limits_before_probes() {
+    for variant in [
+        "invalid",
+        "compiled",
+        "count",
+        "request_bytes",
+        "cancelled",
+        "response_bytes",
+        "empty_response_bytes",
+    ] {
+        let fixture = fixture(Behavior::Good);
+        let compiled = crate::artifact_inventory::compiled_provider_inventory()
+            .workflows
+            .into_iter()
+            .find(|d| d.provider_id == "kernel.json")
+            .unwrap();
+        fixture.providers.register(compiled, Arc::new(WorkflowExecutor::Kernel)).unwrap();
+        let mut queries = vec![selection_query(), selection_query()];
+        let mut limits = limits();
+        let control = OperationControl::new();
+        match variant {
+            "invalid" => queries[1].operation = "unknown".into(),
+            "compiled" => {
+                queries[1].provider_id = Some("kernel.json".into());
+                queries[1].profile = None;
+            }
+            "count" => limits.max_operations = 1,
+            "request_bytes" => limits.max_request_bytes = 1,
+            "cancelled" => control.cancel(),
+            "response_bytes" => limits.max_response_bytes = 1,
+            "empty_response_bytes" => {
+                queries.clear();
+                limits.max_response_bytes = 1;
+            }
+            _ => unreachable!(),
+        }
+        let context = limits.parse.clone().controlled_context(&control).unwrap();
+        assert!(
+            observe_selection(
+                queries,
+                &limits,
+                &context,
+                &fixture.providers.snapshot().unwrap(),
+                &fixture.parsers.snapshot().unwrap()
+            )
+            .is_err(),
+            "{variant}"
+        );
+        assert_eq!(
+            fixture.parser.probes.load(Ordering::SeqCst),
+            usize::from(variant == "response_bytes"),
+            "{variant}"
+        );
+        assert_eq!(fixture.parser.calls.load(Ordering::SeqCst), 0);
+        assert_eq!(fixture.host.calls.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[test]
+fn workflow_observation_uses_captured_snapshots_not_live_registration() {
+    let fixture = fixture(Behavior::Good);
+    let providers = fixture.providers.snapshot().unwrap();
+    let parsers = fixture.parsers.snapshot().unwrap();
+    fixture.providers.unregister("test.host", providers.generation()).unwrap();
+    fixture.parsers.unregister("test.parser", parsers.generation()).unwrap();
+    let limits = limits();
+    let context = limits.parse.clone().controlled_context(&OperationControl::new()).unwrap();
+    let reports =
+        observe_selection(vec![selection_query(); 2], &limits, &context, &providers, &parsers)
+            .unwrap();
+    for report in reports {
+        assert_eq!(report.selected_provider.as_deref(), Some("test.host"));
+        assert_eq!(report.provider_generation, providers.generation());
+        assert_eq!(report.provider_digest, providers.digest());
+        assert_eq!(report.parser_generation, parsers.generation());
+        assert_eq!(report.parser_digest, parsers.digest());
+    }
+    let later = observe_selection(
+        vec![selection_query()],
+        &limits,
+        &context,
+        &fixture.providers.snapshot().unwrap(),
+        &fixture.parsers.snapshot().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(later[0].selected_provider, None);
+    assert_eq!(later[0].rejections, ["unknown_explicit_provider", "no_eligible_provider"]);
+    assert_eq!(fixture.parser.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(fixture.host.calls.load(Ordering::SeqCst), 0);
+}
+
 #[test]
 fn compiled_registry_has_executors_without_parser_registration_or_host_mutation() {
     let parsers = crate::parser_registry_inventory().unwrap();
@@ -144,6 +282,15 @@ fn compiled_batch_executes_all_json_operations_with_kernel_ownership() {
     assert_eq!(result.results.len(), 4);
     assert!(result.results.iter().all(|r| r.ok), "{:?}", result.results);
     assert!(result.selections.iter().all(|s| s.provider_generation == providers.generation()));
+    let observations = observe_selection(
+        result.selections.iter().map(|s| s.requested.clone()).collect(),
+        &limits,
+        &context,
+        &providers,
+        &parsers.snapshot().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(observations, result.selections);
     let mut policy_request = request.clone();
     for item in &mut policy_request.items {
         item.operation.provider_selection.dialect = Some("json".into());

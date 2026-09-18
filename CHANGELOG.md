@@ -367,6 +367,8 @@
 
 - Unify compiled kernel and host workflow executors in the merge registry, protect compiled IDs from host mutation, and execute explicit compiled batches with kernel ownership and bounded typed results.
 
+- Expose bounded source-free workflow/parser selection reports and a controlled variant across the Rust, Ruby and Python facades, sharing execution query validation and immutable snapshot traces without claiming preflight authority.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
