@@ -275,6 +275,7 @@ fn run_version(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) 
             "kernel_version": manifest.kernel_version,
             "cli_contract": "structuredmerge.cli/v1",
             "build": build_info::value(),
+            "compiled_providers": structuredmerge_core::artifact_inventory::compiled_provider_inventory(),
         });
         serde_json::to_writer(&mut *stdout, &value)
             .map_err(io::Error::other)

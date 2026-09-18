@@ -40,6 +40,10 @@ fn version_identifies_each_binary_and_linked_kernel_without_external_tools() {
         .unwrap();
         assert_eq!(value["kernel_version"], linked.kernel_version);
         assert_eq!(value["cli_contract"], "structuredmerge.cli/v1");
+        let inventory = structuredmerge_core::artifact_inventory::compiled_provider_inventory();
+        assert_eq!(value["compiled_providers"], serde_json::to_value(inventory).unwrap());
+        assert_eq!(value["compiled_providers"]["runtime_availability_checked"], false);
+        assert!(output.stdout.len() < 65536, "version observation must fit the assembly budget");
         let build = &value["build"];
         assert_eq!(build["schema"], "structuredmerge.cli-build/v1");
         for key in ["target", "host", "cargo_profile", "cargo_opt_level", "cargo_debug"] {

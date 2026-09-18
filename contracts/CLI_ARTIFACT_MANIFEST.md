@@ -42,7 +42,8 @@ fixture; a test checks that list for drift:
   inferred from the presence of these declarations.
 - `built_in_provider_descriptors`: entries with nonempty `id`, `kind` (`parser`
   or `workflow`), `origin: in_process`, `contract`, `descriptor`, and unique
-  string `asset_requirements`. The embedded descriptor's `id` must agree, and
+  string `asset_requirements`. The embedded descriptor's `id` (parser) or
+  `provider_id` (workflow) must agree, and
   every required asset must be declared. Full kind-specific descriptor/contract
   validation remains a separate gate; parser and workflow declarations are not
   treated as interchangeable.
@@ -172,7 +173,7 @@ make this observation tool POSIX-only.
 
 ```sh
 python3 workspace-scripts/assemble_cli_artifact_manifest.py \
-  --artifact tmp/cli-build-identity-bin/smorg \
+  --artifact tmp/compiled-provider-bin/smorg \
   --declarations tmp/cli-manifest-assembly-declarations.json \
   --artifact-id smorg.local-candidate \
   --execute-local-artifact --allow-development-build \
@@ -210,3 +211,65 @@ provider/asset declarations: they test assembly, not complete release inventorie
 No compiler ran; no observation directories remain; free space remains 134 GiB.
 Authenticated manifests, compiler-owned provider inventory, runtime availability
 and preflight remain open. Discovery remains 19/20, not newly verified here.
+
+## Compiled typed-kernel provider inventory
+
+The linked kernel now owns `artifact_inventory::compiled_provider_inventory()`.
+It returns the existing typed `MergeProviderDescriptor` and
+`ParserProviderDescriptor` contracts, plus the operation-profile catalog. The
+eight kernel workflow/backend descriptors derive from that catalog; parser
+language resolution shares the capability-query helper. The seven cached-only
+parser descriptors come directly from TreeHaver's non-loading constructors.
+No registry mutation, provider callback, grammar probe, cache read or host-package
+discovery occurs. Python/YAML workflows retain their native-extension requirement,
+but no Psych/LibCST host descriptor or substituted TSLP parser is fabricated.
+Capabilities name declared operations; no unconditional preservation guarantee or
+default authority is inferred. Source/policy-specific acceptance remains execution's
+responsibility.
+
+Both executable names include this optional `compiled_providers` object in
+version JSON. Its schema is `structuredmerge.compiled-provider-inventory/v1` and
+scope is `typed-common-operation-kernel`, deliberately not all linked legacy or
+benchmark implementations. The Rust build-tool API is not yet included in the
+generated host facade. Generated Ruby/Python API surfaces are unchanged; Alef's
+own regeneration refreshes its source-input provenance after the core changes.
+
+Candidate assembly preserves this inventory and rejects operator descriptors
+that differ from its exact kind/identity match. Coverage records declared versus
+compiled counts, so empty local declarations cannot masquerade as a complete
+inventory. Older version producers without the optional object retain null
+inventory/coverage, not inferred evidence. Identity validation now respects the
+workflow contract's `provider_id` field instead of incorrectly requiring parser
+`id`. This does not authenticate executable claims or verify asset requirements,
+linkage, grammar digests, contract compatibility, native extensions or liveness;
+all existing trust/publication flags remain false.
+
+Local verification uses one bounded compiler target, the inventory unit test,
+109 CLI tests (including three warm-grammar cases), real Git merge/diff on both
+names, candidate/integrity round trips and tooling tests. Current binaries live
+in `tmp/compiled-provider-bin/`; logs and candidate evidence use
+`tmp/compiled-provider-*`. The compiler target is removed after verification.
+Authenticated manifests, registry integration, verified assets, runtime
+availability and pinned preflight remain open; this does not implement `languages`.
+
+Verification evidence:
+
+- All 74 tooling tests pass with the real `smorg` binary explicitly supplied;
+  the nine assembly tests also pass with `smorg-rs`. Real-artifact tests carry all
+  eight workflow descriptors through candidate integrity checking and reject a
+  changed package-version declaration; parser assets are not fabricated.
+- Alef verification and both unchanged API review baselines pass. The typed
+  publication closure remains 20 crates; no dependency was added.
+- Real Git reports: `tmp/typed-cli-git-zg9mi072/report.json` and
+  `tmp/typed-cli-git-im1sl9km/report.json`.
+- Portable discovery remains 19/20 for each name, recorded in fixture reports
+  `tmp/cli-conformance-7fy2935n/report.json` and
+  `tmp/cli-conformance-y1fsg2_y/report.json` (under the fixtures repository).
+- Current `smorg` SHA-256:
+  `37050074bf7de37af8288ab7960cdf159e693daa879ca13e956cb8231ba64ff4`.
+- Current `smorg-rs` SHA-256:
+  `06316a21586a4b032dc17415de7931b9df9a4215b019e1b514e23cf328bbbb2e`.
+
+The 2.5 GiB compiler target and superseded 47 MiB `cli-build-identity-bin` pair
+are removed after verification. Current binaries and small evidence remain;
+earlier build-identity hashes above are historical, not the retained pair.

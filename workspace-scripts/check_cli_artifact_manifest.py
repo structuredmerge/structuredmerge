@@ -111,7 +111,8 @@ def validate(manifest):
         identities.add((kind, identity))
         require(provider.get("origin") == "in_process", "host registrations are not built-in providers")
         require(isinstance(provider.get("contract"), str) and provider["contract"], "provider contract required")
-        require(isinstance(provider.get("descriptor"), dict) and provider["descriptor"].get("id") == identity,
+        identity_field = "id" if kind == "parser" else "provider_id"
+        require(isinstance(provider.get("descriptor"), dict) and provider["descriptor"].get(identity_field) == identity,
                 "descriptor identity mismatch")
         require(strings(provider.get("asset_requirements")), "invalid asset requirements")
         require(set(provider["asset_requirements"]) <= ids, "provider references undeclared asset")

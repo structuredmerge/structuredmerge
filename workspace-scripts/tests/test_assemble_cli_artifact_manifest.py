@@ -65,6 +65,55 @@ class AssembleManifestTest(unittest.TestCase):
         with self.assertRaises(checker.Rejected):
             self.assemble(development=True)
 
+    def test_compiled_descriptors_are_preserved_and_operator_drift_rejects(self):
+        descriptor = {"provider_id": "kernel.test", "runtime": "rust"}
+        inventory = {"schema": "structuredmerge.compiled-provider-inventory/v1",
+            "scope": "typed-common-operation-kernel", "kernel_version": "0.2.0",
+            "runtime_availability_checked": False, "workflows": [descriptor], "parsers": []}
+        self.observed["compiled_providers"] = inventory
+        self.declarations["built_in_provider_descriptors"] = [{"id": "kernel.test", "kind": "workflow",
+            "origin": "in_process", "contract": "test/v1", "descriptor": copy.deepcopy(descriptor),
+            "asset_requirements": []}]
+        candidate = self.assemble(development=True)
+        self.assertEqual(candidate["compiled_provider_inventory"], inventory)
+        self.assertEqual(candidate["compiled_descriptor_coverage"], {"declared": 1, "compiled": 1})
+        self.assertFalse(candidate["provider_descriptors_verified"])
+        self.declarations["built_in_provider_descriptors"][0]["descriptor"]["runtime"] = "guessed"
+        with self.assertRaisesRegex(checker.Rejected, "differs from compiled"):
+            self.assemble(development=True)
+        self.declarations["built_in_provider_descriptors"] = []
+        self.assertEqual(self.assemble(development=True)["compiled_descriptor_coverage"], {"declared": 0, "compiled": 1})
+        inventory["workflows"].append(copy.deepcopy(descriptor))
+        with self.assertRaisesRegex(checker.Rejected, "duplicate compiled"):
+            self.assemble(development=True)
+
+    @unittest.skipUnless(os.environ.get("SMORG_TEST_ARTIFACT"), "requires an explicitly supplied built CLI")
+    def test_real_compiled_workflows_roundtrip_and_drift_rejection(self):
+        binary = Path(os.environ["SMORG_TEST_ARTIFACT"])
+        observed = assembler.collect(binary, self.declaration_file, "local-test", True, self.root)
+        inventory = observed["compiled_provider_inventory"]
+        self.assertTrue(inventory["workflows"])
+        self.assertTrue(inventory["parsers"])
+        self.declarations["built_in_provider_descriptors"] = [{
+            "id": descriptor["provider_id"], "kind": "workflow", "origin": "in_process",
+            "contract": "https://structuredmerge.org/schemas/provider-result/v1.json",
+            "descriptor": descriptor, "asset_requirements": [],
+        } for descriptor in inventory["workflows"]]
+        self.declaration_file.write_text(json.dumps(self.declarations))
+        candidate = assembler.collect(binary, self.declaration_file, "local-test", True, self.root)
+        path = self.root / "candidate.json"
+        path.write_text(json.dumps(candidate))
+        self.assertTrue(checker.check(path, binary, candidate["target"], "standalone")["passed"])
+        self.assertEqual(candidate["compiled_descriptor_coverage"], {
+            "declared": len(inventory["workflows"]),
+            "compiled": len(inventory["workflows"]) + len(inventory["parsers"]),
+        })
+        self.declarations["built_in_provider_descriptors"][0]["descriptor"]["package_version"] += "-spoofed"
+        self.declaration_file.write_text(json.dumps(self.declarations))
+        with self.assertRaisesRegex(checker.Rejected, "differs from compiled"):
+            assembler.collect(binary, self.declaration_file, "local-test", True, self.root)
+        self.assertFalse(list(self.root.glob("cli-manifest-observation-*")))
+
     def test_claimed_trust_wrong_package_and_inconsistent_source_reject(self):
         for mutate in [lambda o: o.update(package="other"),
                        lambda o: o["build"].update(provenance_verified=True),

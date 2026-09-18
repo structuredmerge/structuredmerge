@@ -16,6 +16,14 @@ spec.loader.exec_module(checker)
 
 
 class ArtifactManifestTest(unittest.TestCase):
+    def test_workflow_identity_uses_the_typed_provider_id_field(self):
+        provider = self.manifest["built_in_provider_descriptors"][0]
+        provider.update(kind="workflow", descriptor={"provider_id": provider["id"]})
+        checker.validate(self.manifest)
+        provider["descriptor"] = {"id": provider["id"]}
+        with self.assertRaisesRegex(checker.Rejected, "identity mismatch"):
+            checker.validate(self.manifest)
+
     def test_required_fields_match_shared_slice_1032_policy(self):
         policy = json.loads((ROOT.parent / "fixtures/diagnostics/slice-1032-cli-artifact-provider-policy/contract.json").read_text())
         self.assertEqual(checker.REQUIRED, set(policy["artifact_manifest"]["required_fields"]))

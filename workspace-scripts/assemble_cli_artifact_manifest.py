@@ -116,6 +116,27 @@ def assemble(declarations, observed, artifact_id, artifact_digest, development=F
                 and source.get("origin") == "build-environment", "invalid source revision/origin")
     require(development or (revision is not None and source["state"] == "clean"),
             "dirty/unrecorded source requires --allow-development-build; never infer it from this checkout")
+    inventory = observed.get("compiled_providers")
+    coverage = None
+    if inventory is not None:
+        require(isinstance(inventory, dict) and inventory.get("schema") == "structuredmerge.compiled-provider-inventory/v1"
+                and inventory.get("scope") == "typed-common-operation-kernel"
+                and inventory.get("kernel_version") == observed["kernel_version"]
+                and inventory.get("runtime_availability_checked") is False, "invalid compiled provider inventory")
+        descriptors = {}
+        for kind, field, identity_field in (("parser", "parsers", "id"), ("workflow", "workflows", "provider_id")):
+            entries = inventory.get(field)
+            require(isinstance(entries, list) and len(entries) <= 1024, "invalid compiled provider list")
+            for descriptor in entries:
+                require(isinstance(descriptor, dict), "invalid compiled descriptor")
+                identity = descriptor.get(identity_field)
+                require(isinstance(identity, str) and identity and (kind, identity) not in descriptors,
+                        "invalid/duplicate compiled provider identity")
+                descriptors[kind, identity] = descriptor
+        for provider in declarations["built_in_provider_descriptors"]:
+            require(descriptors.get((provider["kind"], provider["id"])) == provider["descriptor"],
+                    "provider declaration differs from compiled descriptor")
+        coverage = {"declared": len(declarations["built_in_provider_descriptors"]), "compiled": len(descriptors)}
     result = {key: declarations[key] for key in DECLARED}
     result.update(schema="structuredmerge.cli-artifact-manifest/v1", artifact_id=artifact_id,
         artifact_version=observed["version"], build_revision=revision or "unknown", artifact_digest=artifact_digest,
@@ -124,6 +145,8 @@ def assemble(declarations, observed, artifact_id, artifact_digest, development=F
         compiled_feature_scope="cli-package-cargo-environment-only", candidate_only=True,
         signature_verified=False, build_provenance_verified=False, provider_descriptors_verified=False,
         runtime_availability_checked=False, publication_authorized=False)
+    result["compiled_provider_inventory"] = inventory
+    result["compiled_descriptor_coverage"] = coverage
     validate(result)
     return result
 

@@ -176,6 +176,21 @@ pub(crate) fn native_language<'a>(family: &'a str, dialect: Option<&str>) -> Opt
     }
 }
 
+pub(crate) fn profile_parser_language<'a>(
+    family: &'a str,
+    dialect: Option<&str>,
+) -> Option<&'a str> {
+    if family == "json" {
+        match dialect {
+            None | Some("json") => Some("json"),
+            Some("jsonc" | "json5") => Some("json5"),
+            _ => None,
+        }
+    } else {
+        native_language(family, dialect)
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct NativeMergeProfile {
     pub id: String,

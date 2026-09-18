@@ -81,15 +81,9 @@ pub fn capability_manifest_controlled(
         let dialect_declared =
             query.dialect.as_ref().is_none_or(|d| profile.explicit_dialects.contains(d));
         let parser_request = if operation_declared && dialect_declared {
-            let language = if profile.family == "json" {
-                match query.dialect.as_deref() {
-                    None | Some("json") => "json",
-                    _ => "json5",
-                }
-            } else {
-                crate::profiles::native_language(&profile.family, query.dialect.as_deref())
-                    .expect("declared native dialect")
-            };
+            let language =
+                crate::profiles::profile_parser_language(&profile.family, query.dialect.as_deref())
+                    .expect("declared profile dialect");
             Some(ParserSelectionRequest {
                 language: language.into(),
                 // Dialects select a parser language, as in execute_operation.

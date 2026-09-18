@@ -61,6 +61,7 @@ pub use structural::*;
 mod templates;
 pub use templates::*;
 mod capabilities;
+pub mod artifact_inventory;
 mod profiles;
 pub use capabilities::*;
 pub use profiles::{

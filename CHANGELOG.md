@@ -361,6 +361,8 @@
 
 - Add bounded, opt-in local CLI candidate manifest assembly from embedded identity, measured executable bytes, and explicit declarations; preserve unsigned and unverified status.
 
+- Expose the linked typed-kernel compiled provider inventory in CLI version JSON; preserve exact workflow/parser descriptors in candidate assembly and reject declaration drift without implying runtime availability.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
