@@ -65,3 +65,13 @@ environments are removed on exit; small evidence reports remain under `tmp/`.
 Current generation requires local Alef corrections, including root-array field
 access and preservation of explicit null assertion values. Upstream release reproducibility remains open;
 this is not approval to publish packages or claim full target conformance.
+
+Upstream release check (2026-09-18): GitHub reports v0.91.5, released
+2026-09-17, at commit `765e038`. Source inspection of that tag still shows
+`Pyo3Backend` propagating data-enum opacity into containing DTOs without the
+local `16b8ed0` serializability correction. It also lacks `send_sync_types`,
+which this kernel's `alef.toml` uses for `OperationControl`. Updating the current
+0.89.0 CI pin alone therefore does not resolve the known generator gap. This is
+a source comparison, not a generation or compiler test of 0.91.5. The upstream
+tag was fetched read-only; no local fixes were pushed, no compiler output was
+created, and the CI pin remains unchanged.
