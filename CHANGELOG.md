@@ -369,6 +369,8 @@
 
 - Expose bounded source-free workflow/parser selection reports and a controlled variant across the Rust, Ruby and Python facades, sharing execution query validation and immutable snapshot traces without claiming preflight authority.
 
+- Add opt-in detached SSH authentication for CLI candidate manifests with explicit digest-pinned trust inputs, bounded verification, and no implied runtime or publication authority.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

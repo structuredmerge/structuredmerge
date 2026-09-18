@@ -1,5 +1,73 @@
 # CLI artifact integrity prerequisite
 
+## Caller-trusted signature verification
+
+`workspace-scripts/authenticate_cli_artifact_manifest.py` composes detached
+OpenSSH signature verification with the candidate integrity checker below. It
+authenticates the exact raw manifest bytes, not a reserialized representation.
+This is an opt-in local POSIX build tool, not a choice of project release keys,
+final distribution signature format, or runtime authorization policy.
+
+```sh
+python3 workspace-scripts/authenticate_cli_artifact_manifest.py \
+  --manifest candidate.json --artifact dist/smorg \
+  --target x86_64-unknown-linux-gnu --profile standalone \
+  --signature candidate.json.sig \
+  --allowed-signers trusted-allowed-signers \
+  --allowed-signers-digest sha256:TRUST_FILE_SHA256 \
+  --principal release-signer@example.invalid \
+  --revoked-keys trusted-revocations \
+  --revoked-keys-digest sha256:REVOCATIONS_SHA256 \
+  --asset json path/to/explicitly-supplied-json-grammar
+```
+
+Trust inputs and their digest pins must come from an independently trusted
+channel. Taking keys, principal and pins from the artifact publisher's untrusted
+download would authenticate that supplied key, not establish release trust. No
+keys are discovered from the manifest, checkout, user SSH agent or network.
+OpenSSH's allowed-signers rules authorize the explicit principal, including any
+namespace restrictions, certificate principals and validity periods. The tool
+always requires namespace `cli-artifact-manifest@structuredmerge.org`; ordinary
+`file` or Git signatures cannot substitute. The trusted installed `ssh-keygen`
+executable and local clock are part of the verifier's trusted environment.
+
+Revocation input is optional but, when supplied, requires its own digest pin.
+Omission is explicitly reported as `revocation_checked: false`; it does not
+assert non-revocation. Authorization freshness, key rotation, release identity,
+rollback prevention, build attestation and the project's trust bootstrap remain
+separate release-policy requirements. No private key is used by this tool.
+
+Signature, allowed-signers and revocation inputs are each bounded to 1 MiB and
+copied into disposable repository-local scratch. The verifier reuses the bounded
+process observer: 10-second timeout, capped capture/file writes, disabled cores,
+process-group cleanup and a live 20 GiB disk reserve. Scratch is removed on
+success or failure. The integrity check is pinned to the signed raw bytes and
+rejects manifest replacement between verification and byte checking. As with
+the integrity checker, input paths assume trusted local regular files on a
+stable filesystem; this is not an adversarial filesystem sandbox or a later
+execution lease.
+
+The separate `structuredmerge.cli-artifact-authentication/v1` report identifies
+the authorized principal, namespace and signature/trust/manifest digests. Only
+its signature flag becomes true. Its nested integrity report retains its own
+scope and false signature flag because that checker does not authenticate.
+Neither signature success nor an authorized signature over a development
+candidate proves build provenance, complete descriptors, available grammars,
+runtime health, default approval or publication authority. A signed malformed
+manifest or mismatched artifact/explicit asset still fails closed. Exit 0 means
+this scoped authentication passed; failures exit 2 with stable error codes.
+
+Verification: all 83 tooling tests pass in `tmp/manifest-auth-tooling.log`.
+Nine new tests use disposable Ed25519 keys and real OpenSSH verification, cover
+wrong key/principal/namespace, expiry, revocation, changed manifest/artifact/asset,
+invalid signed declarations, digest pins, verifier/budget failures, scratch
+cleanup and optimized Python CLI behavior. An explicit retained CLI artifact
+also round-trips through candidate assembly and authentication with a temporary
+test key; this is not a release signature. Test keys, copied artifacts and
+verification scratch are removed. No compiler or package installation is run.
+
+## Candidate integrity checker
+
 Slice 1032 requires a verified immutable artifact manifest before runtime
 availability can be claimed. The source-free capability manifest has no build,
 signature or asset-integrity evidence; it cannot serve that purpose. Existing
