@@ -117,7 +117,10 @@ class CommandBudgetTest(unittest.TestCase):
         (ROOT / "tmp").mkdir(exist_ok=True)
         self.temporary = tempfile.TemporaryDirectory(dir=ROOT / "tmp")
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        # command() captures live beside cwd. Give each test an owned parent so
+        # concurrent bounded jobs in repository tmp do not look like leaks.
+        self.root = Path(self.temporary.name) / "work"
+        self.root.mkdir()
 
     def run_program(self, program, **kwargs):
         return gate.command([sys.executable, "-c", program], self.root, dict(os.environ), **kwargs)

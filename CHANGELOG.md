@@ -377,6 +377,8 @@
 
 - Add explicit provider/parser registry generation and digest expectations for guarded workflow execution in Rust and generated Ruby/Python APIs, rejecting stale state before probes or callbacks without claiming full preflight authority.
 
+- Add a bounded Python source-to-installed-wheel gate with Cargo-owned lock pruning, Maturin repackaging, dependency-pin checks, and guaranteed temporary build cleanup.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
