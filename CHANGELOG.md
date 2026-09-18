@@ -482,3 +482,5 @@
 - Normalize Git external-diff absent sides without opening devices and compare validated zero-byte JSON documents through kernel owner semantics, with real-Git added/deleted regression coverage.
 
 - Pin negotiated compiled-workflow parsers before dispatch and output verification, fail without alternate probing when availability changes, and preserve policy-selection provenance and semantic/parser dialect separation.
+
+- Require complete compiled parser/workflow declarations for non-development CLI manifest assembly, and expose strict shared inventory checks in integrity and signature verification.

@@ -68,6 +68,39 @@ verification scratch are removed. No compiler or package installation is run.
 
 ## Candidate integrity checker
 
+### Compiled declaration completeness
+
+Candidate assembly now requires complete typed provider declarations outside
+`--allow-development-build`. In development mode, pass
+`--require-complete-inventory` to require the same coverage. The integrity and
+authentication commands also accept that flag; a valid signature does not waive
+the requirement. Missing inventory or omitted compiled providers fail with
+`artifact.inventory_incomplete`.
+
+The shared comparison keys providers by `(kind, stable ID)`, compares each full
+descriptor against the embedded compiled inventory, rejects invented or altered
+descriptors and duplicate compiled identities, and checks recorded coverage
+counts. Integrity reports include `compiled_inventory_coverage` with deterministic
+`undeclared_providers`, counts, scope and a completeness flag. An absent inventory
+is reported as null unless strict mode is requested. Partial development
+manifests remain explicitly inspectable; they are not silently promoted.
+
+This proves declaration consistency and coverage of the reported
+`typed-common-operation-kernel` inventory, not semantic validation of every
+descriptor field, binary-to-inventory provenance, or exhaustive coverage of
+legacy CLI/benchmark implementations. Empty asset requirement declarations do
+not prove that no grammar is needed. Host compatibility entries never count as
+built-in provider declarations, and parser/workflow identities remain distinct.
+`provider_descriptors_verified` and runtime/publication flags stay false.
+
+Verification: 86 tooling tests pass in `tmp/manifest-inventory-tooling.log`.
+Real retained CLI observation covers all eight workflows and seven parsers,
+rejects workflow-only declarations in strict mode, and round-trips the complete
+declarations through integrity checking and disposable-key authentication.
+Tests also reject missing inventories, falsified counts, descriptor drift and
+same-ID cross-kind substitution. Temporary keys, executable copies and signature
+scratch are cleaned; this work creates no compiler target or installed package.
+
 Slice 1032 requires a verified immutable artifact manifest before runtime
 availability can be claimed. The source-free capability manifest has no build,
 signature or asset-integrity evidence; it cannot serve that purpose. Existing

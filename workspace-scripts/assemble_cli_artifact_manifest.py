@@ -17,7 +17,7 @@ import tempfile
 import time
 
 from check_cli_artifact_manifest import (MAX_ARTIFACT, MAX_MANIFEST, Rejected,
-    digest_file, invalid_constant, require, strings, unique_object, validate)
+    compiled_coverage, digest_file, invalid_constant, require, strings, unique_object, validate)
 
 ROOT = Path(__file__).resolve().parent.parent
 RESERVE = 20 * 1024**3
@@ -91,7 +91,7 @@ def validate_declarations(declarations):
     validate(provisional)
 
 
-def assemble(declarations, observed, artifact_id, artifact_digest, development=False):
+def assemble(declarations, observed, artifact_id, artifact_digest, development=False, require_complete_inventory=False):
     validate_declarations(declarations)
     require(isinstance(observed, dict) and observed.get("schema") == "structuredmerge.cli-version/v1"
             and observed.get("cli_contract") == "structuredmerge.cli/v1", "unsupported version identity")
@@ -117,26 +117,9 @@ def assemble(declarations, observed, artifact_id, artifact_digest, development=F
     require(development or (revision is not None and source["state"] == "clean"),
             "dirty/unrecorded source requires --allow-development-build; never infer it from this checkout")
     inventory = observed.get("compiled_providers")
-    coverage = None
-    if inventory is not None:
-        require(isinstance(inventory, dict) and inventory.get("schema") == "structuredmerge.compiled-provider-inventory/v1"
-                and inventory.get("scope") == "typed-common-operation-kernel"
-                and inventory.get("kernel_version") == observed["kernel_version"]
-                and inventory.get("runtime_availability_checked") is False, "invalid compiled provider inventory")
-        descriptors = {}
-        for kind, field, identity_field in (("parser", "parsers", "id"), ("workflow", "workflows", "provider_id")):
-            entries = inventory.get(field)
-            require(isinstance(entries, list) and len(entries) <= 1024, "invalid compiled provider list")
-            for descriptor in entries:
-                require(isinstance(descriptor, dict), "invalid compiled descriptor")
-                identity = descriptor.get(identity_field)
-                require(isinstance(identity, str) and identity and (kind, identity) not in descriptors,
-                        "invalid/duplicate compiled provider identity")
-                descriptors[kind, identity] = descriptor
-        for provider in declarations["built_in_provider_descriptors"]:
-            require(descriptors.get((provider["kind"], provider["id"])) == provider["descriptor"],
-                    "provider declaration differs from compiled descriptor")
-        coverage = {"declared": len(declarations["built_in_provider_descriptors"]), "compiled": len(descriptors)}
+    coverage = compiled_coverage({**declarations, "compiled_provider_inventory": inventory,
+                                 "linked_kernel_version": observed["kernel_version"]},
+                                require_complete_inventory or not development)
     result = {key: declarations[key] for key in DECLARED}
     result.update(schema="structuredmerge.cli-artifact-manifest/v1", artifact_id=artifact_id,
         artifact_version=observed["version"], build_revision=revision or "unknown", artifact_digest=artifact_digest,
@@ -146,12 +129,13 @@ def assemble(declarations, observed, artifact_id, artifact_digest, development=F
         signature_verified=False, build_provenance_verified=False, provider_descriptors_verified=False,
         runtime_availability_checked=False, publication_authorized=False)
     result["compiled_provider_inventory"] = inventory
-    result["compiled_descriptor_coverage"] = coverage
+    result["compiled_descriptor_coverage"] = None if coverage is None else {
+        "declared": coverage["declared"], "compiled": coverage["compiled"]}
     validate(result)
     return result
 
 
-def collect(artifact, declarations_path, artifact_id, development=False, scratch=None):
+def collect(artifact, declarations_path, artifact_id, development=False, scratch=None, require_complete_inventory=False):
     require(os.name == "posix", "local executable observation currently requires POSIX resource limits")
     artifact = artifact.resolve(strict=True)
     require(declarations_path.is_file() and declarations_path.stat().st_size <= MAX_MANIFEST, "declarations exceed size budget")
@@ -167,7 +151,7 @@ def collect(artifact, declarations_path, artifact_id, development=False, scratch
     with tempfile.TemporaryDirectory(prefix="cli-manifest-observation-", dir=scratch) as directory:
         observed = version(artifact, Path(directory), artifact_digest)
         require(digest_file(artifact)[0] == artifact_digest, "original artifact changed during observation", "artifact.digest_mismatch")
-        candidate = assemble(declarations, observed, artifact_id, artifact_digest, development)
+        candidate = assemble(declarations, observed, artifact_id, artifact_digest, development, require_complete_inventory)
     candidate["declarations_digest"] = "sha256:" + hashlib.sha256(raw).hexdigest()
     return candidate
 
@@ -179,11 +163,14 @@ def main():
     parser.add_argument("--artifact-id", required=True)
     parser.add_argument("--execute-local-artifact", action="store_true", help="explicitly trust this local artifact to execute --version")
     parser.add_argument("--allow-development-build", action="store_true")
+    parser.add_argument("--require-complete-inventory", action="store_true",
+                        help="also require complete typed inventory in development mode; mandatory otherwise")
     args = parser.parse_args()
     if not args.execute_local_artifact:
         parser.error("--execute-local-artifact is required; this command runs the supplied trusted program")
     try:
-        candidate = collect(args.artifact, args.declarations, args.artifact_id, args.allow_development_build)
+        candidate = collect(args.artifact, args.declarations, args.artifact_id, args.allow_development_build,
+                            require_complete_inventory=args.require_complete_inventory)
         print(json.dumps(candidate, sort_keys=True, indent=2))
         return 0
     except (Rejected, OSError, ValueError, KeyError, TypeError, RecursionError) as error:

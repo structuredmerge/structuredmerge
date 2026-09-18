@@ -24,6 +24,44 @@ class ArtifactManifestTest(unittest.TestCase):
         with self.assertRaisesRegex(checker.Rejected, "identity mismatch"):
             checker.validate(self.manifest)
 
+    def test_complete_inventory_requires_both_kinds_and_preserves_missing_identities(self):
+        descriptor = self.manifest["built_in_provider_descriptors"][0]["descriptor"]
+        inventory = {"schema": "structuredmerge.compiled-provider-inventory/v1",
+                     "scope": "typed-common-operation-kernel", "kernel_version": "0.2.0",
+                     "runtime_availability_checked": False,
+                     "parsers": [descriptor], "workflows": [{"provider_id": descriptor["id"]}]}
+        self.manifest.update(compiled_provider_inventory=inventory, linked_kernel_version="0.2.0")
+        self.write()
+        report = self.check()["compiled_inventory_coverage"]
+        self.assertFalse(report["complete"])
+        self.assertEqual(report["undeclared_providers"], [{"kind": "workflow", "id": descriptor["id"]}])
+        with self.assertRaisesRegex(checker.Rejected, "omitted"):
+            self.check(require_complete_inventory=True)
+        provider = copy.deepcopy(self.manifest["built_in_provider_descriptors"][0])
+        provider.update(kind="workflow", descriptor=inventory["workflows"][0])
+        self.manifest["built_in_provider_descriptors"].append(provider)
+        self.write()
+        self.assertTrue(self.check(require_complete_inventory=True)["compiled_inventory_coverage"]["complete"])
+        self.manifest["compiled_descriptor_coverage"] = {"declared": 1, "compiled": 1}
+        self.write()
+        with self.assertRaisesRegex(checker.Rejected, "coverage claim"):
+            self.check()
+        del self.manifest["compiled_descriptor_coverage"]
+        inventory["parsers"][0] = {"id": descriptor["id"], "spoofed": True}
+        self.write()
+        with self.assertRaisesRegex(checker.Rejected, "differs from compiled"):
+            self.check()
+
+    def test_strict_inventory_rejects_absence_and_cli_exits_two(self):
+        self.write()
+        with self.assertRaisesRegex(checker.Rejected, "inventory is required"):
+            self.check(require_complete_inventory=True)
+        result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", str(self.path),
+            "--artifact", str(self.binary), "--target", "test-target", "--profile", "standalone",
+            "--require-complete-inventory"], capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(json.loads(result.stdout)["code"], "artifact.inventory_incomplete")
+
     def test_required_fields_match_shared_slice_1032_policy(self):
         policy = json.loads((ROOT.parent / "fixtures/diagnostics/slice-1032-cli-artifact-provider-policy/contract.json").read_text())
         self.assertEqual(checker.REQUIRED, set(policy["artifact_manifest"]["required_fields"]))

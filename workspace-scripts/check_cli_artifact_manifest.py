@@ -68,6 +68,43 @@ def strings(values):
             and len(values) == len(set(values)))
 
 
+def compiled_coverage(manifest, required=False):
+    """Compare typed declaration identities, never infer runtime availability."""
+    inventory = manifest.get("compiled_provider_inventory")
+    if inventory is None:
+        require(not required, "compiled provider inventory is required", "artifact.inventory_incomplete")
+        return None
+    require(isinstance(inventory, dict)
+            and inventory.get("schema") == "structuredmerge.compiled-provider-inventory/v1"
+            and inventory.get("scope") == "typed-common-operation-kernel"
+            and inventory.get("kernel_version") == manifest.get("linked_kernel_version")
+            and isinstance(inventory.get("kernel_version"), str) and inventory["kernel_version"]
+            and inventory.get("runtime_availability_checked") is False, "invalid compiled provider inventory")
+    descriptors = {}
+    for kind, field, identity_field in (("parser", "parsers", "id"), ("workflow", "workflows", "provider_id")):
+        entries = inventory.get(field)
+        require(isinstance(entries, list) and len(entries) <= 1024, "invalid compiled provider list")
+        for descriptor in entries:
+            require(isinstance(descriptor, dict), "invalid compiled descriptor")
+            identity = descriptor.get(identity_field)
+            require(isinstance(identity, str) and identity and (kind, identity) not in descriptors,
+                    "invalid/duplicate compiled provider identity")
+            descriptors[kind, identity] = descriptor
+    declared = set()
+    for provider in manifest["built_in_provider_descriptors"]:
+        identity = (provider["kind"], provider["id"])
+        require(descriptors.get(identity) == provider["descriptor"],
+                "provider declaration differs from compiled descriptor")
+        declared.add(identity)
+    missing = [{"kind": kind, "id": identity} for kind, identity in sorted(descriptors.keys() - declared)]
+    coverage = {"declared": len(declared), "compiled": len(descriptors)}
+    if "compiled_descriptor_coverage" in manifest:
+        require(manifest["compiled_descriptor_coverage"] == coverage, "compiled coverage claim differs from inventory")
+    require(not required or not missing, "compiled providers omitted from declarations", "artifact.inventory_incomplete")
+    return {**coverage, "complete": not missing, "undeclared_providers": missing,
+            "scope": inventory["scope"], "runtime_availability_checked": False}
+
+
 def validate(manifest):
     require(isinstance(manifest, dict) and manifest.get("schema") == SCHEMA, "unsupported manifest schema")
     require(REQUIRED <= manifest.keys(), "missing Slice 1032 artifact declaration fields")
@@ -119,7 +156,8 @@ def validate(manifest):
         require(not {"available", "selected", "approved_as_default"} & provider.keys(), "provider runtime/authority claim in manifest")
 
 
-def check(manifest_path, artifact, expected_target, expected_profile, assets=None, expected_manifest_digest=None):
+def check(manifest_path, artifact, expected_target, expected_profile, assets=None, expected_manifest_digest=None,
+          require_complete_inventory=False):
     require(manifest_path.is_file() and manifest_path.stat().st_size <= MAX_MANIFEST, "manifest exceeds size budget or is not a file")
     with manifest_path.open("rb") as stream:
         raw = stream.read(MAX_MANIFEST + 1)
@@ -130,6 +168,7 @@ def check(manifest_path, artifact, expected_target, expected_profile, assets=Non
                 "pinned manifest digest mismatch", "artifact.digest_mismatch")
     manifest = json.loads(raw, object_pairs_hook=unique_object, parse_constant=invalid_constant)
     validate(manifest)
+    coverage = compiled_coverage(manifest, require_complete_inventory)
     require(manifest["target"] == expected_target, "declared target differs from expected target", "artifact.platform_unsupported")
     require(manifest["profile"] == expected_profile, "declared profile differs from expected profile", "artifact.profile_unsupported")
     actual, size = digest_file(artifact)
@@ -152,6 +191,7 @@ def check(manifest_path, artifact, expected_target, expected_profile, assets=Non
             "manifest_digest": manifest_digest, "artifact_digest": actual, "artifact_byte_length": size,
             "declared_target": manifest["target"], "declared_profile": manifest["profile"], "assets": checks,
             "manifest_digest_pinned": expected_manifest_digest is not None,
+            "compiled_inventory_coverage": coverage,
             "signature_verified": False, "build_provenance_verified": False,
             "binary_target_verified": False, "provider_descriptors_verified": False,
             "runtime_availability_checked": False, "publication_authorized": False}
@@ -164,12 +204,14 @@ def main():
     parser.add_argument("--target", required=True)
     parser.add_argument("--profile", choices=("standalone", "embedded_host", "explicit_sidecar"), required=True)
     parser.add_argument("--manifest-digest")
+    parser.add_argument("--require-complete-inventory", action="store_true")
     parser.add_argument("--asset", nargs=2, action="append", default=[], metavar=("ID", "FILE"))
     args = parser.parse_args()
     try:
         require(len({identity for identity, _ in args.asset}) == len(args.asset), "duplicate asset input")
         result = check(args.manifest, args.artifact, args.target, args.profile,
-                       {identity: Path(path) for identity, path in args.asset}, args.manifest_digest)
+                       {identity: Path(path) for identity, path in args.asset}, args.manifest_digest,
+                       args.require_complete_inventory)
     except (Rejected, OSError, ValueError, KeyError, TypeError, RecursionError) as error:
         result = {"schema": "structuredmerge.cli-artifact-integrity-check/v1", "passed": False,
                   "scope": "candidate-shape-and-explicit-byte-integrity",

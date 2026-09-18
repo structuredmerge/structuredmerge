@@ -52,6 +52,12 @@ class AssembleManifestTest(unittest.TestCase):
         with self.assertRaises(checker.Rejected):
             self.assemble()
         source["state"] = "clean"
+        with self.assertRaisesRegex(checker.Rejected, "inventory is required"):
+            self.assemble()
+        self.observed["compiled_providers"] = {
+            "schema": "structuredmerge.compiled-provider-inventory/v1",
+            "scope": "typed-common-operation-kernel", "kernel_version": "0.2.0",
+            "workflows": [], "parsers": [], "runtime_availability_checked": False}
         self.assertEqual(self.assemble()["build_revision"], "a" * 40)
         self.assertFalse(self.assemble()["build_provenance_verified"])
 
@@ -108,6 +114,20 @@ class AssembleManifestTest(unittest.TestCase):
             "declared": len(inventory["workflows"]),
             "compiled": len(inventory["workflows"]) + len(inventory["parsers"]),
         })
+        with self.assertRaisesRegex(checker.Rejected, "omitted"):
+            assembler.collect(binary, self.declaration_file, "local-test", True, self.root, True)
+        self.declarations["built_in_provider_descriptors"].extend({
+            "id": descriptor["id"], "kind": "parser", "origin": "in_process",
+            "contract": "https://structuredmerge.org/schemas/parse-result/v1.json",
+            "descriptor": descriptor, "asset_requirements": [],
+        } for descriptor in inventory["parsers"])
+        self.declaration_file.write_text(json.dumps(self.declarations))
+        candidate = assembler.collect(binary, self.declaration_file, "local-test", True, self.root, True)
+        path.write_text(json.dumps(candidate))
+        report = checker.check(path, binary, candidate["target"], "standalone", require_complete_inventory=True)
+        self.assertTrue(report["compiled_inventory_coverage"]["complete"])
+        self.assertEqual(report["compiled_inventory_coverage"]["undeclared_providers"], [])
+        self.assertFalse(report["provider_descriptors_verified"])
         self.declarations["built_in_provider_descriptors"][0]["descriptor"]["package_version"] += "-spoofed"
         self.declaration_file.write_text(json.dumps(self.declarations))
         with self.assertRaisesRegex(checker.Rejected, "differs from compiled"):

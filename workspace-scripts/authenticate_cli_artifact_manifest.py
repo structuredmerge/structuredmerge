@@ -43,7 +43,7 @@ def pinned(path, expected):
 
 def authenticate(manifest, artifact, target, profile, signature, allowed_signers,
                  allowed_signers_digest, principal, assets=None, revoked_keys=None,
-                 revoked_keys_digest=None):
+                 revoked_keys_digest=None, require_complete_inventory=False):
     require(os.name == "posix", "SSH authentication currently requires POSIX resource limits",
             "artifact.authentication_unsupported")
     require(isinstance(principal, str) and 0 < len(principal) <= 1024
@@ -80,7 +80,7 @@ def authenticate(manifest, artifact, target, profile, signature, allowed_signers
             raise Rejected("artifact.authentication_failed", "bounded signature verifier failed") from error
         require(result.returncode == 0, "signature is not authorized by the supplied trust policy",
                 "artifact.signature_invalid")
-    integrity = check(manifest, artifact, target, profile, assets, digest(raw))
+    integrity = check(manifest, artifact, target, profile, assets, digest(raw), require_complete_inventory)
     return {"schema": SCHEMA, "passed": True,
             "scope": "caller-trusted-signature-and-explicit-byte-integrity",
             "manifest_digest": digest(raw), "signature_digest": digest(signature_raw),
@@ -102,13 +102,15 @@ def main():
     parser.add_argument("--profile", choices=("standalone", "embedded_host", "explicit_sidecar"), required=True)
     parser.add_argument("--revoked-keys", type=Path)
     parser.add_argument("--revoked-keys-digest")
+    parser.add_argument("--require-complete-inventory", action="store_true")
     parser.add_argument("--asset", nargs=2, action="append", default=[], metavar=("ID", "FILE"))
     args = parser.parse_args()
     try:
         require(len({identity for identity, _ in args.asset}) == len(args.asset), "duplicate asset input")
         result = authenticate(args.manifest, args.artifact, args.target, args.profile,
             args.signature, args.allowed_signers, args.allowed_signers_digest, args.principal,
-            {identity: Path(path) for identity, path in args.asset}, args.revoked_keys, args.revoked_keys_digest)
+            {identity: Path(path) for identity, path in args.asset}, args.revoked_keys, args.revoked_keys_digest,
+            args.require_complete_inventory)
     except (Rejected, OSError, ValueError, KeyError, TypeError, RecursionError) as error:
         result = {"schema": SCHEMA, "passed": False,
                   "code": getattr(error, "code", "artifact.authentication_invalid"), "message": str(error),

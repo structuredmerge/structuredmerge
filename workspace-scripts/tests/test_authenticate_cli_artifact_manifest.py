@@ -154,6 +154,25 @@ class ManifestAuthenticationTest(unittest.TestCase):
         self.assertEqual(result["integrity"]["artifact_digest"], candidate["artifact_digest"])
         self.assertFalse(result["build_provenance_verified"])
         self.assertFalse(result["publication_authorized"])
+        with self.assertRaisesRegex(auth.Rejected, "omitted"):
+            self.authenticate(artifact=binary, target=candidate["target"], require_complete_inventory=True)
+        inventory = candidate["compiled_provider_inventory"]
+        for kind, field, identity_field in (("parser", "parsers", "id"), ("workflow", "workflows", "provider_id")):
+            declarations["built_in_provider_descriptors"].extend({
+                "id": descriptor[identity_field], "kind": kind, "origin": "in_process",
+                "contract": "test/v1", "descriptor": descriptor, "asset_requirements": [],
+            } for descriptor in inventory[field])
+        declaration_file.write_text(json.dumps(declarations))
+        candidate = assembler.collect(binary, declaration_file, "local-signature-test", True, self.root, True)
+        self.path.write_text(json.dumps(candidate))
+        self.sign()
+        result = self.authenticate(artifact=binary, target=candidate["target"], require_complete_inventory=True)
+        self.assertTrue(result["integrity"]["compiled_inventory_coverage"]["complete"])
+        self.assertFalse(result["integrity"]["provider_descriptors_verified"])
+
+    def test_authorized_signature_does_not_excuse_missing_inventory(self):
+        with self.assertRaisesRegex(auth.Rejected, "inventory is required"):
+            self.authenticate(require_complete_inventory=True)
 
     def test_cli_optimized_success_and_failure(self):
         args = [sys.executable, "-O", str(ROOT / "workspace-scripts/authenticate_cli_artifact_manifest.py"),
