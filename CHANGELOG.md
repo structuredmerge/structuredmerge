@@ -359,6 +359,8 @@
 
 - Embed Cargo build target/profile/features and explicitly declared source identity in CLI version JSON without runtime checkout discovery or provenance/availability claims.
 
+- Add bounded, opt-in local CLI candidate manifest assembly from embedded identity, measured executable bytes, and explicit declarations; preserve unsigned and unverified status.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

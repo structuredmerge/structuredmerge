@@ -161,3 +161,52 @@ verification. Current binaries and small evidence remain. This implements the
 build-identity input, not complete manifest emission/authentication, asset linkage,
 provider availability, preflight pinning or default authority. No package was
 published and no upstream/local-only Alef policy changed.
+
+## Local candidate assembly
+
+`workspace-scripts/assemble_cli_artifact_manifest.py` combines the supplied
+executable's embedded version/build identity and measured SHA-256 with explicit
+operator declarations. It requires `--execute-local-artifact`: this runs a trusted
+local program, not an untrusted-program sandbox. POSIX resource limits currently
+make this observation tool POSIX-only.
+
+```sh
+python3 workspace-scripts/assemble_cli_artifact_manifest.py \
+  --artifact tmp/cli-build-identity-bin/smorg \
+  --declarations tmp/cli-manifest-assembly-declarations.json \
+  --artifact-id smorg.local-candidate \
+  --execute-local-artifact --allow-development-build \
+  > tmp/cli-manifest-assembly-smorg.json
+```
+
+Declarations use `structuredmerge.cli-artifact-declarations/v1`, with exactly
+`profile`, `schema_contracts`, `built_in_provider_descriptors`,
+`host_bridge_protocols`, `grammar_assets`, `grammar_installation_policy`,
+`network_policy`, and `platform_requirements`. They are validated before execution
+and cannot override measured digest or embedded identity. Their raw-byte digest
+is retained. Dirty or unknown source identity requires the explicit development
+flag; even declared-clean identity is not authenticated provenance.
+
+Observation copies at most 512 MiB into repository-local disposable scratch,
+checks bytes before and after execution, limits stdout/stderr to 64 KiB each,
+disables core dumps, enforces a ten-second deadline and 20 GiB free-space reserve,
+and terminates the process group. Copies, captures and isolated grammar directories
+are removed on success or failure. Empty PATH and isolated grammar directories
+are not a network/security sandbox. The original executable is rehashed after
+observation; no current-checkout identity is substituted.
+
+Every output is explicitly an unsigned candidate with provenance, descriptor,
+runtime availability and publication verification false. Cargo feature flags
+describe only the CLI package environment, not all transitive build features.
+Provider/asset declarations are neither compiler-derived nor proven complete.
+
+Verification: all 62 tooling tests pass, including seven assembly tests covering
+identity policy, override rejection, round-trip integrity, changed bytes, failed
+commands, output flooding, timeout and scratch cleanup. Log:
+`tmp/cli-manifest-assembly-tooling.log`. Both retained CLI names assemble and pass
+the integrity checker; evidence is `tmp/cli-manifest-assembly-{smorg,smorg-rs}.json`
+and matching `-check.json` files. Those local examples deliberately use empty
+provider/asset declarations: they test assembly, not complete release inventories.
+No compiler ran; no observation directories remain; free space remains 134 GiB.
+Authenticated manifests, compiler-owned provider inventory, runtime availability
+and preflight remain open. Discovery remains 19/20, not newly verified here.
