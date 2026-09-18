@@ -1,5 +1,30 @@
 # CLI artifact integrity prerequisite
 
+## CI execution of the tooling gates
+
+The Linux installed-CLI job now runs the complete tooling suite against its
+installed `smorg`, then the manifest suite against its installed `smorg-rs`.
+Previously the suite ran in the Python wheel job without its required sibling
+fixtures or an explicit Ruby setup, and real-artifact tests lacked
+`SMORG_TEST_ARTIFACT`. The installed job supplies pinned fixtures at the expected
+path, Ruby 4.0, Python 3.14 and a required `ssh-keygen` executable. It retains
+tooling logs with the existing Git evidence, never disposable signing keys.
+
+Single-job, non-incremental, debug-info-free CLI builds use a dedicated target;
+core dumps are disabled for installation and audits. An `always()` cleanup step
+removes only that job's target and installation directories after evidence
+collection, including failure paths. Python installed-wheel matrix coverage is
+unchanged. The optional real-grammar authentication test still requires an
+explicit `SMORG_TEST_GRAMMAR`; this job does not acquire a grammar merely to make
+that test green. Synthetic signed-asset tests run regardless.
+
+Local verification uses retained binaries: 93 tooling tests (one optional
+grammar-input skip) and 38 manifest tests against the alias (the same skip).
+Logs: `tmp/manifest-ci-tooling.log`, `tmp/manifest-ci-alias.log`. The added workflow
+test checks fixture/runtime/build ordering, both executable inputs, separate
+Python artifact coverage and failure cleanup. This verifies local commands and
+workflow structure, not a hosted CI run; no push or workflow dispatch occurred.
+
 ## Caller-trusted signature verification
 
 `workspace-scripts/authenticate_cli_artifact_manifest.py` composes detached

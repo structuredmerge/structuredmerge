@@ -26,6 +26,12 @@ jobs:
     timeout-minutes: 30
     env:
       TREE_HAVER_LANGUAGE_PACK_CACHE_DIR: ${{ github.workspace }}/tmp/typed-tslp-cache
+      CARGO_TARGET_DIR: ${{ github.workspace }}/tmp/cli-target
+      CARGO_BUILD_JOBS: "1"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,6 +41,9 @@ jobs:
           repository: structuredmerge/structuredmerge-fixtures
           ref: 93276c5a54fe6fb6bd3cc0c44aa63880fc9a0a19
           path: shared-fixtures
+      - name: Place tooling fixtures beside kernel
+        shell: bash
+        run: mv shared-fixtures ../fixtures
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
@@ -43,21 +52,41 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.14"
+      - name: Setup Ruby for cross-language tooling audits
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
       - name: Install both kernel executables from this checkout
         shell: bash
         run: |
           mkdir -p tmp
           export TMPDIR="$PWD/tmp"
+          ulimit -c 0
           cargo install --path crates/smorg-rs --root "$PWD/tmp/cli-install" --debug --locked
+      - name: Verify tooling against the installed canonical artifact
+        env:
+          SMORG_TEST_ARTIFACT: ${{ github.workspace }}/tmp/cli-install/bin/smorg
+        shell: bash
+        run: |
+          ulimit -c 0
+          command -v ssh-keygen
+          python -m unittest discover -s workspace-scripts/tests -v 2>&1 | tee tmp/cli-tooling.log
+      - name: Verify manifest gates against the installed compatibility artifact
+        env:
+          SMORG_TEST_ARTIFACT: ${{ github.workspace }}/tmp/cli-install/bin/smorg-rs
+        shell: bash
+        run: |
+          ulimit -c 0
+          python -m unittest discover -s workspace-scripts/tests -p '*cli_artifact_manifest.py' -v 2>&1 | tee tmp/cli-manifest-alias.log
       - name: Verify installed canonical executable through real Git
         run: >-
           python workspace-scripts/check_installed_cli_git.py tmp/cli-install/bin/smorg
-          --fixtures shared-fixtures/diagnostics/slice-951-git-driver-json-integration/git-driver-json-integration.json
+          --fixtures ../fixtures/diagnostics/slice-951-git-driver-json-integration/git-driver-json-integration.json
       - name: Verify installed compatibility alias through real Git
         if: ${{ !cancelled() }}
         run: >-
           python workspace-scripts/check_installed_cli_git.py tmp/cli-install/bin/smorg-rs
-          --fixtures shared-fixtures/diagnostics/slice-951-git-driver-json-integration/git-driver-json-integration.json
+          --fixtures ../fixtures/diagnostics/slice-951-git-driver-json-integration/git-driver-json-integration.json
       - name: Retain Git gate evidence even on failure
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -65,11 +94,20 @@ jobs:
           name: installed-kernel-cli-git-linux
           include-hidden-files: true
           path: |
+            tmp/cli-tooling.log
+            tmp/cli-manifest-alias.log
             tmp/installed-cli-git-*/report.json
             tmp/installed-cli-git-*/*/driver-report.json
             tmp/installed-cli-git-*/*/merge-stdout
             tmp/installed-cli-git-*/*/merge-stderr
           if-no-files-found: warn
+      - name: Remove disposable CLI build and install directories
+        if: always()
+        shell: bash
+        run: |
+          if [ -d tmp/cli-target ]; then rm -r -- tmp/cli-target; fi
+          if [ -d tmp/cli-install ]; then rm -r -- tmp/cli-install; fi
+          df -h .
 
   typed-core-python-artifact:
     name: Typed core Python installed artifact (${{ matrix.platform }}, Python ${{ matrix.python }})
@@ -120,11 +158,6 @@ jobs:
         run: python -m pip install 'maturin>=1,<2' 'libcst==1.9.0'
       - name: Verify common operation execution with native LibCST
         run: cargo test -p structuredmerge-core --test native_operations --locked python_ -- --ignored
-      - name: Verify archive audit rejects invalid artifacts
-        # Tooling audits include POSIX CLI and Ruby workflow checks; installed
-        # Python runtime/generated tests below still run on every target.
-        if: matrix.platform == 'linux-x64'
-        run: python -m unittest discover -s workspace-scripts/tests -v
       - name: Verify typed Ruby and Python API review baselines
         run: python workspace-scripts/check_typed_api_baselines.py
       - name: Check typed publication dependency closure

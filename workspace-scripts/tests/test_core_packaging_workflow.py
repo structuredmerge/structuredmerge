@@ -17,6 +17,35 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         ], check=True, capture_output=True, text=True, timeout=10)
         cls.jobs = json.loads(result.stdout)["jobs"]
 
+    def test_tooling_audits_have_fixtures_ruby_and_both_installed_artifacts(self):
+        job = self.jobs["installed-kernel-cli"]
+        steps = job["steps"]
+        commands = [step.get("run", "") for step in steps]
+        fixture_index = next(i for i, step in enumerate(steps)
+                             if step.get("with", {}).get("repository") == "structuredmerge/structuredmerge-fixtures")
+        move_index = commands.index("mv shared-fixtures ../fixtures")
+        ruby_index = next(i for i, step in enumerate(steps) if step.get("uses", "").startswith("ruby/setup-ruby@"))
+        build_index = next(i for i, command in enumerate(commands) if "cargo install --path" in command)
+        audits = [(i, step) for i, step in enumerate(steps) if "unittest discover" in step.get("run", "")]
+        self.assertEqual(len(audits), 2)
+        self.assertEqual({step["env"]["SMORG_TEST_ARTIFACT"].rsplit("/", 1)[1] for _, step in audits}, {"smorg", "smorg-rs"})
+        self.assertLess(fixture_index, move_index)
+        for index, step in audits:
+            self.assertLess(move_index, index)
+            self.assertLess(ruby_index, index)
+            self.assertLess(build_index, index)
+            self.assertNotIn("if", step)
+        self.assertIn("command -v ssh-keygen", audits[0][1]["run"])
+        self.assertNotIn("unittest discover", json.dumps(self.jobs["typed-core-python-artifact"]))
+        self.assertEqual(job["env"]["CARGO_BUILD_JOBS"], "1")
+        self.assertEqual(job["env"]["CARGO_INCREMENTAL"], "0")
+        self.assertEqual(job["env"]["CARGO_PROFILE_DEV_DEBUG"], "0")
+        cleanup = steps[-1]
+        self.assertEqual(cleanup["if"], "always()")
+        self.assertIn("rm -r -- tmp/cli-target", cleanup["run"])
+        self.assertIn("rm -r -- tmp/cli-install", cleanup["run"])
+        self.assertNotIn("rm -r -- tmp\n", cleanup["run"])
+
     def test_export_compiles_then_packages_verifies_and_uploads_only_core(self):
         steps = self.jobs["ruby-package"]["steps"]
         commands = [step.get("run", "") for step in steps]

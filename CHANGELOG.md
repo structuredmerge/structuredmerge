@@ -486,3 +486,5 @@
 - Pin negotiated compiled-workflow parsers before dispatch and output verification, fail without alternate probing when availability changes, and preserve policy-selection provenance and semantic/parser dialect separation.
 
 - Require complete compiled parser/workflow declarations for non-development CLI manifest assembly, and expose strict shared inventory checks in integrity and signature verification.
+
+- Run cross-language tooling audits in the installed CLI CI job with pinned shared fixtures, explicit Ruby setup, real manifest tests for both executables, retained logs, and disposable build cleanup.
