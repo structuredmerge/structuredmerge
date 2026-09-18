@@ -365,6 +365,8 @@
 
 - Implement read-only conflicts diff JSON through ast-merge-git with exact source digests and ours/base/theirs byte ranges; reject malformed markers and bound input/region sizes.
 
+- Unify compiled kernel and host workflow executors in the merge registry, protect compiled IDs from host mutation, and execute explicit compiled batches with kernel ownership and bounded typed results.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

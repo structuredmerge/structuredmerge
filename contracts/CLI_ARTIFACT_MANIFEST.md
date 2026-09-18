@@ -173,7 +173,7 @@ make this observation tool POSIX-only.
 
 ```sh
 python3 workspace-scripts/assemble_cli_artifact_manifest.py \
-  --artifact tmp/git-null-bin/smorg \
+  --artifact tmp/workflow-registry-bin/smorg \
   --declarations tmp/cli-manifest-assembly-declarations.json \
   --artifact-id smorg.local-candidate \
   --execute-local-artifact --allow-development-build \
@@ -284,3 +284,7 @@ See `contracts/CLI_GIT_INSTALL.md` for current retained binary hashes and checks
 
 Git absent-side diff work subsequently superseded that pair; current hashes and
 checks are in `contracts/CLI_GIT_ABSENT_SIDES.md`. Manifest formats are unchanged.
+
+Unified workflow-registry work subsequently superseded that pair; current binary
+hashes and checks are in `contracts/TYPED_WORKFLOW_HOST.md`. Runtime registry
+integration does not authenticate the compiled declarations or manifest.

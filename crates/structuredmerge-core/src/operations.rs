@@ -45,5 +45,5 @@ pub fn execute_operation_controlled(
     let snapshot = crate::host::registry()
         .snapshot()
         .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;
-    crate::native_operation::execute_native_operation(&validated, &snapshot, &context)
+    crate::workflow::execute_compiled_operation(&validated, &snapshot, &context)
 }

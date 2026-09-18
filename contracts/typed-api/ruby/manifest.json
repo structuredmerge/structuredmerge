@@ -1,11 +1,11 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "ruby",
-  "review_reason": "Add explicit cached-only parser registration; existing registration signatures and policy unchanged",
+  "review_reason": "Reviewed additive :kernel execution-owner value; :host and function signatures preserved. Registry inventory includes immutable compiled descriptors; host tests select by provider ID.",
   "files": {
     "lib/structuredmerge_core/native.rb": "1958362029340a5786ed9762f1431dcdbcf0017626d262aede09db17eb2ea32f",
     "lib/structuredmerge_core/version.rb": "6cda1e4772dbebb74e509d2aefe2fcc1a9081782f9dd3f514f00a629c4211125",
     "lib/structuredmerge_core.rb": "defe67340887e4fcfecefc0a68d255fab86768e5c81260916819b636303f5cdf",
-    "sig/types.rbs": "551a09138acd7c06d3b42a9c47addec11ccfface81bb5fedd48e22d1bc3c020c"
+    "sig/types.rbs": "f6cd1a1e8f18352fa1d516ad27da3cce4bbc67f974ea85402e38b075e21640e2"
   }
 }

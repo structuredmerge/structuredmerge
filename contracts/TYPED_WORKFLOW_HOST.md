@@ -90,3 +90,77 @@ envelopes remain open. Host availability, versioned parser-profile support,
 family-default workflow execution, allowed delegation, complete portable batch
 conformance and broad binding-runtime guarantees also remain open. No existing
 kernel profile or native default changes, and no new package is published.
+
+## Unified compiled/host executor registry
+
+The facade now seeds the same merge registry with eight compiled executor handles
+derived from the common-operation catalog. Host handles continue to use the same
+generation, descriptor normalization, snapshot and lifetime machinery. Inventory
+is no longer an empty-or-host-only list; consumers must select by provider ID.
+Initialization registers no parsers and probes/loads no grammar. Compiled IDs
+reject registration, replacement and retirement through all host mutation APIs,
+without changing the registry generation.
+
+Explicit compiled batches validate the entire request and profile-owned parser
+queries before negotiation, capture the existing provider/parser snapshots, then
+call the native operation engines. They preserve typed kernel results, check
+negotiated identity and common result validation, enforce cumulative source and
+response budgets, and share cancellation/deadline control. They report `kernel`
+ownership and `approved_as_default: false`. Host batches retain the coarse
+callback and `host` ownership. The common single-operation facade resolves known
+compiled profiles through this registry too; unsupported profiles retain their
+portable error results, with no implicit host dispatch or fallback.
+
+Alef generates the added Python `WorkflowExecutionOwner.KERNEL` and Ruby
+`:kernel` variant. Existing `HOST`/`:host` values and function signatures are
+unchanged. The generated surface was reviewed and API baselines were refreshed
+with the owning tool. Older retained bindings cannot represent the new owner;
+use the newly verified artifacts rather than mixing a stale native extension
+with updated declarations.
+
+Local verification:
+
+- All 15 core unit tests pass, including all four JSON operations in one
+  compiled batch, protected inventory, invalid/cold queries, budgets, and
+  existing host lifecycle/fault tests: `tmp/workflow-registry-tests.log`.
+- All 128 CLI tests and 74 tooling tests pass:
+  `tmp/workflow-registry-cli-tests.log`, `tmp/workflow-registry-tooling.log`.
+- Both real-Git merge and modified/added/deleted diff gates pass:
+  `tmp/typed-cli-git-_7dsmlh9/report.json`,
+  `tmp/typed-cli-git-d2iqb5st/report.json`.
+- CPython 3.14.2/LibCST 1.9.0 installed wheel: 57 boundary tests, 113 generated
+  tests and 114 test-app tests pass. Report:
+  `tmp/core-python-artifact-gefjl_5t/report.json`.
+- MRI 4.0.6 installed gem: 50 boundary examples and 110/110 generated/test-app
+  examples pass, with linkage and type checks. Report:
+  `tmp/core-ruby-artifact-20260918-2567582-jw50mt/report.json`.
+- Both runtimes verify all three compiled-ID mutation protections. Existing
+  host replacement, retirement, GC, concurrency and cancellation checks still
+  pass with the compiled entries present. Installed tests validate the new
+  inventory/lifecycle behavior; the four-operation compiled-batch proof is Rust.
+- Local Alef verification, both API baselines and the 20-crate release inventory
+  pass. Alef's presence-only entries remain weaker than content verification.
+
+Current retained artifacts and SHA-256:
+
+- `tmp/workflow-registry-bin/smorg`:
+  `e9681cdbd7042f19c8ac5822549626980337db3df3450ebaa497032eee83b4e2`.
+- `tmp/workflow-registry-bin/smorg-rs`:
+  `5dc24fc3048cd2f294131f64c301851ef39a6d6376bfcaf85750c61bf4241f92`.
+- `tmp/workflow-registry-wheels/structuredmerge_core-0.2.0-cp310-abi3-manylinux_2_34_x86_64.whl`:
+  `1cfe495a8b683e2fa62a878c79e784238d50eabbc91bff3cb19e08b49b5e27f3`.
+- `packages/ruby/lib/structuredmerge_core_rb.so`:
+  `89a59382cf080ffd06c2d2fc56546cd3b7a7e6b1d394085073121b50ab8c2703`.
+
+One heavy build ran at a time, with incremental/debug data disabled, no core
+dumps, and live 30 GiB free-space/8 GiB target guards. The 4.9 GiB target, 39 MiB
+temporary build environment, superseded CLI pair and old cached-binding wheel
+are removed after checks. Disposable installed consumers are removed by their
+runners; current binaries/wheel/extension and small evidence remain.
+
+Registry presence still does not prove parser availability, authenticated assets,
+default authority or platform support. Negotiation is not a liveness lease;
+changed parser identity fails closed but preflight/stale-snapshot envelopes remain
+open. Common single-operation host dispatch, family defaults, delegation,
+broader compiled-provider batch coverage and other runtime/platform gates remain.
+Nothing is published or pushed upstream; the local-only Alef constraint remains.

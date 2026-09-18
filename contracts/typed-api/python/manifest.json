@@ -1,10 +1,10 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "python",
-  "review_reason": "Add explicit cached-only parser registration; existing registration signatures and policy unchanged",
+  "review_reason": "Reviewed additive WorkflowExecutionOwner.KERNEL enum value; host value and function signatures preserved. Registry inventory now includes immutable compiled descriptors and callers must select by provider ID, not position.",
   "files": {
     "structuredmerge_core/__init__.py": "58688794cbb87ba17b06218aedf32483bb3a889dbf3c28e5e0f379b81f5ecbe7",
-    "structuredmerge_core/_native.pyi": "e80eed211edad3a5bd2f044518632ded8b20bb7ee46bb0cf91d891a329d1f9ec",
+    "structuredmerge_core/_native.pyi": "ff0b32ad7e2fcd1dbd6f093bf56fb45d6ffb941f094e94a87738d164dee67c7b",
     "structuredmerge_core/api.py": "0d1a5d2b19dbfe228d1cf4c4c7864922851eb269e0d769076063ac38c7dd6e22",
     "structuredmerge_core/exceptions.py": "25e61ce52e2e192df977a5f2ba7473dd6012e064c4bba38b05c15dc043201a29",
     "structuredmerge_core/options.py": "51d412a5f28ed2f31f1585c9beb4e4d130dbb7ea7e0f5577a1cbeb050e98b894",

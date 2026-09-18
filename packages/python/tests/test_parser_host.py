@@ -21,6 +21,26 @@ from libcst_facts import LibCSTHost
 
 
 class TypedParserHostTest(unittest.TestCase):
+    def test_compiled_workflows_are_listed_and_cannot_be_retired_by_hosts(self):
+        inventory = core.workflow_registry_inventory()
+        profiles = core.operation_profile_catalog().profiles
+        ids = {p.provider_id for p in inventory.providers}
+        self.assertTrue({p.provider_id for p in profiles} <= ids)
+        self.assertNotEqual(native.WorkflowExecutionOwner.KERNEL, native.WorkflowExecutionOwner.HOST)
+        class ReservedHost:
+            def descriptor(self):
+                return next(p for p in inventory.providers if p.provider_id == "kernel.json")
+            def execute_batch(self, request, control):
+                raise AssertionError("reserved host must never execute")
+        with self.assertRaisesRegex(RuntimeError, "workflow.reserved_provider"):
+            core.register_workflow_host(ReservedHost())
+        with self.assertRaisesRegex(RuntimeError, "workflow.reserved_provider"):
+            core.replace_workflow_host(ReservedHost(), inventory.generation)
+        for profile in profiles:
+            with self.assertRaisesRegex(RuntimeError, "workflow.reserved_provider"):
+                core.unregister_workflow_host(profile.provider_id, inventory.generation)
+        self.assertEqual(core.workflow_registry_inventory().generation, inventory.generation)
+
     def workflow_fixture(self):
         provider_id = "python.libcst.workflow"
         profile = "python.libcst.analysis.v1"
@@ -153,7 +173,7 @@ class TypedParserHostTest(unittest.TestCase):
             self.assertTrue(all(report.provider_generation == generation for report in execution.selections))
             self.assertEqual(len(old.calls), 1)
             self.assertEqual(replacement.calls, [])
-            self.assertEqual(json.loads(inventory.providers[0].metadata["host_tag"]), "old")
+            self.assertEqual(json.loads(next(p for p in inventory.providers if p.provider_id == provider_id).metadata["host_tag"]), "old")
             subsequent = core.execute_workflow_batch(provider_id, request, limits)
             self.assertEqual(json.loads(subsequent.provider.metadata["host_tag"]), "replacement")
             self.assertTrue(all(report.provider_generation == current[0] for report in subsequent.selections))
@@ -173,7 +193,7 @@ class TypedParserHostTest(unittest.TestCase):
             execution = core.execute_workflow_batch(provider_id, request, limits)
             self.assertEqual(len(execution.results), 2)
             self.assertEqual(len(host.calls), 1)
-            self.assertEqual(core.workflow_registry_inventory().providers, [])
+            self.assertNotIn(provider_id, [p.provider_id for p in core.workflow_registry_inventory().providers])
             with self.assertRaisesRegex(RuntimeError, "workflow"):
                 core.execute_workflow_batch(provider_id, request, limits)
             self.assertEqual(len(host.calls), 1)
@@ -237,7 +257,7 @@ class TypedParserHostTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "execution.cancelled"):
                     pending.result(timeout=15)
             self.assertEqual(len(host.calls), 1)
-            self.assertEqual(core.workflow_registry_inventory().providers, [])
+            self.assertNotIn(provider_id, [p.provider_id for p in core.workflow_registry_inventory().providers])
         finally:
             release.set()
             if not retired:

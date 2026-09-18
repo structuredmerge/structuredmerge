@@ -4,6 +4,163 @@ use serde_json::json;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tree_haver::service::{ParserProvider, ParserRegistry, ProviderFault};
 
+#[test]
+fn compiled_registry_has_executors_without_parser_registration_or_host_mutation() {
+    let parsers = crate::parser_registry_inventory().unwrap();
+    let snapshot = registry().snapshot().unwrap();
+    for mut descriptor in crate::artifact_inventory::compiled_provider_inventory().workflows {
+        descriptor.dialects.sort();
+        let id = &descriptor.provider_id;
+        assert_eq!(snapshot.descriptor(id), Some(&descriptor));
+        assert!(matches!(snapshot.provider(id).unwrap().as_ref(), WorkflowExecutor::Kernel));
+        assert_eq!(require_host_id(id).unwrap_err().code, "workflow.reserved_provider");
+        assert_eq!(
+            unregister_workflow_host(id.clone(), snapshot.generation()).unwrap_err().code,
+            "workflow.reserved_provider"
+        );
+    }
+    assert_eq!(snapshot.inventory(), registry().snapshot().unwrap().inventory());
+    assert_eq!(parsers, crate::parser_registry_inventory().unwrap());
+}
+
+fn kernel_request(operation: &str) -> WorkflowBatchRequest {
+    let roles: &[&str] = match operation {
+        "analyze" => &["source"],
+        "diff2" => &["before", "after"],
+        "merge2" => &["incoming", "current"],
+        _ => &["base", "ours", "theirs"],
+    };
+    let mut sources = serde_json::Map::new();
+    for role in roles {
+        let text = "{\"a\":1}";
+        let source = source_input(
+            (*role).into(),
+            serde_json::from_value(json!(role)).unwrap(),
+            SourceEncoding::Utf8,
+            text.as_bytes().to_vec(),
+        )
+        .unwrap();
+        sources.insert((*role).into(), json!({"source_id":role,"role":role,"content":text,"encoding":"utf-8","byte_length":source.descriptor.byte_length,"sha256":source.descriptor.sha256}));
+    }
+    let policy = match operation {
+        "merge2" => {
+            json!({"directional_merge":"template-into-current","render_policy":"source-preserving"})
+        }
+        "merge3" => json!({"render_policy":"source-preserving"}),
+        _ => json!({}),
+    };
+    let operation: OperationRequest = serde_json::from_value(json!({"schema":OPERATION_SCHEMA,"request_id":operation,"operation":operation,"policy":policy,
+        "provider_selection":{"provider_id":"kernel.json","family":"json","profile_id":"kernel.json.nested.v1","required_capabilities":[operation]},
+        "parser_selection":{"backend":"json.cached","preference":[],"required_capabilities":[]}, "sources":sources,"extensions":[],"metadata":{}})).unwrap();
+    let parse_options = crate::profiles::operation_parse_options(
+        "kernel.json.nested.v1",
+        operation.operation.kind(),
+    );
+    WorkflowBatchRequest {
+        items: vec![WorkflowOperation {
+            operation,
+            parser_language: "json".into(),
+            parser_dialect: None,
+            parse_options,
+        }],
+    }
+}
+
+#[test]
+fn compiled_batch_rejects_mismatched_queries_and_cold_registry() {
+    let parsers = ParserRegistry::default();
+    let providers = registry().snapshot().unwrap();
+    for variant in ["cold", "language", "dialect", "options", "profile", "budget"] {
+        let mut request = kernel_request("analyze");
+        let mut limits = limits();
+        match variant {
+            "language" => request.items[0].parser_language = "python".into(),
+            "dialect" => request.items[0].parser_dialect = Some("json5".into()),
+            "options" => request.items[0].parse_options.tokens = true,
+            "profile" => request.items[0].operation.provider_selection.profile_id = None,
+            "budget" => limits.parse.max_input_bytes = 0,
+            _ => (),
+        }
+        let control = OperationControl::new();
+        let context = limits.parse.clone().controlled_context(&control).unwrap();
+        let failure = execute(
+            "kernel.json",
+            request,
+            &limits,
+            &control,
+            &context,
+            &providers,
+            &parsers.snapshot().unwrap(),
+        )
+        .unwrap_err();
+        assert_eq!(
+            failure.code,
+            match variant {
+                "cold" => "workflow.no_eligible_provider",
+                "budget" => "resource.limit",
+                _ => "workflow.invalid_request",
+            },
+            "{variant}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires explicitly supplied cached JSON grammar; never downloads"]
+fn compiled_batch_executes_all_json_operations_with_kernel_ownership() {
+    let parsers = ParserRegistry::default();
+    parsers
+        .register(Arc::new(
+            tree_haver::language_pack_provider::LanguagePackProvider::new_cached_only(
+                "json.cached".into(),
+                "json".into(),
+            )
+            .unwrap(),
+        ))
+        .unwrap();
+    let providers = registry().snapshot().unwrap();
+    let mut limits = limits();
+    limits.max_operations = 4;
+    limits.max_response_bytes = 1024 * 1024;
+    limits.parse.max_nodes = 1000;
+    let mut request = WorkflowBatchRequest { items: vec![] };
+    for operation in ["analyze", "diff2", "merge2", "merge3"] {
+        request.items.extend(kernel_request(operation).items);
+    }
+    let control = OperationControl::new();
+    let context = limits.parse.clone().controlled_context(&control).unwrap();
+    let result = execute(
+        "kernel.json",
+        request.clone(),
+        &limits,
+        &control,
+        &context,
+        &providers,
+        &parsers.snapshot().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(result.execution_owner, WorkflowExecutionOwner::Kernel);
+    assert!(!result.approved_as_default);
+    assert_eq!(result.results.len(), 4);
+    assert!(result.results.iter().all(|r| r.ok), "{:?}", result.results);
+    assert!(result.selections.iter().all(|s| s.provider_generation == providers.generation()));
+    limits.max_response_bytes = 1;
+    assert_eq!(
+        execute(
+            "kernel.json",
+            request,
+            &limits,
+            &control,
+            &context,
+            &providers,
+            &parsers.snapshot().unwrap()
+        )
+        .unwrap_err()
+        .code,
+        "resource.limit"
+    );
+}
+
 fn descriptor() -> MergeProviderDescriptor {
     MergeProviderDescriptor {
         provider_id: "test.host".into(),
@@ -242,16 +399,16 @@ fn limits() -> WorkflowLimits {
     }
 }
 struct Fixture {
-    providers: Arc<MergeProviderRegistry<dyn WorkflowHost>>,
+    providers: Arc<MergeProviderRegistry<WorkflowExecutor>>,
     parsers: ParserRegistry,
     parser: Arc<Parser>,
     host: Arc<Host>,
 }
 fn fixture(behavior: Behavior) -> Fixture {
-    let providers: Arc<MergeProviderRegistry<dyn WorkflowHost>> =
+    let providers: Arc<MergeProviderRegistry<WorkflowExecutor>> =
         Arc::new(MergeProviderRegistry::default());
     let host = Arc::new(Host { calls: AtomicUsize::new(0), behavior, after: None });
-    providers.register(descriptor(), host.clone()).unwrap();
+    providers.register(descriptor(), Arc::new(WorkflowExecutor::Host(host.clone()))).unwrap();
     let parsers = ParserRegistry::default();
     let parser = Arc::new(Parser {
         descriptor: ParserProviderDescriptor {
@@ -415,7 +572,10 @@ fn workflow_callback_can_retire_itself_without_invalidating_inflight_selection()
             registry.upgrade().unwrap().unregister("test.host", 2).unwrap();
         })),
     });
-    fixture.providers.replace(descriptor(), host.clone(), 1).unwrap();
+    fixture
+        .providers
+        .replace(descriptor(), Arc::new(WorkflowExecutor::Host(host.clone())), 1)
+        .unwrap();
     fixture.host = host;
     let result = run(&fixture, request(), limits(), &OperationControl::new()).unwrap();
     assert_eq!(result.selections[0].provider_generation, 2);

@@ -20,6 +20,21 @@ end
 RSpec.describe StructuredmergeCore do
   include NativeMergeFixture
 
+  it "lists compiled workflows without granting host retirement authority" do
+    inventory = described_class.workflow_registry_inventory
+    profiles = described_class.operation_profile_catalog.profiles
+    expect(inventory.providers.map(&:provider_id)).to include(*profiles.map(&:provider_id))
+    reserved = Object.new
+    reserved.define_singleton_method(:descriptor) { inventory.providers.find { |provider| provider.provider_id == "kernel.json" } }
+    reserved.define_singleton_method(:execute_batch) { |*| raise "reserved host must never execute" }
+    expect { described_class.register_workflow_host(reserved) }.to raise_error(RuntimeError, /workflow.reserved_provider/)
+    expect { described_class.replace_workflow_host(reserved, inventory.generation) }.to raise_error(RuntimeError, /workflow.reserved_provider/)
+    profiles.each do |profile|
+      expect { described_class.unregister_workflow_host(profile.provider_id, inventory.generation) }.to raise_error(RuntimeError, /workflow.reserved_provider/)
+    end
+    expect(described_class.workflow_registry_inventory.generation).to eq(inventory.generation)
+  end
+
   it "delivers native Psych facts and shared cancellation to a coarse workflow callback" do
     core = described_class
     parser = TypedPsychHost.new
@@ -107,7 +122,7 @@ RSpec.describe StructuredmergeCore do
     expect(execution.selections.map(&:provider_generation)).to eq([generation] * 2)
     expect(original.calls.length).to eq(1)
     expect(replacement.calls).to be_empty
-    expect(JSON.parse(inventory.providers.first.metadata.fetch("host_tag"))).to eq("original")
+    expect(JSON.parse(inventory.providers.find { |provider| provider.provider_id == "ruby.psych.workflow" }.metadata.fetch("host_tag"))).to eq("original")
     subsequent = described_class.execute_workflow_batch("ruby.psych.workflow", workflow_request, workflow_limits)
     expect(JSON.parse(subsequent.provider.metadata.fetch("host_tag"))).to eq("replacement")
     expect(subsequent.selections.map(&:provider_generation)).to eq([current] * 2)
@@ -129,7 +144,7 @@ RSpec.describe StructuredmergeCore do
     execution = described_class.execute_workflow_batch("ruby.psych.workflow", workflow_request, workflow_limits)
     expect(execution.results.length).to eq(2)
     expect(host.calls.length).to eq(1)
-    expect(described_class.workflow_registry_inventory.providers).to be_empty
+    expect(described_class.workflow_registry_inventory.providers.map(&:provider_id)).not_to include("ruby.psych.workflow")
     expect { described_class.execute_workflow_batch("ruby.psych.workflow", workflow_request, workflow_limits) }.to raise_error(RuntimeError, /workflow/)
     expect(host.calls.length).to eq(1)
   ensure
@@ -219,7 +234,7 @@ RSpec.describe StructuredmergeCore do
     expect(worker.value).to be_a(RuntimeError)
     expect(worker.value.message).to include("execution.cancelled")
     expect(host.calls.length).to eq(1)
-    expect(described_class.workflow_registry_inventory.providers).to be_empty
+    expect(described_class.workflow_registry_inventory.providers.map(&:provider_id)).not_to include("ruby.psych.workflow")
   ensure
     release << true if release
     worker&.join(15)

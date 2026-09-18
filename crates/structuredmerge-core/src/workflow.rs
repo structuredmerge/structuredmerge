@@ -1,5 +1,5 @@
-//! Typed host-owned workflow boundary. This is not a kernel semantic promotion.
-//! TreeHaver parses every source before the single coarse host callback.
+//! One executable registry for compiled kernel and host-owned workflows.
+//! TreeHaver owns parsing; ownership never implies default authority.
 
 use crate::*;
 use ast_merge::{
@@ -60,6 +60,7 @@ pub struct WorkflowLimits {
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowExecutionOwner {
     Host,
+    Kernel,
 }
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct WorkflowExecution {
@@ -78,9 +79,30 @@ pub trait WorkflowHost: Send + Sync {
         control: OperationControl,
     ) -> Result<WorkflowBatchResult, CoreError>;
 }
-static WORKFLOWS: OnceLock<MergeProviderRegistry<dyn WorkflowHost>> = OnceLock::new();
-fn registry() -> &'static MergeProviderRegistry<dyn WorkflowHost> {
-    WORKFLOWS.get_or_init(MergeProviderRegistry::default)
+enum WorkflowExecutor {
+    Kernel,
+    Host(Arc<dyn WorkflowHost>),
+}
+static WORKFLOWS: OnceLock<MergeProviderRegistry<WorkflowExecutor>> = OnceLock::new();
+fn registry() -> &'static MergeProviderRegistry<WorkflowExecutor> {
+    WORKFLOWS.get_or_init(|| {
+        let registry = MergeProviderRegistry::default();
+        for descriptor in crate::artifact_inventory::compiled_provider_inventory().workflows {
+            registry
+                .register(descriptor, Arc::new(WorkflowExecutor::Kernel))
+                .expect("compiled workflow descriptor is valid and unique");
+        }
+        registry
+    })
+}
+fn require_host_id(id: &str) -> Result<(), CoreError> {
+    if crate::operation_profile_catalog().profiles.iter().any(|p| p.provider_id == id) {
+        return Err(error(
+            "workflow.reserved_provider",
+            "compiled provider IDs cannot be mutated through the host API",
+        ));
+    }
+    Ok(())
 }
 fn error(code: &str, message: &str) -> CoreError {
     CoreError { code: code.into(), message: message.into() }
@@ -94,21 +116,59 @@ fn describe(host: &dyn WorkflowHost) -> Result<MergeProviderDescriptor, CoreErro
         .map_err(|_| error("workflow.descriptor_fault", "workflow descriptor callback failed"))
 }
 pub fn register_workflow_host(host: Arc<dyn WorkflowHost>) -> Result<u64, CoreError> {
-    registry().register(describe(host.as_ref())?, host).map_err(registration_error)
+    let descriptor = describe(host.as_ref())?;
+    require_host_id(&descriptor.provider_id)?;
+    registry()
+        .register(descriptor, Arc::new(WorkflowExecutor::Host(host)))
+        .map_err(registration_error)
 }
 pub fn replace_workflow_host(
     host: Arc<dyn WorkflowHost>,
     expected_generation: u64,
 ) -> Result<u64, CoreError> {
+    let descriptor = describe(host.as_ref())?;
+    require_host_id(&descriptor.provider_id)?;
     registry()
-        .replace(describe(host.as_ref())?, host, expected_generation)
+        .replace(descriptor, Arc::new(WorkflowExecutor::Host(host)), expected_generation)
         .map_err(registration_error)
 }
 pub fn unregister_workflow_host(id: String, expected_generation: u64) -> Result<u64, CoreError> {
+    require_host_id(&id)?;
     registry().unregister(&id, expected_generation).map_err(registration_error)
 }
 pub fn workflow_registry_inventory() -> Result<MergeProviderInventory, CoreError> {
     registry().snapshot().map(|snapshot| snapshot.inventory()).map_err(registration_error)
+}
+
+/// The common facade retains explicit compiled-profile semantics, but resolves
+/// its executor through the same registry as batches. Host workflows need the
+/// batch API's explicit parser query; never infer that query from a host name.
+pub(crate) fn execute_compiled_operation(
+    request: &crate::ValidatedOperationRequest,
+    parsers: &ParserRegistrySnapshot,
+    context: &ExecutionContext,
+) -> Result<OperationResult, CoreError> {
+    let profile = request.request().provider_selection.profile_id.as_deref();
+    let declaration = crate::operation_profile_catalog()
+        .profiles
+        .into_iter()
+        .find(|p| Some(p.id.as_str()) == profile);
+    if let Some(declaration) = declaration {
+        let snapshot = registry().snapshot().map_err(registration_error)?;
+        let executor = snapshot.provider(&declaration.provider_id).ok_or_else(|| {
+            error("workflow.unknown_provider", "compiled executor is not registered")
+        })?;
+        if !matches!(executor.as_ref(), WorkflowExecutor::Kernel) {
+            return Err(error(
+                "workflow.invalid_executor",
+                "compiled profile has no kernel executor",
+            ));
+        }
+        return crate::native_operation::execute_native_operation(request, parsers, context);
+    }
+    // Preserve the existing portable unsupported-profile result, not a host
+    // dispatch, text fallback, or an implicit provider choice.
+    crate::native_operation::execute_native_operation(request, parsers, context)
 }
 pub fn execute_workflow_batch(
     provider_id: String,
@@ -138,7 +198,7 @@ fn execute(
     limits: &WorkflowLimits,
     control: &OperationControl,
     context: &ExecutionContext,
-    providers: &MergeProviderSnapshot<dyn WorkflowHost>,
+    providers: &MergeProviderSnapshot<WorkflowExecutor>,
     parsers: &ParserRegistrySnapshot,
 ) -> Result<WorkflowExecution, CoreError> {
     context.check().map_err(CoreError::from)?;
@@ -152,7 +212,7 @@ fn execute(
     let descriptor = providers.descriptor(provider_id).ok_or_else(|| {
         error("workflow.unknown_provider", "explicit workflow provider is not registered")
     })?;
-    let host = providers.provider(provider_id).unwrap();
+    let executor = providers.provider(provider_id).unwrap();
     let mut remaining = context.max_input_bytes;
     let mut ids = BTreeSet::new();
     let mut validated = vec![];
@@ -242,6 +302,40 @@ fn execute(
         query.validate().map_err(CoreError::from)?;
         queries.push(query);
     }
+    // Compiled execution uses profile-owned parser options. Validate every
+    // supplied query before probes, rather than silently ignoring host fields.
+    if matches!(executor.as_ref(), WorkflowExecutor::Kernel) {
+        for item in &request.items {
+            let profile = crate::operation_profile_catalog()
+                .profiles
+                .into_iter()
+                .find(|p| {
+                    p.provider_id == provider_id
+                        && Some(&p.id) == item.operation.provider_selection.profile_id.as_ref()
+                })
+                .ok_or_else(|| {
+                    error(
+                        "workflow.invalid_request",
+                        "compiled workflow requires its explicit profile",
+                    )
+                })?;
+            let dialect = item.operation.provider_selection.dialect.as_deref();
+            if crate::profiles::profile_parser_language(&profile.family, dialect)
+                != Some(item.parser_language.as_str())
+                || item.parser_dialect.as_deref() != dialect
+                || item.parse_options
+                    != crate::profiles::operation_parse_options(
+                        &profile.id,
+                        item.operation.operation.kind(),
+                    )
+            {
+                return Err(error(
+                    "workflow.invalid_request",
+                    "compiled workflow parser query differs from its profile",
+                ));
+            }
+        }
+    }
     let mut selections = vec![];
     for query in &queries {
         let selection = negotiate_merge_provider(
@@ -260,6 +354,57 @@ fn execute(
         }
         selections.push(selection);
     }
+    if matches!(executor.as_ref(), WorkflowExecutor::Kernel) {
+        let mut results = Vec::new();
+        for (value, selection) in validated.iter().zip(&selections) {
+            context.check().map_err(CoreError::from)?;
+            let result =
+                crate::native_operation::execute_native_operation(value, parsers, context)?;
+            let selected = selection
+                .candidates
+                .iter()
+                .find(|c| c.selected)
+                .unwrap()
+                .parser_report
+                .as_ref()
+                .unwrap()
+                .selected_backend
+                .as_ref();
+            if result.provider.provider_id.as_deref() != Some(provider_id)
+                || result
+                    .profile
+                    .parser
+                    .as_ref()
+                    .is_some_and(|p| p.selected_backend.as_ref() != selected)
+            {
+                return Err(error(
+                    "workflow.invalid_result",
+                    "compiled workflow changed negotiated executor identity",
+                ));
+            }
+            result.validate_against(value).map_err(|_| {
+                error(
+                    "workflow.invalid_result",
+                    "compiled workflow result failed common validation",
+                )
+            })?;
+            results.push(result);
+            #[derive(Serialize)]
+            struct Response<'a> {
+                items: &'a [OperationResult],
+            }
+            bounded(&Response { items: &results }, limits.max_response_bytes)?;
+        }
+        context.check().map_err(CoreError::from)?;
+        return Ok(WorkflowExecution {
+            provider: descriptor.clone(),
+            execution_owner: WorkflowExecutionOwner::Kernel,
+            approved_as_default: false,
+            selections,
+            results,
+        });
+    }
+    let WorkflowExecutor::Host(host) = executor.as_ref() else { unreachable!() };
     let requirements = &descriptor.parser_requirements;
     let service = TreeHaverParseService::default()
         .with_constraints(ParserConstraints {
