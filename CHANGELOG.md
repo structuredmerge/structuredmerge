@@ -349,6 +349,8 @@
 
 - Expose explicit cached-only language-pack parser registration in the typed Rust facade and generated Ruby/Python bindings, preserving legacy registration and shared registry lifetime semantics.
 
+- Add an explicit typed merge-driver lane with cached-only parser selection, kernel-owned merge results, bounded inputs, and staged conflict/output policies; retain legacy entry points during migration.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

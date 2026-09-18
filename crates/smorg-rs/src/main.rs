@@ -19,6 +19,7 @@ mod benchmark_adapter;
 mod external_command;
 mod path_safety;
 mod staged_file;
+mod typed_driver;
 
 const EXIT_SUCCESS: i32 = 0;
 const EXIT_UNRESOLVED_CONFLICT: i32 = 1;
@@ -40,6 +41,13 @@ struct MergeDriverOptions {
     profile_id: Option<String>,
     profile_report: bool,
     require_profile_status: Option<String>,
+    provider_id: Option<String>,
+    backend_id: Option<String>,
+    family: Option<String>,
+    dialect: Option<String>,
+    required_capabilities: Vec<String>,
+    conflict_policy: Option<String>,
+    fallback_explicit: bool,
 }
 
 #[derive(Debug, Default)]
@@ -188,6 +196,19 @@ fn print_usage(out: &mut dyn Write) {
     let _ = writeln!(out, "       smorg-rs diff-driver [--path-name PATH] OLD NEW");
     let _ = writeln!(
         out,
+        "Typed merge lane: --provider ID --backend kernel.tslp.LANGUAGE --profile ID"
+    );
+    let _ = writeln!(
+        out,
+        "  [--family FAMILY] [--dialect DIALECT] [--require-capability NAME] (repeatable)"
+    );
+    let _ = writeln!(out, "  [--conflict-policy leave-ours|write] [--check-only [--exit-code]]");
+    let _ = writeln!(
+        out,
+        "  Cached grammars only; no fallback; 8 MiB aggregate input limit. No typed default selection yet."
+    );
+    let _ = writeln!(
+        out,
         "       smorg-rs diff-driver PATH OLD-FILE OLD-HEX OLD-MODE NEW-FILE NEW-HEX NEW-MODE [OLD-PREFIX NEW-PREFIX]"
     );
     let _ = writeln!(out, "       smorg-rs conflicts diff [--path-name PATH] [--exit-code] FILE");
@@ -291,6 +312,16 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
                 return EXIT_USER_ERROR;
             }
         }
+    }
+    if options.provider_id.is_some()
+        || options.backend_id.is_some()
+        || options.family.is_some()
+        || options.dialect.is_some()
+        || !options.required_capabilities.is_empty()
+        || options.conflict_policy.is_some()
+        || options.profile_id.as_deref().is_some_and(|id| id.starts_with("kernel."))
+    {
+        return typed_driver::run_merge(&options, stderr);
     }
     let ancestor_source = match fs::read_to_string(&options.ancestor) {
         Ok(source) => source,
@@ -492,6 +523,12 @@ fn parse_merge_driver_options(
     let mut profile_id = None;
     let mut profile_report = false;
     let mut require_profile_status = None;
+    let mut provider_id = None;
+    let mut backend_id = None;
+    let mut family = None;
+    let mut dialect = None;
+    let mut required_capabilities = Vec::new();
+    let mut conflict_policy = None;
     let mut positionals = Vec::new();
     let mut seen_options = std::collections::BTreeSet::new();
 
@@ -507,7 +544,7 @@ fn parse_merge_driver_options(
             } else {
                 args[index].as_str()
             };
-            if !seen_options.insert(key) {
+            if key != "--require-capability" && !seen_options.insert(key) {
                 let _ = writeln!(stderr, "duplicate merge-driver option {key:?}");
                 return None;
             }
@@ -523,12 +560,42 @@ fn parse_merge_driver_options(
                 | "--profile"
                 | "--require-profile-status"
                 | "--fallback"
+                | "--provider"
+                | "--backend"
+                | "--family"
+                | "--dialect"
+                | "--require-capability"
+                | "--conflict-policy"
         ) && args.get(index + 1).is_none_or(|value| value.is_empty() || value.starts_with("--"))
         {
             let _ = writeln!(stderr, "merge-driver option {:?} requires a value", args[index]);
             return None;
         }
         match args[index].as_str() {
+            "--provider" => {
+                index += 1;
+                provider_id = args.get(index).cloned();
+            }
+            "--backend" => {
+                index += 1;
+                backend_id = args.get(index).cloned();
+            }
+            "--family" => {
+                index += 1;
+                family = args.get(index).cloned();
+            }
+            "--dialect" => {
+                index += 1;
+                dialect = args.get(index).cloned();
+            }
+            "--require-capability" => {
+                index += 1;
+                required_capabilities.push(args[index].clone());
+            }
+            "--conflict-policy" => {
+                index += 1;
+                conflict_policy = args.get(index).cloned();
+            }
             "--ancestor" => {
                 index += 1;
                 ancestor = args.get(index).cloned();
@@ -621,6 +688,13 @@ fn parse_merge_driver_options(
         profile_id,
         profile_report,
         require_profile_status,
+        provider_id,
+        backend_id,
+        family,
+        dialect,
+        required_capabilities,
+        conflict_policy,
+        fallback_explicit: seen_options.contains("--fallback"),
     })
 }
 

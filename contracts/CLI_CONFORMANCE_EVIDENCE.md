@@ -85,3 +85,78 @@ asset, health and preflight-staleness requirements. `languages --json` must not 
 made green merely by labeling that source-free declaration/observation report as
 complete runtime availability. Full typed CLI operation routing and the other
 shared contract/platform gates remain open.
+
+## Explicit typed merge-driver lane
+
+Both names now accept an explicit typed selection, for example:
+
+```sh
+smorg merge-driver --provider kernel.json --backend kernel.tslp.json \
+  --profile kernel.json.nested.v1 --report merge-report.json BASE OURS THEIRS file.txt
+```
+
+The logical filename does not select a parser. The kernel's profile catalog and
+capability request determine the parser language; the CLI accepts only the
+matching `kernel.tslp.LANGUAGE` backend and registers it through the cached-only
+factory. Arbitrary host backends are not available in this standalone binary.
+Provider, family, dialect, profile and required capabilities remain conjunctive.
+Repeatable capability flags become the sorted unique set required by the wire
+contract. Registration is removed on exit from the operation scope.
+
+This lane requires provider/backend/profile explicitly. Any typed selector (or
+a `kernel.*` profile) enters it; missing or unsupported constraints never fall
+back to the legacy route. Without a typed selection, the existing compatibility
+route remains unchanged. The source-free observation used to obtain parser
+requirements is not availability or default-authority evidence.
+
+All source files must be regular UTF-8 files, limited to 8 MiB in aggregate.
+Kernel execution uses a 200,000-node limit, 100 diagnostics, and a cooperative
+10-second deadline. These are not process/memory sandbox or hard preemption
+guarantees. No fallback is supported in this lane, including explicit legacy
+fallback modes. `--require-profile-status available` still requires successful
+execution; recommended/default status and legacy `--profile-report` are rejected.
+
+The adapter executes one typed merge3 and retains its result in a
+`structuredmerge.cli-report/v1` report. Unresolved conflict evidence, not `ok`
+alone, selects exit 1. Check-only plus exit-code also returns 1 for a changed
+successful output, with a distinct report outcome. Conflict policy defaults to
+leave-ours; write uses only validated provider `conflicted_output` (for example
+the `kernel.git.json.v1` profile), never CLI-generated markers. Output aliases of
+base/theirs and report aliases are rejected. Complete staging precedes report
+commit, then output commit; staging failures clean temporary files. Existing
+stable-filesystem and per-file atomicity limits still apply.
+
+Local Linux evidence:
+
+- 96 standard CLI tests pass, plus both explicitly enabled warm-grammar tests
+  (98 total), exercising both real binary names.
+- Warm tests cover clean/check-only merges despite a `.txt` logical name, true
+  conflicts with both write policies, malformed UTF-8/JSON, source-size limits,
+  unsupported capabilities, report hardlinks, and output/report staging failures.
+- Cold-cache tests return an error result without changing ours or acquiring
+  grammars. Tests use isolated local library/cache directories and observe no
+  HTTP(S) proxy connection; this is not a network sandbox claim.
+- Existing local JSON grammar SHA-256:
+  `8e44debe3f89057328a3db45fb5cbb98ddb41f4bcfca82a2a1aa268301a579d4`.
+  Run warm tests with `SMORG_TEST_JSON_GRAMMAR` naming that existing library and
+  `cargo test -p smorg --locked --test typed_driver -- --ignored`.
+- Kernel log `tmp/typed-cli-verified.log`; the earlier
+  `tmp/typed-cli-tests-final.log` retains the diagnosed capability-set failure.
+- Portable discovery/argument subset stays 19/20, with `languages --json` still
+  red: fixtures `tmp/cli-conformance-swjlt784/report.json` (canonical) and
+  `tmp/cli-conformance-rwz2khr2/report.json` (alias).
+- Retained `tmp/typed-cli-bin/smorg` SHA-256:
+  `7d15f8a95796b1349667c16eb34b0a30c8a2316ade8cba0942e0bc123eaf5aca`.
+- Retained `tmp/typed-cli-bin/smorg-rs` SHA-256:
+  `0986c442c3cc32213007aa01fe0e90a84c659b58ce581a3e78aba13474c3124d`.
+
+The 2.5 GiB compiler target and superseded discovery binaries are removed after
+verification; reports, logs and the current binary pair remain. Compilation used
+the 8 GiB target / 30 GiB free-space watchdog with debug/incremental output off.
+
+Still open: typed default/project selection, diff migration, complete
+pre-execution error reports (currently stderr/exit 2 with no fabricated result),
+artifact availability, portable positive operation cases, installed real-Git
+validation of this new lane, native CLIs, and platform/distribution gates.
+Profiles needing native facts are not made supported by registering TSLP.
+This is not full CLI conformance, package publication, or default promotion.
