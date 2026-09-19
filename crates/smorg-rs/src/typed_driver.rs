@@ -300,7 +300,7 @@ fn select_parser(
         .as_ref()
         .ok_or_else(|| selection("profile does not declare the requested operation/dialect"))?
         .language;
-    if backend != &format!("kernel.tslp.{language}") {
+    if backend != format!("kernel.tslp.{language}") {
         return Err(selection("backend is not an explicitly supported cached kernel parser"));
     }
     Ok(manifest)

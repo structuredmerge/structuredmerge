@@ -309,7 +309,7 @@ fn plans(options: &GitInstallOptions) -> Result<Vec<Step>, Failure> {
             // GIT_CONFIG_GLOBAL override. No HOME/XDG guessing in the installer.
             let path = paths
                 .split_terminator('\n')
-                .last()
+                .next_back()
                 .ok_or_else(|| invalid("Git reported no global configuration path"))?;
             Ok(vec![plan(absolute(path)?, Kind::Driver, options)?])
         }
