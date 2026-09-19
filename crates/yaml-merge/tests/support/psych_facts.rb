@@ -6,11 +6,6 @@
 require "json"
 require "psych"
 
-# Psych versions differ on whether a leading BOM counts as a character column.
-# Probe the native AST convention without changing the document passed to Psych.
-PSYCH_BOM_COLUMN_WIDTH = Psych.parse_stream("\uFEFFx: 1\n").children.first.start_column
-raise "unsupported Psych BOM column convention" unless [0, 1].include?(PSYCH_BOM_COLUMN_WIDTH)
-
 def project(request)
   source = request.fetch("source")
   text = source.fetch("bytes").pack("C*").force_encoding(Encoding::UTF_8)
@@ -18,13 +13,16 @@ def project(request)
   lines = text.split("\n", -1)
   bom_bytes = text.start_with?("\uFEFF") ? 3 : 0
   lines[0] = lines[0].delete_prefix("\uFEFF") if bom_bytes.positive?
+  # Psych 5.6 (Ruby 4.0) rejects a BOM before a non-ASCII first key. Parse a
+  # BOM-free view, but retain the original bytes and restore the three-byte
+  # offset in every reported span below.
+  psych_text = bom_bytes.positive? ? text.byteslice(bom_bytes..).force_encoding(Encoding::UTF_8) : text
   starts = [0]
   text.bytes.each_with_index { |byte, index| starts << index + 1 if byte == 10 }
   offset = lambda do |row, column|
     # Psych's columns count Unicode characters, not UTF-8 bytes.
     # Libyaml reports the next row at EOF even without a final newline.
     next text.bytesize if row == lines.length && column.zero?
-    column -= PSYCH_BOM_COLUMN_WIDTH if row.zero? && bom_bytes.positive?
     line = lines.fetch(row)
     raise "invalid character column: row=#{row} column=#{column} length=#{line.length}" if column.negative? || column > line.length
     starts.fetch(row) + (row.zero? ? bom_bytes : 0) + line[0, column].bytesize
@@ -60,7 +58,7 @@ def project(request)
     end
     id
   end
-  root = visit.call(Psych.parse_stream(text), nil)
+  root = visit.call(Psych.parse_stream(psych_text), nil)
   {request_id: request.fetch("request_id"), source: source.fetch("descriptor"), ok: true,
    root_id: root, nodes: nodes, comments: [], diagnostics: [], extensions: [], metadata: {}}
 rescue Psych::SyntaxError => error
