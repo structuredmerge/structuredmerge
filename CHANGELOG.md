@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Generated Ruby trait bridges no longer rebind already-owned callback parameters.** The Magnus generator now emits ownership conversions only for borrowed inputs on synchronous callbacks, while retaining the renamed owned bindings required by asynchronous callbacks; generated Ruby code no longer triggers redundant-local Clippy errors.
+
 ### Changed
 
 - Point kernel crate metadata and new artifact provenance at structuredmerge/structuredmerge; remove kettle-rusty from this repository’s release inventory while accepting pre-split registry metadata.
