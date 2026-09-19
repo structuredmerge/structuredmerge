@@ -263,6 +263,12 @@ jobs:
   check:
     name: Check
     runs-on: ubuntu-latest
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/tmp/check-target
+      CARGO_BUILD_JOBS: "1"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -277,11 +283,22 @@ jobs:
         run: mv shared-fixtures ../fixtures
       - name: Setup mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+      - name: Prepare JSON grammar for typed provider test
+        shell: bash
+        run: |
+          mkdir -p tmp
+          export TMPDIR="$PWD/tmp"
+          ulimit -c 0
+          mise exec -- cargo install --path crates/smorg-rs --root "$PWD/tmp/check-cli-install" --debug --locked
+          python workspace-scripts/prepare_cli_git_grammar.py \
+            tmp/check-cli-install/bin/smorg \
+            --cache tmp/typed-tslp-cache
       - name: Run checks
         run: mise run check
       - name: Verify typed Rust language-pack parser service
         env:
           TREE_HAVER_LANGUAGE_PACK_CACHE_DIR: ${{ github.workspace }}/tmp/typed-tslp-cache
+          TREE_HAVER_CACHED_JSON_LIBRARY: ${{ github.workspace }}/tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so
         run: mise exec -- cargo test -p tree-haver --test language_pack_provider --locked -- --include-ignored
       - name: Setup Ruby for native parser integration
         uses: ruby/setup-ruby@v1
@@ -291,6 +308,14 @@ jobs:
         run: mise exec -- cargo test -p yaml-merge --test typed_psych_merge --locked -- --ignored
       - name: Verify common operation execution with native Psych
         run: mise exec -- cargo test -p structuredmerge-core --test native_operations --locked -- --ignored --skip python_
+      - name: Remove disposable check build and grammar directories
+        if: always()
+        shell: bash
+        run: |
+          if [ -d tmp/check-target ]; then rm -r -- tmp/check-target; fi
+          if [ -d tmp/check-cli-install ]; then rm -r -- tmp/check-cli-install; fi
+          if [ -d tmp/typed-tslp-cache ]; then rm -r -- tmp/typed-tslp-cache; fi
+          df -h .
 
   ruby-bindings:
     name: Legacy checkout regressions (${{ matrix.platform }}, Ruby ${{ matrix.ruby }})
