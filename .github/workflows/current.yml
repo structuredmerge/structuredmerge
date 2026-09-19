@@ -226,11 +226,13 @@ jobs:
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
           toolchain: stable
-          targets: ${{ runner.os == 'Windows' && 'x86_64-pc-windows-gnu' || '' }}
       - name: Match typed extension to RubyInstaller ABI
         if: runner.os == 'Windows'
         shell: bash
         run: |
+          # rb-sys uses the repository's active toolchain, not necessarily stable.
+          rustup show active-toolchain
+          rustup target add x86_64-pc-windows-gnu
           echo 'RUST_TARGET=x86_64-pc-windows-gnu' >> "$GITHUB_ENV"
           echo 'CARGO_BUILD_TARGET=x86_64-pc-windows-gnu' >> "$GITHUB_ENV"
       - name: Setup Ruby
@@ -322,11 +324,13 @@ jobs:
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
           toolchain: stable
-          targets: ${{ runner.os == 'Windows' && 'x86_64-pc-windows-gnu' || '' }}
       - name: Match RubyInstaller ABI
         if: runner.os == 'Windows'
         shell: bash
         run: |
+          # Keep target installation aligned with the toolchain cargo will select.
+          rustup show active-toolchain
+          rustup target add x86_64-pc-windows-gnu
           echo 'RUST_TARGET=x86_64-pc-windows-gnu' >> "$GITHUB_ENV"
           echo 'CARGO_BUILD_TARGET=x86_64-pc-windows-gnu' >> "$GITHUB_ENV"
       - name: Setup Ruby

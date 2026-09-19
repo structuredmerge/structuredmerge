@@ -106,6 +106,31 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         ruby = next(step for step in self.jobs["ruby-package"]["steps"] if step.get("uses", "").startswith("ruby/setup-ruby@"))
         self.assertEqual(ruby["with"]["ruby-version"], "4.0")
 
+    def test_windows_ruby_target_is_installed_for_the_active_toolchain(self):
+        for name in ("typed-core-ruby-artifact", "ruby-bindings"):
+            with self.subTest(job=name):
+                job = self.jobs[name]
+                steps = job["steps"]
+                setup = next(i for i, step in enumerate(steps)
+                             if step.get("uses", "").startswith("dtolnay/rust-toolchain@"))
+                abi_index, abi = next((i, step) for i, step in enumerate(steps)
+                                     if "CARGO_BUILD_TARGET=" in step.get("run", ""))
+                self.assertEqual(abi["if"], "runner.os == 'Windows'")
+                self.assertEqual(abi["shell"], "bash")
+                # No +stable/--toolchain override: honor rust-toolchain.toml,
+                # just as the subsequent rb-sys cargo subprocess does.
+                self.assertIn("rustup target add x86_64-pc-windows-gnu", abi["run"].splitlines())
+                self.assertNotIn("RUSTUP_TOOLCHAIN", job.get("env", {}))
+                self.assertNotIn("working-directory", abi)
+                self.assertLess(setup, abi_index)
+                builds = [i for i, step in enumerate(steps)
+                          if "rake compile" in step.get("run", "")
+                          or "build_legacy_ruby_regression.rb" in step.get("run", "")]
+                self.assertTrue(builds)
+                for build in builds:
+                    self.assertLess(abi_index, build)
+                    self.assertNotIn("if", steps[build])
+
     def test_installed_core_matrix_preserves_separate_legacy_coverage(self):
         job = self.jobs["typed-core-ruby-artifact"]
         legacy = self.jobs["ruby-bindings"]

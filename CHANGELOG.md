@@ -26,6 +26,8 @@
 
 - Expand installed Python core artifact CI to Linux, macOS and Windows x64/ARM64 targets, retain Python 3.10 minimum-runtime coverage, and resolve exactly one wheel without shell-dependent wildcard expansion.
 
+- Install the Windows Ruby GNU target for the repository-selected Rust toolchain before typed and legacy extension builds, instead of installing it only for stable.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider
