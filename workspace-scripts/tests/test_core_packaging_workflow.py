@@ -44,6 +44,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         self.assertEqual(cleanup["if"], "always()")
         self.assertIn("rm -r -- tmp/cli-target", cleanup["run"])
         self.assertIn("rm -r -- tmp/cli-install", cleanup["run"])
+        self.assertIn("rm -r -- tmp/typed-tslp-cache", cleanup["run"])
         self.assertNotIn("rm -r -- tmp\n", cleanup["run"])
 
     def test_typed_git_ci_uses_published_fixtures_and_exact_prepared_grammar(self):
@@ -55,6 +56,10 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         legacy = [i for i, step in enumerate(steps) if "slice-951-git-driver-json-integration" in step.get("run", "")]
         typed = [(i, step) for i, step in enumerate(steps) if "--typed --fixtures" in step.get("run", "")]
         self.assertEqual(len(legacy), 2)
+        provision = next(i for i, step in enumerate(steps)
+                         if "prepare_cli_git_grammar.py" in step.get("run", ""))
+        self.assertLess(provision, min(legacy))
+        self.assertIn("--cache tmp/typed-tslp-cache", steps[provision]["run"])
         self.assertEqual(len(typed), 2)
         for index, step in typed:
             self.assertLess(max(legacy), index)

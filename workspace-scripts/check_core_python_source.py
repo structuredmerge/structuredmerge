@@ -118,8 +118,10 @@ def verify_lock_pruning(before, after):
             "new_or_changed_pins": 0}
 
 
-def run(argv, cwd, env, evidence, label, work, timeout=180):
+def run(argv, cwd, env, evidence, label, work, timeout=180, work_budget=None):
     """Bound logs, disk and wall time; retire descendants even after leader exit."""
+    if work_budget is None:
+        work_budget = BUILD_BUDGET
     if shutil.disk_usage(work).free < RESERVE:
         raise RuntimeError("source gate requires 30 GiB free")
     paths = [evidence / (label + suffix) for suffix in (".stdout", ".stderr")]
@@ -136,7 +138,7 @@ def run(argv, cwd, env, evidence, label, work, timeout=180):
                 except FileNotFoundError:
                     # Cargo atomically replaces/removes intermediates.
                     continue
-            if (shutil.disk_usage(work).free < RESERVE or size > BUILD_BUDGET
+            if (shutil.disk_usage(work).free < RESERVE or size > work_budget
                     or time.monotonic() - start > timeout
                     or any(path.stat().st_size > LOG_BUDGET for path in paths)):
                 raise RuntimeError(f"{label}: source gate resource budget exceeded")

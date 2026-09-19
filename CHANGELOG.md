@@ -32,6 +32,8 @@
 
 - Keep conflict-review and provider-inventory regression assertions clean under strict workspace Clippy without redundant casts or singleton clones.
 
+- Provision the installed CLI JSON grammar in a separate bounded cold-cache step before real-Git gates, preserving the strict merge file limit and cleaning disposable caches.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider

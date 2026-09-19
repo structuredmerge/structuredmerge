@@ -78,6 +78,10 @@ jobs:
         run: |
           ulimit -c 0
           python -m unittest discover -s workspace-scripts/tests -p '*cli_artifact_manifest.py' -v 2>&1 | tee tmp/cli-manifest-alias.log
+      - name: Prepare cold JSON grammar cache with bounded resources
+        run: >-
+          python workspace-scripts/prepare_cli_git_grammar.py tmp/cli-install/bin/smorg
+          --cache tmp/typed-tslp-cache
       - name: Verify installed canonical executable through real Git
         run: >-
           python workspace-scripts/check_installed_cli_git.py tmp/cli-install/bin/smorg
@@ -88,7 +92,7 @@ jobs:
           python workspace-scripts/check_installed_cli_git.py tmp/cli-install/bin/smorg-rs
           --fixtures ../fixtures/diagnostics/slice-951-git-driver-json-integration/git-driver-json-integration.json
       - name: Verify prepared grammar byte authentication
-        # The preceding legacy integration tests prepare JSON through TSLP's
+        # The explicit bounded preparation step loads JSON through TSLP's
         # normal public loader. These checks neither acquire nor infer a path.
         env:
           SMORG_TEST_GRAMMAR: ${{ github.workspace }}/tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so
@@ -118,6 +122,10 @@ jobs:
             tmp/cli-tooling.log
             tmp/cli-manifest-alias.log
             tmp/cli-grammar-auth.log
+            tmp/cli-provision-evidence-*/report.json
+            tmp/cli-provision-evidence-*/provision.stdout
+            tmp/cli-provision-evidence-*/provision.stderr
+            tmp/cli-provision-evidence-*/driver.json
             tmp/typed-cli-git-*/report.json
             tmp/typed-cli-git-*/*/driver-report.json
             tmp/typed-cli-git-*/*/diff-report.json
@@ -132,6 +140,7 @@ jobs:
         run: |
           if [ -d tmp/cli-target ]; then rm -r -- tmp/cli-target; fi
           if [ -d tmp/cli-install ]; then rm -r -- tmp/cli-install; fi
+          if [ -d tmp/typed-tslp-cache ]; then rm -r -- tmp/typed-tslp-cache; fi
           df -h .
 
   typed-core-python-artifact:
