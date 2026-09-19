@@ -108,7 +108,7 @@ No compiler run is needed for this tooling change. Per-run repositories and
 captures are removed; retained evidence is small. Hosted execution remains unproven.
 
 The installed Linux CI job now runs both modes separately. It pins published
-fixtures `c7028ab01249f297c5c55bc3e5321226ff825d39`. The preceding legacy tests
+fixtures `be4bf25d59bceac6a4adcc27dea081a2bab4c798`. The preceding legacy tests
 prepare JSON through TSLP's public loader; the subsequent typed gates receive
 the exact locked-1.17.0 Linux cache library path and fail if it is absent. They
 never acquire a grammar. A separate signed-asset test checks that prepared

@@ -51,7 +51,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         steps = self.jobs["installed-kernel-cli"]["steps"]
         fixtures = next(step for step in steps
                         if step.get("with", {}).get("repository") == "structuredmerge/structuredmerge-fixtures")
-        self.assertEqual(fixtures["with"]["ref"], "c7028ab01249f297c5c55bc3e5321226ff825d39")
+        self.assertEqual(fixtures["with"]["ref"], "be4bf25d59bceac6a4adcc27dea081a2bab4c798")
         grammar = "tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so"
         legacy = [i for i, step in enumerate(steps) if "slice-951-git-driver-json-integration" in step.get("run", "")]
         typed = [(i, step) for i, step in enumerate(steps) if "--typed --fixtures" in step.get("run", "")]
@@ -84,7 +84,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         self.assertEqual(set(consumers), {"installed-kernel-cli", "check", "ruby-bindings"})
         for name, revision in consumers.items():
             with self.subTest(job=name):
-                self.assertEqual(revision, "c7028ab01249f297c5c55bc3e5321226ff825d39")
+                self.assertEqual(revision, "be4bf25d59bceac6a4adcc27dea081a2bab4c798")
 
     def test_export_compiles_then_packages_verifies_and_uploads_only_core(self):
         steps = self.jobs["ruby-package"]["steps"]
