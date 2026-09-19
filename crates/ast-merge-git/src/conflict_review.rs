@@ -183,7 +183,7 @@ mod tests {
             .as_bytes();
         let review = review_conflicts(bytes.to_vec(), 7).unwrap();
         let region = &review.regions[0];
-        let slice = |range: &ByteRange| &bytes[range.start_byte as usize..range.end_byte as usize];
+        let slice = |range: &ByteRange| &bytes[range.start_byte..range.end_byte];
         assert_eq!(slice(&region.ours), "雪\r\n".as_bytes());
         assert_eq!(slice(region.base.as_ref().unwrap()), b"");
         assert_eq!(slice(&region.theirs), "後\r\n".as_bytes());

@@ -30,6 +30,8 @@
 
 - Preserve reviewed source bytes in Windows Ruby CI checkouts so installed-artifact API hashes remain platform-independent.
 
+- Keep conflict-review and provider-inventory regression assertions clean under strict workspace Clippy without redundant casts or singleton clones.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider

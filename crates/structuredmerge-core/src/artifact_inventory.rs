@@ -128,8 +128,11 @@ mod tests {
                 .iter()
                 .find(|p| p.provider_id == workflow.provider_id)
                 .unwrap();
-            assert_eq!(workflow.profiles, [profile.id.clone()]);
-            assert_eq!(workflow.parser_requirements.contracts, [profile.parser_contract.clone()]);
+            assert_eq!(workflow.profiles.as_slice(), std::slice::from_ref(&profile.id));
+            assert_eq!(
+                workflow.parser_requirements.contracts.as_slice(),
+                std::slice::from_ref(&profile.parser_contract)
+            );
         }
         assert_eq!(
             registry.snapshot().unwrap().inventory().providers.len(),
