@@ -28,6 +28,8 @@
 
 - Install the Windows Ruby GNU target for the repository-selected Rust toolchain before typed and legacy extension builds, instead of installing it only for stable.
 
+- Preserve reviewed source bytes in Windows Ruby CI checkouts so installed-artifact API hashes remain platform-independent.
+
 ### Added
 
 - Publish and enforce exact provider selection: unavailable explicit provider

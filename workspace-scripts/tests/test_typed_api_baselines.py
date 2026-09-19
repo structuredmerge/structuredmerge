@@ -1,4 +1,6 @@
 import importlib.util
+import hashlib
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -78,6 +80,30 @@ class TypedApiBaselineTest(unittest.TestCase):
                 BASELINE.check(self.root, "ruby")
             path.write_bytes(files[name])
         self.assertFalse(any("prototype" in name for name in files))
+
+    def test_git_line_ending_conversion_changes_reviewed_ruby_bytes(self):
+        content = BASELINE.surface_files(ROOT, "ruby")["lib/structuredmerge_core/native.rb"]
+        checkout = self.root / "checkout"
+        checkout.mkdir()
+
+        def git(*args, data=None):
+            return subprocess.run(["git", *args], cwd=checkout, input=data,
+                                  capture_output=True, check=True, timeout=10).stdout
+
+        git("init", "--template=")
+        git("config", "core.safecrlf", "false")
+        # Store exact reviewed bytes without check-in filters, then exercise
+        # Git's real checkout conversion as a Windows runner would.
+        blob = git("hash-object", "-w", "--stdin", data=content).decode().strip()
+        git("update-index", "--add", "--cacheinfo", f"100644,{blob},native.rb")
+        path = checkout / "native.rb"
+        for autocrlf, expected in (("true", False), ("false", True)):
+            git("config", "core.autocrlf", autocrlf)
+            if path.exists():
+                path.unlink()
+            git("checkout-index", "--force", "native.rb")
+            self.assertEqual(hashlib.sha256(path.read_bytes()).digest() ==
+                             hashlib.sha256(content).digest(), expected)
 
 
 if __name__ == "__main__":

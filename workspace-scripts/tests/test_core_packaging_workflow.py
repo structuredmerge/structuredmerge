@@ -131,6 +131,19 @@ class CorePackagingWorkflowTest(unittest.TestCase):
                     self.assertLess(abi_index, build)
                     self.assertNotIn("if", steps[build])
 
+    def test_windows_binding_checkouts_preserve_reviewed_source_bytes(self):
+        for name in ("typed-core-python-artifact", "typed-core-ruby-artifact", "ruby-bindings"):
+            with self.subTest(job=name):
+                steps = self.jobs[name]["steps"]
+                checkout = next(i for i, step in enumerate(steps)
+                                if step.get("uses", "").startswith("actions/checkout@"))
+                preservation = [(i, step) for i, step in enumerate(steps)
+                                if step.get("run") == "git config --global core.autocrlf false"]
+                self.assertEqual(len(preservation), 1)
+                index, step = preservation[0]
+                self.assertEqual(step["if"], "runner.os == 'Windows'")
+                self.assertLess(index, checkout)
+
     def test_installed_core_matrix_preserves_separate_legacy_coverage(self):
         job = self.jobs["typed-core-ruby-artifact"]
         legacy = self.jobs["ruby-bindings"]
@@ -146,7 +159,9 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         self.assertEqual(job["runs-on"], "${{ matrix.runner }}")
         ruby = next(step for step in job["steps"] if step.get("uses", "").startswith("ruby/setup-ruby@"))
         self.assertEqual(ruby["with"]["ruby-version"], "${{ matrix.ruby }}")
-        windows = next(step for step in job["steps"] if step.get("if") == "runner.os == 'Windows'")
+        windows = next(step for step in job["steps"]
+                       if "CARGO_BUILD_TARGET=" in step.get("run", ""))
+        self.assertEqual(windows["if"], "runner.os == 'Windows'")
         self.assertIn("CARGO_BUILD_TARGET=x86_64-pc-windows-gnu", windows["run"])
         self.assertIn("RUST_TARGET=x86_64-pc-windows-gnu", windows["run"])
         commands = "\n".join(step.get("run", "") for step in legacy["steps"])
