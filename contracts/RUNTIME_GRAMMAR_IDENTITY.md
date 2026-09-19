@@ -40,6 +40,14 @@ Their source corroborates the intended lifetime invariant; this audit did not
 run those upstream tests and does not claim their conditional grammar branches
 were exercised locally.
 
+An additional read-only check of the released `v1.20.0` `registry.rs`
+(2026-09-19) finds the same boundary: `LOADED_LIBRARIES` remains a
+process-wide `HashMap<PathBuf, libloading::Library>`, and the public registry
+still returns languages/parsers rather than a receipt carrying loaded-byte
+identity. The release's ABI compatibility checks do not establish content
+identity. The locked dependency must therefore not be bumped as a speculative
+fix; an upstream loader-owned extension remains the required dependency action.
+
 TreeHaver's `LanguagePackProvider::parser` correctly calls the public
 `has_parser` / `get_parser` path for cached-only operations. That proves local
 loadability without implicit acquisition. Neither call exposes the missing
