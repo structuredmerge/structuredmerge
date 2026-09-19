@@ -1,6 +1,6 @@
 # 💎 ast-merge
 
-[![Source](https://img.shields.io/badge/source-github-238636.svg)](https://github.com/structuredmerge/structuredmerge-rust) ![License](https://img.shields.io/badge/license-AGPL-3.0-only%20OR%20PolyForm-Small-Business-1.0.0-259D6C.svg)
+[![Source](https://img.shields.io/badge/source-github-238636.svg)](https://github.com/structuredmerge/structuredmerge) ![License](https://img.shields.io/badge/license-AGPL-3.0-only%20OR%20PolyForm-Small-Business-1.0.0-259D6C.svg)
 
 ## 🌻 Synopsis
 
@@ -17,7 +17,7 @@ This crate is part of the StructuredMerge Rust package family. The implementatio
 
 </details>
 
-[sm-family-guide]: https://github.com/structuredmerge/structuredmerge-rust#package-family
+[sm-family-guide]: https://github.com/structuredmerge/structuredmerge#package-family
 [sm-family-fixtures]: https://github.com/structuredmerge/structuredmerge-fixtures
 [sm-family-go]: https://github.com/structuredmerge/structuredmerge-go
 [sm-family-ruby]: https://github.com/structuredmerge/structuredmerge-ruby
