@@ -42,17 +42,19 @@ used.
 
 ## Ruby Artifact
 
-The current `structuredmerge_host_prototype` gem is the generated integration
-artifact while the ABI is still experimental. Its production successor will be
-named `structuredmerge-rust` and expose the Rust application facade, not a
-second Ruby implementation of merge behavior.
+The first Ruby release target is the generated typed-core gem
+`structuredmerge-core`. It exposes the same reviewed Rust-owned API as the
+Python package and is released from this repository after the Rust dependency
+closure is available on crates.io. Its source gem is prepared with registry
+dependencies and verified in an isolated consumer before RubyGems publication;
+the platform-gem matrix remains an additional compatibility/artifact gate.
 
-The prototype is distributed only as precompiled platform gems. Its private
-host core and workspace path dependencies make the development source gem
-non-installable outside this repository. A source gem may be added only after
-the production facade is independently publishable and an isolated source-gem
-install proves the complete Cargo graph is available. Development `rake build`
-output is not a release artifact.
+`structuredmerge_host_prototype` is a separate historical host-provider
+integration artifact retained for legacy regression coverage. It is not part of
+the Rust/Ruby/Python first-release set, must not enter the typed publication
+closure, and must never be published merely to unblock the production
+`structuredmerge-core` gem. Development `rake build` output is not a release
+artifact.
 
 The generated Magnus layer and hand-maintained Ruby host adapter live in the
 same gem. The adapter accepts providers from the existing Ruby package family;
