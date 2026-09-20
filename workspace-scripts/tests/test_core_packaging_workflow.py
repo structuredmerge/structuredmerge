@@ -46,6 +46,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         self.assertIn("rm -r -- tmp/cli-install", cleanup["run"])
         self.assertIn("rm -r -- tmp/typed-tslp-cache", cleanup["run"])
         self.assertNotIn("rm -r -- tmp\n", cleanup["run"])
+        self.assertNotIn("df -h", cleanup["run"])
 
     def test_typed_git_ci_uses_published_fixtures_and_exact_prepared_grammar(self):
         steps = self.jobs["installed-kernel-cli"]["steps"]
@@ -103,6 +104,12 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         self.assertIn("core-ruby-artifact.json", artifact["path"])
         self.assertNotIn("prototype", json.dumps(steps))
         self.assertNotIn("alef publish", "\n".join(commands))
+
+    def test_python_binding_build_pins_reproducible_source_epoch(self):
+        steps = self.jobs["typed-core-python-artifact"]["steps"]
+        build = next(step for step in steps if "maturin build" in step.get("run", ""))
+        self.assertEqual(build["shell"], "bash")
+        self.assertIn("SOURCE_DATE_EPOCH=$(git show -s --format=%ct", build["run"])
 
     def test_export_does_not_replace_installed_runtime_gate(self):
         steps = self.jobs["typed-core-ruby-artifact"]["steps"]
