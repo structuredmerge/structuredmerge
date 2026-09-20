@@ -4,6 +4,8 @@ permissions:
   contents: read
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       publish:
@@ -12,13 +14,30 @@ on:
         default: false
         type: boolean
       release_tag:
-        description: Release tag to create after all registries succeed (for example v0.2.1)
-        required: true
+        description: Release tag to validate/publish (for example v0.2.1)
+        required: false
         default: v0.2.1
         type: string
+      dry_run:
+        description: Build and validate release artifacts without publishing
+        required: false
+        default: true
+        type: boolean
+      force_republish:
+        description: Republish targets even when the exact version is already present
+        required: false
+        default: false
+        type: boolean
+      targets:
+        description: Comma-separated targets (empty means all enabled targets)
+        required: false
+        default: ""
+        type: string
+  repository_dispatch:
+    types: [publish-release]
 
 concurrency:
-  group: structuredmerge-publish
+  group: structuredmerge-publish-${{ inputs.release_tag || github.event.release.tag_name || github.event.client_payload.tag || github.run_id }}
   cancel-in-progress: false
 
 env:
@@ -27,12 +46,98 @@ env:
   PYTHONDONTWRITEBYTECODE: "1"
 
 jobs:
+  prepare:
+    name: Prepare release metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      checkout_ref: ${{ steps.ref.outputs.checkout_ref }}
+      version: ${{ steps.meta.outputs.version }}
+      dry_run: ${{ steps.meta.outputs.dry_run }}
+      force_republish: ${{ steps.meta.outputs.force_republish }}
+      release_crates: ${{ steps.meta.outputs.release_crates }}
+      release_python: ${{ steps.meta.outputs.release_python }}
+      release_ruby: ${{ steps.meta.outputs.release_ruby }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Prepare release metadata
+        id: meta
+        uses: xberg-io/actions/prepare-release-metadata@v1
+        with:
+          available-targets: "crates,python,ruby"
+          alef-version: "0.94.0"
+          targets: ${{ inputs.targets || github.event.client_payload.targets || '' }}
+          tag: ${{ inputs.release_tag || github.event.release.tag_name || github.event.client_payload.tag || '' }}
+          dry-run: ${{ inputs.dry_run || 'false' }}
+          force-republish: ${{ inputs.force_republish || 'false' }}
+
+      - name: Resolve checkout ref
+        id: ref
+        env:
+          DRY_RUN: ${{ steps.meta.outputs.dry_run }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          DISPATCH_SHA: ${{ github.sha }}
+        run: |
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            echo "checkout_ref=${DISPATCH_SHA}" >> "$GITHUB_OUTPUT"
+          else
+            echo "checkout_ref=${TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write release configuration summary
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          TARGETS: ${{ steps.meta.outputs.release_targets }}
+          DRY_RUN: ${{ steps.meta.outputs.dry_run }}
+          FORCE_REPUBLISH: ${{ steps.meta.outputs.force_republish }}
+        run: |
+          {
+            echo "## Release configuration"
+            echo "- Tag: ${TAG}"
+            echo "- Version: ${VERSION}"
+            echo "- Targets: ${TARGETS}"
+            echo "- Dry run: ${DRY_RUN}"
+            echo "- Force republish: ${FORCE_REPUBLISH}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  check-registries:
+    name: Check registries
+    needs: prepare
+    uses: xberg-io/actions/.github/workflows/reusable-check-registries.yml@v1
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      registries: |
+        [
+          {
+            "name": "cratesio",
+            "registry": "cratesio",
+            "package": "structuredmerge-core"
+          },
+          {
+            "name": "pypi",
+            "registry": "pypi",
+            "package": "structuredmerge-core"
+          },
+          {
+            "name": "rubygems",
+            "registry": "rubygems",
+            "package": "structuredmerge-core"
+          }
+        ]
+
   validate:
     name: Validate release inputs
+    needs: prepare
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
@@ -58,7 +163,7 @@ jobs:
 
   release-binaries:
     name: Build release CLI artifact (${{ matrix.platform }})
-    needs: validate
+    needs: [prepare, validate]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -85,6 +190,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
@@ -115,7 +222,7 @@ jobs:
         env:
           TARGET_DIR: target/${{ matrix.target }}/release
         run: |
-          version="${{ inputs.release_tag }}"
+          version="${{ needs.prepare.outputs.version }}"
           version="${version#v}"
           source_date_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
           export SOURCE_DATE_EPOCH="$source_date_epoch"
@@ -131,17 +238,19 @@ jobs:
       - name: Upload release archive
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: smorg-${{ inputs.release_tag }}-${{ matrix.platform }}
+          name: smorg-${{ needs.prepare.outputs.tag }}-${{ matrix.platform }}
           path: tmp/release-assets/smorg-*
           if-no-files-found: error
 
   assemble-release-evidence:
     name: Assemble release manifests and provenance
-    needs: release-binaries
+    needs: [prepare, release-binaries]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Setup Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
@@ -149,21 +258,20 @@ jobs:
       - name: Download all platform archives
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          pattern: smorg-${{ inputs.release_tag }}-*
+          pattern: smorg-${{ needs.prepare.outputs.tag }}-*
           path: tmp/release-assets
           merge-multiple: true
       - name: Generate and validate release evidence
         shell: bash
         run: |
-          version="${{ inputs.release_tag }}"
-          version="${version#v}"
+          version="${{ needs.prepare.outputs.version }}"
           python workspace-scripts/generate_release_manifests.py \
             --version "$version" \
             --asset-dir tmp/release-assets \
             --output-dir tmp/release-evidence
           python workspace-scripts/generate_release_evidence.py \
             --version "$version" \
-            --release-tag "${{ inputs.release_tag }}" \
+            --release-tag "${{ needs.prepare.outputs.tag }}" \
             --source-revision "$GITHUB_SHA" \
             --asset-inventory tmp/release-evidence/smorg-assets.json \
             --output tmp/release-evidence/smorg-release-evidence.json
@@ -173,14 +281,21 @@ jobs:
       - name: Upload assembled release evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: smorg-${{ inputs.release_tag }}-release-evidence
+          name: smorg-${{ needs.prepare.outputs.tag }}-release-evidence
           path: tmp/release-evidence
           if-no-files-found: error
 
   publish-rust:
     name: Publish Rust dependency closure
-    needs: [validate, release-binaries, assemble-release-evidence]
-    if: ${{ inputs.publish == true }}
+    needs: [prepare, check-registries, validate, release-binaries, assemble-release-evidence]
+    if: >-
+      ${{
+        inputs.publish == true &&
+        needs.prepare.outputs.release_crates == 'true' &&
+        needs.prepare.outputs.dry_run != 'true' &&
+        (fromJson(needs.check-registries.outputs.results).cratesio != 'true' ||
+          needs.prepare.outputs.force_republish == 'true')
+      }}
     permissions:
       contents: write
       id-token: write
@@ -189,6 +304,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
@@ -204,19 +321,21 @@ jobs:
       - name: Publish dependency-first Rust closure and tag
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           ruby workspace-scripts/release_rust_crates.rb --push --tag
           git push origin "$RELEASE_TAG"
 
   verify-rust-install:
     name: Verify crates.io installation
-    needs: publish-rust
-    if: ${{ inputs.publish == true }}
+    needs: [prepare, publish-rust]
+    if: ${{ inputs.publish == true && needs.publish-rust.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
@@ -227,7 +346,7 @@ jobs:
           python-version: "3.14"
       - name: Install published smorg crate
         env:
-          RELEASE_VERSION: ${{ inputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           version="${RELEASE_VERSION#v}"
           mkdir -p "$RUNNER_TEMP/smorg-install"
