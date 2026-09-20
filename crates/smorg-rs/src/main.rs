@@ -765,6 +765,101 @@ fn report_and_enforce_profile(
     EXIT_SUCCESS
 }
 
+fn preflight_selection(
+    request: &structuredmerge_core::OperationRequest,
+    inventory: &structuredmerge_core::artifact_inventory::CompiledProviderInventory,
+) -> Result<serde_json::Value, String> {
+    let provider = request
+        .provider_selection
+        .provider_id
+        .as_deref()
+        .ok_or_else(|| "preflight requires an explicit workflow provider ID".to_string())?;
+    let workflow = inventory
+        .workflows
+        .iter()
+        .find(|descriptor| descriptor.provider_id == provider)
+        .ok_or_else(|| format!("unknown workflow provider {provider}"))?;
+    let backend = request
+        .parser_selection
+        .backend
+        .as_deref()
+        .ok_or_else(|| "preflight requires an explicit parser backend".to_string())?;
+    let parser = inventory
+        .parsers
+        .iter()
+        .find(|descriptor| descriptor.id == backend)
+        .ok_or_else(|| format!("unknown parser provider {backend}"))?;
+    let language = parser
+        .languages
+        .first()
+        .cloned()
+        .ok_or_else(|| format!("parser provider {backend} declares no language"))?;
+
+    let parser_inventory =
+        structuredmerge_core::parser_registry_inventory().map_err(|error| error.to_string())?;
+    if !parser_inventory.providers.iter().any(|descriptor| descriptor.id == backend) {
+        structuredmerge_core::register_cached_language_pack_parser(
+            backend.to_string(),
+            language.clone(),
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    let operation = match request.operation.kind() {
+        structuredmerge_core::OperationKind::Analyze => "analyze",
+        structuredmerge_core::OperationKind::Diff2 => "diff2",
+        structuredmerge_core::OperationKind::Merge2 => "merge2",
+        structuredmerge_core::OperationKind::Merge3 => "merge3",
+    };
+    let query = structuredmerge_core::MergeSelectionRequest {
+        provider_id: Some(provider.to_string()),
+        family: request
+            .provider_selection
+            .family
+            .clone()
+            .unwrap_or_else(|| workflow.family.clone()),
+        operation: operation.to_string(),
+        dialect: request.provider_selection.dialect.clone(),
+        profile: request.provider_selection.profile_id.clone(),
+        required_capabilities: request.provider_selection.required_capabilities.clone(),
+        required_preservation: vec![],
+        parser: structuredmerge_core::ParserSelectionRequest {
+            language,
+            dialect: request.provider_selection.dialect.clone(),
+            options: structuredmerge_core::ParseOptions::default(),
+            selection: structuredmerge_core::ParserSelection {
+                backend_id: Some(backend.to_string()),
+                preference: request.parser_selection.preference.clone(),
+                required_capabilities: request.parser_selection.required_capabilities.clone(),
+            },
+        },
+    };
+    let limits = structuredmerge_core::WorkflowLimits {
+        max_operations: 1,
+        max_request_bytes: 2 * 1024 * 1024,
+        max_response_bytes: 2 * 1024 * 1024,
+        parse: structuredmerge_core::ParseLimits {
+            max_batch_items: 1,
+            max_input_bytes: 8 * 1024 * 1024,
+            max_nodes: 1_000_000,
+            max_diagnostics: 1_000,
+            timeout_millis: Some(5_000),
+        },
+    };
+    let reports = structuredmerge_core::workflow_selection_reports(vec![query], limits)
+        .map_err(|error| error.to_string())?;
+    Ok(json!({
+        "provider_id": provider,
+        "parser_id": backend,
+        "selection": reports,
+        "registry_generation": structuredmerge_core::workflow_registry_inventory()
+            .map_err(|error| error.to_string())?
+            .generation,
+        "parser_registry_generation": structuredmerge_core::parser_registry_inventory()
+            .map_err(|error| error.to_string())?
+            .generation,
+    }))
+}
+
 fn run_languages(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
     match args {
         [arg] if arg == "--gitattributes" => {
@@ -966,27 +1061,43 @@ fn run_languages(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write
             let parsed = serde_json::from_slice::<structuredmerge_core::OperationRequest>(&input)
                 .map_err(|error| error.to_string());
             let validated = parsed.and_then(|request| {
+                let selection_request = request.clone();
                 request
                     .validate(8 * 1024 * 1024, |_, _| {
                         Err("preflight requires inline source content or bytes".to_string())
                     })
-                    .map(|_| ())
+                    .map(|_| selection_request)
                     .map_err(|error| error.to_string())
             });
-            let (outcome, exit_code, diagnostic, preflight_validated) = match validated {
-                Ok(()) => (
-                    "unsupported",
-                    EXIT_USER_ERROR,
-                    json!({"code": "provider.runtime_unavailable", "message": "runtime provider availability was not checked; preflight cannot authorize execution"}),
-                    true,
-                ),
-                Err(error) => (
-                    "error",
-                    EXIT_USER_ERROR,
-                    json!({"code": "preflight.invalid_request", "message": error}),
-                    false,
-                ),
-            };
+            let (outcome, exit_code, diagnostic, preflight_validated, selection_checked, selection) =
+                match validated {
+                    Ok(request) => match preflight_selection(&request, &inventory) {
+                        Ok(selection) => (
+                            "unsupported",
+                            EXIT_USER_ERROR,
+                            json!({"code": "provider.runtime_unavailable", "message": "provider selection was evaluated, but runtime availability is not authenticated; preflight cannot authorize execution"}),
+                            true,
+                            true,
+                            Some(selection),
+                        ),
+                        Err(error) => (
+                            "unsupported",
+                            EXIT_USER_ERROR,
+                            json!({"code": "provider.selection_unavailable", "message": error}),
+                            true,
+                            true,
+                            None,
+                        ),
+                    },
+                    Err(error) => (
+                        "error",
+                        EXIT_USER_ERROR,
+                        json!({"code": "preflight.invalid_request", "message": error}),
+                        false,
+                        false,
+                        None,
+                    ),
+                };
             if json_output {
                 let value = json!({
                     "schema": "structuredmerge.cli-report/v1",
@@ -1001,11 +1112,12 @@ fn run_languages(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write
                         "state": "unavailable",
                         "selectable": false,
                         "preflight_validated": preflight_validated,
-                        "selection_checked": false,
+                        "selection_checked": selection_checked,
                         "request_path": request_path,
                         "registry_generation": null,
                         "provider_id": null,
                         "parser_id": null,
+                        "selection": selection,
                         "diagnostics": [diagnostic.clone()],
                     },
                     "conflict_review": null,
@@ -2487,6 +2599,7 @@ mod tests {
         assert_eq!(report["command"], "languages.preflight");
         assert_eq!(report["outcome"], "unsupported");
         assert_eq!(report["availability"]["preflight_validated"], true);
+        assert_eq!(report["availability"]["selection_checked"], true);
     }
 
     #[test]
