@@ -32,6 +32,9 @@ class ReleaseManifestTest(unittest.TestCase):
             self.assertIn(expected, scoop["architecture"]["64bit"]["hash"])
             self.assertIn("bin \"smorg\"", formula)
             self.assertIn("smorg-0.2.1-macos-arm64.tar.gz", formula)
+            self.assertEqual(formula.count("class Smorg < Formula"), 1)
+            self.assertEqual(formula.count("\nend\n"), 1)
+            self.assertLess(formula.index('  bin "smorg"'), formula.rindex("\nend\n"))
 
     def test_missing_platform_asset_fails_closed(self):
         with tempfile.TemporaryDirectory() as root:

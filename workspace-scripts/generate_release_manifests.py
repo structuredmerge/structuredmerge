@@ -66,7 +66,6 @@ def render_homebrew(version: str, assets: dict[str, dict[str, str]]) -> str:
         [
             "    end",
             "  end",
-            "end",
             "",
             '  bin "smorg"',
             '  bin "smorg-rs"',
