@@ -438,6 +438,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout shared fixtures
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: structuredmerge/structuredmerge-fixtures
+          ref: be4bf25d59bceac6a4adcc27dea081a2bab4c798
+          path: shared-fixtures
+      - name: Place fixtures beside kernel
+        shell: bash
+        run: mv shared-fixtures ../fixtures
       - name: Install Alef
         shell: bash
         run: |
