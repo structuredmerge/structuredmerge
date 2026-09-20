@@ -198,7 +198,8 @@ jobs:
       - name: Build checked-in generated core binding
         shell: bash
         run: |
-          echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct \"$GITHUB_SHA\")" >> "$GITHUB_ENV"
+          source_date_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
+          echo "SOURCE_DATE_EPOCH=$source_date_epoch" >> "$GITHUB_ENV"
           python -m maturin build --locked --out ../../tmp/core-wheels --profile dev
         working-directory: packages/python
       - name: Verify wheel contents and isolated installed native merges

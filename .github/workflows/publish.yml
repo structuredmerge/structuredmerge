@@ -75,13 +75,23 @@ jobs:
           test "$(stat -c %s target/release/smorg-rs)" -le 134217728
           ./target/release/smorg --version
           ./target/release/smorg-rs --version
-      - name: Upload release executables
+      - name: Package deterministic release archive
+        shell: bash
+        run: |
+          version="${{ inputs.release_tag }}"
+          version="${version#v}"
+          source_date_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
+          export SOURCE_DATE_EPOCH="$source_date_epoch"
+          python workspace-scripts/package_release_archive.py \
+            --version "$version" \
+            --platform linux-x86_64 \
+            --binary-dir target/release \
+            --output-dir tmp/release-assets
+      - name: Upload release archive
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: smorg-${{ inputs.release_tag }}-linux-x86_64
-          path: |
-            target/release/smorg
-            target/release/smorg-rs
+          path: tmp/release-assets/smorg-*.tar.gz
           if-no-files-found: error
 
   publish-rust:
