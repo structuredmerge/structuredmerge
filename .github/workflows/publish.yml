@@ -131,9 +131,51 @@ jobs:
           path: tmp/release-assets/smorg-*
           if-no-files-found: error
 
+  assemble-release-evidence:
+    name: Assemble release manifests and provenance
+    needs: release-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+      - name: Download all platform archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: smorg-${{ inputs.release_tag }}-*
+          path: tmp/release-assets
+          merge-multiple: true
+      - name: Generate and validate release evidence
+        shell: bash
+        run: |
+          version="${{ inputs.release_tag }}"
+          version="${version#v}"
+          python workspace-scripts/generate_release_manifests.py \
+            --version "$version" \
+            --asset-dir tmp/release-assets \
+            --output-dir tmp/release-evidence
+          python workspace-scripts/generate_release_evidence.py \
+            --version "$version" \
+            --release-tag "${{ inputs.release_tag }}" \
+            --source-revision "$GITHUB_SHA" \
+            --asset-inventory tmp/release-evidence/smorg-assets.json \
+            --output tmp/release-evidence/smorg-release-evidence.json
+          ruby -c tmp/release-evidence/smorg.rb
+          python -m json.tool tmp/release-evidence/smorg.json >/dev/null
+          python -m json.tool tmp/release-evidence/smorg-release-evidence.json >/dev/null
+      - name: Upload assembled release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: smorg-${{ inputs.release_tag }}-release-evidence
+          path: tmp/release-evidence
+          if-no-files-found: error
+
   publish-rust:
     name: Publish Rust dependency closure
-    needs: [validate, release-binaries]
+    needs: [validate, release-binaries, assemble-release-evidence]
     if: ${{ inputs.publish == true }}
     permissions:
       contents: write
