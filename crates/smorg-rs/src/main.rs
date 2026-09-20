@@ -766,18 +766,60 @@ fn report_and_enforce_profile(
 }
 
 fn run_languages(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
-    if args != ["--gitattributes"] {
-        let _ = writeln!(stderr, "languages currently requires --gitattributes");
-        return EXIT_USER_ERROR;
+    match args {
+        [arg] if arg == "--gitattributes" => {
+            for line in [
+                "*.go merge=smorg-rs diff=smorg-rs smorg.language=go",
+                "*.json merge=smorg-rs diff=smorg-rs smorg.language=json",
+                "*.jsonc merge=smorg-rs diff=smorg-rs smorg.language=jsonc",
+            ] {
+                let _ = writeln!(stdout, "{line}");
+            }
+            EXIT_SUCCESS
+        }
+        [arg] if arg == "--json" => {
+            // This command inventories compiled declarations only. It does not
+            // probe host runtimes or load grammars; callers must not interpret
+            // the result as runtime availability or default-provider approval.
+            let inventory = structuredmerge_core::artifact_inventory::compiled_provider_inventory();
+            let value = json!({
+                "schema": "structuredmerge.cli-report/v1",
+                "command": "languages",
+                "cli": {
+                    "executable": env!("CARGO_BIN_NAME"),
+                    "package": env!("CARGO_PKG_NAME"),
+                    "version": env!("CARGO_PKG_VERSION"),
+                    "kernel_version": inventory.kernel_version,
+                    "cli_contract": "structuredmerge.cli/v1",
+                },
+                "outcome": "clean",
+                "exit_code": EXIT_SUCCESS,
+                "operation_result": null,
+                "availability": {
+                    "schema": "structuredmerge.cli-availability/v1",
+                    "runtime_availability_checked": inventory.runtime_availability_checked,
+                    "compiled_providers": inventory,
+                },
+                "conflict_review": null,
+                "git_install": null,
+                "output_commit_verified": false,
+                "diagnostics": [],
+            });
+            if let Err(error) = serde_json::to_writer(&mut *stdout, &value) {
+                let _ = writeln!(stderr, "cannot write languages report: {error}");
+                return EXIT_INTERNAL_ERROR;
+            }
+            if let Err(error) = writeln!(stdout) {
+                let _ = writeln!(stderr, "cannot write languages report: {error}");
+                return EXIT_INTERNAL_ERROR;
+            }
+            EXIT_SUCCESS
+        }
+        _ => {
+            let _ = writeln!(stderr, "languages accepts --json or --gitattributes");
+            EXIT_USER_ERROR
+        }
     }
-    for line in [
-        "*.go merge=smorg-rs diff=smorg-rs smorg.language=go",
-        "*.json merge=smorg-rs diff=smorg-rs smorg.language=json",
-        "*.jsonc merge=smorg-rs diff=smorg-rs smorg.language=jsonc",
-    ] {
-        let _ = writeln!(stdout, "{line}");
-    }
-    EXIT_SUCCESS
 }
 
 fn run_git(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
@@ -2119,6 +2161,21 @@ mod tests {
         let output = String::from_utf8(stdout).expect("utf8 output");
         assert!(output.contains("*.go merge=smorg-rs diff=smorg-rs smorg.language=go"));
         assert!(output.contains("*.json merge=smorg-rs diff=smorg-rs smorg.language=json"));
+    }
+
+    #[test]
+    fn languages_json_reports_compiled_inventory_without_claiming_runtime_availability() {
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let exit = run(&["languages".to_string(), "--json".to_string()], &mut stdout, &mut stderr);
+
+        assert_eq!(exit, EXIT_SUCCESS, "stderr={}", String::from_utf8_lossy(&stderr));
+        let report: serde_json::Value = serde_json::from_slice(&stdout).expect("JSON report");
+        assert_eq!(report["schema"], "structuredmerge.cli-report/v1");
+        assert_eq!(report["command"], "languages");
+        assert_eq!(report["cli"]["cli_contract"], "structuredmerge.cli/v1");
+        assert_eq!(report["availability"]["runtime_availability_checked"], false);
+        assert!(report["availability"]["compiled_providers"]["workflows"].is_array());
     }
 
     #[test]
