@@ -56,9 +56,9 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       dry_run: ${{ steps.meta.outputs.dry_run }}
       force_republish: ${{ steps.meta.outputs.force_republish }}
+      publish_enabled: ${{ steps.publish.outputs.enabled }}
       release_crates: ${{ steps.meta.outputs.release_crates }}
       release_python: ${{ steps.meta.outputs.release_python }}
-      release_ruby: ${{ steps.meta.outputs.release_ruby }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,7 +67,7 @@ jobs:
         id: meta
         uses: xberg-io/actions/prepare-release-metadata@v1
         with:
-          available-targets: "crates,python,ruby"
+          available-targets: "crates,python"
           alef-version: "0.94.0"
           targets: ${{ inputs.targets || github.event.client_payload.targets || '' }}
           tag: ${{ inputs.release_tag || github.event.release.tag_name || github.event.client_payload.tag || '' }}
@@ -87,6 +87,24 @@ jobs:
             echo "checkout_ref=${TAG}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Resolve publication authorization
+        id: publish
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_PUBLISH: ${{ inputs.publish || 'false' }}
+          DISPATCH_PUBLISH: ${{ github.event.client_payload.publish || 'false' }}
+          DRY_RUN: ${{ steps.meta.outputs.dry_run }}
+        run: |
+          enabled=false
+          if [[ "${DRY_RUN}" != "true" ]] && {
+            [[ "${INPUT_PUBLISH}" == "true" ]] ||
+            [[ "${EVENT_NAME}" == "release" ]] ||
+            [[ "${EVENT_NAME}" == "repository_dispatch" && "${DISPATCH_PUBLISH}" == "true" ]]
+          }; then
+            enabled=true
+          fi
+          echo "enabled=${enabled}" >> "$GITHUB_OUTPUT"
+
       - name: Write release configuration summary
         env:
           TAG: ${{ steps.meta.outputs.tag }}
@@ -94,6 +112,7 @@ jobs:
           TARGETS: ${{ steps.meta.outputs.release_targets }}
           DRY_RUN: ${{ steps.meta.outputs.dry_run }}
           FORCE_REPUBLISH: ${{ steps.meta.outputs.force_republish }}
+          PUBLISH_ENABLED: ${{ steps.publish.outputs.enabled }}
         run: |
           {
             echo "## Release configuration"
@@ -102,6 +121,7 @@ jobs:
             echo "- Targets: ${TARGETS}"
             echo "- Dry run: ${DRY_RUN}"
             echo "- Force republish: ${FORCE_REPUBLISH}"
+            echo "- Publication enabled: ${PUBLISH_ENABLED}"
           } >> "$GITHUB_STEP_SUMMARY"
 
   check-registries:
@@ -120,11 +140,6 @@ jobs:
           {
             "name": "pypi",
             "registry": "pypi",
-            "package": "structuredmerge-core"
-          },
-          {
-            "name": "rubygems",
-            "registry": "rubygems",
             "package": "structuredmerge-core"
           }
         ]
@@ -160,6 +175,131 @@ jobs:
           python -m unittest workspace-scripts/tests/test_release_manifests.py -v
       - name: Run workspace tests
         run: cargo test --workspace --locked
+
+  build-python-wheels:
+    name: Build Python wheel (${{ matrix.label }})
+    needs: prepare
+    if: needs.prepare.outputs.release_python == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: linux-x86_64
+            runner: ubuntu-latest
+          - label: linux-aarch64
+            runner: ubuntu-24.04-arm
+          - label: macos-arm64
+            runner: macos-14
+          - label: macos-x86_64
+            runner: macos-15-intel
+          - label: windows-x86_64
+            runner: windows-2025
+          - label: windows-arm64
+            runner: windows-11-arm
+    steps:
+      - name: Preserve reviewed source bytes on Windows
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+      - name: Setup Rust
+        uses: xberg-io/actions/setup-rust@v1
+        with:
+          components: ""
+          use-sccache: "false"
+          install-llvm-cov: "false"
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+      - name: Install maturin
+        run: python -m pip install --disable-pip-version-check 'maturin>=1,<2'
+      - name: Build wheel
+        working-directory: packages/python
+        shell: bash
+        run: python -m maturin build --release --locked --out ../../dist
+        env:
+          PROJECT_ROOT: ${{ github.workspace }}
+      - name: Upload wheel
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-wheel-${{ matrix.label }}
+          path: dist/*.whl
+          if-no-files-found: error
+          retention-days: 14
+
+  build-python-sdist:
+    name: Build Python source distribution
+    needs: prepare
+    if: needs.prepare.outputs.release_python == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+      - name: Build source distribution
+        uses: xberg-io/actions/build-python-sdist@v1
+        with:
+          package-dir: packages/python
+          output-dir: dist
+          alef-version: "0.94.0"
+          dry-run: ${{ needs.prepare.outputs.dry_run }}
+      - name: Upload source distribution
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a1 # v7.0.1
+        with:
+          name: python-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-python:
+    name: Publish Python package
+    needs: [prepare, check-registries, build-python-wheels, build-python-sdist]
+    if: >-
+      ${{
+        (needs.prepare.outputs.publish_enabled == 'true' ||
+          needs.prepare.outputs.dry_run == 'true') &&
+        needs.prepare.outputs.release_python == 'true' &&
+        needs.build-python-wheels.result == 'success' &&
+        needs.build-python-sdist.result == 'success' &&
+        (needs.prepare.outputs.dry_run == 'true' ||
+          fromJson(needs.check-registries.outputs.results).pypi != 'true' ||
+          needs.prepare.outputs.force_republish == 'true')
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download wheels
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: python-wheel-*
+          path: dist
+          merge-multiple: true
+      - name: Download source distribution
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: python-sdist
+          path: dist
+      - name: Publish to PyPI
+        uses: xberg-io/actions/publish-pypi@v1
+        with:
+          packages-dir: dist
+          expected-version: ${{ needs.prepare.outputs.version }}
+          dry-run: ${{ needs.prepare.outputs.dry_run }}
 
   release-binaries:
     name: Build release CLI artifact (${{ matrix.platform }})
@@ -290,7 +430,7 @@ jobs:
     needs: [prepare, check-registries, validate, release-binaries, assemble-release-evidence]
     if: >-
       ${{
-        inputs.publish == true &&
+        needs.prepare.outputs.publish_enabled == 'true' &&
         needs.prepare.outputs.release_crates == 'true' &&
         needs.prepare.outputs.dry_run != 'true' &&
         (fromJson(needs.check-registries.outputs.results).cratesio != 'true' ||
@@ -329,7 +469,7 @@ jobs:
   verify-rust-install:
     name: Verify crates.io installation
     needs: [prepare, publish-rust]
-    if: ${{ inputs.publish == true && needs.publish-rust.result == 'success' }}
+    if: ${{ needs.prepare.outputs.publish_enabled == 'true' && needs.publish-rust.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
