@@ -10,6 +10,7 @@ edition = "2024"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 description = "Generated Ruby host-provider prototype for StructuredMerge"
 readme = false
+publish = false
 keywords = []
 categories = []
 
