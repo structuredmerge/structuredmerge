@@ -126,17 +126,6 @@ are available remotely; a local workflow edit is not a hosted test result.
 Kernel CI's `ruby-package` job now exports only the allowlisted typed core. The
 `mise run ruby-package` task uses the same package-only path; its fixed export
 directory must be absent or use the direct command above with a fresh directory.
-The former `release-ruby-host.yml` workflow is removed: prototype tags and manual
-runs must never publish that package. The workflow remains recoverable in Git
-history, and legacy API/lifecycle regression sources are retained separately.
-The legacy checkout job explicitly builds that historical extension with
-`bundle exec ruby ../../workspace-scripts/build_legacy_ruby_regression.rb` from
-`packages/ruby` before `bundle exec rake spec` and `check_ruby_api.rb`. The helper
-uses the retained rb_sys configuration in a fresh kernel `tmp/` directory and
-copies only a successfully built library into the ignored checkout `lib/` path.
-It creates no gem. Neither the installed typed-core gate nor its package producer
-calls this helper or depends on this legacy extension. This keeps historical
-regressions executable without restoring the abandoned publication product.
-Historical cold-path tooling is explicitly named `legacy-ruby-cold-paths`, not a
-core release gate. A new core publication workflow still requires the plan's
+The former host-publication workflow is removed. The current core publication
+workflow requires the plan's
 upstream-generation, ABI/platform, provenance and installed-consumer gates.

@@ -34,6 +34,5 @@ owned_paths = [
   "packages/ruby/Steepfile",
   "packages/ruby/sig/types.rbs",
   "packages/ruby/structuredmerge_core.gemspec",
-  "packages/ruby/structuredmerge_host_prototype.gemspec",
   "test_apps/ruby/Gemfile",
 ]

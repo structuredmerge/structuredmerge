@@ -2,7 +2,6 @@
 members = [
   "crates/*",
   "packages/ruby/ext/structuredmerge_core_rb/native",
-  "packages/ruby/ext/structuredmerge_host_prototype_core_rb/native",
 ]
 resolver = "2"
 

@@ -1,7 +1,7 @@
 # StructuredMerge core
 
 The typed facade for the shared Rust kernel and its generated language bindings.
-It has no dependency on `structuredmerge-host-prototype-core`.
+It has no dependency on legacy host-integration crates.
 
 Implementation starts with the source/operation boundary from specification
 Slices 722 and 1024–1027:
@@ -77,7 +77,7 @@ cross-platform, or upstream-generator reproducibility. CI now defines the
 same Linux/Ruby 4.0 check; hosted execution remains unverified.
 
 The Python artifact gate likewise audits the wheel's package identity, combined
-license text, and absence of prototype files/executables, then runs the LibCST
+license text, and absence of unexpected legacy files/executables, then runs the LibCST
 merge suite in a fresh virtual environment and copied test directory:
 
 ```sh

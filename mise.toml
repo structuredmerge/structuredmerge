@@ -20,22 +20,14 @@ run = "cargo test --workspace"
 [tasks.alef-verify]
 run = "alef verify --exit-code"
 
-[tasks.ruby-bindings]
+[tasks.ruby-spec]
 run = "bundle check || bundle install && bundle exec rake spec"
-dir = "packages/ruby"
-
-[tasks.ruby-api]
-run = "bundle exec ruby ../../workspace-scripts/check_ruby_api.rb"
 dir = "packages/ruby"
 
 [tasks.ruby-package]
 description = "Export a development typed-core platform gem; never publish"
 dir = "packages/ruby"
 run = "bundle exec rake compile && bundle exec ruby ../../workspace-scripts/check_core_ruby_artifact.rb --package-only ../../tmp/core-artifacts"
-
-[tasks.legacy-ruby-cold-paths]
-description = "Historical prototype artifact measurement only; not a core release gate"
-run = "ruby workspace-scripts/measure_ruby_cold_paths.rb dist"
 
 [tasks.publish-validate]
 run = "alef publish validate"

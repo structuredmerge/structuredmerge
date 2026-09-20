@@ -82,7 +82,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
                 checkout = step.get("with", {})
                 if checkout.get("repository") == "structuredmerge/structuredmerge-fixtures":
                     consumers[name] = checkout["ref"]
-        self.assertEqual(set(consumers), {"installed-kernel-cli", "check", "ruby-bindings", "alef"})
+        self.assertEqual(set(consumers), {"installed-kernel-cli", "check", "alef"})
         for name, revision in consumers.items():
             with self.subTest(job=name):
                 self.assertEqual(revision, "be4bf25d59bceac6a4adcc27dea081a2bab4c798")
@@ -120,7 +120,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         self.assertEqual(ruby["with"]["ruby-version"], "4.0")
 
     def test_windows_ruby_target_is_installed_for_the_active_toolchain(self):
-        for name in ("typed-core-ruby-artifact", "ruby-bindings"):
+        for name in ("typed-core-ruby-artifact",):
             with self.subTest(job=name):
                 job = self.jobs[name]
                 steps = job["steps"]
@@ -137,15 +137,14 @@ class CorePackagingWorkflowTest(unittest.TestCase):
                 self.assertNotIn("working-directory", abi)
                 self.assertLess(setup, abi_index)
                 builds = [i for i, step in enumerate(steps)
-                          if "rake compile" in step.get("run", "")
-                          or "build_legacy_ruby_regression.rb" in step.get("run", "")]
+                          if "rake compile" in step.get("run", "")]
                 self.assertTrue(builds)
                 for build in builds:
                     self.assertLess(abi_index, build)
                     self.assertNotIn("if", steps[build])
 
     def test_windows_binding_checkouts_preserve_reviewed_source_bytes(self):
-        for name in ("typed-core-python-artifact", "typed-core-ruby-artifact", "ruby-bindings"):
+        for name in ("typed-core-python-artifact", "typed-core-ruby-artifact"):
             with self.subTest(job=name):
                 steps = self.jobs[name]["steps"]
                 checkout = next(i for i, step in enumerate(steps)
@@ -159,9 +158,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
 
     def test_installed_core_matrix_preserves_separate_legacy_coverage(self):
         job = self.jobs["typed-core-ruby-artifact"]
-        legacy = self.jobs["ruby-bindings"]
         matrix = job["strategy"]["matrix"]["include"]
-        self.assertEqual(matrix, legacy["strategy"]["matrix"]["include"])
         self.assertEqual(len(matrix), 6)
         self.assertEqual({row["ruby"] for row in matrix}, {"3.2", "4.0"})
         self.assertEqual({row["platform"] for row in matrix}, {
@@ -177,27 +174,8 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         self.assertEqual(windows["if"], "runner.os == 'Windows'")
         self.assertIn("CARGO_BUILD_TARGET=x86_64-pc-windows-gnu", windows["run"])
         self.assertIn("RUST_TARGET=x86_64-pc-windows-gnu", windows["run"])
-        commands = "\n".join(step.get("run", "") for step in legacy["steps"])
-        self.assertIn("bundle exec rake spec", commands)
-        self.assertIn("check_ruby_api.rb", commands)
-        build = next(i for i, step in enumerate(legacy["steps"])
-                     if "build_legacy_ruby_regression.rb" in step.get("run", ""))
-        tests = next(i for i, step in enumerate(legacy["steps"])
-                     if step.get("run") == "bundle exec rake spec")
-        self.assertLess(build, tests)
-        for name in ("typed-core-ruby-artifact", "ruby-package"):
-            self.assertNotIn("build_legacy_ruby_regression.rb", json.dumps(self.jobs[name]))
-
-    def test_retired_publication_is_removed_but_regression_sources_remain(self):
+    def test_retired_publication_is_removed(self):
         self.assertFalse((self.root / ".github/workflows/release-ruby-host.yml").exists())
-        for path in (self.root / ".github/workflows").glob("*.yml"):
-            source = path.read_text()
-            self.assertNotIn("structuredmerge_host_prototype-v", source)
-            self.assertNotIn("structuredmerge-host-prototype-", source)
-        for path in ("packages/ruby/spec/structuredmerge_host_prototype_spec.rb",
-                     "crates/structuredmerge-host-prototype-core/src/lib.rs",
-                     "contracts/legacy-operation-migration.json"):
-            self.assertTrue((self.root / path).is_file())
 
     def test_python_installed_matrix_covers_planned_architectures(self):
         job = self.jobs["typed-core-python-artifact"]

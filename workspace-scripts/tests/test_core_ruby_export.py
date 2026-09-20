@@ -91,7 +91,7 @@ puts JSON.generate(artifact: artifact, package: spec.name, version: spec.version
 
     def test_matching_report_cannot_authorize_wrong_archive(self):
         changes = {
-            "package": 'spec.name = "structuredmerge_host_prototype"',
+            "package": 'spec.name = "unrelated_host_package"',
             "platform": 'spec.platform = Gem::Platform::RUBY',
             "ruby_requirement": 'spec.required_ruby_version = Gem::Requirement.new(">= 0")',
             "extra_file": 'File.write("extra.rb", ""); spec.files += ["extra.rb"]',

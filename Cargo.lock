@@ -1609,43 +1609,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "structuredmerge-host-prototype-core"
-version = "0.2.1"
-dependencies = [
- "ast-crispr",
- "ast-merge",
- "ast-merge-git",
- "ast-template",
- "async-trait",
- "bash-merge",
- "go-merge",
- "json-merge",
- "parking_lot",
- "rust-merge",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "tokio",
- "tree-haver",
- "typescript-merge",
-]
-
-[[package]]
-name = "structuredmerge-host-prototype-core-rb"
-version = "0.2.1"
-dependencies = [
- "async-trait",
- "magnus",
- "rb-sys",
- "serde",
- "serde_json",
- "structuredmerge-host-prototype-core",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "structuredmerge-toml-merge"
 version = "0.2.1"
 dependencies = [

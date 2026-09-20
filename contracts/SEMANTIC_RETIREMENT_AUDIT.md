@@ -90,7 +90,7 @@ Inventory schema: `structuredmerge.legacy-operation-migration/v1`; groups: **12*
 ### `parser-services`
 
 - Methods: `register_parser_host, replace_parser_host, unregister_parser_host, clear_parser_hosts, registered_parser_hosts, register_tslp_parser_host, parse_normalized_with_tslp, parse_with_parser, probe_with_parser`
-- Consumers: `ruby/gems/tree_haver/lib/tree_haver/backends/rust_tslp.rb`, `structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb`
+- Consumers: `ruby/gems/tree_haver/lib/tree_haver/backends/rust_tslp.rb`, retired Ruby boundary coverage
 - Replacement: Typed ParserHost registration, TreeHaver selection and parse_sources; explicit Rust TSLP provider registration and typed normalized results.
 - Disposition: `local_consumer_migrated`
 - Gap / gate: Ruby TreeHaver now registers and parses through typed structuredmerge-core, including a versioned native extra-node flag; its full 90-example suite passes against the installed core gem. Provider identity and diagnostic wording intentionally follow typed results. Hosted/released-package, downstream and full lint/coverage gates remain open. Legacy facade regression specs are retained; typed inventory, source-free selection and generation-checked replacement are deliberate new contracts, not drop-in legacy signatures. Process-wide bulk-clear remains unproven as a product need. Typed Rust facade regressions now prove in-flight snapshot retention, same-ID re-registration isolation, retired-host release and cancellation. See contracts/TYPED_PARSER_LIFECYCLE.md for explicit method dispositions. Typed declaration inventory now reaches installed Ruby/Python artifacts. Source-free selection reports now expose shared dispatch probes in Rust/Ruby/Python installed artifacts; no-eligible results retain candidate evidence without parsing. Atomic host replacement now passes installed Ruby/Python in-callback, stale-generation and unknown-ID tests. Full merge capability/authority reporting and broader binding runtime guarantees remain open; matching method names are not drop-in compatibility.
@@ -98,7 +98,7 @@ Inventory schema: `structuredmerge.legacy-operation-migration/v1`; groups: **12*
 ### `capabilities`
 
 - Methods: `capability_manifest`
-- Consumers: `structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb`
+- Consumers: retired Ruby boundary coverage
 - Replacement: Typed capability manifest and provider identity with observable availability, support and default authority.
 - Disposition: `retain_until_consumer_migration`
 - Gap / gate: operation_profile_catalog declares all eight common-operation profiles through Rust and generated Ruby/Python bindings. Typed capability_manifest composes these declarations with one registry snapshot and explicitly requested parser eligibility observations; operation/dialect support, probe evidence and default authority remain separate. Installed Ruby 4.0.6/Psych and Python 3.14.2/LibCST artifacts pass manifest tests, including empty non-probing queries, faults, limits, cancellation and reentrant host retirement. See contracts/TYPED_CAPABILITY_MANIFEST.md. Wider platform/consumer integration remains open; parser eligibility is not source-specific merge support or default approval.
@@ -106,7 +106,7 @@ Inventory schema: `structuredmerge.legacy-operation-migration/v1`; groups: **12*
 ### `workflow-hosts`
 
 - Methods: `register_workflow_host, replace_workflow_host, unregister_workflow_host, clear_workflow_hosts, registered_workflow_hosts, execute_typed_workflow`
-- Consumers: `structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb`, `structuredmerge/packages/ruby/lib/structuredmerge_host_prototype/workflow_provider.rb`
+- Consumers: retired Ruby boundary coverage and provider adapter
 - Replacement: Typed WorkflowHost coarse callbacks with explicit host-owned workflow boundaries; Rust retains merge semantics.
 - Disposition: `retain_regression_only`
 - Gap / gate: Rust structuredmerge-core now exports a typed WorkflowHost boundary using the ast-merge registry, explicit-provider batch dispatch, TreeHaver-prepared parse facts, bounded requests/results, cancellation and common-result validation. Execution is explicitly host-owned and not default-approved. See contracts/TYPED_WORKFLOW_HOST.md. Ruby/Python Alef exposure, real native consumers, installed runtime gates, host availability, versioned parser profiles, family-default dispatch, delegation and full portable failure/batch envelopes remain open. Retain boundary regressions, not a separately released host product. Consumer discovery beyond the listed local evidence remains open.
@@ -114,7 +114,7 @@ Inventory schema: `structuredmerge.legacy-operation-migration/v1`; groups: **12*
 ### `runtime-identity-probes`
 
 - Methods: `execute_identity, execute_async_identity, execute_detached_identity, execute_in_process_identity, execute_typed_identity, start_identity_worker, prepare_identity_worker, dispatch_identity_worker, cancel_identity_worker, identity_worker_cancelled, poll_identity_worker, start_host_runtime, shutdown_host_runtime`
-- Consumers: `structuredmerge/packages/ruby/spec/structuredmerge_host_prototype_spec.rb`
+- Consumers: retired Ruby boundary coverage
 - Replacement: Real typed-operation lifecycle tests, OperationControl and generated runtime-affine callback infrastructure; no identity-worker product API by default.
 - Disposition: `retain_regression_only`
 - Gap / gate: GC, concurrency, cancellation and deadline cases are migrated in scoped installed Ruby/Python tests. Fresh installed-runtime processes now verify normal exit with idle registered providers, retired providers, and cancelled/drained callbacks (three repetitions per mode). This is not active-callback interpreter finalization, foreign-thread entry, embedding/subinterpreter support or broad stress evidence; retain legacy regressions and the remaining runtime gates.

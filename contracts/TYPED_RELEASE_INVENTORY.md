@@ -43,7 +43,7 @@ the accepted public-crate strategy, remaining dependencies must be available at
 verified registry versions before a registry-backed source installation passes.
 Keep source packaging, isolated native compilation, installed runtime tests,
 reproducible upstream generation, and publication as distinct gates. Do not
-hand-edit generated manifests or publish placeholder/prototype packages to
+hand-edit generated manifests or publish placeholder packages to
 work around these gaps. This inventory is a prerequisite, not source-gem approval.
 
 The separate `prepare_core_ruby_source.rb` helper now exercises Alef's default
@@ -60,7 +60,7 @@ installed conformance, reproducibility or release readiness.
 sdist using Python 3.11+ on POSIX. It rejects oversized exports, links, traversal,
 duplicate archive entries, missing package inputs and incorrect license bytes.
 Cargo metadata must place the typed facade, Python binding and all local package
-dependencies inside the extraction, without prototype packages. It then builds
+dependencies inside the extraction, without unrelated packages. It then builds
 an isolated debug wheel with `--locked --offline`, one compiler job, and runs the
 existing wheel-content/API-baseline and installed native-merge/e2e/app gate.
 Cargo registry dependencies must already be cached; this is not a fresh-cache,

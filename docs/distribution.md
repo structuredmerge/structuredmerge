@@ -49,13 +49,6 @@ closure is available on crates.io. Its source gem is prepared with registry
 dependencies and verified in an isolated consumer before RubyGems publication;
 the platform-gem matrix remains an additional compatibility/artifact gate.
 
-`structuredmerge_host_prototype` is a separate historical host-provider
-integration artifact retained for legacy regression coverage. It is not part of
-the Rust/Ruby/Python first-release set, must not enter the typed publication
-closure, and must never be published merely to unblock the production
-`structuredmerge-core` gem. Development `rake build` output is not a release
-artifact.
-
 The generated Magnus layer and hand-maintained Ruby host adapter live in the
 same gem. The adapter accepts providers from the existing Ruby package family;
 it does not depend on every native parser gem or auto-register them. Parser and
@@ -111,23 +104,9 @@ entry identifies the operation, format family, dialect, merge provider,
 TreeHaver backend, support status, package version, and required extension
 schemas. Selection is always explicit at the operation boundary.
 
-The generated Ruby bundle returns the manifest as JSON:
-
-```ruby
-require "json"
-require "structuredmerge_host_prototype"
-
-manifest = JSON.parse(StructuredmergeHostPrototype.capability_manifest)
-json_merge3 = manifest.fetch("operations").find do |capability|
-  capability.fetch("family") == "json" && capability.fetch("operation") == "merge3"
-end
-raise "JSON merge3 is unavailable" unless json_merge3
-```
-
-`operations` contains only operations compiled into that artifact.
-`parser_provider_factories` describes providers the artifact can register on
-demand; it does not imply that every grammar has reviewed merge behavior.
-`registered_providers` is the current process registry and includes the exact
+The generated Ruby bundle exposes typed operation and profile APIs through
+`StructuredmergeCore`; callers select an operation explicitly and receive
+validated result objects. The package does not auto-register parser providers.
 version and validated descriptor captured when each parser or workflow host was
 registered. Entries and registry snapshots are sorted by stable identifiers.
 

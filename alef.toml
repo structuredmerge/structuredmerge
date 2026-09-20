@@ -11,13 +11,6 @@ user_owned = [
   "contracts/typed-api/ruby/snapshot/**",
   # Retained legacy regression inputs, not active generation/publication targets.
   # Keep exact paths so new typed-core outputs cannot inherit an exclusion.
-  "packages/ruby/ext/structuredmerge_host_prototype_core_rb/native/Cargo.toml",
-  "packages/ruby/ext/structuredmerge_host_prototype_core_rb/native/extconf.rb",
-  "packages/ruby/ext/structuredmerge_host_prototype_core_rb/src/lib.rs",
-  "packages/ruby/lib/structuredmerge_host_prototype.rb",
-  "packages/ruby/lib/structuredmerge_host_prototype/native.rb",
-  "packages/ruby/lib/structuredmerge_host_prototype/version.rb",
-  "packages/ruby/structuredmerge_host_prototype.gemspec",
 ]
 
 [workspace.scaffold]

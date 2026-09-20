@@ -74,8 +74,8 @@ def check_metadata(metadata, source):
         manifest = Path(package["manifest_path"]).resolve()
         if not manifest.is_relative_to(source.resolve()):
             raise ValueError("source package escapes archive")
-        if "prototype" in package["name"]:
-            raise ValueError("prototype package in source archive")
+        if package["name"].endswith("-host"):
+            raise ValueError("unexpected host package in source archive")
         local.append(package["name"])
         for dependency in package["dependencies"]:
             if dependency.get("path") and not Path(dependency["path"]).resolve().is_relative_to(source.resolve()):

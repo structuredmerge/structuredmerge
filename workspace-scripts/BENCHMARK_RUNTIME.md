@@ -3,7 +3,7 @@
 Use the existing Ruby `Ast::Merge::Git::LocalBenchmark` implementation and the
 fixtures repository's Slice 1023 corpus. `benchmark-runtime.gemfile` supplies only
 its runtime dependencies and JSON structural oracle through ENV-driven nomono.
-It neither loads nor installs `structuredmerge_host_prototype`. Nomono must
+It neither loads nor installs retired host artifacts. No benchmark must
 already be installed, as required for local-path bundle bootstrap.
 
 Use the `smorg-rs` compatibility executable for the retained harness's unlabelled

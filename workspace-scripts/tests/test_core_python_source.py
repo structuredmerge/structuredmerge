@@ -93,7 +93,7 @@ class SourceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "dependency escapes"):
             GATE.check_metadata(metadata, self.work)
         metadata = self.metadata()
-        metadata["packages"][0]["name"] = "structuredmerge-host-prototype-core"
+        metadata["packages"][0]["name"] = "unrelated-host-package"
         with self.assertRaisesRegex(ValueError, "prototype"):
             GATE.check_metadata(metadata, self.work)
 

@@ -3,7 +3,7 @@
 The [machine-readable inventory](legacy-operation-migration.json) assigns each
 method in the existing [Ruby compatibility record](ruby-api-v1.json) exactly one
 migration disposition. It is a removal/migration work list, not a requirement to
-publish, stabilize, or reproduce the prototype package. The typed core must not
+publish, stabilize, or reproduce the retired package. The typed core must not
 depend on that crate as a shortcut.
 
 ## Evidence and limits

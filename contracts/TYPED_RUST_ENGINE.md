@@ -39,7 +39,7 @@ failure. Go's typed regressions protect behavior during shared-helper extraction
 `kernel.rust.owners.v1` selects `kernel.rust` for analyze, diff2, merge2 and merge3.
 Selection accepts only the Rust family and absent/Rust dialect. Unsupported
 selectors, policies and marker options fail closed. Parsing uses the
-existing TreeHaver registry; no host prototype or alternate registry is involved.
+existing TreeHaver registry; no alternate registry is involved.
 
 Analysis retains native references and revalidates embedded owner claims. Diff2
 reports exact whole-owner changes plus a complete-source summary when bytes
@@ -110,7 +110,7 @@ claimed. No Alef changes were pushed and no core package was published.
 
 Ruby main `45cc6000d` migrates the opt-in `rust.rust` provider to the shared
 `Ast::Merge::TypedCoreProvider`. Its `RustHostProvider` name remains for call-site
-compatibility, but it no longer inherits or loads the host prototype. All four
+compatibility, but it no longer inherits or loads legacy host glue. All four
 operations execute typed Rust decisions; the adapter transports native owner
 identities/byte spans, actual verification and complete canonical conflict records.
 Neutral Git framing is accepted; custom labels/marker widths fail closed.
