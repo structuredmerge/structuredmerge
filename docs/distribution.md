@@ -97,12 +97,10 @@ successful installation, exact parser byte preservation, and the expected
 clean merge result. Timings are evidence, not pass/fail thresholds, because
 runner, filesystem, network, and package caches are not controlled.
 
-Hosted Alef generation is currently opt-in: released Alef 0.89.0 cannot parse
-the current `send_sync_types` configuration, so the repository workflow leaves
-that job disabled until an upstream release supports it. Local verification
-uses the checked-out integrated Alef fixes and runs `alef verify --exit-code`.
-Do not add an unrecorded branch or floating Git reference to the hosted build
-chain; re-enable the job only after an upstream release is pinned and verified.
+Hosted Alef generation remains opt-in for cost control. Released Alef 0.94.0
+supports the current `send_sync_types` configuration, so local and hosted
+verification use the released tool. Do not add an unrecorded branch or
+floating Git reference to the hosted build chain.
 
 ## Capability Discovery
 

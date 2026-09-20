@@ -1,9 +1,9 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "python",
-  "review_reason": "Add explicit registry generation/digest expectation and guarded workflow execution; no full preflight or asset authority.",
+  "review_reason": "Regenerated released Alef 0.94.0 outputs for the 0.2.1 release candidate; Python public API changed only by the reviewed package-version header update.",
   "files": {
-    "structuredmerge_core/__init__.py": "3fee795ee66044c896b265ed89fb75b61178643c446883be9a798366062b6044",
+    "structuredmerge_core/__init__.py": "773db448545c74b3088cbcd9a5acfab36e5220764e88390f1e537c979e3b8c25",
     "structuredmerge_core/_native.pyi": "beba4581c9c15b78543a780c517dff33d345acd0fa32359296d36e25b112a370",
     "structuredmerge_core/api.py": "8f6977e0d3fc369306aaec99f5c2f8cc9698681f862090b212386ec69f8172d7",
     "structuredmerge_core/exceptions.py": "25e61ce52e2e192df977a5f2ba7473dd6012e064c4bba38b05c15dc043201a29",

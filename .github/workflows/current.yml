@@ -431,11 +431,8 @@ jobs:
 
   alef:
     name: Alef generation
-    # Hosted generation is opt-in until the integrated local Alef fixes are
-    # released upstream. Local development uses the checked-out integrated
-    # generator and runs `alef verify --exit-code`; released 0.89.0 cannot
-    # parse the current send_sync_types configuration. Set the repository
-    # variable only after an upstream release is known to support it.
+    # Hosted generation is opt-in for cost control. Released Alef 0.94.0
+    # supports the current send_sync_types configuration.
     if: ${{ vars.STRUCTUREDMERGE_ALEF_CI == 'true' }}
     runs-on: ubuntu-latest
     steps:
