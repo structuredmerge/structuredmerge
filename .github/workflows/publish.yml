@@ -168,7 +168,7 @@ jobs:
         with:
           python-version: "3.14"
       - name: Setup Ruby
-        uses: ruby/setup-ruby@1a615958ad9d422dd932dc64fbf22c8b2910e7c7 # v1.207.0
+        uses: appraisal-rb/setup-ruby-flash@925395edf973d2dc0a629919f407f3547a03d4b5 # v2.1
         with:
           ruby-version: "4.0"
       - name: Install Alef
@@ -356,7 +356,7 @@ jobs:
           echo 'RUST_TARGET=x86_64-pc-windows-gnu' >> "$GITHUB_ENV"
           echo 'CARGO_BUILD_TARGET=x86_64-pc-windows-gnu' >> "$GITHUB_ENV"
       - name: Setup Ruby
-        uses: ruby/setup-ruby@1a615958ad9d422dd932dc64fbf22c8b2910e7c7 # v1.207.0
+        uses: appraisal-rb/setup-ruby-flash@925395edf973d2dc0a629919f407f3547a03d4b5 # v2.1
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
@@ -403,7 +403,7 @@ jobs:
         with:
           version: "0.94.0"
       - name: Setup Ruby
-        uses: ruby/setup-ruby@1a615958ad9d422dd932dc64fbf22c8b2910e7c7 # v1.207.0
+        uses: appraisal-rb/setup-ruby-flash@925395edf973d2dc0a629919f407f3547a03d4b5 # v2.1
         with:
           ruby-version: "4.0"
           bundler: none
@@ -611,7 +611,7 @@ jobs:
         with:
           python-version: "3.14"
       - name: Setup Ruby
-        uses: ruby/setup-ruby@1a615958ad9d422dd932dc64fbf22c8b2910e7c7 # v1.207.0
+        uses: appraisal-rb/setup-ruby-flash@925395edf973d2dc0a629919f407f3547a03d4b5 # v2.1
         with:
           ruby-version: "4.0"
       - name: Publish dependency-first Rust closure and tag
