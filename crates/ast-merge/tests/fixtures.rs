@@ -8720,26 +8720,27 @@ fn conforms_to_slice_572_structured_edit_provider_batch_execution_receipt_replay
 
 #[test]
 fn conforms_to_slice_573_structured_edit_provider_execution_receipt_replay_session_fixture() {
-    let fixture = read_fixture_from_path(diagnostics_fixture_path(
-        "structured_edit_provider_execution_receipt_replay_session",
-    ));
-    let cases = fixture["cases"].as_array().expect("cases should be an array");
+    run_with_large_stack(|| {
+        let fixture = read_fixture_from_path(diagnostics_fixture_path(
+            "structured_edit_provider_execution_receipt_replay_session",
+        ));
+        let cases = fixture["cases"].as_array().expect("cases should be an array");
 
-    for case in cases {
-        let receipt_replay_session = serde_json::from_value::<
-            StructuredEditProviderExecutionReceiptReplaySession,
-        >(case["receipt_replay_session"].clone())
-        .expect("receipt replay session should deserialize");
-        let roundtrip =
-            serde_json::to_value(&receipt_replay_session).expect("roundtrip should serialize");
-        let decoded =
-            serde_json::from_value::<StructuredEditProviderExecutionReceiptReplaySession>(
-                roundtrip,
-            )
+        for case in cases {
+            let receipt_replay_session = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplaySession,
+            >(case["receipt_replay_session"].clone())
+            .expect("receipt replay session should deserialize");
+            let roundtrip =
+                serde_json::to_value(&receipt_replay_session).expect("roundtrip should serialize");
+            let decoded = serde_json::from_value::<
+                StructuredEditProviderExecutionReceiptReplaySession,
+            >(roundtrip)
             .expect("roundtrip should deserialize");
 
-        assert_eq!(decoded, receipt_replay_session);
-    }
+            assert_eq!(decoded, receipt_replay_session);
+        }
+    });
 }
 
 #[test]
@@ -8848,25 +8849,28 @@ fn conforms_to_slice_576_structured_edit_provider_execution_receipt_replay_sessi
 
 #[test]
 fn conforms_to_slice_577_structured_edit_provider_batch_execution_receipt_replay_session_fixture() {
-    let fixture = read_fixture_from_path(diagnostics_fixture_path(
-        "structured_edit_provider_batch_execution_receipt_replay_session",
-    ));
-    let cases = fixture["cases"].as_array().expect("cases should be an array");
+    run_with_large_stack(|| {
+        let fixture = read_fixture_from_path(diagnostics_fixture_path(
+            "structured_edit_provider_batch_execution_receipt_replay_session",
+        ));
+        let cases = fixture["cases"].as_array().expect("cases should be an array");
 
-    for case in cases {
-        let batch_receipt_replay_session = serde_json::from_value::<
-            StructuredEditProviderBatchExecutionReceiptReplaySession,
-        >(case["batch_receipt_replay_session"].clone())
-        .expect("batch receipt replay session should deserialize");
-        let roundtrip = serde_json::to_value(&batch_receipt_replay_session)
-            .expect("roundtrip should serialize");
-        let decoded = serde_json::from_value::<
-            StructuredEditProviderBatchExecutionReceiptReplaySession,
-        >(roundtrip)
-        .expect("roundtrip should deserialize");
+        for case in cases {
+            let batch_receipt_replay_session =
+                serde_json::from_value::<StructuredEditProviderBatchExecutionReceiptReplaySession>(
+                    case["batch_receipt_replay_session"].clone(),
+                )
+                .expect("batch receipt replay session should deserialize");
+            let roundtrip = serde_json::to_value(&batch_receipt_replay_session)
+                .expect("roundtrip should serialize");
+            let decoded = serde_json::from_value::<
+                StructuredEditProviderBatchExecutionReceiptReplaySession,
+            >(roundtrip)
+            .expect("roundtrip should deserialize");
 
-        assert_eq!(decoded, batch_receipt_replay_session);
-    }
+            assert_eq!(decoded, batch_receipt_replay_session);
+        }
+    });
 }
 
 #[test]
