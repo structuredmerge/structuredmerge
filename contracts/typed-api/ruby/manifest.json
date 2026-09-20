@@ -4,7 +4,7 @@
   "review_reason": "Add explicit registry generation/digest expectation and guarded workflow execution; no full preflight or asset authority.",
   "files": {
     "lib/structuredmerge_core/native.rb": "1958362029340a5786ed9762f1431dcdbcf0017626d262aede09db17eb2ea32f",
-    "lib/structuredmerge_core/version.rb": "6cda1e4772dbebb74e509d2aefe2fcc1a9081782f9dd3f514f00a629c4211125",
+    "lib/structuredmerge_core/version.rb": "99c8b3f93ad0d98825c986c3d405eb50b97bc4e5c14d61fa087ea228966c424a",
     "lib/structuredmerge_core.rb": "defe67340887e4fcfecefc0a68d255fab86768e5c81260916819b636303f5cdf",
     "sig/types.rbs": "ac9ce335e2169c7f384ac596c415a0c3de629aad8374ca46f871c5861f2890a3"
   }
