@@ -1,6 +1,6 @@
 [package]
 name = "smorg"
-version = "0.2.0"
+version = "0.2.1"
 repository = "https://github.com/structuredmerge/structuredmerge"
 homepage = "https://structuredmerge.org"
 authors = ["Peter H. Boling"]
@@ -9,26 +9,26 @@ description = "StructuredMerge kernel command-line interface"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
-ast-merge = { version = "0.2.0", path = "../ast-merge" }
-ast-merge-git = { version = "0.2.0", path = "../ast-merge-git" }
+ast-merge = { version = "0.2.1", path = "../ast-merge" }
+ast-merge-git = { version = "0.2.1", path = "../ast-merge-git" }
 base64 = "0.22"
-bash-merge = { version = "0.2.0", path = "../bash-merge" }
-go-merge = { version = "0.2.0", path = "../go-merge" }
-generic-merge = { version = "0.2.0", path = "../generic-merge" }
-json-merge = { version = "0.2.0", path = "../json-merge" }
-markdown-merge = { version = "0.2.0", path = "../markdown-merge" }
-plain-merge = { version = "0.2.0", path = "../plain-merge" }
-rbs-merge = { version = "0.2.0", path = "../rbs-merge" }
-ruby-merge = { version = "0.2.0", path = "../ruby-merge" }
-rust-merge = { version = "0.2.0", path = "../rust-merge" }
+bash-merge = { version = "0.2.1", path = "../bash-merge" }
+go-merge = { version = "0.2.1", path = "../go-merge" }
+generic-merge = { version = "0.2.1", path = "../generic-merge" }
+json-merge = { version = "0.2.1", path = "../json-merge" }
+markdown-merge = { version = "0.2.1", path = "../markdown-merge" }
+plain-merge = { version = "0.2.1", path = "../plain-merge" }
+rbs-merge = { version = "0.2.1", path = "../rbs-merge" }
+ruby-merge = { version = "0.2.1", path = "../ruby-merge" }
+rust-merge = { version = "0.2.1", path = "../rust-merge" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-structuredmerge-core = { version = "0.2.0", path = "../structuredmerge-core" }
+structuredmerge-core = { version = "0.2.1", path = "../structuredmerge-core" }
 same-file = "1.0.6"
 tempfile = "3"
-toml-merge = { package = "structuredmerge-toml-merge", version = "0.2.0", path = "../toml-merge" }
-typescript-merge = { version = "0.2.0", path = "../typescript-merge" }
-yaml-merge = { version = "0.2.0", path = "../yaml-merge" }
+toml-merge = { package = "structuredmerge-toml-merge", version = "0.2.1", path = "../toml-merge" }
+typescript-merge = { version = "0.2.1", path = "../typescript-merge" }
+yaml-merge = { version = "0.2.1", path = "../yaml-merge" }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

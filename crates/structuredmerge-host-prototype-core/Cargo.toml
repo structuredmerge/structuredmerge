@@ -1,6 +1,6 @@
 [package]
 name = "structuredmerge-host-prototype-core"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Peter H. Boling"]
 edition = "2024"
 description = "Experimental host-provider bridge core for StructuredMerge"
@@ -10,23 +10,23 @@ license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 publish = false
 
 [dependencies]
-ast-crispr = { version = "0.2.0", path = "../ast-crispr" }
-ast-merge = { version = "0.2.0", path = "../ast-merge" }
-ast-template = { version = "0.2.0", path = "../ast-template" }
+ast-crispr = { version = "0.2.1", path = "../ast-crispr" }
+ast-merge = { version = "0.2.1", path = "../ast-merge" }
+ast-template = { version = "0.2.1", path = "../ast-template" }
 async-trait = "0.1"
-ast-merge-git = { version = "0.2.0", path = "../ast-merge-git" }
-bash-merge = { version = "0.2.0", path = "../bash-merge" }
-go-merge = { version = "0.2.0", path = "../go-merge" }
+ast-merge-git = { version = "0.2.1", path = "../ast-merge-git" }
+bash-merge = { version = "0.2.1", path = "../bash-merge" }
+go-merge = { version = "0.2.1", path = "../go-merge" }
 parking_lot = "0.12"
-json-merge = { version = "0.2.0", path = "../json-merge" }
-rust-merge = { version = "0.2.0", path = "../rust-merge" }
-typescript-merge = { version = "0.2.0", path = "../typescript-merge" }
+json-merge = { version = "0.2.1", path = "../json-merge" }
+rust-merge = { version = "0.2.1", path = "../rust-merge" }
+typescript-merge = { version = "0.2.1", path = "../typescript-merge" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 tempfile = "3"
 tokio = { version = "1", features = ["time"] }
-tree-haver = { version = "0.2.0", path = "../tree-haver" }
+tree-haver = { version = "0.2.1", path = "../tree-haver" }
 
 [lib]
 path = "src/lib.rs"

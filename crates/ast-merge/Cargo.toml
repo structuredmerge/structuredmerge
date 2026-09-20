@@ -1,6 +1,6 @@
 [package]
 name = "ast-merge"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Peter H. Boling"]
 edition = "2024"
 description = "Core Structured Merge AST, ruleset, planning, and review contracts"
@@ -12,7 +12,7 @@ license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
-tree-haver = { version = "0.2.0", path = "../tree-haver" }
+tree-haver = { version = "0.2.1", path = "../tree-haver" }
 
 [lib]
 path = "src/lib.rs"

@@ -10,13 +10,13 @@
   "dependency_first_order": [
     {
       "package": "tree-haver",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/tree-haver/Cargo.toml",
       "local_dependencies": []
     },
     {
       "package": "ast-merge",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/ast-merge/Cargo.toml",
       "local_dependencies": [
         "tree-haver"
@@ -24,7 +24,7 @@
     },
     {
       "package": "ast-crispr",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/ast-crispr/Cargo.toml",
       "local_dependencies": [
         "ast-merge"
@@ -32,7 +32,7 @@
     },
     {
       "package": "json-merge",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/json-merge/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -41,7 +41,7 @@
     },
     {
       "package": "ast-merge-git",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/ast-merge-git/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -51,7 +51,7 @@
     },
     {
       "package": "markdown-merge",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/markdown-merge/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -60,7 +60,7 @@
     },
     {
       "package": "ruby-merge",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/ruby-merge/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -69,7 +69,7 @@
     },
     {
       "package": "structuredmerge-toml-merge",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/toml-merge/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -78,7 +78,7 @@
     },
     {
       "package": "ast-template",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/ast-template/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -89,7 +89,7 @@
     },
     {
       "package": "bash-merge",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/bash-merge/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -98,7 +98,7 @@
     },
     {
       "package": "go-merge",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/go-merge/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -107,7 +107,7 @@
     },
     {
       "package": "python-merge",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/python-merge/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -116,7 +116,7 @@
     },
     {
       "package": "rust-merge",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/rust-merge/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -125,7 +125,7 @@
     },
     {
       "package": "typescript-merge",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/typescript-merge/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -134,7 +134,7 @@
     },
     {
       "package": "yaml-merge",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/yaml-merge/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -143,7 +143,7 @@
     },
     {
       "package": "structuredmerge-core",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/structuredmerge-core/Cargo.toml",
       "local_dependencies": [
         "ast-crispr",
@@ -162,7 +162,7 @@
     },
     {
       "package": "generic-merge",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/generic-merge/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -171,7 +171,7 @@
     },
     {
       "package": "plain-merge",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/plain-merge/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -180,7 +180,7 @@
     },
     {
       "package": "rbs-merge",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/rbs-merge/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
@@ -189,7 +189,7 @@
     },
     {
       "package": "smorg",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "manifest": "crates/smorg-rs/Cargo.toml",
       "local_dependencies": [
         "ast-merge",
