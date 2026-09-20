@@ -105,6 +105,9 @@ def generate_manifests(version: str, asset_dir: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "smorg.rb").write_text(render_homebrew(version, assets))
     (output_dir / "smorg.json").write_text(render_scoop(version, assets))
+    (output_dir / "smorg-assets.json").write_text(
+        json.dumps({"version": version, "assets": assets}, indent=2) + "\n"
+    )
 
 
 def main() -> int:
