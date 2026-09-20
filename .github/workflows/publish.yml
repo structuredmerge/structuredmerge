@@ -110,8 +110,10 @@ jobs:
       - name: Publish dependency-first Rust closure and tag
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          ruby workspace-scripts/release_rust_crates.rb --push --tag --push-git
+          ruby workspace-scripts/release_rust_crates.rb --push --tag
+          git push origin "$RELEASE_TAG"
 
   verify-rust-install:
     name: Verify crates.io installation
