@@ -189,7 +189,7 @@ jobs:
           python workspace-scripts/check_typed_release_inventory.py
           python -m unittest workspace-scripts/tests/test_release_manifests.py -v
       - name: Run workspace tests
-        run: cargo test --workspace --locked
+        run: cargo test --workspace
 
   build-python-wheels:
     name: Build Python wheel (${{ matrix.label }})
@@ -364,16 +364,8 @@ jobs:
           rustup target add x86_64-pc-windows-gnu
           echo 'RUST_TARGET=x86_64-pc-windows-gnu' >> "$GITHUB_ENV"
           echo 'CARGO_BUILD_TARGET=x86_64-pc-windows-gnu' >> "$GITHUB_ENV"
-      - name: Setup Ruby (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Setup Ruby
         uses: appraisal-rb/setup-ruby-flash@4ee08a66f0a60f7bb129d5d0e997042f935d1904 # v2.5
-        with:
-          ruby-version: ${{ matrix.ruby }}
-          bundler-cache: true
-          working-directory: packages/ruby
-      - name: Setup Ruby (Windows)
-        if: runner.os == 'Windows'
-        uses: ruby/setup-ruby@1a615958ad9d422dd932dc64fbf22c8b2910e7c7 # v1.207.0
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
