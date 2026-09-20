@@ -109,7 +109,8 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         steps = self.jobs["typed-core-python-artifact"]["steps"]
         build = next(step for step in steps if "maturin build" in step.get("run", ""))
         self.assertEqual(build["shell"], "bash")
-        self.assertIn("SOURCE_DATE_EPOCH=$(git show -s --format=%ct", build["run"])
+        self.assertIn('source_date_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"', build["run"])
+        self.assertIn('SOURCE_DATE_EPOCH=$source_date_epoch', build["run"])
 
     def test_export_does_not_replace_installed_runtime_gate(self):
         steps = self.jobs["typed-core-ruby-artifact"]["steps"]

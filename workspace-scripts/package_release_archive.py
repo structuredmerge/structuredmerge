@@ -24,8 +24,9 @@ def source_epoch() -> int:
     return epoch
 
 
-def collect_binaries(binary_dir: Path) -> list[Path]:
-    binaries = [binary_dir / name for name in BINARIES]
+def collect_binaries(binary_dir: Path, windows: bool) -> list[Path]:
+    suffix = ".exe" if windows else ""
+    binaries = [binary_dir / f"{name}{suffix}" for name in BINARIES]
     missing = [str(path) for path in binaries if not path.is_file()]
     if missing:
         raise ValueError(f"missing release executable(s): {', '.join(missing)}")
@@ -37,11 +38,12 @@ def package(version: str, platform: str, binary_dir: Path, output_dir: Path) -> 
         raise ValueError("version must be non-empty and omit the leading v")
     if not platform or "/" in platform or "\\" in platform:
         raise ValueError("platform must be a non-empty archive-safe name")
-    binaries = collect_binaries(binary_dir)
+    windows = platform.startswith("windows")
+    binaries = collect_binaries(binary_dir, windows)
     output_dir.mkdir(parents=True, exist_ok=True)
     epoch = source_epoch()
     archive_name = f"smorg-{version}-{platform}"
-    if platform.startswith("windows"):
+    if windows:
         archive = output_dir / f"{archive_name}.zip"
         with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as output:
             for binary in binaries:
