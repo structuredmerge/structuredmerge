@@ -503,7 +503,7 @@ jobs:
           targets: ${{ matrix.target }}
       - name: Build release executables
         shell: bash
-        run: cargo build --release --locked -p smorg --target "${{ matrix.target }}"
+        run: cargo build --release -p smorg --target "${{ matrix.target }}"
       - name: Verify release CLI gates
         shell: bash
         env:
