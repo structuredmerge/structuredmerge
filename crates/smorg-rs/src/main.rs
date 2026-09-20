@@ -926,6 +926,103 @@ fn run_languages(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write
             }
             EXIT_SUCCESS
         }
+        _ if args.first().is_some_and(|arg| arg == "--preflight") => {
+            let json_output = args.iter().any(|arg| arg == "--json");
+            if args.len() < 2
+                || args.len() > 3
+                || args.iter().filter(|arg| arg.as_str() == "--json").count() > 1
+                || args.get(2).is_some_and(|arg| arg != "--json")
+            {
+                let _ = writeln!(stderr, "languages --preflight syntax: REQUEST.json [--json]");
+                return EXIT_USER_ERROR;
+            }
+            let request_path = &args[1];
+            const PREFLIGHT_INPUT_LIMIT: usize = 2 * 1024 * 1024;
+            let input = match fs::read(request_path) {
+                Ok(input) if input.len() <= PREFLIGHT_INPUT_LIMIT => input,
+                Ok(_) => {
+                    if !json_output {
+                        let _ = writeln!(stderr, "preflight request exceeds 2 MiB");
+                    }
+                    return EXIT_USER_ERROR;
+                }
+                Err(error) => {
+                    if !json_output {
+                        let _ = writeln!(stderr, "cannot read preflight request: {error}");
+                    }
+                    return EXIT_USER_ERROR;
+                }
+            };
+            let inventory = structuredmerge_core::artifact_inventory::compiled_provider_inventory();
+            let base_cli = || {
+                json!({
+                    "executable": env!("CARGO_BIN_NAME"),
+                    "package": env!("CARGO_PKG_NAME"),
+                    "version": env!("CARGO_PKG_VERSION"),
+                    "kernel_version": inventory.kernel_version,
+                    "cli_contract": "structuredmerge.cli/v1",
+                })
+            };
+            let parsed = serde_json::from_slice::<structuredmerge_core::OperationRequest>(&input)
+                .map_err(|error| error.to_string());
+            let validated = parsed.and_then(|request| {
+                request
+                    .validate(8 * 1024 * 1024, |_, _| {
+                        Err("preflight requires inline source content or bytes".to_string())
+                    })
+                    .map(|_| ())
+                    .map_err(|error| error.to_string())
+            });
+            let (outcome, exit_code, diagnostic, preflight_validated) = match validated {
+                Ok(()) => (
+                    "unsupported",
+                    EXIT_USER_ERROR,
+                    json!({"code": "provider.runtime_unavailable", "message": "runtime provider availability was not checked; preflight cannot authorize execution"}),
+                    true,
+                ),
+                Err(error) => (
+                    "error",
+                    EXIT_USER_ERROR,
+                    json!({"code": "preflight.invalid_request", "message": error}),
+                    false,
+                ),
+            };
+            if json_output {
+                let value = json!({
+                    "schema": "structuredmerge.cli-report/v1",
+                    "command": "languages.preflight",
+                    "cli": base_cli(),
+                    "outcome": outcome,
+                    "exit_code": exit_code,
+                    "operation_result": null,
+                    "availability": {
+                        "schema": "structuredmerge.cli-availability/v1",
+                        "runtime_availability_checked": false,
+                        "state": "unavailable",
+                        "selectable": false,
+                        "preflight_validated": preflight_validated,
+                        "selection_checked": false,
+                        "request_path": request_path,
+                        "registry_generation": null,
+                        "provider_id": null,
+                        "parser_id": null,
+                        "diagnostics": [diagnostic.clone()],
+                    },
+                    "conflict_review": null,
+                    "git_install": null,
+                    "output_commit_verified": false,
+                    "diagnostics": [diagnostic],
+                });
+                if serde_json::to_writer(&mut *stdout, &value).is_err() || writeln!(stdout).is_err()
+                {
+                    let _ = writeln!(stderr, "cannot write preflight report");
+                    return EXIT_INTERNAL_ERROR;
+                }
+            } else {
+                let _ = writeln!(stderr, "preflight {outcome}: {}", diagnostic["message"]);
+            }
+            exit_code
+        }
         _ => {
             let _ = writeln!(stderr, "languages accepts --json or --gitattributes");
             EXIT_USER_ERROR
@@ -2341,6 +2438,105 @@ mod tests {
         let report: serde_json::Value = serde_json::from_slice(&stdout).expect("JSON report");
         assert_eq!(report["outcome"], "error");
         assert_eq!(report["diagnostics"][0]["code"], "provider.unknown");
+    }
+
+    #[test]
+    fn languages_preflight_validates_inline_request_but_never_claims_runtime_authority() {
+        let dir = TestDir::new();
+        let request = json!({
+            "schema": "structuredmerge.operation-request/v1",
+            "request_id": "preflight-test",
+            "operation": "analyze",
+            "policy": {},
+            "provider_selection": {
+                "provider_id": "kernel.json",
+                "family": "json",
+                "dialect": "json",
+                "profile_id": "kernel.json.nested.v1",
+                "required_capabilities": []
+            },
+            "parser_selection": {
+                "backend": "kernel.tslp.json",
+                "preference": [],
+                "required_capabilities": []
+            },
+            "sources": {
+                "source": {
+                    "source_id": "source:json:preflight",
+                    "role": "source",
+                    "byte_length": 2,
+                    "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+                    "encoding": "utf-8",
+                    "content": "{}"
+                }
+            },
+            "extensions": [],
+            "metadata": {}
+        });
+        let path = dir.write("request.json", &request.to_string());
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let exit = run(
+            &["languages".into(), "--preflight".into(), path, "--json".into()],
+            &mut stdout,
+            &mut stderr,
+        );
+
+        assert_eq!(exit, EXIT_USER_ERROR, "stderr={}", String::from_utf8_lossy(&stderr));
+        let report: Value = serde_json::from_slice(&stdout).expect("JSON report");
+        assert_eq!(report["command"], "languages.preflight");
+        assert_eq!(report["outcome"], "unsupported");
+        assert_eq!(report["availability"]["preflight_validated"], true);
+    }
+
+    #[test]
+    fn languages_preflight_rejects_valid_request_without_runtime_probe() {
+        let dir = TestDir::new();
+        let request = json!({
+            "schema": "structuredmerge.operation-request/v1",
+            "request_id": "preflight-test",
+            "operation": "analyze",
+            "policy": {},
+            "provider_selection": {
+                "provider_id": "kernel.json",
+                "family": "json",
+                "dialect": "json",
+                "profile_id": "kernel.json.nested.v1",
+                "required_capabilities": []
+            },
+            "parser_selection": {
+                "backend": "kernel.tslp.json",
+                "preference": [],
+                "required_capabilities": []
+            },
+            "sources": {
+                "source": {
+                    "source_id": "source:json:preflight",
+                    "role": "source",
+                    "byte_length": 2,
+                    "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77f3f7f5f6f2e7f9b5f7f",
+                    "encoding": "utf-8",
+                    "content": "{}"
+                }
+            },
+            "extensions": [],
+            "metadata": {}
+        });
+        let path = dir.write("request.json", &request.to_string());
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let exit = run(
+            &["languages".into(), "--preflight".into(), path, "--json".into()],
+            &mut stdout,
+            &mut stderr,
+        );
+
+        assert_eq!(exit, EXIT_USER_ERROR, "stderr={}", String::from_utf8_lossy(&stderr));
+        let report: Value = serde_json::from_slice(&stdout).expect("JSON report");
+        assert_eq!(report["command"], "languages.preflight");
+        assert_eq!(report["outcome"], "error");
+        assert_eq!(report["availability"]["selection_checked"], false);
+        assert_eq!(report["diagnostics"][0]["code"], "preflight.invalid_request");
     }
 
     #[test]
