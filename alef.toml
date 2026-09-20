@@ -196,7 +196,7 @@ module = "native_merge_fixture"
 
 [crates.e2e.calls.yaml_native_merge]
 function = "run_yaml_native_merge"
-module = "structuredmerge_core"
+module = "native_merge_fixture"
 skip_languages = ["python"]
 args = [
   { name = "base", field = "input.base", type = "string" },
@@ -216,7 +216,7 @@ args = [
 
 [crates.e2e.calls.yaml_common_analyze]
 function = "run_yaml_common_analyze"
-module = "structuredmerge_core"
+module = "native_merge_fixture"
 skip_languages = ["python"]
 args = [
   { name = "source", field = "input.source", type = "string" },
@@ -224,7 +224,7 @@ args = [
 
 [crates.e2e.calls.yaml_common_diff]
 function = "run_yaml_common_diff"
-module = "structuredmerge_core"
+module = "native_merge_fixture"
 skip_languages = ["python"]
 args = [
   { name = "before", field = "input.before", type = "string" },
@@ -233,7 +233,7 @@ args = [
 
 [crates.e2e.calls.yaml_common_merge]
 function = "run_yaml_common_merge"
-module = "structuredmerge_core"
+module = "native_merge_fixture"
 skip_languages = ["python"]
 args = [
   { name = "base", field = "input.base", type = "string" },
