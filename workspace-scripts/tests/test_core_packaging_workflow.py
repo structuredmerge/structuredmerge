@@ -82,7 +82,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
                 checkout = step.get("with", {})
                 if checkout.get("repository") == "structuredmerge/structuredmerge-fixtures":
                     consumers[name] = checkout["ref"]
-        self.assertEqual(set(consumers), {"installed-kernel-cli", "check", "ruby-bindings"})
+        self.assertEqual(set(consumers), {"installed-kernel-cli", "check", "ruby-bindings", "alef"})
         for name, revision in consumers.items():
             with self.subTest(job=name):
                 self.assertEqual(revision, "be4bf25d59bceac6a4adcc27dea081a2bab4c798")
