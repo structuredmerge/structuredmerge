@@ -815,6 +815,117 @@ fn run_languages(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write
             }
             EXIT_SUCCESS
         }
+        _ if args.first().is_some_and(|arg| arg == "--inspect") => {
+            let json_output = args.iter().any(|arg| arg == "--json");
+            let Some(provider_id) = args.get(1).filter(|id| !id.is_empty()) else {
+                let _ = writeln!(stderr, "languages --inspect requires a provider ID");
+                return EXIT_USER_ERROR;
+            };
+            let Some(kind_pos) = args.iter().position(|arg| arg == "--kind") else {
+                let _ = writeln!(stderr, "languages --inspect requires --kind parser|workflow");
+                return EXIT_USER_ERROR;
+            };
+            let Some(kind) = args.get(kind_pos + 1).map(String::as_str) else {
+                let _ = writeln!(stderr, "languages --inspect requires --kind parser|workflow");
+                return EXIT_USER_ERROR;
+            };
+            if !matches!(kind, "parser" | "workflow")
+                || kind_pos != 2
+                || args.iter().filter(|arg| arg.as_str() == "--kind").count() != 1
+                || args.iter().filter(|arg| arg.as_str() == "--json").count() > 1
+                || args.len() > kind_pos + 3
+                || args.get(kind_pos + 2).is_some_and(|arg| arg != "--json")
+            {
+                let _ = writeln!(
+                    stderr,
+                    "languages --inspect syntax: --inspect ID --kind parser|workflow [--json]"
+                );
+                return EXIT_USER_ERROR;
+            }
+
+            let inventory = structuredmerge_core::artifact_inventory::compiled_provider_inventory();
+            let descriptor = match kind {
+                "parser" => inventory
+                    .parsers
+                    .iter()
+                    .find(|descriptor| descriptor.id == *provider_id)
+                    .map(|descriptor| json!(descriptor)),
+                "workflow" => inventory
+                    .workflows
+                    .iter()
+                    .find(|descriptor| descriptor.provider_id == *provider_id)
+                    .map(|descriptor| json!(descriptor)),
+                _ => unreachable!(),
+            };
+            let Some(descriptor) = descriptor else {
+                if json_output {
+                    let value = json!({
+                        "schema": "structuredmerge.cli-report/v1",
+                        "command": "languages.inspect",
+                        "cli": {
+                            "executable": env!("CARGO_BIN_NAME"),
+                            "package": env!("CARGO_PKG_NAME"),
+                            "version": env!("CARGO_PKG_VERSION"),
+                            "kernel_version": inventory.kernel_version,
+                            "cli_contract": "structuredmerge.cli/v1",
+                        },
+                        "outcome": "error",
+                        "exit_code": EXIT_USER_ERROR,
+                        "operation_result": null,
+                        "availability": null,
+                        "conflict_review": null,
+                        "git_install": null,
+                        "output_commit_verified": false,
+                        "diagnostics": [{"code": "provider.unknown", "message": format!("unknown {kind} provider {provider_id}")}],
+                    });
+                    let _ = serde_json::to_writer(&mut *stdout, &value);
+                    let _ = writeln!(stdout);
+                } else {
+                    let _ = writeln!(stderr, "unknown {kind} provider {provider_id}");
+                }
+                return EXIT_USER_ERROR;
+            };
+            if json_output {
+                let value = json!({
+                    "schema": "structuredmerge.cli-report/v1",
+                    "command": "languages.inspect",
+                    "cli": {
+                        "executable": env!("CARGO_BIN_NAME"),
+                        "package": env!("CARGO_PKG_NAME"),
+                        "version": env!("CARGO_PKG_VERSION"),
+                        "kernel_version": inventory.kernel_version,
+                        "cli_contract": "structuredmerge.cli/v1",
+                    },
+                    "outcome": "clean",
+                    "exit_code": EXIT_SUCCESS,
+                    "operation_result": null,
+                    "availability": {
+                        "schema": "structuredmerge.cli-availability/v1",
+                        "runtime_availability_checked": false,
+                        "state": "compiled",
+                        "selectable": false,
+                        "provider_kind": kind,
+                        "provider_id": provider_id,
+                        "descriptor": descriptor,
+                    },
+                    "conflict_review": null,
+                    "git_install": null,
+                    "output_commit_verified": false,
+                    "diagnostics": [],
+                });
+                if serde_json::to_writer(&mut *stdout, &value).is_err() || writeln!(stdout).is_err()
+                {
+                    let _ = writeln!(stderr, "cannot write provider inspection report");
+                    return EXIT_INTERNAL_ERROR;
+                }
+            } else {
+                let _ = writeln!(
+                    stdout,
+                    "{kind} provider {provider_id}: compiled (runtime availability not checked)"
+                );
+            }
+            EXIT_SUCCESS
+        }
         _ => {
             let _ = writeln!(stderr, "languages accepts --json or --gitattributes");
             EXIT_USER_ERROR
@@ -2176,6 +2287,60 @@ mod tests {
         assert_eq!(report["cli"]["cli_contract"], "structuredmerge.cli/v1");
         assert_eq!(report["availability"]["runtime_availability_checked"], false);
         assert!(report["availability"]["compiled_providers"]["workflows"].is_array());
+    }
+
+    #[test]
+    fn languages_inspect_preserves_parser_workflow_kind_and_compiled_state() {
+        let inventory = structuredmerge_core::artifact_inventory::compiled_provider_inventory();
+        let parser_id = inventory.parsers.first().expect("compiled parser").id.clone();
+        let workflow_id =
+            inventory.workflows.first().expect("compiled workflow").provider_id.clone();
+        for (kind, provider_id) in [("parser", parser_id), ("workflow", workflow_id)] {
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            let exit = run(
+                &[
+                    "languages".to_string(),
+                    "--inspect".to_string(),
+                    provider_id.clone(),
+                    "--kind".to_string(),
+                    kind.to_string(),
+                    "--json".to_string(),
+                ],
+                &mut stdout,
+                &mut stderr,
+            );
+            assert_eq!(exit, EXIT_SUCCESS, "stderr={}", String::from_utf8_lossy(&stderr));
+            let report: serde_json::Value = serde_json::from_slice(&stdout).expect("JSON report");
+            assert_eq!(report["command"], "languages.inspect");
+            assert_eq!(report["availability"]["provider_kind"], kind);
+            assert_eq!(report["availability"]["provider_id"], provider_id);
+            assert_eq!(report["availability"]["state"], "compiled");
+            assert_eq!(report["availability"]["selectable"], false);
+            assert_eq!(report["availability"]["runtime_availability_checked"], false);
+        }
+    }
+
+    #[test]
+    fn languages_inspect_unknown_provider_fails_explicitly() {
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let exit = run(
+            &[
+                "languages".to_string(),
+                "--inspect".to_string(),
+                "unknown.provider".to_string(),
+                "--kind".to_string(),
+                "workflow".to_string(),
+                "--json".to_string(),
+            ],
+            &mut stdout,
+            &mut stderr,
+        );
+        assert_eq!(exit, EXIT_USER_ERROR);
+        let report: serde_json::Value = serde_json::from_slice(&stdout).expect("JSON report");
+        assert_eq!(report["outcome"], "error");
+        assert_eq!(report["diagnostics"][0]["code"], "provider.unknown");
     }
 
     #[test]
