@@ -112,3 +112,33 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           ruby workspace-scripts/release_rust_crates.rb --push --tag --push-git
+
+  verify-rust-install:
+    name: Verify crates.io installation
+    needs: publish-rust
+    if: ${{ inputs.publish == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: stable
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+      - name: Install published smorg crate
+        env:
+          RELEASE_VERSION: ${{ inputs.release_tag }}
+        run: |
+          version="${RELEASE_VERSION#v}"
+          mkdir -p "$RUNNER_TEMP/smorg-install"
+          cargo install smorg --version "$version" --locked --root "$RUNNER_TEMP/smorg-install"
+          "$RUNNER_TEMP/smorg-install/bin/smorg" --version
+          "$RUNNER_TEMP/smorg-install/bin/smorg-rs" --version
+      - name: Verify installed CLI discovery contract
+        env:
+          SMORG_TEST_ARTIFACT: ${{ runner.temp }}/smorg-install/bin/smorg
+        run: python -m unittest discover -s workspace-scripts/tests -p '*cli_artifact_manifest.py' -v
