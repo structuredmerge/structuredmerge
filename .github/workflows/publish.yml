@@ -1,0 +1,114 @@
+name: Publish
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the validated 0.2.1 dependency closure and release artifacts
+        required: true
+        default: false
+        type: boolean
+      release_tag:
+        description: Release tag to create after all registries succeed (for example v0.2.1)
+        required: true
+        default: v0.2.1
+        type: string
+
+concurrency:
+  group: structuredmerge-publish
+  cancel-in-progress: false
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_BUILD_JOBS: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  validate:
+    name: Validate release inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: stable
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@1a615958ad9d422dd932dc64fbf22c8b2910e7c7 # v1.207.0
+        with:
+          ruby-version: "4.0"
+      - name: Install Alef
+        run: cargo install alef --version "=$(cat workspace-scripts/alef-version)" --locked
+      - name: Verify generated bindings and package metadata
+        run: |
+          alef verify --exit-code
+          alef publish validate
+          python workspace-scripts/check_typed_release_inventory.py
+      - name: Run workspace tests
+        run: cargo test --workspace --locked
+
+  release-binaries:
+    name: Build release CLI artifacts
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: stable
+      - name: Build release executables
+        run: cargo build --release --locked -p smorg
+      - name: Verify release CLI gates
+        run: |
+          test "$(stat -c %s target/release/smorg)" -le 134217728
+          test "$(stat -c %s target/release/smorg-rs)" -le 134217728
+          ./target/release/smorg --version
+          ./target/release/smorg-rs --version
+      - name: Upload release executables
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: smorg-${{ inputs.release_tag }}-linux-x86_64
+          path: |
+            target/release/smorg
+            target/release/smorg-rs
+          if-no-files-found: error
+
+  publish-rust:
+    name: Publish Rust dependency closure
+    needs: [validate, release-binaries]
+    if: ${{ inputs.publish == true }}
+    permissions:
+      contents: write
+      id-token: write
+    runs-on: ubuntu-latest
+    environment: crates-io
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: stable
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@1a615958ad9d422dd932dc64fbf22c8b2910e7c7 # v1.207.0
+        with:
+          ruby-version: "4.0"
+      - name: Publish dependency-first Rust closure and tag
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          ruby workspace-scripts/release_rust_crates.rb --push --tag --push-git
