@@ -82,13 +82,31 @@ The existing artifact checker now accepts an explicit independent provider:
 
 ```sh
 ruby workspace-scripts/check_core_ruby_artifact.rb \
-  --provider-gem /absolute/path/to/psych-merge-7.1.9.gem
+  --provider-gem /absolute/path/to/psych-merge-7.1.9.gem \
+  [--provider-support-dir /absolute/path/to/sibling-closure]
 ```
 
 It verifies the archive identity/entry point, installs the local core/provider
 and their declared dependencies into an isolated gem home, and declares Psych
 5.5.x in the temporary bundle. It does not copy the conformance projector in this
-mode. The helper supplies counters/batch observations and aliases the provider
+mode.
+
+`--provider-support-dir` supplies the candidate provider's prebuilt sibling
+closure (e.g. `ast-merge`, `tree_haver`, `yaml-merge` archives) and requires
+`--provider-gem`. Sibling gems pin each other with exact-version runtime
+requirements, so a release-bumped Ruby checkout names versions the registry does
+not have yet and the provider install would fail with `Could not find a valid
+gem`. The gate validates the directory before creating any workspace: every
+archive must be transitively reachable from the provider's runtime
+requirements, must satisfy them, must not duplicate the provider or the core,
+and no archive may be outside the closure. Validated archives are installed with
+`gem install --local --ignore-dependencies` into the disposable gem home ahead
+of the provider, so the provider install and the temporary bundle resolve the
+unpublished sibling versions locally while third-party dependencies still come
+from the registry. The report records `provider_support_artifacts` with each
+archive's name, version and SHA-256.
+
+The helper supplies counters/batch observations and aliases the provider
 ID to `ruby.typed.psych` for existing fixtures, but delegates native parsing and
 probing to the installed adapter. Package/parser provenance is retained. This
 fixture alias is not a new production registration API; the native-layer tests

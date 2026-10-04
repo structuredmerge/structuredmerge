@@ -13,19 +13,88 @@ require "rubygems/package"
 require "tmpdir"
 require_relative "artifact_workspace"
 
-usage = "usage: check_core_ruby_artifact.rb [--package-only OUTPUT_DIRECTORY | --provider-gem PSYCH_GEM]"
+usage = "usage: check_core_ruby_artifact.rb [--package-only OUTPUT_DIRECTORY | --provider-gem PSYCH_GEM [--provider-support-dir SUPPORT_DIRECTORY]]"
 if ARGV == ["--help"]
   puts usage
   exit
 end
-abort usage unless ARGV.empty? || (ARGV.length == 2 && %w[--package-only --provider-gem].include?(ARGV[0]) && !ARGV[1].empty?)
-export_directory = File.expand_path(ARGV[1]) if ARGV[0] == "--package-only"
-provider_gem = File.realpath(ARGV[1]) if ARGV[0] == "--provider-gem"
+options = {}
+remaining = ARGV.dup
+until remaining.empty?
+  flag = remaining.shift
+  value = remaining.shift
+  abort usage unless %w[--package-only --provider-gem --provider-support-dir].include?(flag) && !value.to_s.empty?
+  abort usage if options.key?(flag)
+
+  options[flag] = value
+end
+abort usage if options.key?("--package-only") && (options.key?("--provider-gem") || options.key?("--provider-support-dir"))
+abort usage if options.key?("--provider-support-dir") && !options.key?("--provider-gem")
+export_directory = File.expand_path(options.fetch("--package-only")) if options.key?("--package-only")
+provider_gem = File.realpath(options.fetch("--provider-gem")) if options.key?("--provider-gem")
+provider_support_dir = File.expand_path(options.fetch("--provider-support-dir")) if options.key?("--provider-support-dir")
+
+# Runtime dependency requirements keyed by gem name.
+def runtime_dependency_requirements(spec)
+  spec.dependencies.select { |dependency| dependency.type == :runtime }
+    .each_with_object({}) do |dependency, requirements|
+      (requirements[dependency.name] ||= []) << dependency.requirement
+    end
+end
+
+# Validate the candidate provider's prebuilt sibling closure. A release-bumped
+# checkout pins sibling gems to versions that are not published yet, so the
+# isolated gate must install them from local archives instead of the registry.
+# Archives are accepted only when they satisfy the provider's transitive runtime
+# requirements; anything else fails closed before a workspace is created.
+def validated_provider_support(support_directory, provider_archive)
+  abort "provider support directory is missing: #{support_directory}" unless File.directory?(support_directory)
+  archives_by_name = {}
+  Dir.glob(File.join(support_directory, "*.gem")).sort.each do |path|
+    archive = Gem::Package.new(path)
+    archive.verify
+    name = archive.spec.name
+    if %w[psych-merge structuredmerge-core].include?(name)
+      abort "provider support archive must not duplicate the provider or core: #{name}"
+    end
+    abort "duplicate provider support archive for #{name}" if archives_by_name.key?(name)
+
+    archives_by_name[name] = [path, archive]
+  end
+  abort "provider support directory has no gem archives" if archives_by_name.empty?
+
+  requirements = runtime_dependency_requirements(provider_archive.spec)
+  validated = []
+  queue = requirements.keys
+  until queue.empty?
+    name = queue.shift
+    entry = archives_by_name[name]
+    next unless entry
+    next if validated.any? { |validated_entry| validated_entry.last.spec.name == name }
+
+    version = entry.last.spec.version
+    unless requirements.fetch(name).all? { |requirement| requirement.satisfied_by?(version) }
+      abort "provider support archive #{name} #{version} does not satisfy " \
+            "#{requirements.fetch(name).map(&:to_s).join(", ")}"
+    end
+    validated << entry
+    runtime_dependency_requirements(entry.last.spec).each do |dependency_name, dependency_requirements|
+      (requirements[dependency_name] ||= []).concat(dependency_requirements)
+      queue << dependency_name
+    end
+  end
+  leftover = archives_by_name.keys - validated.map { |entry| entry.last.spec.name }
+  abort "unexpected provider support archive #{leftover.first}" unless leftover.empty?
+
+  validated
+end
+
 if provider_gem
   provider_archive = Gem::Package.new(provider_gem)
   provider_archive.verify
   abort "expected a psych-merge provider gem" unless provider_archive.spec.name == "psych-merge"
   abort "provider gem lacks the typed parser host" unless provider_archive.contents.include?("lib/psych/merge/core_parser_host.rb")
+  provider_support = validated_provider_support(provider_support_dir, provider_archive) if provider_support_dir
 end
 
 root = File.expand_path("..", __dir__)
@@ -165,6 +234,16 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
   run.call(RbConfig.ruby, File.join(root, "workspace-scripts/check_ruby_linkage.rb"), artifact)
   run.call(RbConfig.ruby, "-S", "gem", "install", artifact, "--no-document",
     "--clear-sources", "--source", "https://rubygems.org")
+  if provider_support
+    # Stage the candidate sibling closure first. A release-bumped Ruby checkout
+    # pins sibling gems (= same version) that the registry does not have yet, so
+    # the provider install below resolves them from this disposable gem home.
+    # --ignore-dependencies is safe: the closure was validated transitively above.
+    provider_support.each do |support_path, _support_archive|
+      run.call(RbConfig.ruby, "-S", "gem", "install", support_path, "--no-document",
+        "--local", "--ignore-dependencies", "--clear-sources")
+    end
+  end
   if provider_gem
     run.call(RbConfig.ruby, "-S", "gem", "install", provider_gem, "--no-document",
       "--clear-sources", "--source", "https://rubygems.org")
@@ -194,6 +273,16 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
     report["provider_sha256"] = Digest::SHA256.file(provider_gem).hexdigest
     report["fixture_provider_id"] = "ruby.typed.psych"
     report["production_provider_id"] = "ruby.psych"
+    if provider_support
+      report["provider_support_artifacts"] = provider_support.map do |support_path, support_archive|
+        {
+          "name" => support_archive.spec.name,
+          "version" => support_archive.spec.version.to_s,
+          "archive" => support_path,
+          "sha256" => Digest::SHA256.file(support_path).hexdigest
+        }
+      end
+    end
     FileUtils.cp(File.join(consumer, "Gemfile.lock"), File.join(stage, "Gemfile.lock"))
   end
   File.write(File.join(stage, "report.json"), JSON.pretty_generate(report) + "\n")
