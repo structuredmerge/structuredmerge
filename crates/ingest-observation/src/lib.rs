@@ -464,9 +464,7 @@ pub fn verify(
 
     match mode {
         "none" => {
-            if deletion["authority_ref"].is_null() && targets.is_empty() {
-                // ok
-            } else {
+            if !(deletion["authority_ref"].is_null() && targets.is_empty()) {
                 return Err(Error::new(ErrorCode::Deletion));
             }
         }

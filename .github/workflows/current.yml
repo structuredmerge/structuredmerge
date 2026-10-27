@@ -374,9 +374,7 @@ jobs:
       - name: Install Alef
         shell: bash
         run: |
-          # Fork until upstream (xberg-io/alef) releases the tagged-enum fixes
-          # (upstream issues #725/#727, PR #726). Revert to --version when released.
-          cargo install --git https://github.com/structuredmerge/alef --rev "$(cat workspace-scripts/alef-version)" --locked
+          cargo install alef --version "=$(cat workspace-scripts/alef-version)" --locked
       - name: Verify generated bindings
         run: alef verify --exit-code
       - name: Reproduce generated tree twice
