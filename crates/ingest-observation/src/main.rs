@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::process::ExitCode;
 
-use ingest_observation::{verify, Context, Decision, Envelope, State};
+use ingest_observation::{Context, Decision, Envelope, State, verify};
 use serde::Deserialize;
 
 #[derive(Deserialize)]

@@ -25,7 +25,9 @@ pub fn is_valid_rfc3339_utc(value: &str) -> bool {
         return false;
     }
     if !date.chars().enumerate().all(|(i, c)| {
-        if i == 4 || i == 7 { return c == '-'; }
+        if i == 4 || i == 7 {
+            return c == '-';
+        }
         c.is_ascii_digit()
     }) {
         return false;
@@ -37,7 +39,9 @@ pub fn is_valid_rfc3339_utc(value: &str) -> bool {
         return false;
     }
     if !time.chars().enumerate().all(|(i, c)| {
-        if i == 2 || i == 5 { return c == ':'; }
+        if i == 2 || i == 5 {
+            return c == ':';
+        }
         c.is_ascii_digit()
     }) {
         return false;

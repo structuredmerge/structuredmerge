@@ -1,7 +1,7 @@
 //! Extended contract-surface tests: optional fields from slices 1047–1054.
 
-use ingest_observation::{verify, Context, Envelope, State};
-use serde_json::{json, Value};
+use ingest_observation::{Context, Envelope, State, verify};
+use serde_json::{Value, json};
 
 fn sha256_hex(data: &str) -> String {
     format!("sha256:{}", {
@@ -128,7 +128,8 @@ fn embedding_contract_valid_and_invalid() {
             "model_revision": null, "dimensions": 1536,
             "normalization": null, "instruction_profile": null
         }
-    })).expect("verifies");
+    }))
+    .expect("verifies");
     assert!(!valid.replay);
 
     let error = run(json!({
@@ -137,7 +138,8 @@ fn embedding_contract_valid_and_invalid() {
             "model_revision": null, "dimensions": -1,
             "normalization": null, "instruction_profile": null
         }
-    })).expect_err("must reject");
+    }))
+    .expect_err("must reject");
     assert_eq!(error.code().to_string(), "embedding");
 }
 
@@ -146,16 +148,17 @@ fn source_interval_rules() {
     run(json!({
         "source_time_start": "2026-10-26T09:00:00Z",
         "source_time_end": "2026-10-26T09:05:00Z"
-    })).expect("valid interval verifies");
+    }))
+    .expect("valid interval verifies");
 
     let inverted = run(json!({
         "source_time_start": "2026-10-26T09:05:00Z",
         "source_time_end": "2026-10-26T09:00:00Z"
-    })).expect_err("must reject");
+    }))
+    .expect_err("must reject");
     assert_eq!(inverted.code().to_string(), "time");
 
-    let half = run(json!({"source_time_start": "2026-10-26T09:00:00Z"}))
-        .expect_err("must reject");
+    let half = run(json!({"source_time_start": "2026-10-26T09:00:00Z"})).expect_err("must reject");
     assert_eq!(half.code().to_string(), "time");
 }
 
@@ -211,7 +214,8 @@ fn incorporation_rules_enforced() {
             "outcome": "unknown",
             "evidence_refs": []
         }]
-    })).expect("unknown outcome with empty sides verifies");
+    }))
+    .expect("unknown outcome with empty sides verifies");
     assert!(!valid.replay);
 
     let error = run(json!({
@@ -223,7 +227,8 @@ fn incorporation_rules_enforced() {
             "outcome": "accepted",
             "evidence_refs": []
         }]
-    })).expect_err("accepted without subject must reject");
+    }))
+    .expect_err("accepted without subject must reject");
     assert_eq!(error.code().to_string(), "incorporation");
 }
 
@@ -236,7 +241,8 @@ fn lineage_rules_enforced() {
                             "algorithm": null, "confidence": null},
             "status": "ambiguous"
         }]
-    })).expect("ambiguous assertion verifies");
+    }))
+    .expect("ambiguous assertion verifies");
     assert!(!ambiguous.replay);
 
     let error = run(json!({
@@ -246,6 +252,7 @@ fn lineage_rules_enforced() {
                             "algorithm": null, "confidence": null},
             "status": "asserted"
         }]
-    })).expect_err("asserted with empty sides must reject");
+    }))
+    .expect_err("asserted with empty sides must reject");
     assert_eq!(error.code().to_string(), "lineage");
 }
