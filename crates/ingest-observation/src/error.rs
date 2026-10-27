@@ -25,6 +25,10 @@ pub enum ErrorCode {
     Revision,
     ConflictingRetry,
     UnavailableBytes,
+    Ancestry,
+    Embedding,
+    Lineage,
+    Incorporation,
 }
 
 impl fmt::Display for ErrorCode {
@@ -50,6 +54,10 @@ impl fmt::Display for ErrorCode {
             ErrorCode::Revision => "revision",
             ErrorCode::ConflictingRetry => "conflicting_retry",
             ErrorCode::UnavailableBytes => "unavailable_bytes",
+            ErrorCode::Ancestry => "ancestry",
+            ErrorCode::Embedding => "embedding",
+            ErrorCode::Lineage => "lineage",
+            ErrorCode::Incorporation => "incorporation",
         })
     }
 }
