@@ -67,6 +67,7 @@ def extract_source(archive, destination):
 
 def check_metadata(metadata, source):
     """Cargo parses manifests; every local package/path must stay in the export."""
+    expected = {"structuredmerge-core", "structuredmerge-core-py"}
     local = []
     for package in metadata["packages"]:
         if package["source"] is not None:
@@ -80,7 +81,12 @@ def check_metadata(metadata, source):
         for dependency in package["dependencies"]:
             if dependency.get("path") and not Path(dependency["path"]).resolve().is_relative_to(source.resolve()):
                 raise ValueError("source dependency escapes archive")
-    if not {"structuredmerge-core", "structuredmerge-core-py"}.issubset(local):
+    unexpected = set(local) - expected
+    if unexpected:
+        raise ValueError(
+            f"unexpected local prototype package(s) in source archive: {sorted(unexpected)}"
+        )
+    if not expected.issubset(local):
         raise ValueError("typed facade and Python binding must be in source archive")
     return sorted(local)
 

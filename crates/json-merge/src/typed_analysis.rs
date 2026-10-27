@@ -209,8 +209,12 @@ pub fn analyze(parsed: &ParsedResult, dialect: JsonDialect) -> Result<Analysis, 
     let mut layout_gaps = vec![];
     for gap in &facts.family.layout_gaps {
         let source = facts.layout_gap_sources.get(&gap.id).ok_or("unresolved layout gap bytes")?;
-        let before = gap.before_owner_id.as_deref().map(&resolve).transpose()?;
-        let after = gap.after_owner_id.as_deref().map(&resolve).transpose()?;
+        // Named reference: `resolve` is a non-Copy closure used by both maps,
+        // so neither call site borrows inline (clippy needless_borrows) and
+        // neither moves it.
+        let resolver = &resolve;
+        let before = gap.before_owner_id.as_deref().map(resolver).transpose()?;
+        let after = gap.after_owner_id.as_deref().map(resolver).transpose()?;
         let controller = if gap.controller_side == "before" { &before } else { &after };
         let controller = controller.as_ref().ok_or("unresolved gap controller")?;
         if let Some(owner) = &before {

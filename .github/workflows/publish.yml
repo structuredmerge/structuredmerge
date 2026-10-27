@@ -328,9 +328,6 @@ jobs:
         include:
           - label: x86_64-linux
             runner: ubuntu-latest
-            ruby: "3.2"
-          - label: x86_64-linux
-            runner: ubuntu-latest
             ruby: "4.0"
           - label: aarch64-linux
             runner: ubuntu-24.04-arm

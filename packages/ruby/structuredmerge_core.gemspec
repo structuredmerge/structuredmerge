@@ -15,7 +15,7 @@ Gem::Specification.new do |spec|
 
   spec.licenses      = ["AGPL-3.0-only", "PolyForm-Small-Business-1.0.0"]
 
-  spec.required_ruby_version = ">= 3.2.0"
+  spec.required_ruby_version = ">= 3.3.0"
   spec.metadata["rubygems_mfa_required"] = "true"
 
   # Keep sibling packages and retained legacy inputs out of this gem's archive.

@@ -1,6 +1,6 @@
 //! Contract test runner — exercises v2 fixture vectors against Rust implementation.
 
-use ingest_observation::{Context, Decision, Envelope, State, verify};
+use ingest_observation::{Context, Envelope, State, verify};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -41,15 +41,11 @@ struct FixtureCase {
 
 #[derive(Debug, Deserialize)]
 struct FixtureSequence {
-    name: String,
-    context: FixtureContext,
     steps: Vec<FixtureCase>,
 }
 
 #[derive(Debug, Deserialize)]
 struct ContractFixture {
-    schema: String,
-    kind: String,
     cases: Vec<FixtureCase>,
     sequences: Vec<FixtureSequence>,
 }
