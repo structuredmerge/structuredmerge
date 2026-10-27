@@ -6,12 +6,45 @@ import os
 from pathlib import Path
 import shlex
 import shutil
+import subprocess
 import tempfile
 
 
 def require(condition, detail):
     if not condition:
         raise AssertionError(detail)
+
+
+def warm_language_cache(binary, stage, env):
+    """Populate the tree-sitter grammar cache before any sandboxed run.
+
+    Grammar extraction writes individual files larger than the gate's 8 MiB
+    RLIMIT_FSIZE, so a cold cache makes the driver die of SIGXFSZ mid-
+    extraction — and because the cache directory persists across runs,
+    pass/fail silently depended on cache warmth. Warm it deterministically
+    here (outside the per-file limit, still timeout-bounded) so every gated
+    case starts from the same cache state."""
+    warm = stage / "warmup"
+    warm.mkdir()
+    for name, body in (
+        ("base", b'{"warmup":true}'),
+        ("ours", b'{"warmup":true,"ours":1}'),
+        ("theirs", b'{"warmup":true,"theirs":1}'),
+    ):
+        (warm / name).write_bytes(body)
+    result = subprocess.run(
+        [
+            str(binary), "merge-driver", "--strict",
+            "--report", str(warm / "report.json"),
+            str(warm / "base"), str(warm / "ours"), str(warm / "theirs"),
+            "warmup.json",
+        ],
+        cwd=warm, env=env, timeout=120, capture_output=True, check=False,
+    )
+    require(
+        result.returncode == 0 and (warm / "report.json").is_file(),
+        f"language cache warmup failed: {result.stderr.decode(errors='replace')[:400]}",
+    )
 
 
 def main():
@@ -44,6 +77,7 @@ def main():
     env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
                GIT_TERMINAL_PROMPT="0", GIT_EDITOR="true", LC_ALL="C")
     env.setdefault("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR", str(root / "tmp/typed-tslp-cache"))
+    warm_language_cache(binary, stage, env)
     results = []
     for index, case in enumerate(cases):
         repo = stage / f"work-{index}"

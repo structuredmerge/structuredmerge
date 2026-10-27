@@ -156,11 +156,14 @@ class CorePackagingWorkflowTest(unittest.TestCase):
                 self.assertEqual(step["if"], "runner.os == 'Windows'")
                 self.assertLess(index, checkout)
 
-    def test_installed_core_matrix_preserves_separate_legacy_coverage(self):
+    def test_installed_core_matrix_covers_supported_rubies(self):
         job = self.jobs["typed-core-ruby-artifact"]
         matrix = job["strategy"]["matrix"]["include"]
-        self.assertEqual(len(matrix), 6)
-        self.assertEqual({row["ruby"] for row in matrix}, {"3.2", "4.0"})
+        # EOL Ruby (3.2) is deliberately unsupported: rb-sys cannot bind its
+        # headers and nothing ever validated the claim. Only supported,
+        # tested rubies appear in the matrix.
+        self.assertEqual(len(matrix), 5)
+        self.assertEqual({row["ruby"] for row in matrix}, {"4.0"})
         self.assertEqual({row["platform"] for row in matrix}, {
             "x86_64-linux", "aarch64-linux", "arm64-darwin",
             "x86_64-darwin", "x64-mingw-ucrt",
