@@ -881,7 +881,7 @@ RSpec.describe StructuredmergeCore do
     control.cancel
     expect { described_class.execute_operation_controlled(request, merge_limits, control) }
       .to raise_error(RuntimeError, /execution.cancelled/)
-    expect { described_class::OperationPolicy.from_analyze(described_class::DiffPolicy.new(extra: {})) }.to raise_error(TypeError)
+    expect { described_class::OperationPolicy.from_hash({operation: "bogus"}) }.to raise_error(RuntimeError, /Unknown discriminator/)
     expect(host.calls).to eq(0)
   ensure
     described_class.unregister_parser_host("ruby.typed.psych")
@@ -896,13 +896,14 @@ RSpec.describe StructuredmergeCore do
       "merge3" => described_class::ThreeWayMergePolicy.new(render_policy: "source-preserving", labels: {"ours" => "local"}, conflict_marker_size: 9, extra: extra)
     }
     policies.each do |name, payload|
-      policy = described_class::OperationPolicy.public_send("from_#{name}", payload)
+      policy = described_class::OperationPolicy.from_hash({operation: name, policy: payload})
       source_count = {"analyze" => 1, "diff2" => 2, "merge2" => 2, "merge3" => 3}.fetch(name)
       request = common_request(name, Array.new(source_count, "a: one\n"), policy: policy)
       restored = request.operation
       expect(restored).to be_a(described_class::OperationPolicy)
-      policies.each_key { |other| expect(restored.public_send(other)).to be_nil unless other == name }
-      value = restored.public_send(name)
+      policies.each_key { |other| expect(restored.public_send("#{other}?")).to be(false) unless other == name }
+      expect(restored.public_send("#{name}?")).to be(true)
+      value = restored.value
       expect(value).to be_a(payload.class)
       expect(value.extra).to eq(extra)
       case name
@@ -920,7 +921,7 @@ RSpec.describe StructuredmergeCore do
         expect(value.conflict_marker_size).to eq(9)
       end
     end
-    expect { described_class::OperationPolicy.new }.to raise_error(TypeError)
+    expect { described_class::OperationPolicy.new }.to raise_error(NoMethodError)
   end
 
   it "preserves canonical record variants and payloads across the installed native boundary" do
