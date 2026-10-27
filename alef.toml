@@ -65,6 +65,9 @@ error_constructor = "structuredmerge_core::CoreError::new({msg})"
 [crates.ruby]
 gem_name = "structuredmerge-core"
 scaffold_output = "packages/ruby"
+# EOL Ruby (3.2) is unsupported: rb-sys cannot bind its headers (bool without
+# stdbool, fixed upstream in 3.3) and no CI run ever validated the old floor.
+required_ruby_version = ">= 3.3.0"
 
 [crates.ruby.stubs]
 output = "packages/ruby/sig"

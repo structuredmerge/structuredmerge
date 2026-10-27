@@ -52,7 +52,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         steps = self.jobs["installed-kernel-cli"]["steps"]
         fixtures = next(step for step in steps
                         if step.get("with", {}).get("repository") == "structuredmerge/structuredmerge-fixtures")
-        self.assertEqual(fixtures["with"]["ref"], "be4bf25d59bceac6a4adcc27dea081a2bab4c798")
+        self.assertEqual(fixtures["with"]["ref"], "4be9f11e25190730559ad1c5039cacdfacf2943a")
         grammar = "tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so"
         legacy = [i for i, step in enumerate(steps) if "slice-951-git-driver-json-integration" in step.get("run", "")]
         typed = [(i, step) for i, step in enumerate(steps) if "--typed --fixtures" in step.get("run", "")]
@@ -85,7 +85,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         self.assertEqual(set(consumers), {"installed-kernel-cli", "check", "alef"})
         for name, revision in consumers.items():
             with self.subTest(job=name):
-                self.assertEqual(revision, "be4bf25d59bceac6a4adcc27dea081a2bab4c798")
+                self.assertEqual(revision, "4be9f11e25190730559ad1c5039cacdfacf2943a")
 
     def test_export_compiles_then_packages_verifies_and_uploads_only_core(self):
         steps = self.jobs["ruby-package"]["steps"]
@@ -156,11 +156,14 @@ class CorePackagingWorkflowTest(unittest.TestCase):
                 self.assertEqual(step["if"], "runner.os == 'Windows'")
                 self.assertLess(index, checkout)
 
-    def test_installed_core_matrix_preserves_separate_legacy_coverage(self):
+    def test_installed_core_matrix_covers_supported_rubies(self):
         job = self.jobs["typed-core-ruby-artifact"]
         matrix = job["strategy"]["matrix"]["include"]
-        self.assertEqual(len(matrix), 6)
-        self.assertEqual({row["ruby"] for row in matrix}, {"3.2", "4.0"})
+        # EOL Ruby (3.2) is deliberately unsupported: rb-sys cannot bind its
+        # headers and nothing ever validated the claim. Only supported,
+        # tested rubies appear in the matrix.
+        self.assertEqual(len(matrix), 5)
+        self.assertEqual({row["ruby"] for row in matrix}, {"4.0"})
         self.assertEqual({row["platform"] for row in matrix}, {
             "x86_64-linux", "aarch64-linux", "arm64-darwin",
             "x86_64-darwin", "x64-mingw-ucrt",

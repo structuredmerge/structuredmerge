@@ -178,14 +178,14 @@ module NativeMergeFixture
     end
     policy ||= case operation
     when "analyze"
-      StructuredmergeCore::OperationPolicy.from_analyze(StructuredmergeCore::AnalyzePolicy.new(extra: {}))
+      StructuredmergeCore::OperationPolicyAnalyze.new(value: StructuredmergeCore::AnalyzePolicy.new(extra: {}))
     when "diff2"
-      StructuredmergeCore::OperationPolicy.from_diff2(StructuredmergeCore::DiffPolicy.new(extra: {}))
+      StructuredmergeCore::OperationPolicyDiff2.new(value: StructuredmergeCore::DiffPolicy.new(extra: {}))
     when "merge2"
-      StructuredmergeCore::OperationPolicy.from_merge2(StructuredmergeCore::DirectionalMergePolicy.new(
+      StructuredmergeCore::OperationPolicyMerge2.new(value: StructuredmergeCore::DirectionalMergePolicy.new(
         directional_merge: "template-into-current", render_policy: "source-preserving", extra: {}))
     else
-      StructuredmergeCore::OperationPolicy.from_merge3(StructuredmergeCore::ThreeWayMergePolicy.new(
+      StructuredmergeCore::OperationPolicyMerge3.new(value: StructuredmergeCore::ThreeWayMergePolicy.new(
         render_policy: "source-preserving", fallback_policy: "none", extra: {}))
     end
     StructuredmergeCore::OperationRequest.new(schema: "structuredmerge.operation-request/v1", request_id: request_id,
@@ -247,7 +247,7 @@ module NativeMergeFixture
     begin
       original = common_request(operation, sources)
       policy = if git_options
-        StructuredmergeCore::OperationPolicy.from_merge3(StructuredmergeCore::ThreeWayMergePolicy.new(
+        StructuredmergeCore::OperationPolicyMerge3.new(value: StructuredmergeCore::ThreeWayMergePolicy.new(
           render_policy: "source-preserving", conflict_marker_size: git_options[0], labels: {"ours" => git_options[1]}, extra: {}))
       else
         original.operation

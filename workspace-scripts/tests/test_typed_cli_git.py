@@ -100,6 +100,7 @@ class TypedCliGitTest(unittest.TestCase):
                         raise OSError("injected report failure")
                     return original(path, *args, **kwargs)
                 with patch.object(sys, "argv", ["gate", str(binary), "--fixtures", str(fixture)]), \
+                        patch.object(legacy, "warm_language_cache"), \
                         patch.object(gate, "command", side_effect=RuntimeError("injected command failure")), \
                         patch.object(legacy.tempfile, "mkdtemp", return_value=str(stage)), \
                         patch.object(Path, "write_text", write), contextlib.redirect_stdout(io.StringIO()):

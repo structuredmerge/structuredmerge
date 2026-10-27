@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: structuredmerge/structuredmerge-fixtures
-          ref: be4bf25d59bceac6a4adcc27dea081a2bab4c798
+          ref: 4be9f11e25190730559ad1c5039cacdfacf2943a
           path: shared-fixtures
       - name: Place tooling fixtures beside kernel
         shell: bash
@@ -215,9 +215,6 @@ jobs:
         include:
           - platform: x86_64-linux
             runner: ubuntu-latest
-            ruby: "3.2"
-          - platform: x86_64-linux
-            runner: ubuntu-latest
             ruby: "4.0"
           - platform: aarch64-linux
             runner: ubuntu-24.04-arm
@@ -279,7 +276,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: structuredmerge/structuredmerge-fixtures
-          ref: be4bf25d59bceac6a4adcc27dea081a2bab4c798
+          ref: 4be9f11e25190730559ad1c5039cacdfacf2943a
           path: shared-fixtures
       - name: Place fixtures beside kernel
         shell: bash
@@ -369,7 +366,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: structuredmerge/structuredmerge-fixtures
-          ref: be4bf25d59bceac6a4adcc27dea081a2bab4c798
+          ref: 4be9f11e25190730559ad1c5039cacdfacf2943a
           path: shared-fixtures
       - name: Place fixtures beside kernel
         shell: bash

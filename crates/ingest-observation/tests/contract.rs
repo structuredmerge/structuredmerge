@@ -1,7 +1,7 @@
 //! Contract test runner — exercises v2 fixture vectors against Rust implementation.
 
-use ingest_observation::{verify, Envelope, Context, State, Decision};
-use serde::{Deserialize};
+use ingest_observation::{Context, Envelope, State, verify};
+use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
@@ -41,15 +41,11 @@ struct FixtureCase {
 
 #[derive(Debug, Deserialize)]
 struct FixtureSequence {
-    name: String,
-    context: FixtureContext,
     steps: Vec<FixtureCase>,
 }
 
 #[derive(Debug, Deserialize)]
 struct ContractFixture {
-    schema: String,
-    kind: String,
     cases: Vec<FixtureCase>,
     sequences: Vec<FixtureSequence>,
 }
@@ -62,7 +58,8 @@ fn fixture_path() -> PathBuf {
 
 fn load_contract() -> ContractFixture {
     let path = fixture_path();
-    let content = fs::read_to_string(&path).unwrap_or_else(|_| panic!("Failed to read fixture: {:?}", path));
+    let content =
+        fs::read_to_string(&path).unwrap_or_else(|_| panic!("Failed to read fixture: {:?}", path));
     serde_json::from_str(&content).unwrap_or_else(|e| panic!("Failed to parse fixture: {}", e))
 }
 
@@ -94,11 +91,22 @@ fn check_case(case: &FixtureCase, state: &mut State) {
             let result = verify(&envelope, &context, state);
             assert!(result.is_err(), "Expected error '{}' but got Ok: {:?}", error, result);
             let err = result.unwrap_err();
-            assert_eq!(err.code().to_string(), *error, "Wrong error code for {}: got {}", case.name, err.code());
+            assert_eq!(
+                err.code().to_string(),
+                *error,
+                "Wrong error code for {}: got {}",
+                case.name,
+                err.code()
+            );
         }
         Expectation::Success { status, authorized_delete_ids, replay } => {
-            let decision = verify(&envelope, &context, state).unwrap_or_else(|e| panic!("{} failed: {}", case.name, e));
-            assert_eq!(decision.authorized_delete_ids, *authorized_delete_ids, "Delete IDs mismatch for {}", case.name);
+            let decision = verify(&envelope, &context, state)
+                .unwrap_or_else(|e| panic!("{} failed: {}", case.name, e));
+            assert_eq!(
+                decision.authorized_delete_ids, *authorized_delete_ids,
+                "Delete IDs mismatch for {}",
+                case.name
+            );
             assert_eq!(decision.replay, *replay, "Replay flag mismatch for {}", case.name);
             assert_eq!(status, "verified", "Unexpected status for {}", case.name);
         }

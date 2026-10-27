@@ -35,8 +35,15 @@ pub struct State {
     #[serde(default)]
     pub accepted: HashMap<(String, String, String), AcceptedEntry>,
     #[serde(default)]
-    pub revisions: HashMap<(String, String, String), String>,
+    pub revisions: HashMap<(String, String, String), RetainedRevision>,
     pub head: Option<String>,
+}
+
+/// Projection evidence retained for a revision: re-referencing the revision
+/// is valid only when this evidence matches (fresh observation, no advance).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetainedRevision {
+    pub projection: String,
 }
 
 /// Stored entry for an accepted observation.
@@ -50,5 +57,30 @@ pub struct AcceptedEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Decision {
     pub authorized_delete_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tombstones: Vec<Tombstone>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub retained_evidence: Vec<RetainedEvidence>,
     pub replay: bool,
+}
+
+/// Derived tombstone record for one authorized deletion target.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Tombstone {
+    pub target: String,
+    pub prior_revision_ref: String,
+    pub cause: String,
+    pub observation_id: String,
+    pub revision_ref: String,
+    pub authority_ref: Option<String>,
+}
+
+/// Retained-evidence manifest entry for one consumed byte descriptor.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RetainedEvidence {
+    pub domain: String,
+    pub digest: String,
+    pub via: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ref_: Option<String>,
 }

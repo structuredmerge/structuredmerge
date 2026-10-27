@@ -22,7 +22,10 @@ pub fn verify_bytes(
         Error::new(ErrorCode::Json)
     })?;
     if domain != expected_domain {
-        eprintln!("DEBUG verify_bytes: domain mismatch: got {} expected {}", domain, expected_domain);
+        eprintln!(
+            "DEBUG verify_bytes: domain mismatch: got {} expected {}",
+            domain, expected_domain
+        );
         return Err(Error::new(ErrorCode::Json));
     }
     let byte_length = obj.get("byte_length").and_then(|v| v.as_u64()).ok_or_else(|| {
@@ -38,7 +41,10 @@ pub fn verify_bytes(
     let has_inline = obj.contains_key("inline_base64");
     let has_ref = obj.contains_key("ref");
     if has_inline == has_ref {
-        eprintln!("DEBUG verify_bytes: transport mismatch for {} (inline={}, ref={})", expected_domain, has_inline, has_ref);
+        eprintln!(
+            "DEBUG verify_bytes: transport mismatch for {} (inline={}, ref={})",
+            expected_domain, has_inline, has_ref
+        );
         return Err(Error::new(ErrorCode::Json));
     }
 
@@ -53,7 +59,10 @@ pub fn verify_bytes(
             Error::new(ErrorCode::Json)
         })?;
         resources.get(ref_key).ok_or_else(|| {
-            eprintln!("DEBUG verify_bytes: ref {} not found in resources for {}", ref_key, expected_domain);
+            eprintln!(
+                "DEBUG verify_bytes: ref {} not found in resources for {}",
+                ref_key, expected_domain
+            );
             Error::new(ErrorCode::UnavailableBytes)
         })?
     };
@@ -69,8 +78,14 @@ pub fn verify_bytes(
         return Err(Error::new(ErrorCode::Json));
     }
     if data.len() as u64 != byte_length || sha256(&data) != digest {
-        eprintln!("DEBUG verify_bytes: length/digest mismatch for {}: len={} expected={}, digest={} expected={}", 
-            expected_domain, data.len(), byte_length, sha256(&data), digest);
+        eprintln!(
+            "DEBUG verify_bytes: length/digest mismatch for {}: len={} expected={}, digest={} expected={}",
+            expected_domain,
+            data.len(),
+            byte_length,
+            sha256(&data),
+            digest
+        );
         return Err(Error::new(ErrorCode::Json));
     }
     Ok(data)
