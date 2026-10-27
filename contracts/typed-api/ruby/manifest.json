@@ -1,11 +1,11 @@
 {
-  "schema": "structuredmerge.typed-api-review-baseline/v1",
-  "target": "ruby",
-  "review_reason": "alef 0.94->0.115: additive Ruby sum-type codegen (OperationPolicy from_hash dispatch + Data.define variants in native.rb, matching rbs). Reviewed: purely additive modules, no existing signatures changed.",
   "files": {
+    "lib/structuredmerge_core.rb": "defe67340887e4fcfecefc0a68d255fab86768e5c81260916819b636303f5cdf",
     "lib/structuredmerge_core/native.rb": "582b6ae400a204e38c80ee5aa480e41abed68bf47ef2bf1d7c62e669849f1c14",
     "lib/structuredmerge_core/version.rb": "99c8b3f93ad0d98825c986c3d405eb50b97bc4e5c14d61fa087ea228966c424a",
-    "lib/structuredmerge_core.rb": "defe67340887e4fcfecefc0a68d255fab86768e5c81260916819b636303f5cdf",
-    "sig/types.rbs": "0d63fe5ea194a9e810910da1c1d940096d6cd1752703026b8d25cb96d7ae8392"
-  }
+    "sig/types.rbs": "78a522c6512a05e391fb4ab81be83bdbdd6af8c4607ec192ae33f37e68ab18eb"
+  },
+  "review_reason": "alef 0.94->0.115: additive Ruby sum-type codegen (OperationPolicy from_hash dispatch + Data.define variants in native.rb, matching rbs). Reviewed: purely additive modules, no existing signatures changed.",
+  "schema": "structuredmerge.typed-api-review-baseline/v1",
+  "target": "ruby"
 }
