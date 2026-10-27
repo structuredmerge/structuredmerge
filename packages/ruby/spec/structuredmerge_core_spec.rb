@@ -832,7 +832,7 @@ RSpec.describe StructuredmergeCore do
       request = common_request(operation, texts)
       expect(request.sources.length).to eq(texts.length)
       expect(request.operation).to be_a(described_class::OperationPolicy)
-      expect(request.operation.public_send(operation)).not_to be_nil
+      expect(request.operation.public_send("#{operation}?")).to be(true)
       request = common_request(operation, texts, policy: request.operation)
       result = described_class.execute_operation(request, merge_limits)
       expect(result.ok).to be(true)
