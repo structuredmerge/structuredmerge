@@ -1136,3 +1136,77 @@ fn controls_and_output_failures_do_not_fabricate_success_or_expose_native_except
     let encoded = serde_json::to_string(&result).unwrap();
     assert!(!encoded.contains("private parser exception"));
 }
+
+#[test]
+fn batch_surfaces_profile_rejection_diagnostic_not_executor_identity_error() {
+    struct GuardHost;
+    impl ParserHost for GuardHost {
+        fn descriptor(&self) -> Result<ParserProviderDescriptor, CoreError> {
+            serde_json::from_value(json!({
+                "id": "test.psych.batch-guard", "family": "native", "runtime": "ruby",
+                "package": "psych", "package_version": "test", "parser": "psych", "parser_version": "test",
+                "grammar": null, "grammar_version": null, "languages": ["yaml"], "dialects": [],
+                "contracts": [PARSE_RESULT_SCHEMA],
+                "capabilities": ["diagnostics", "native_extensions", "source_spans"],
+                "probe_id": "test.psych.batch-guard", "priority": 0, "metadata": {}, "extensions": []
+            }))
+            .map_err(|error| CoreError { code: "registration".into(), message: error.to_string() })
+        }
+        fn probe_batch(&self, request: ProbeBatchRequest) -> Result<ProbeBatchResult, CoreError> {
+            Ok(ProbeBatchResult {
+                items: request
+                    .items
+                    .iter()
+                    .map(|_| ParserProbeResult { available: true, loadable: true })
+                    .collect(),
+            })
+        }
+        fn parse_batch(&self, _: ParseBatchRequest) -> Result<ParseBatchResult, CoreError> {
+            unreachable!("profile rejection precedes any parse call")
+        }
+    }
+    register_parser_host(Arc::new(GuardHost)).unwrap();
+
+    let mut value = wire("merge3", &["a: one", "a: two", "a: one"]);
+    value["parser_selection"]["backend"] = json!("test.psych.batch-guard");
+    value["policy"]["fallback_policy"] = json!("text");
+    let operation = request(value).request().clone();
+
+    let outcome = execute_workflow_batch(
+        "kernel.yaml".into(),
+        WorkflowBatchRequest {
+            items: vec![WorkflowOperation {
+                operation,
+                parser_language: "yaml".into(),
+                parser_dialect: None,
+                parse_options: ParseOptions {
+                    comments: false,
+                    tokens: false,
+                    diagnostics: false,
+                    native_extensions: true,
+                },
+            }],
+        },
+        WorkflowLimits {
+            max_operations: 3,
+            max_request_bytes: 100_000,
+            max_response_bytes: 100_000,
+            parse: ParseLimits {
+                max_batch_items: 3,
+                max_input_bytes: 4096,
+                max_nodes: 1000,
+                max_diagnostics: 20,
+                timeout_millis: None,
+            },
+        },
+    );
+
+    unregister_parser_provider("test.psych.batch-guard".into()).unwrap();
+
+    let execution =
+        outcome.expect("profile rejection must surface as a diagnostic result, not a batch error");
+    let result = &execution.results[0];
+    assert!(!result.ok);
+    assert_eq!(code(result), "operation.unsupported_requirements");
+    assert_eq!(result.provider.provider_id.as_deref(), Some("kernel.yaml"));
+}

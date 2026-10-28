@@ -327,6 +327,15 @@ pub(crate) fn execute_native_operation_with_service(
             ("typescript", "kernel.typescript", typescript_merge::typed::owners)
         }
         _ => {
+            // The rejecting executor is still identified in the result: a
+            // diagnostic result with no provider identity reads upstream as
+            // an executor swap (workflow.invalid_result), masking the real
+            // rejection reason. Identity mirrors the request's explicit
+            // selectors when present, keeping validate_against's
+            // requested-vs-actual contract satisfied for rejected results.
+            result.provider.provider_id = input.provider_selection.provider_id.clone();
+            result.provider.family = input.provider_selection.family.clone();
+            result.profile.profile_id = input.provider_selection.profile_id.clone();
             diagnostic(
                 &mut result,
                 PortableCategory::UnsupportedFeature,
@@ -338,6 +347,15 @@ pub(crate) fn execute_native_operation_with_service(
             return finish(result, request, &evidence);
         }
     };
+    // Executor identity is populated before any rejection arm so every
+    // diagnostic result names its executor, mirroring json_operation. The
+    // request's explicit selectors win when present (validate_against
+    // requires requested == actual even for unclassified results).
+    result.provider.provider_id =
+        input.provider_selection.provider_id.clone().or_else(|| Some(provider.into()));
+    result.provider.family =
+        input.provider_selection.family.clone().or_else(|| Some(family.into()));
+    result.profile.profile_id = input.provider_selection.profile_id.clone();
     if input.provider_selection.provider_id.as_deref().is_some_and(|id| id != provider)
         || input.provider_selection.family.as_deref().is_some_and(|name| name != family)
         || crate::profiles::native_language(family, input.provider_selection.dialect.as_deref())
@@ -424,9 +442,6 @@ pub(crate) fn execute_native_operation_with_service(
         );
         return finish(result, request, &evidence);
     }
-    result.provider.provider_id = Some(provider.into());
-    result.provider.family = Some(family.into());
-    result.profile.profile_id = input.provider_selection.profile_id.clone();
     let mut parses = vec![];
     for &role in input.operation.kind().source_roles() {
         let source = request
