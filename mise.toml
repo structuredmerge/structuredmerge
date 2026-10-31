@@ -1,6 +1,7 @@
 [tools]
 rust = "stable"
 "github:xberg-io/alef" = "0.89.0"
+ruby = "4.0.9"
 
 [tasks.format]
 run = "cargo fmt --all"
