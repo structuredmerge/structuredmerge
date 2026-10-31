@@ -372,6 +372,30 @@ mod tests {
     }
 
     #[test]
+    fn shared_comment_ownership_fixture_matches_the_bash_typed_merge_contract() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/polyglot/typed-core/bash_merge3_comment_ownership.json"
+        ))
+        .unwrap();
+        let input = &fixture["input"];
+        let base = input["base"].as_str().unwrap();
+        let ours = input["ours"].as_str().unwrap();
+        let theirs = input["theirs"].as_str().unwrap();
+        let expected = fixture["assertions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|assertion| assertion["field"] == "output")
+            .and_then(|assertion| assertion["value"].as_str())
+            .unwrap();
+
+        let result = merge_bash_three_way(base, ours, theirs, BashDialect::Bash);
+
+        assert_eq!(result.outcome, ThreeWayMergeOutcome::Clean);
+        assert_eq!(result.output.as_deref(), Some(expected));
+    }
+
+    #[test]
     fn preserves_comments_and_blank_line_gaps_between_independent_owner_edits() {
         let base = "# left documentation\nleft() { echo one; }\n\n# right documentation\nright() { echo one; }\n";
         let ours = base.replace("echo one; }\n\n# right", "echo two; }\n\n# right");
