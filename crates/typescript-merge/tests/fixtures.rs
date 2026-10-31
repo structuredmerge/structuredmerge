@@ -35,6 +35,21 @@ fn merges_independent_function_edits_with_exact_source_preservation() {
 }
 
 #[test]
+fn consumes_shared_multi_declarator_fixture() {
+    let fixture =
+        read_fixture(&["polyglot", "typed-core", "typescript_merge3_multi_declarator.json"]);
+    let input = &fixture["input"];
+    let result = merge_typescript_three_way(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        TypeScriptDialect::TypeScript,
+    );
+    assert_ne!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
+    assert!(!fixture["assertions"][0]["value"].as_bool().unwrap());
+}
+
+#[test]
 fn preserves_imports_when_merging_independent_declaration_edits() {
     let base = "import { value } from './shared';\n\nfunction left(): string { return value; }\nfunction right(): string { return value; }\n";
     let ours =

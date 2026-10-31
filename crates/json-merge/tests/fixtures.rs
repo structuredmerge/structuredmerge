@@ -584,3 +584,21 @@ fn parses_jsonc_through_the_json5_language_pack_grammar() {
     assert!(result.diagnostics.is_empty());
     assert_eq!(result.analysis.unwrap().owners[0].path, "/alpha");
 }
+
+#[test]
+fn consumes_shared_nested_owner_merge_fixture() {
+    let fixture = read_fixture_from_path(fixture_path(&[
+        "polyglot",
+        "typed-core",
+        "json_merge3_nested_owner.json",
+    ]));
+    let input = &fixture["input"];
+    let result = json_merge::merge_json_three_way(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        JsonDialect::Json,
+    );
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
+    assert_eq!(result.output.is_some(), fixture["assertions"][0]["value"].as_bool().unwrap());
+}

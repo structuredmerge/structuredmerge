@@ -39,6 +39,20 @@ fn merges_independent_function_edits_with_exact_source_preservation() {
 }
 
 #[test]
+fn consumes_shared_malformed_owner_fixture() {
+    let fixture = read_fixture(&["polyglot", "typed-core", "rust_merge3_malformed_owner.json"]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+    );
+    assert_ne!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
+    assert!(!fixture["assertions"][0]["value"].as_bool().unwrap());
+}
+
+#[test]
 fn rejects_owner_membership_changes_with_independent_edits() {
     let base = "fn left() -> i32 { 1 }\n\nfn right() -> i32 { 1 }\n";
     let ours = "fn left() -> i32 { 2 }\n\nfn right() -> i32 { 1 }\n";
