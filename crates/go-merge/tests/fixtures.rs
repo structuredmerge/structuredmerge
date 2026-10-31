@@ -34,6 +34,20 @@ fn merges_independent_function_edits_with_exact_source_preservation() {
 }
 
 #[test]
+fn consumes_shared_comment_ownership_fixture() {
+    let fixture = read_fixture(&["polyglot", "typed-core", "go_merge3_comment_ownership.json"]);
+    let input = &fixture["input"];
+    let result = merge_go_three_way(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        GoDialect::Go,
+    );
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
+    assert_eq!(result.output.as_deref(), fixture["assertions"][1]["value"].as_str());
+}
+
+#[test]
 fn rejects_owner_membership_changes_with_independent_edits() {
     let base = "package main\n\nfunc left() int { return 1 }\n\nfunc right() int { return 1 }\n";
     let ours = "package main\n\nfunc left() int { return 2 }\n\nfunc right() int { return 1 }\n";
