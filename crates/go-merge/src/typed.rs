@@ -1,5 +1,5 @@
-//! Existing conservative Go function ownership over validated TreeHaver facts.
-//! Package/import bytes remain unowned layout, not newly supported merge owners.
+//! Conservative Go function and whole-variable ownership over validated facts.
+//! Package/import bytes remain unowned layout and are not merge owners.
 use ast_merge::{
     SourcePreservingMergeEvidence, SourcePreservingOwnerDocument,
     native_analysis::NativeOwnerAnalysis,
