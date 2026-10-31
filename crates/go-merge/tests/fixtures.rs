@@ -113,10 +113,10 @@ fn rejects_ambiguous_go_three_way_inputs_without_fallback() {
         "package changed\n\nfunc value() int { return 1 }\n",
         GoDialect::Go,
     );
-    assert_eq!(changed_layout.outcome, ast_merge::ThreeWayMergeOutcome::Error);
+    assert_eq!(changed_layout.outcome, ast_merge::ThreeWayMergeOutcome::Conflict);
     assert_eq!(
         changed_layout.diagnostics[0].category,
-        ast_merge::DiagnosticCategory::UnsupportedFeature
+        ast_merge::DiagnosticCategory::MergeConflict
     );
 }
 

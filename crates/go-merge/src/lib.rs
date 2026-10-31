@@ -289,6 +289,18 @@ fn go_membership_change_with_owner_edit(
     if grouped_ids(ours) != base_groups || grouped_ids(theirs) != base_groups {
         return true;
     }
+    let package_ids = |document: &SourcePreservingOwnerDocument| {
+        document
+            .owners
+            .iter()
+            .filter(|owner| owner.id.starts_with("/package:"))
+            .map(|owner| owner.id.clone())
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    let base_packages = package_ids(base);
+    if package_ids(ours) != base_packages || package_ids(theirs) != base_packages {
+        return true;
+    }
 
     let base_ids =
         base.owners.iter().map(|owner| owner.id.as_str()).collect::<std::collections::HashSet<_>>();
@@ -401,12 +413,21 @@ pub(crate) fn project_go_owners(
             pending_comments.push(node);
             continue;
         }
-        if matches!(node.kind.as_str(), "package_clause" | "import_declaration") {
+        if node.kind == "import_declaration" {
             pending_comments.clear();
             last_owner = None;
             continue;
         }
         let id = match node.kind.as_str() {
+            "package_clause" => {
+                let name = index
+                    .descendants(node)
+                    .into_iter()
+                    .find(|child| child.kind == "package_identifier")
+                    .map(|child| child.source_fragment.trim().to_string())
+                    .ok_or("Go package clause has no stable name")?;
+                format!("/package:{name}")
+            }
             "function_declaration" => {
                 let name = declaration_name(node, &index)
                     .ok_or("Go function declaration has no stable name")?;
