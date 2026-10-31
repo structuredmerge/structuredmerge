@@ -13,6 +13,7 @@ use ast_merge::{
 };
 use ast_merge_git::{Merge3Request, merge3};
 use go_merge::{GoDialect, merge_go};
+use plain_merge::merge_text;
 use serde_json::json;
 
 mod benchmark_adapter;
@@ -20,7 +21,6 @@ mod build_info;
 mod conflict_review;
 mod external_command;
 mod git_install;
-mod line_merge;
 mod path_safety;
 mod staged_file;
 mod typed_driver;
@@ -388,6 +388,17 @@ fn run_merge_driver(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Wr
         &other_source,
     );
     let mut fallbacks = Vec::new();
+    let language = normalize_language(settings.language.as_deref(), &effective_path);
+    if merge_driver_fallback_eligible(&result, &options, &language) {
+        (result, fallbacks) = apply_merge_fallbacks(
+            result,
+            &options.fallback,
+            settings.conflict_marker_size,
+            &ancestor_source,
+            &current_source,
+            &other_source,
+        );
+    }
     if !result.ok {
         print_diagnostics(stderr, &result);
         if result.output.is_none() && !options.strict && options.fallback != "none" {
@@ -1598,30 +1609,157 @@ fn merge_by_path(
             conflict_marker_size: Some(conflict_marker_size),
             render_policy: Some("source_preserving_edits".to_string()),
         })),
-        _ => match line_merge::merge3_lines(
-            ancestor_source,
-            current_source,
-            other_source,
-            conflict_marker_size,
-        ) {
-            Some(merged) => MergeDriverResult {
-                ok: !merged.conflicted,
+        language => unsupported_language_result(language, path_name),
+    }
+}
+
+/// Mirrors smorg-rb: languages without a structured provider are reported as
+/// unsupported so the caller can apply the git/plain-text fallback chain.
+fn unsupported_language_result(language: &str, path_name: &str) -> MergeDriverResult {
+    merge_driver_result(MergeResult {
+        ok: false,
+        diagnostics: vec![ast_merge::Diagnostic {
+            severity: ast_merge::DiagnosticSeverity::Error,
+            category: ast_merge::DiagnosticCategory::UnsupportedFeature,
+            message: format!(
+                "no structured merge driver is configured for {language:?} at {path_name}"
+            ),
+            path: None,
+            review: None,
+        }],
+        output: None,
+        policies: vec![],
+    })
+}
+
+fn has_structured_provider(language: &str) -> bool {
+    matches!(language, "go" | "json" | "jsonc" | "json5")
+}
+
+fn merge_driver_fallback_eligible(
+    result: &MergeDriverResult,
+    options: &MergeDriverOptions,
+    language: &str,
+) -> bool {
+    !result.ok
+        && !options.strict
+        && options.fallback != "none"
+        && !has_structured_provider(language)
+}
+
+/// smorg-rb order: `git merge-file` first (real three-way text merge), then the
+/// plain-text template merge only if git produced no output.
+fn apply_merge_fallbacks(
+    result: MergeDriverResult,
+    requested_mode: &str,
+    marker_size: usize,
+    ancestor_source: &str,
+    current_source: &str,
+    other_source: &str,
+) -> (MergeDriverResult, Vec<serde_json::Value>) {
+    let reason = fallback_reason(&result.diagnostics);
+    let git = merge_git_file_fallback(marker_size, ancestor_source, current_source, other_source);
+    if git.output.is_some() {
+        let fallbacks = vec![json!({
+            "mode": "git_merge_file", "requested_mode": requested_mode,
+            "reason": reason, "applied": true
+        })];
+        return (merge_fallback_result(result, git), fallbacks);
+    }
+    let plain = merge_text(other_source, current_source);
+    if plain.ok && plain.output.is_some() {
+        let git_reason = fallback_reason(&git.diagnostics);
+        let fallbacks = vec![
+            json!({"mode": "git_merge_file", "requested_mode": requested_mode,
+                   "reason": reason, "applied": false}),
+            json!({"mode": "plain_text", "requested_mode": requested_mode,
+                   "reason": git_reason, "applied": true}),
+        ];
+        return (merge_fallback_result(result, merge_driver_result(plain)), fallbacks);
+    }
+    (result, vec![])
+}
+
+fn merge_fallback_result(
+    original: MergeDriverResult,
+    fallback: MergeDriverResult,
+) -> MergeDriverResult {
+    let mut diagnostics = original.diagnostics;
+    diagnostics.extend(fallback.diagnostics);
+    MergeDriverResult { diagnostics, ..fallback }
+}
+
+fn merge_git_file_fallback(
+    marker_size: usize,
+    ancestor_source: &str,
+    current_source: &str,
+    other_source: &str,
+) -> MergeDriverResult {
+    let failure = |category: ast_merge::DiagnosticCategory, message: String| {
+        merge_driver_result(MergeResult {
+            ok: false,
+            diagnostics: vec![ast_merge::Diagnostic {
+                severity: ast_merge::DiagnosticSeverity::Error,
+                category,
+                message,
+                path: None,
+                review: None,
+            }],
+            output: None,
+            policies: vec![],
+        })
+    };
+    let directory = std::env::temp_dir().join(format!(
+        "smorg-merge-file-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_nanos())
+    ));
+    if let Err(error) = fs::create_dir(&directory) {
+        return failure(ast_merge::DiagnosticCategory::UnsupportedFeature, error.to_string());
+    }
+    let result = (|| {
+        let files =
+            [("current", current_source), ("base", ancestor_source), ("other", other_source)]
+                .map(|(name, source)| (directory.join(name), source));
+        for (path, source) in &files {
+            fs::write(path, source)?;
+        }
+        std::process::Command::new("git")
+            .args(["merge-file", "-p", "-L", "ours", "-L", "base", "-L", "theirs"])
+            .arg(format!("--marker-size={marker_size}"))
+            .args(files.iter().map(|(path, _)| path))
+            .output()
+    })();
+    let _ = fs::remove_dir_all(&directory);
+    match result {
+        // git merge-file exits with the number of conflicts (capped at 127);
+        // anything else (signal, >127) is an error with no usable output.
+        Ok(output) if output.status.code().is_some_and(|code| (0..=127).contains(&code)) => {
+            let clean = output.status.success();
+            let mut merged = merge_driver_result(MergeResult {
+                ok: clean,
                 diagnostics: vec![],
-                output: Some(merged.output),
-                ..merge_driver_result(MergeResult {
-                    ok: true,
-                    diagnostics: vec![],
-                    output: None,
-                    policies: vec![],
-                })
-            },
-            None => merge_driver_result(MergeResult {
-                ok: false,
-                diagnostics: vec![],
-                output: None,
+                output: Some(String::from_utf8_lossy(&output.stdout).into_owned()),
                 policies: vec![],
-            }),
-        },
+            });
+            if !clean {
+                merged.diagnostics.push(ast_merge::Diagnostic {
+                    severity: ast_merge::DiagnosticSeverity::Error,
+                    category: ast_merge::DiagnosticCategory::MergeConflict,
+                    message: "git merge-file reported unresolved conflicts".to_string(),
+                    path: None,
+                    review: None,
+                });
+            }
+            merged
+        }
+        Ok(output) => failure(
+            ast_merge::DiagnosticCategory::UnsupportedFeature,
+            format!("git merge-file failed: {}", String::from_utf8_lossy(&output.stderr).trim()),
+        ),
+        Err(error) => failure(ast_merge::DiagnosticCategory::UnsupportedFeature, error.to_string()),
     }
 }
 
@@ -1696,6 +1834,7 @@ fn normalize_language(language: Option<&str>, path_name: &str) -> String {
         "go" | "golang" => return "go".to_string(),
         "json" => return "json".to_string(),
         "jsonc" | "json with comments" => return "jsonc".to_string(),
+        "json5" => return "json5".to_string(),
         "plain" | "text" | "plaintext" | "text/plain" => return "text".to_string(),
         _ => {}
     }
@@ -1704,6 +1843,7 @@ fn normalize_language(language: Option<&str>, path_name: &str) -> String {
         Some("go") => "go".to_string(),
         Some("json") => "json".to_string(),
         Some("jsonc") => "jsonc".to_string(),
+        Some("json5") => "json5".to_string(),
         _ => "text".to_string(),
     }
 }
@@ -1901,6 +2041,74 @@ mod tests {
         assert!(merged.contains(r#""current":true"#), "{merged}");
         assert!(merged.contains(r#""other":true"#), "{merged}");
         assert!(stdout.is_empty(), "merge-driver should keep stdout quiet");
+    }
+
+    fn run_unsupported_merge(
+        extra: &[&str],
+        base: &str,
+        ours: &str,
+        theirs: &str,
+    ) -> (i32, String, serde_json::Value) {
+        let dir = TestDir::new();
+        let ancestor = dir.write("ancestor.sh", base);
+        let current = dir.write("current.tmp", ours);
+        let other = dir.write("other.tmp", theirs);
+        let report = dir.write("report.json", "");
+        let mut args: Vec<String> =
+            ["merge-driver", "--path-name", "tests/run.sh", "--report"].map(String::from).into();
+        args.push(report.clone());
+        args.extend(extra.iter().map(|arg| arg.to_string()));
+        args.extend([ancestor, current.clone(), other]);
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        let exit = run(&args, &mut stdout, &mut stderr);
+        let merged = fs::read_to_string(current).expect("read current file");
+        let report: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(report).expect("report")).expect("json");
+        (exit, merged, report)
+    }
+
+    const SH_BASE: &str = "#!/usr/bin/env bash\n# Tags: a\n\nrun one\nrun two\n";
+
+    #[test]
+    fn unsupported_language_uses_git_merge_file_and_preserves_lines() {
+        let (exit, merged, report) = run_unsupported_merge(
+            &[],
+            SH_BASE,
+            "#!/usr/bin/env bash\n# Tags: b\n\nrun one\nrun two\n",
+            "#!/usr/bin/env bash\n# Tags: a\n\nrun one\nrun two --fast\n",
+        );
+        assert_eq!(exit, EXIT_SUCCESS);
+        assert_eq!(merged, "#!/usr/bin/env bash\n# Tags: b\n\nrun one\nrun two --fast\n");
+        assert_eq!(report["fallbacks"][0]["mode"], "git_merge_file");
+        assert_eq!(report["fallbacks"][0]["applied"], true);
+    }
+
+    #[test]
+    fn unsupported_language_overlapping_edits_leave_conflict_markers() {
+        let (exit, merged, report) = run_unsupported_merge(
+            &[],
+            SH_BASE,
+            "#!/usr/bin/env bash\n# Tags: b\n\nrun one\nrun two\n",
+            "#!/usr/bin/env bash\n# Tags: c\n\nrun one\nrun two\n",
+        );
+        assert_eq!(exit, EXIT_UNRESOLVED_CONFLICT);
+        assert!(merged.contains("<<<<<<< ours\n# Tags: b\n"), "{merged}");
+        assert!(merged.contains("=======\n# Tags: c\n>>>>>>> theirs\n"), "{merged}");
+        assert_eq!(report["fallbacks"][0]["mode"], "git_merge_file");
+    }
+
+    #[test]
+    fn unsupported_language_with_fallback_none_does_not_rewrite() {
+        let ours = "#!/usr/bin/env bash\n# Tags: b\n\nrun one\nrun two\n";
+        let (exit, merged, report) = run_unsupported_merge(
+            &["--fallback", "none"],
+            SH_BASE,
+            ours,
+            "#!/usr/bin/env bash\n# Tags: a\n\nrun one\nrun two --fast\n",
+        );
+        assert_eq!(exit, EXIT_UNRESOLVED_CONFLICT);
+        assert_eq!(merged, ours);
+        assert_eq!(report["fallbacks"].as_array().map_or(0, Vec::len), 0);
     }
 
     #[test]
