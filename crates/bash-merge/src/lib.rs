@@ -213,6 +213,13 @@ fn project_bash_analysis(
         if top_level.source_fragment.is_empty() {
             return Err(format!("Bash owner {path:?} has no source fragment"));
         }
+        if top_level.kind == "function_definition" {
+            let suffix = &source[top_level.span.range.end_byte..];
+            let line_suffix = suffix.split_once('\n').map_or(suffix, |(line, _)| line);
+            if line_suffix.trim_start().starts_with('#') {
+                return Err(format!("Bash function owner {path:?} has an inline trailing comment"));
+            }
+        }
 
         owner_node_ids.insert(path.clone(), vec![top_level.id.clone()]);
         owners.push(ast_merge::SourcePreservingOwner {
