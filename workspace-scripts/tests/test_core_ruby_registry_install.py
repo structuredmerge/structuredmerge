@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 
 
@@ -48,3 +49,20 @@ class CoreRubyRegistryInstallTest(unittest.TestCase):
                                         text=True, capture_output=True, check=False, timeout=10)
                 self.assertEqual(result.returncode, expected, result.stderr)
                 self.assertIn("usage:", result.stdout + result.stderr)
+
+    def test_local_archive_must_have_the_exact_requested_version(self):
+        script = self.root / "workspace-scripts/check_core_ruby_registry_install.rb"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "README.md").write_text("test gem\n")
+            build = subprocess.run(
+                ["ruby", "-rrubygems/package", "-e", "spec = Gem::Specification.new { |s| s.name = 'structuredmerge-core'; s.version = '0.2.0'; s.summary = 'test'; s.authors = ['test']; s.files = ['README.md'] }; puts Gem::Package.build(spec)"],
+                cwd=root, capture_output=True, text=True, check=True, timeout=10,
+            )
+            archive, = root.glob("*.gem")
+            result = subprocess.run(
+                ["ruby", str(script), "--version", "0.2.1", "--gem", str(archive)],
+                cwd=self.root, text=True, capture_output=True, check=False, timeout=10,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("local archive version does not match", result.stderr)
