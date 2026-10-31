@@ -59,14 +59,18 @@ docker run --rm \
   smorg-bench:PINNED \
   --manifest /manifests/profile-sample.jsonl \
   --results /results/profile-sample.jsonl \
+  --artifacts-dir /results/profile-sample-artifacts \
   --shard-index 0 --shards 10 --workers 1
 ```
 
 The runner executes both StructuredMerge and Git's `merge-file` baseline. It
 records tool status, runtime, conflict-marker status, exact and whitespace-
-normalized agreement with `Expected`, and output digests. It writes one JSONL
-row at a time and resumes from completed case IDs. Expected results can be
-wrong or incomplete; exact agreement is historical developer agreement, not
+normalized agreement with `Expected`, and output digests. It also saves each
+StructuredMerge output, its report, and the Git baseline output and diagnostics
+under a case-keyed artifact directory; JSONL rows contain their paths and
+digests. The source inputs and historical `Expected` remain in the sampled case
+directory. This preserves disagreements for manual review. Expected results can
+be wrong or incomplete; exact agreement is historical developer agreement, not
 semantic correctness. Keep unsupported, errors, conflicts, and timeouts apart
 from clean results. Manually review disagreements and run behavioral tests for
 the sampled source projects before making correctness claims.
