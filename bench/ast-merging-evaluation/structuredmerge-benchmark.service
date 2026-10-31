@@ -1,0 +1,20 @@
+[Unit]
+Description=StructuredMerge unattended benchmark queue
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=smorgops
+Group=smorgops
+EnvironmentFile=/etc/structuredmerge-bench.env
+ExecStart=/srv/structuredmerge-bench/src/structuredmerge/bench/ast-merging-evaluation/run_queue.sh /srv/structuredmerge-bench/src/AST-Merging-Evaluation /srv/structuredmerge-bench/benchmark-queue.tsv /srv/structuredmerge-bench/cache
+WorkingDirectory=/srv/structuredmerge-bench
+Restart=on-failure
+RestartSec=30s
+TimeoutStartSec=infinity
+StandardOutput=append:/srv/structuredmerge-bench/logs/benchmark.log
+StandardError=append:/srv/structuredmerge-bench/logs/benchmark.log
+
+[Install]
+WantedBy=multi-user.target
