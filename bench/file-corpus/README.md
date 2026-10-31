@@ -8,8 +8,8 @@ volume. The sampler reads the archive once and extracts only a deterministic
 sample of supported extensions, so it does not require unpacking the entire
 corpus.
 
-The first target is the current typed adapter's merge3 set: JSON, Python, Go,
-Rust, TypeScript/TSX, and Bash. Confirm the exact path-to-dialect mapping against
+The first target is the current typed adapter's file-level set: JSON/JSONC/JSON5,
+Python, Go, Rust, TypeScript/TSX, and Bash. Confirm the exact path-to-dialect mapping against
 the pinned adapter descriptor before each run. Do not count other extensions as
 unsupported failures; exclude them from the selected denominator and retain the
 all-corpus extension inventory separately.
@@ -24,7 +24,7 @@ python3 bench/file-corpus/sample_zenodo.py \
   --archive /srv/structuredmerge-bench/data/merge_cases.tar.gz \
   --output /srv/structuredmerge-bench/cases/profile-sample \
   --sample-modulus 100 --sample-bucket 0 \
-  --extensions json py go rs ts tsx sh
+  --extensions json jsonc json5 py go rs ts tsx sh
 ```
 
 Generate the manifest and ten stable job shards. All sampled cases for a
@@ -36,7 +36,7 @@ After the pilot, replace this estimate with measured per-repository runtimes.
 python3 bench/file-corpus/make_manifest.py \
   --root /srv/structuredmerge-bench/cases/profile-sample \
   --output /srv/structuredmerge-bench/manifests/profile-sample.jsonl \
-  --extensions json py go rs ts tsx sh
+  --extensions json jsonc json5 py go rs ts tsx sh
 ```
 
 The case input itself needs no repository clone or project test setup. A 1%
