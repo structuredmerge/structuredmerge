@@ -48,6 +48,23 @@ fn consumes_shared_comment_ownership_fixture() {
 }
 
 #[test]
+fn consumes_shared_conflict_fixture_and_records_diagnostic_category() {
+    let fixture = read_fixture(&["polyglot", "typed-core", "go_merge3_conflict.json"]);
+    let input = &fixture["input"];
+    let result = merge_go_three_way(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        GoDialect::Go,
+    );
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Conflict);
+    assert_eq!(result.output, None);
+    assert_eq!(result.conflicts.len(), 1);
+    assert_eq!(result.diagnostics[0].category, ast_merge::DiagnosticCategory::MergeConflict);
+}
+
+#[test]
 fn rejects_owner_membership_changes_with_independent_edits() {
     let base = "package main\n\nfunc left() int { return 1 }\n\nfunc right() int { return 1 }\n";
     let ours = "package main\n\nfunc left() int { return 2 }\n\nfunc right() int { return 1 }\n";
