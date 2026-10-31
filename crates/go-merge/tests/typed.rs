@@ -123,16 +123,20 @@ fn analysis_preserves_native_function_references_and_unowned_header_bytes() {
     let owner = &analysis.document.owners[0];
     assert_eq!(owner.path, "/function:f");
     let ids = &analysis.owner_node_ids[&owner.id];
-    assert_eq!(ids.len(), 1);
-    let node = parsed.document.node(&ids[0]).unwrap();
-    assert_eq!(node.native_type, "function_declaration");
-    assert_eq!(node.span.range.start_byte, owner.start_byte);
-    assert_eq!(node.span.range.end_byte, owner.end_byte);
-    assert_eq!(owner.fingerprint.as_bytes(), parsed.source.slice(node.span.range.clone()).unwrap());
+    assert_eq!(ids.len(), 2);
+    let nodes = ids.iter().map(|id| parsed.document.node(id).unwrap()).collect::<Vec<_>>();
+    assert!(nodes.iter().any(|node| node.native_type == "comment"));
+    let function = nodes.iter().find(|node| node.native_type == "function_declaration").unwrap();
+    assert!(owner.start_byte < function.span.range.start_byte);
+    assert_eq!(function.span.range.end_byte, owner.end_byte);
+    assert_eq!(
+        owner.fingerprint.as_bytes(),
+        &parsed.source.bytes()[owner.start_byte..owner.end_byte]
+    );
     let gaps = analysis.layout_gaps().unwrap();
     assert_eq!(
         parsed.source.slice(gaps[0].range.clone()).unwrap(),
-        "package main\nimport \"fmt\"\n// é\n".as_bytes()
+        "package main\nimport \"fmt\"\n".as_bytes()
     );
     let mut wrong = parsed.clone();
     wrong.source = parser.parse(BASE, SourceRole::Source).source;
@@ -203,12 +207,9 @@ fn membership_plus_owner_edit_retains_the_family_guard_without_false_proof() {
 #[test]
 fn unsupported_syntax_and_wrong_source_roles_fail_closed() {
     let parser = Parser::new("go");
-    for text in [
-        "package main\n",
-        "package main\nvar x = 1\nfunc f() {}\n",
-        "package main\nfunc f() {}\nfunc f() {}\n",
-        "package main\nfunc f( {\n",
-    ] {
+    for text in
+        ["package main\n", "package main\nfunc f() {}\nfunc f() {}\n", "package main\nfunc f( {\n"]
+    {
         assert!(typed::analysis(&parser.parse(text, SourceRole::Source)).is_err(), "{text}");
     }
     assert!(
@@ -216,6 +217,18 @@ fn unsupported_syntax_and_wrong_source_roles_fail_closed() {
     );
     let [base, ours, theirs] = parser.inputs([BASE, OURS, THEIRS]);
     assert!(typed::merge3(&ours, &base, &theirs, |_| panic!("invalid roles")).is_err());
+}
+
+#[test]
+fn analysis_projects_grouped_variables_as_stable_whole_declaration_owners() {
+    let parser = Parser::new("go");
+    let parsed = parser.parse(
+        "package main\nvar (\n left = 1\n right = 2\n)\nfunc stable() {}\n",
+        SourceRole::Source,
+    );
+    let analysis = typed::analysis(&parsed).unwrap();
+    assert_eq!(analysis.document.owners.len(), 2);
+    assert!(analysis.document.owners[0].id.starts_with("/var_group:left;right"));
 }
 
 #[test]

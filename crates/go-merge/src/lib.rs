@@ -1,10 +1,9 @@
 use ast_merge::{
     ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, FamilyFeatureProfile, MergeConflict, MergeResult, NamedOwnerKind,
-    NamedOwnerProjectionPolicy, ParseResult, PolicyReference, PolicySurface,
-    SourcePreservingOwnerDocument, ThreeWayMergeOutcome, ThreeWayMergeResult,
-    merge_source_preserving_owners, normalized_parse_error_result, parse_error_result,
-    project_named_top_level_owners, three_way_parse_error,
+    DiagnosticSeverity, FamilyFeatureProfile, MergeConflict, MergeResult, ParseResult,
+    PolicyReference, PolicySurface, SourcePreservingOwnerDocument, ThreeWayMergeOutcome,
+    ThreeWayMergeResult, merge_source_preserving_owners, normalized_parse_error_result,
+    parse_error_result, three_way_parse_error,
 };
 use tree_haver::{
     BackendReference, NormalizedTreeIndex, NormalizedTreeNode, ParserRequest,
@@ -16,9 +15,6 @@ pub const PACKAGE_NAME: &str = "go-merge";
 
 pub mod directional;
 pub mod typed;
-
-const GO_FUNCTION_OWNER_KINDS: &[NamedOwnerKind<'static>] =
-    &[NamedOwnerKind { node_kind: "function_declaration", path_kind: "function" }];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -281,6 +277,19 @@ fn go_membership_change_with_owner_edit(
     ours: &SourcePreservingOwnerDocument,
     theirs: &SourcePreservingOwnerDocument,
 ) -> bool {
+    let grouped_ids = |document: &SourcePreservingOwnerDocument| {
+        document
+            .owners
+            .iter()
+            .filter(|owner| owner.id.starts_with("/var_group:"))
+            .map(|owner| owner.id.clone())
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    let base_groups = grouped_ids(base);
+    if grouped_ids(ours) != base_groups || grouped_ids(theirs) != base_groups {
+        return true;
+    }
+
     let base_ids =
         base.owners.iter().map(|owner| owner.id.as_str()).collect::<std::collections::HashSet<_>>();
     let ours_ids =
@@ -291,15 +300,27 @@ fn go_membership_change_with_owner_edit(
         .map(|owner| owner.id.as_str())
         .collect::<std::collections::HashSet<_>>();
     let membership_changed = base_ids != ours_ids || base_ids != theirs_ids;
-    membership_changed
-        && base.owners.iter().any(|base_owner| {
-            [&ours.owners, &theirs.owners].into_iter().any(|owners| {
-                owners
-                    .iter()
-                    .find(|owner| owner.id == base_owner.id)
-                    .is_some_and(|owner| owner.fingerprint != base_owner.fingerprint)
-            })
-        })
+    if !membership_changed {
+        return false;
+    }
+    unmanaged_fingerprint(ours) != unmanaged_fingerprint(theirs)
+}
+
+fn unmanaged_fingerprint(document: &SourcePreservingOwnerDocument) -> String {
+    use std::collections::HashSet;
+
+    let mut owned_lines = HashSet::new();
+    for owner in &document.owners {
+        for line in owner.start_line..=owner.end_line {
+            owned_lines.insert(line);
+        }
+    }
+    document
+        .source
+        .split_inclusive('\n')
+        .enumerate()
+        .filter_map(|(index, line)| (!owned_lines.contains(&(index + 1))).then_some(line))
+        .collect::<String>()
 }
 
 fn conservative_membership_conflict() -> ThreeWayMergeResult<String> {
@@ -335,19 +356,152 @@ fn parse_source_preserving_go(source: &str) -> Result<SourcePreservingOwnerDocum
     if !parsed.source_fragments_available {
         return Err("Go parser did not retain source fragments".to_string());
     }
-    project_named_top_level_owners(source, &parsed.root_id, &parsed.nodes, owner_policy())
+    project_go_owners(source, &parsed.root_id, &parsed.nodes).map(|analysis| analysis.document)
 }
 
-fn owner_policy() -> NamedOwnerProjectionPolicy<'static> {
-    NamedOwnerProjectionPolicy {
-        family: "Go",
-        owner_kinds: GO_FUNCTION_OWNER_KINDS,
-        ignored_kinds: &["package_clause", "import_declaration"],
-        wrapper_kinds: &[],
-        name_fields: &["name"],
-        fallback_name_kinds: &["identifier"],
-        accept_any_named_kind: false,
+/// Project Go functions and variable declarations as whole source owners.
+/// Grouped declarations use their ordered member identities, matching the
+/// Ruby provider's whole-declaration ownership boundary.
+pub(crate) fn project_go_owners(
+    source: &str,
+    root_id: &str,
+    nodes: &[NormalizedTreeNode],
+) -> Result<ast_merge::native_analysis::NativeOwnerAnalysis, String> {
+    use std::collections::{BTreeMap, HashSet};
+    use tree_haver::NodeRole;
+
+    let index = NormalizedTreeIndex::new(nodes)?;
+    let root = index.root(root_id)?;
+    let mut owners = Vec::new();
+    let mut owner_node_ids = BTreeMap::new();
+    let mut owner_ids = HashSet::new();
+    let mut pending_comments = Vec::new();
+    let mut last_owner: Option<String> = None;
+
+    for node in index.children(root) {
+        if node.role == NodeRole::Comment || node.kind == "comment" {
+            if let Some(owner_id) = &last_owner {
+                if let Some(owner) = owners
+                    .iter_mut()
+                    .find(|owner: &&mut ast_merge::SourcePreservingOwner| owner.id == *owner_id)
+                {
+                    let gap = source.get(owner.end_byte..node.span.range.start_byte).unwrap_or("");
+                    if gap.bytes().all(|byte| matches!(byte, b'\t' | b'\r' | b' ')) {
+                        owner.end_byte = node.span.range.end_byte;
+                        owner.end_line = node.span.end_point.row + 1;
+                        owner.fingerprint = source[owner.start_byte..owner.end_byte].to_string();
+                        owner_node_ids
+                            .entry(owner_id.clone())
+                            .or_insert_with(Vec::new)
+                            .push(node.id.clone());
+                        continue;
+                    }
+                }
+            }
+            pending_comments.push(node);
+            continue;
+        }
+        if matches!(node.kind.as_str(), "package_clause" | "import_declaration") {
+            pending_comments.clear();
+            last_owner = None;
+            continue;
+        }
+        let id = match node.kind.as_str() {
+            "function_declaration" => {
+                let name = declaration_name(node, &index)
+                    .ok_or("Go function declaration has no stable name")?;
+                format!("/function:{name}")
+            }
+            "var_declaration" => {
+                let descendants = index.descendants(node);
+                let mut members = descendants
+                    .iter()
+                    .filter(|child| child.kind == "var_spec")
+                    .map(|spec| {
+                        let children = index.children(spec);
+                        let names = children
+                            .iter()
+                            .filter(|child| child.field_name.as_deref() == Some("name"))
+                            .map(|child| child.source_fragment.trim().to_string())
+                            .collect::<Vec<_>>();
+                        if names.is_empty() {
+                            children
+                                .iter()
+                                .filter(|child| child.kind == "identifier")
+                                .take(1)
+                                .map(|child| child.source_fragment.trim().to_string())
+                                .collect()
+                        } else {
+                            names
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                if members.is_empty() || members.iter().any(Vec::is_empty) {
+                    return Err("Go variable declaration has no stable member names".into());
+                }
+                if descendants.iter().any(|child| child.kind == "var_spec_list") {
+                    let identity =
+                        members.iter().map(|member| member.join(",")).collect::<Vec<_>>().join(";");
+                    format!("/var_group:{identity}")
+                } else {
+                    let names = members.remove(0);
+                    if names.len() == 1 {
+                        format!("/var:{}", names[0])
+                    } else {
+                        format!("/var:{}", names.join(","))
+                    }
+                }
+            }
+            kind => {
+                pending_comments.clear();
+                return Err(format!("unsupported top-level Go node {kind:?}"));
+            }
+        };
+        if !owner_ids.insert(id.clone()) {
+            return Err(format!("Go document has duplicate top-level owner identity {id:?}"));
+        }
+        if node.source_fragment.is_empty() {
+            return Err(format!("Go owner {id:?} has no source fragment"));
+        }
+        let mut start_byte = node.span.range.start_byte;
+        let mut start_line = node.span.start_point.row + 1;
+        let mut attached_ids = vec![node.id.clone()];
+        for comment in pending_comments.iter().rev() {
+            let gap = source.get(comment.span.range.end_byte..start_byte).unwrap_or("");
+            if !gap.bytes().all(|byte| matches!(byte, b'\t' | b'\r' | b'\n' | b' '))
+                || gap.bytes().filter(|byte| *byte == b'\n').count() > 1
+            {
+                break;
+            }
+            start_byte = comment.span.range.start_byte;
+            start_line = comment.span.start_point.row + 1;
+            attached_ids.push(comment.id.clone());
+        }
+        attached_ids.reverse();
+        let fingerprint = source
+            .get(start_byte..node.span.range.end_byte)
+            .ok_or("Go owner source range is invalid")?
+            .to_string();
+        owner_node_ids.insert(id.clone(), attached_ids);
+        owners.push(ast_merge::SourcePreservingOwner {
+            id: id.clone(),
+            path: id,
+            fingerprint,
+            start_byte,
+            end_byte: node.span.range.end_byte,
+            start_line,
+            end_line: node.span.end_point.row + 1,
+        });
+        last_owner = owners.last().map(|owner| owner.id.clone());
+        pending_comments.clear();
     }
+    if owners.is_empty() {
+        return Err("Go document has no supported top-level owners".into());
+    }
+    Ok(ast_merge::native_analysis::NativeOwnerAnalysis {
+        document: SourcePreservingOwnerDocument { source: source.to_string(), owners },
+        owner_node_ids,
+    })
 }
 
 fn go_import_paths(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> Vec<String> {

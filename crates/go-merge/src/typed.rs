@@ -13,8 +13,7 @@ pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
     let nodes = parsed.normalized_nodes()?;
     let root = parsed.document.output().root_id.as_deref().ok_or("Go parse omitted its root")?;
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
-    let analysis =
-        ast_merge::project_named_top_level_analysis(source, root, &nodes, super::owner_policy())?;
+    let analysis = super::project_go_owners(source, root, &nodes)?;
     analysis.validate(parsed)?;
     Ok(analysis)
 }
