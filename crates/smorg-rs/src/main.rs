@@ -13,7 +13,6 @@ use ast_merge::{
 };
 use ast_merge_git::{Merge3Request, merge3};
 use go_merge::{GoDialect, merge_go};
-use plain_merge::merge_text;
 use serde_json::json;
 
 mod benchmark_adapter;
@@ -21,6 +20,7 @@ mod build_info;
 mod conflict_review;
 mod external_command;
 mod git_install;
+mod line_merge;
 mod path_safety;
 mod staged_file;
 mod typed_driver;
@@ -1598,7 +1598,30 @@ fn merge_by_path(
             conflict_marker_size: Some(conflict_marker_size),
             render_policy: Some("source_preserving_edits".to_string()),
         })),
-        _ => merge_driver_result(merge_text(other_source, current_source)),
+        _ => match line_merge::merge3_lines(
+            ancestor_source,
+            current_source,
+            other_source,
+            conflict_marker_size,
+        ) {
+            Some(merged) => MergeDriverResult {
+                ok: !merged.conflicted,
+                diagnostics: vec![],
+                output: Some(merged.output),
+                ..merge_driver_result(MergeResult {
+                    ok: true,
+                    diagnostics: vec![],
+                    output: None,
+                    policies: vec![],
+                })
+            },
+            None => merge_driver_result(MergeResult {
+                ok: false,
+                diagnostics: vec![],
+                output: None,
+                policies: vec![],
+            }),
+        },
     }
 }
 
