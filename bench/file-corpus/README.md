@@ -79,7 +79,7 @@ Do not bake that archive into a 34 GB image or pull it once per worker. Place it
 on the persistent VM disk, extract the selected sample once, and pass each
 worker its manifest shard and result path as parameters.
 
-Start on one D4s_v5 VM with two workers, then compare throughput and disk wait.
+Start on one D4as_v5 VM with two workers, then compare throughput and disk wait.
 Increase concurrency only when CPU measurements justify it; use a larger VM for
 project builds/tests. The Dockerfile builds one reusable worker image (Rust tool
 plus runner); each worker receives `--shard-index`, `--shards`, `--workers`,

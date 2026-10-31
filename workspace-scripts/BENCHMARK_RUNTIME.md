@@ -12,18 +12,20 @@ external dispatch; its explicit form is `benchmark-provider-merge3`. This does
 not change the kernel providers measured by the existing harness.
 
 Run from the kernel repository with a clean Ruby checkout pinned to the revision
-being evaluated. Keep the generated lockfile and raw results in kernel `tmp/`,
-not in the user's Ruby development bundle:
+being evaluated. The repository's `mise.toml` pins the benchmark runtime to Ruby
+4.0.9; run Bundler through `mise exec` so the benchmark doesn't silently use a
+different system Ruby. Keep the generated lockfile and raw results in kernel
+`tmp/`, not in the user's Ruby development bundle:
 
 ```sh
 mkdir -p tmp/benchmark-runtime
 cp workspace-scripts/benchmark-runtime.gemfile tmp/benchmark-runtime/Gemfile
 export BUNDLE_GEMFILE="$PWD/tmp/benchmark-runtime/Gemfile"
 export STRUCTUREDMERGE_DEV=/absolute/path/to/clean/structuredmerge-ruby/gems
-bundle install
+mise exec -- bundle install
 cargo build -p smorg --locked
 mkdir -p "$STRUCTUREDMERGE_DEV/ast-merge-git/tmp"
-bundle exec ast-merge-git benchmark run \
+mise exec -- bundle exec ast-merge-git benchmark run \
   --corpus ../fixtures/diagnostics/slice-1023-local-paired-benchmark/corpus.json \
   --profile micro --driver "$PWD/target/debug/smorg-rs" \
   --adapter-descriptor benchmark-adapter.json \
@@ -40,7 +42,7 @@ canonical fixture corpus; do not create a substitute selector.
 Use the harness's report implementation to evaluate saved raw results:
 
 ```sh
-bundle exec ruby -r ast/merge/git -r json -e '
+mise exec -- bundle exec ruby -r ast/merge/git -r json -e '
   run = JSON.parse(File.read(ARGV.fetch(0)))
   report = Ast::Merge::Git::LocalBenchmarkReport.build(run)
   puts JSON.pretty_generate(report)
