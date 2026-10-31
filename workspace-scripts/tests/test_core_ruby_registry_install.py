@@ -34,7 +34,7 @@ class CoreRubyRegistryInstallTest(unittest.TestCase):
         for required in (
             '"GEM_HOME" => gem_home', '"GEM_PATH" => gem_home', '"RUBYLIB" => nil',
             '"RUBYOPT" => nil', 'unsetenv_others: true', 'expected_version',
-            'native extension escaped installed core gem', 'expected one installed structuredmerge-core gem directory',
+            'CoreRubyRegistryInstallContract.verify!', 'expected one installed structuredmerge-core gem directory',
             'installed core signatures are missing', 'raise "registry install gate failed',
         ):
             with self.subTest(required=required):
@@ -66,3 +66,51 @@ class CoreRubyRegistryInstallTest(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("local archive version does not match", result.stderr)
+
+    def test_install_contract_covers_missing_wrong_version_and_path_leaks(self):
+        contract = self.root / "workspace-scripts/core_ruby_registry_install_contract.rb"
+        ruby = r"""
+          require "json"
+          require "core_ruby_registry_install_contract"
+          input = JSON.parse(ARGV.fetch(0))
+          spec = if input.fetch("installed")
+                   Struct.new(:name, :version, :full_gem_path).new(
+                     "structuredmerge-core", input.fetch("installed_version"), input.fetch("gem_path")
+                   )
+                 end
+          begin
+            CoreRubyRegistryInstallContract.verify!(
+              spec: spec, expected_version: input.fetch("expected_version"),
+              gem_home: input.fetch("gem_home"), native_paths: input.fetch("native_paths")
+            )
+          rescue CoreRubyRegistryInstallContract::VerificationError => error
+            warn error.message
+            exit 1
+          end
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            home = root / "gems"
+            gem_path = home / "gems/structuredmerge-core-0.2.1"
+            native = gem_path / "lib/structuredmerge_core_rb/extension.so"
+            outside = root / "outside/extension.so"
+            native.parent.mkdir(parents=True)
+            outside.parent.mkdir(parents=True)
+            native.touch()
+            outside.touch()
+
+            cases = (
+                ("exact version and paths", {"installed": True, "installed_version": "0.2.1", "expected_version": "0.2.1", "gem_path": str(gem_path), "gem_home": str(home), "native_paths": [str(native)]}, 0, ""),
+                ("missing package", {"installed": False, "expected_version": "0.2.1", "gem_home": str(home), "native_paths": []}, 1, "is not installed"),
+                ("wrong version", {"installed": True, "installed_version": "0.2.0", "expected_version": "0.2.1", "gem_path": str(gem_path), "gem_home": str(home), "native_paths": [str(native)]}, 1, "wrong installed version"),
+                ("wrong gem path", {"installed": True, "installed_version": "0.2.1", "expected_version": "0.2.1", "gem_path": str(root / "outside"), "gem_home": str(home), "native_paths": [str(outside)]}, 1, "escaped isolated GEM_HOME"),
+                ("wrong native path", {"installed": True, "installed_version": "0.2.1", "expected_version": "0.2.1", "gem_path": str(gem_path), "gem_home": str(home), "native_paths": [str(outside)]}, 1, "native extension escaped"),
+            )
+            for label, payload, expected_code, expected_message in cases:
+                with self.subTest(case=label):
+                    result = subprocess.run(
+                        ["ruby", "-I", str(contract.parent), "-e", ruby, json.dumps(payload)],
+                        cwd=self.root, text=True, capture_output=True, check=False, timeout=10,
+                    )
+                    self.assertEqual(result.returncode, expected_code, result.stderr)
+                    self.assertIn(expected_message, result.stderr + result.stdout)

@@ -66,6 +66,7 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-registry-install-",
     "BUNDLE_PATH" => nil, "RUBYLIB" => nil, "RUBYOPT" => nil,
     "STRUCTUREDMERGE_EXPECT_GEM_HOME" => gem_home,
     "STRUCTUREDMERGE_EXPECT_VERSION" => version.to_s,
+    "STRUCTUREDMERGE_INSTALL_CHECK_ROOT" => File.join(root, "workspace-scripts"),
     "STRUCTUREDMERGE_PSYCH_FACTS" => psych_facts,
     "CARGO_BUILD_JOBS" => "1"
   )
@@ -93,18 +94,18 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-registry-install-",
   run.call(RbConfig.ruby, "-S", "bundle", "install", "--jobs", "4")
   run.call(RbConfig.ruby, "-e", <<~'VERIFY', directory: consumer)
     require "rubygems"
-    gem "structuredmerge-core", "= #{ENV.fetch("STRUCTUREDMERGE_EXPECT_VERSION")}"
+    expected_version = ENV.fetch("STRUCTUREDMERGE_EXPECT_VERSION")
+    gem "structuredmerge-core", "= #{expected_version}"
     spec = Gem.loaded_specs.fetch("structuredmerge-core")
-    expected_version = Gem::Version.new(ENV.fetch("STRUCTUREDMERGE_EXPECT_VERSION"))
-    abort "wrong installed version: #{spec.version}" unless spec.version == expected_version
-    expected_home = File.realpath(ENV.fetch("STRUCTUREDMERGE_EXPECT_GEM_HOME"))
-    abort "core gem escaped isolated GEM_HOME" unless File.realpath(spec.full_gem_path).start_with?(expected_home + File::SEPARATOR)
     require "structuredmerge_core"
     native_paths = $LOADED_FEATURES.select { |path| path.include?("structuredmerge_core_rb") }
-    abort "native extension did not load from installed core gem" if native_paths.empty?
-    abort "native extension escaped installed core gem" unless native_paths.all? { |path| File.realpath(path).start_with?(File.realpath(spec.full_gem_path) + File::SEPARATOR) }
+    require File.join(ENV.fetch("STRUCTUREDMERGE_INSTALL_CHECK_ROOT"), "core_ruby_registry_install_contract")
+    verification = CoreRubyRegistryInstallContract.verify!(
+      spec: spec, expected_version: expected_version,
+      gem_home: ENV.fetch("STRUCTUREDMERGE_EXPECT_GEM_HOME"), native_paths: native_paths
+    )
     abort "typed core has no native merge API" unless StructuredmergeCore.respond_to?(:execute_operation)
-    puts JSON.generate(version: spec.version.to_s, gem_path: spec.full_gem_path, native_paths: native_paths)
+    puts JSON.generate(verification)
   VERIFY
   installed_core_dirs = Dir.glob(File.join(gem_home, "gems", "structuredmerge-core-#{version}*")).select do |path|
     File.directory?(path)
