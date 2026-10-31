@@ -79,13 +79,14 @@ Do not bake that archive into a 34 GB image or pull it once per worker. Place it
 on the persistent VM disk, extract the selected sample once, and pass each
 worker its manifest shard and result path as parameters.
 
-Start on one D8s VM with up to four workers, then compare throughput and disk
-wait. The Dockerfile builds one reusable worker image (Rust tool plus runner);
-each worker receives `--shard-index`, `--shards`, `--workers`, manifest, and
-result path. The archive and extracted cases stay on mounted storage, so the
-image does not grow with the 34.1 GB corpus. We cannot report a measured image
-size until a Docker build completes. Only publish an ACR image or clone to more
-VMs after the pilot confirms useful speedup. For repository-test benchmarks,
-keep repositories indivisible and balance by measured setup plus merge time.
-ACR and additional VMs add recurring cost; the OpenTofu budget is an alert,
-not a hard spend cap.
+Start on one D4s_v5 VM with two workers, then compare throughput and disk wait.
+Increase concurrency only when CPU measurements justify it; use a larger VM for
+project builds/tests. The Dockerfile builds one reusable worker image (Rust tool
+plus runner); each worker receives `--shard-index`, `--shards`, `--workers`,
+manifest, and result path. The archive and extracted cases stay on mounted
+storage, so the image does not grow with the 34.1 GB corpus. We cannot report a
+measured image size until a Docker build completes. Only publish an ACR image or
+clone to more VMs after the pilot confirms useful speedup. For repository-test
+benchmarks, keep repositories indivisible and balance by measured setup plus
+merge time. ACR and additional VMs add recurring cost; the OpenTofu budget is
+an alert, not a hard spend cap.
