@@ -129,3 +129,22 @@ directory must be absent or use the direct command above with a fresh directory.
 The former host-publication workflow is removed. The current core publication
 workflow requires the plan's
 upstream-generation, ABI/platform, provenance and installed-consumer gates.
+
+## Post-publication RubyGems install gate
+
+After a non-dry-run `structuredmerge-core` RubyGems publication, the release
+workflow runs `workspace-scripts/check_core_ruby_registry_install.rb` with the
+exact release version. The verifier installs from RubyGems into a fresh
+`GEM_HOME`, clears checkout load paths, checks the gem and native extension
+origins, validates the installed RBS, and runs the core, generated e2e, and
+consumer-app suites. A failed install or test fails the release workflow. Dry
+runs skip this job.
+
+The verifier also accepts `--gem PATH` for local candidate testing. On
+2026-10-31 it passed against the x86_64 Linux platform gem candidate
+`structuredmerge-core 0.2.1` (SHA-256
+`8ca7a4f185c74f0c6fcba2af803013dde642b47e142a4e2015092e3267d554ce`):
+53 core, 110 generated e2e, and 110 consumer-app examples passed, with RBS and
+extension-path checks green. This is local candidate evidence only. The exact
+registry-installed source gem gate remains pending publication and the
+registry-backed Rust dependency closure; no package was published.

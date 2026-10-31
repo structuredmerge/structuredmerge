@@ -46,6 +46,18 @@ reproducible upstream generation, and publication as distinct gates. Do not
 hand-edit generated manifests or publish placeholder packages to
 work around these gaps. This inventory is a prerequisite, not source-gem approval.
 
+### Registry-installed Ruby verification follow-up (2026-10-31)
+
+The Ruby release workflow now has a post-publication job that installs the exact
+RubyGems version into a clean `GEM_HOME`, checks that both the gem and native
+extension load from that home, validates the installed RBS, and runs the core,
+generated e2e, and consumer-app specs. The new verifier passed locally against
+the 0.2.1 x86_64 Linux platform-gem candidate (53 core, 110 generated, and 110
+consumer-app examples). It did not test the source gem from RubyGems: that gem is
+not published, and the registry-backed `structuredmerge-core` Cargo dependency
+remains unavailable as described above. No registry package was published; the
+post-publication job remains an unrun release gate.
+
 The separate `prepare_core_ruby_source.rb` helper now exercises Alef's default
 registry preparation in an isolated committed snapshot and creates an allowlisted
 source archive. The binding manifest's external path is removed by Alef, not a
