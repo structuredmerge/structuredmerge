@@ -54,7 +54,11 @@ pub fn owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, St
     let index = tree_haver::NormalizedTreeIndex::new(&nodes)?;
     let root = index.root(parsed.document.output().root_id.as_deref().ok_or("missing Go root")?)?;
     if index.children(root).iter().any(|node| node.kind == "function_declaration") {
-        return crate::typed::owners(parsed);
+        let mut document = crate::typed::owners(parsed)?;
+        // Package and import declarations are validated header identity, not
+        // insertable function owners. plan_insertions compares the exact header.
+        document.owners.retain(|owner| !owner.id.starts_with("/package:"));
+        return Ok(document);
     }
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
     Ok(SourcePreservingOwnerDocument { source: source.into(), owners: vec![] })
