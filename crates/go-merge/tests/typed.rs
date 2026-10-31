@@ -209,6 +209,31 @@ fn membership_plus_owner_edit_retains_the_family_guard_without_false_proof() {
 }
 
 #[test]
+fn analysis_projects_go_types_constants_and_methods_with_native_identities() {
+    let parser = Parser::new("go");
+    let source = "package main\n\ntype Widget struct{}\n\nconst Version, Alias = 1, 2\n\nfunc (w Widget) Name() string { return \"old\" }\n";
+    let parsed = parser.parse(source, SourceRole::Source);
+    let analysis = typed::analysis(&parsed).unwrap();
+    let ids = analysis.document.owners.iter().map(|owner| owner.id.as_str()).collect::<Vec<_>>();
+    assert_eq!(
+        ids,
+        ["/package:main", "/type:Widget", "/const:Version,Alias", "/method:Widget.Name"]
+    );
+
+    let grouped = parser.parse(
+        "package main\n\ntype (\n    Widget struct{}\n    Count int\n)\n\nconst (\n    First = 1\n    Second = 2\n)\n",
+        SourceRole::Source,
+    );
+    let grouped_analysis = typed::analysis(&grouped).unwrap();
+    let grouped_ids =
+        grouped_analysis.document.owners.iter().map(|owner| owner.id.as_str()).collect::<Vec<_>>();
+    assert_eq!(
+        grouped_ids,
+        ["/package:main", "/type_group:Widget;Count", "/const_group:First;Second"]
+    );
+}
+
+#[test]
 fn unsupported_syntax_and_wrong_source_roles_fail_closed() {
     let parser = Parser::new("go");
     for text in ["package main\nfunc f() {}\nfunc f() {}\n", "package main\nfunc f( {\n"] {

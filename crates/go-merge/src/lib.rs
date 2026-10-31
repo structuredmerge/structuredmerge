@@ -281,7 +281,11 @@ fn go_membership_change_with_owner_edit(
         document
             .owners
             .iter()
-            .filter(|owner| owner.id.starts_with("/var_group:"))
+            .filter(|owner| {
+                owner.id.starts_with("/var_group:")
+                    || owner.id.starts_with("/type_group:")
+                    || owner.id.starts_with("/const_group:")
+            })
             .map(|owner| owner.id.clone())
             .collect::<std::collections::BTreeSet<_>>()
     };
@@ -371,9 +375,9 @@ fn parse_source_preserving_go(source: &str) -> Result<SourcePreservingOwnerDocum
     project_go_owners(source, &parsed.root_id, &parsed.nodes).map(|analysis| analysis.document)
 }
 
-/// Project Go functions and variable declarations as whole source owners.
-/// Grouped declarations use their ordered member identities, matching the
-/// Ruby provider's whole-declaration ownership boundary.
+/// Project supported Go declarations as whole source owners.
+/// Grouped type, const, and variable declarations use ordered member identities,
+/// matching the Ruby provider's whole-declaration ownership boundary.
 pub(crate) fn project_go_owners(
     source: &str,
     root_id: &str,
@@ -432,6 +436,67 @@ pub(crate) fn project_go_owners(
                 let name = declaration_name(node, &index)
                     .ok_or("Go function declaration has no stable name")?;
                 format!("/function:{name}")
+            }
+            "method_declaration" => {
+                let descendants = index.descendants(node);
+                let receiver = descendants
+                    .iter()
+                    .find(|child| child.kind == "type_identifier")
+                    .map(|child| child.source_fragment.trim())
+                    .ok_or("Go method declaration has no stable receiver type")?;
+                let name = index
+                    .children(node)
+                    .into_iter()
+                    .find(|child| child.kind == "field_identifier")
+                    .map(|child| child.source_fragment.trim())
+                    .ok_or("Go method declaration has no stable name")?;
+                format!("/method:{receiver}.{name}")
+            }
+            "type_declaration" | "const_declaration" => {
+                let is_type = node.kind == "type_declaration";
+                let spec_kind = if is_type { "type_spec" } else { "const_spec" };
+                let name_kind = if is_type { "type_identifier" } else { "identifier" };
+                let label = if is_type { "type" } else { "const" };
+                let member_groups = index
+                    .descendants(node)
+                    .into_iter()
+                    .filter(|child| child.kind == spec_kind)
+                    .map(|spec| {
+                        let mut names = index
+                            .children(spec)
+                            .into_iter()
+                            .filter(|child| child.kind == name_kind)
+                            .map(|child| child.source_fragment.trim().to_string())
+                            .collect::<Vec<_>>();
+                        if is_type {
+                            names.truncate(1);
+                        }
+                        if names.is_empty() {
+                            Err(format!("Go {label} declaration has a spec without a stable name"))
+                        } else {
+                            Ok(names)
+                        }
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                if member_groups.is_empty() {
+                    return Err(format!("Go {label} declaration has no stable member names"));
+                }
+                let grouped = index.children(node).iter().any(|child| child.kind == "(");
+                if grouped {
+                    let members = member_groups
+                        .iter()
+                        .map(|names| names.join(","))
+                        .collect::<Vec<_>>()
+                        .join(";");
+                    format!("/{label}_group:{members}")
+                } else {
+                    let members = member_groups.into_iter().flatten().collect::<Vec<_>>();
+                    if members.len() == 1 {
+                        format!("/{label}:{}", members[0])
+                    } else {
+                        format!("/{label}:{}", members.join(","))
+                    }
+                }
             }
             "var_declaration" => {
                 let descendants = index.descendants(node);
