@@ -6,6 +6,12 @@ import unittest
 
 
 class RubySourceArgumentsTest(unittest.TestCase):
+    def test_source_package_detaches_extension_from_checkout_workspace(self):
+        root = pathlib.Path(__file__).resolve().parents[2]
+        script = (root / "workspace-scripts/prepare_core_ruby_source.rb").read_text()
+        self.assertIn("Standalone root for the packaged Ruby extension crate", script)
+        self.assertIn('unless manifest_text.match?(/^\\[workspace\\]\\s*$/)', script)
+
     def test_help_and_invalid_arguments_do_not_prepare(self):
         root = pathlib.Path(__file__).resolve().parents[2]
         script = root / "workspace-scripts/prepare_core_ruby_source.rb"

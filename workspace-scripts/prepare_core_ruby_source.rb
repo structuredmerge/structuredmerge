@@ -48,6 +48,15 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-source-",
   prepare_log = run.call(options[:alef], "publish", "prepare", "--lang", "ruby", "--crate", "structuredmerge-core", chdir: workspace)
   File.write(File.join(stage, "prepare.log"), prepare_log)
 
+  # The generated extension crate lives under the monorepo Cargo.toml, but the
+  # Ruby source gem installs it outside that workspace. Give the packaged crate
+  # its own workspace root so Cargo does not search back into the source tree.
+  native_manifest = File.join(workspace, "packages/ruby/ext/structuredmerge_core_rb/native/Cargo.toml")
+  manifest_text = File.read(native_manifest)
+  unless manifest_text.match?(/^\[workspace\]\s*$/)
+    File.write(native_manifest, "#{manifest_text.rstrip}\n\n# Standalone root for the packaged Ruby extension crate.\n[workspace]\n")
+  end
+
   package = File.join(stage, "package")
   FileUtils.mkdir_p(package)
   original = File.join(workspace, "packages/ruby")
