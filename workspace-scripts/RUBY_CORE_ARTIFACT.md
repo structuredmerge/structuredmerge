@@ -148,3 +148,18 @@ The verifier also accepts `--gem PATH` for local candidate testing. On
 extension-path checks green. This is local candidate evidence only. The exact
 registry-installed source gem gate remains pending publication and the
 registry-backed Rust dependency closure; no package was published.
+
+
+Local candidate rerun (2026-11-01) against the current committed Rust workspace:
+the x86_64 Linux / Ruby 4.0.9 platform artifact was built with
+--package-only (SHA-256
+e0403ab03da895dfc5a7f071d67428e7becf316a0079fe0403d35462932a71ad). The first
+isolated install exposed a stale generated Rust analyze fixture that expected
+#[test] to be rejected, despite the shared owner-profile fixture now expecting
+native syn support. The shared typed-core fixture was corrected and Ruby/Python
+generated tests plus the Ruby consumer-app copies were regenerated/synchronized.
+The verifier then passed 53 core, 116 generated e2e, and 116 consumer-app
+examples, with installed native-extension path and RBS checks green. The report
+states registry_install=local-candidate and publication_gate=false. This verifies
+the current local platform candidate, not a RubyGems-installed source package;
+no package was published.
