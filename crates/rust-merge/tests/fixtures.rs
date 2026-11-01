@@ -474,6 +474,22 @@ fn rust_native_backend_merges_unique_macro_invocations_as_owners() {
 }
 
 #[test]
+fn rust_native_syn_preserves_comments_around_macro_invocation_owners() {
+    let fixture =
+        read_fixture(&["polyglot", "typed-core", "rust_syn_macro_invocation_comments_merge3.json"]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(fixture["expected"]["output"].as_str().unwrap()));
+}
+
+#[test]
 fn rust_classic_backends_merge_block_doc_two_tip_additions() {
     let fixture =
         read_fixture(&["polyglot", "typed-core", "rust_merge3_block_doc_two_tip_additions.json"]);
