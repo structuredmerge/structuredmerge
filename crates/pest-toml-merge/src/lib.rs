@@ -296,6 +296,7 @@ fn projected_comments(source: &str, root: &Pair<'_, PestTomlRule>) -> Vec<Tracke
                 full_line: line_without_newline[..offset].trim().is_empty(),
                 indent: Some(offset),
                 structural_prefix: false,
+                scope: ast_merge::CommentScope::Owner,
             });
         }
         line_start += line.len();

@@ -15,6 +15,15 @@ pub enum CommentAttachmentPolicy {
     FollowingOwner,
 }
 
+/// Whether a tracked comment attaches to a structural owner or to the document root.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CommentScope {
+    #[default]
+    Owner,
+    Root,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TrackedComment {
     pub line: usize,
@@ -24,6 +33,12 @@ pub struct TrackedComment {
     pub indent: Option<usize>,
     #[serde(default)]
     pub structural_prefix: bool,
+    #[serde(default, skip_serializing_if = "is_owner_comment_scope")]
+    pub scope: CommentScope,
+}
+
+fn is_owner_comment_scope(scope: &CommentScope) -> bool {
+    *scope == CommentScope::Owner
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -94,17 +109,44 @@ pub fn augment_normalized_comments_with_evidence_filter(
     include_comment: impl Fn(&NormalizedTreeNode) -> bool,
     normalize_comment: impl Fn(&str) -> String,
 ) -> Result<NormalizedCommentEvidence, String> {
+    augment_normalized_comments_with_evidence_scope(
+        source,
+        owners,
+        nodes,
+        style,
+        policy,
+        |node| include_comment(node).then_some(CommentScope::Owner),
+        normalize_comment,
+    )
+}
+
+/// Provider-backed comment scope feeds the shared owner/root disposition rules.
+pub fn augment_normalized_comments_with_evidence_scope(
+    source: &str,
+    owners: &[LayoutOwner],
+    nodes: &[NormalizedTreeNode],
+    style: &str,
+    policy: CommentAttachmentPolicy,
+    comment_scope: impl Fn(&NormalizedTreeNode) -> Option<CommentScope>,
+    normalize_comment: impl Fn(&str) -> String,
+) -> Result<NormalizedCommentEvidence, String> {
     let lines = source_lines(source);
     let index = NormalizedTreeIndex::new(nodes)?;
+    let scopes = nodes
+        .iter()
+        .filter(|node| node.role == NodeRole::Comment)
+        .filter_map(|node| comment_scope(node).map(|scope| (node.id.as_str(), scope)))
+        .collect::<std::collections::HashMap<_, _>>();
     let mut tracked = nodes
         .iter()
-        .filter(|node| node.role == NodeRole::Comment && include_comment(node))
+        .filter(|node| node.role == NodeRole::Comment && scopes.contains_key(node.id.as_str()))
         .flat_map(|node| {
             tracked_normalized_comment(
                 &lines,
                 node,
                 &normalize_comment,
                 is_structural_prefix_comment(node, &index),
+                scopes[node.id.as_str()],
             )
             .into_iter()
             .map(move |comment| (comment, node.id.clone()))
@@ -173,6 +215,7 @@ pub fn augment_normalized_comments_with_owners(
                 node,
                 &normalize_comment,
                 is_structural_prefix_comment(node, &index),
+                CommentScope::Owner,
             )
         })
         .collect::<Vec<_>>();
@@ -290,6 +333,7 @@ fn tracked_normalized_comment(
     node: &NormalizedTreeNode,
     normalize_comment: &impl Fn(&str) -> String,
     structural_prefix: bool,
+    scope: CommentScope,
 ) -> Vec<TrackedComment> {
     let start_line = node.span.start_point.row + 1;
     let mut fragments = node.source_fragment.split('\n').collect::<Vec<_>>();
@@ -315,6 +359,7 @@ fn tracked_normalized_comment(
                 full_line,
                 indent: Some(indent),
                 structural_prefix,
+                scope,
             }
         })
         .collect()
@@ -420,7 +465,8 @@ fn augment_comments_observed(
             .iter()
             .enumerate()
             .filter(|(index, comment)| {
-                !comment.full_line
+                comment.scope == CommentScope::Owner
+                    && !comment.full_line
                     && !claimed.contains(index)
                     && (owner.start_line..=owner.end_line).contains(&comment.line)
             })
@@ -495,7 +541,8 @@ fn augment_comments_observed(
         .iter()
         .enumerate()
         .filter(|(index, comment)| {
-            comment.full_line
+            comment.scope == CommentScope::Owner
+                && comment.full_line
                 && !claimed.contains(index)
                 && last_owner_line.is_some_and(|line| comment.line > line)
         })
@@ -601,7 +648,10 @@ fn leading_comment_indices(
     let mut current = owner.start_line.saturating_sub(1);
     while current > 0 {
         if let Some((index, _)) = comments.iter().enumerate().find(|(index, comment)| {
-            comment.full_line && comment.line == current && !claimed.contains(index)
+            comment.scope == CommentScope::Owner
+                && comment.full_line
+                && comment.line == current
+                && !claimed.contains(index)
         }) {
             selected.push(index);
             current -= 1;
@@ -665,7 +715,10 @@ fn trailing_comment_indices(
     let mut selected = Vec::new();
     while current <= max_line {
         let Some((index, comment)) = comments.iter().enumerate().find(|(index, comment)| {
-            comment.full_line && comment.line == current && !claimed.contains(index)
+            comment.scope == CommentScope::Owner
+                && comment.full_line
+                && comment.line == current
+                && !claimed.contains(index)
         }) else {
             break;
         };
@@ -827,6 +880,7 @@ mod tests {
             full_line,
             indent: Some(0),
             structural_prefix: false,
+            scope: CommentScope::Owner,
         }
     }
 

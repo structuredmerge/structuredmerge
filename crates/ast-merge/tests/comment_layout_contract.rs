@@ -1,5 +1,5 @@
 use ast_merge::{
-    CommentAttachmentPolicy, LayoutOwner, TrackedComment, augment_comments,
+    CommentAttachmentPolicy, CommentScope, LayoutOwner, TrackedComment, augment_comments,
     augment_comments_with_owner_indents, augment_comments_with_owner_indents_policy,
 };
 use serde_json::{Value, json};
@@ -36,6 +36,11 @@ fn shared_comment_line_ownership_fixture_matches_regions_and_layout() {
             full_line: comment["full_line"].as_bool().unwrap(),
             indent: Some(comment["indent"].as_u64().unwrap() as usize),
             structural_prefix: comment["structural_prefix"].as_bool().unwrap_or(false),
+            scope: if comment["scope"].as_str() == Some("root") {
+                CommentScope::Root
+            } else {
+                CommentScope::Owner
+            },
         })
         .collect::<Vec<_>>();
     let actual =
@@ -113,6 +118,11 @@ fn shared_comment_line_ownership_fixture_matches_regions_and_layout() {
                 full_line: comment["full_line"].as_bool().unwrap(),
                 indent: Some(comment["indent"].as_u64().unwrap() as usize),
                 structural_prefix: comment["structural_prefix"].as_bool().unwrap_or(false),
+                scope: if comment["scope"].as_str() == Some("root") {
+                    CommentScope::Root
+                } else {
+                    CommentScope::Owner
+                },
             })
             .collect::<Vec<_>>();
         let augmentation = augment_comments(
@@ -143,6 +153,32 @@ fn shared_comment_line_ownership_fixture_matches_regions_and_layout() {
                 expected.as_str()
             );
         }
+        if let Some(expected_leading) = case["expected"]["leading_by_owner"].as_object() {
+            for (owner_id, expected) in expected_leading {
+                let attachment = augmentation
+                    .attachments
+                    .iter()
+                    .find(|attachment| attachment.owner_id == *owner_id)
+                    .unwrap();
+                assert_eq!(
+                    region_content(&attachment.leading_region_id),
+                    expected.as_str().map(str::to_string)
+                );
+            }
+        }
+        if case["expected"].get("preamble").is_some() {
+            assert_eq!(
+                region_content(&augmentation.preamble_region_id),
+                case["expected"]["preamble"].as_str().map(str::to_string)
+            );
+            let orphan_content = augmentation
+                .orphan_region_ids
+                .iter()
+                .filter_map(|id| regions.get(id.as_str()).copied())
+                .map(|region| region.normalized_content())
+                .collect::<Vec<_>>();
+            assert_eq!(serde_json::to_value(orphan_content).unwrap(), case["expected"]["orphans"]);
+        }
         assert_eq!(
             region_content(&augmentation.postlude_region_id),
             case["expected"]["postlude"].as_str().map(str::to_string)
@@ -164,6 +200,11 @@ fn shared_comment_line_ownership_fixture_matches_regions_and_layout() {
             full_line: entry["full_line"].as_bool().unwrap(),
             indent: Some(entry["indent"].as_u64().unwrap() as usize),
             structural_prefix: entry["structural_prefix"].as_bool().unwrap_or(false),
+            scope: if entry["scope"].as_str() == Some("root") {
+                CommentScope::Root
+            } else {
+                CommentScope::Owner
+            },
         }];
         let owner_indents = case["owner_indent"]
             .as_u64()
@@ -224,6 +265,11 @@ fn shared_comment_line_ownership_fixture_matches_regions_and_layout() {
                 full_line: comment["full_line"].as_bool().unwrap(),
                 indent: Some(comment["indent"].as_u64().unwrap() as usize),
                 structural_prefix: comment["structural_prefix"].as_bool().unwrap_or(false),
+                scope: if comment["scope"].as_str() == Some("root") {
+                    CommentScope::Root
+                } else {
+                    CommentScope::Owner
+                },
             })
             .collect::<Vec<_>>();
         let augmentation = augment_comments(
@@ -308,6 +354,11 @@ fn shared_comment_attachment_policy_cases_match_rubric() {
                 full_line: comment["full_line"].as_bool().unwrap(),
                 indent: Some(comment["indent"].as_u64().unwrap() as usize),
                 structural_prefix: comment["structural_prefix"].as_bool().unwrap_or(false),
+                scope: if comment["scope"].as_str() == Some("root") {
+                    CommentScope::Root
+                } else {
+                    CommentScope::Owner
+                },
             })
             .collect::<Vec<_>>();
 

@@ -81,14 +81,22 @@ const THEIRS: &str = "use std::fmt;\n\nfn left() -> i32 { 1 }\n\nfn right() -> i
 #[test]
 fn rust_source_line_analysis_uses_shared_dispositions_and_following_owner_policy() {
     let parser = Parser::new("rust");
-    let parsed = parser.parse("// docs\nfn f() {}\n\nfn g() {}\n", SourceRole::Current);
+    let parsed = parser
+        .parse("//! module docs\n/// function docs\nfn f() {}\n\nfn g() {}\n", SourceRole::Current);
     let analysis = typed::source_line_analysis(&parsed).unwrap();
 
-    let docs = analysis.dispositions.iter().find(|line| line.line_number == 1).unwrap();
-    assert_eq!(docs.kind, "comment_owner");
-    assert_eq!(docs.comment_kind.as_deref(), Some("leading"));
-    assert_eq!(docs.owner_id.as_deref(), Some(analysis.owners.document.owners[0].id.as_str()));
-    assert_eq!(analysis.dispositions.len(), 4);
+    let module_docs = analysis.dispositions.iter().find(|line| line.line_number == 1).unwrap();
+    assert_eq!(module_docs.kind, "root_region");
+    assert_eq!(module_docs.root_region_kind.as_deref(), Some("preamble"));
+    assert_eq!(module_docs.owner_id, None);
+    let function_docs = analysis.dispositions.iter().find(|line| line.line_number == 2).unwrap();
+    assert_eq!(function_docs.kind, "comment_owner");
+    assert_eq!(function_docs.comment_kind.as_deref(), Some("leading"));
+    assert_eq!(
+        function_docs.owner_id.as_deref(),
+        Some(analysis.owners.document.owners[0].id.as_str())
+    );
+    assert_eq!(analysis.dispositions.len(), 5);
     assert!(analysis.dispositions.iter().all(|line| line.kind != "unmanaged"));
 }
 

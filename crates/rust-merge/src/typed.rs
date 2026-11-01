@@ -1,10 +1,10 @@
 //! Existing conservative Rust declaration ownership over validated TreeHaver facts.
 //! Use declarations are whole owners; nested owner/member semantics stay out of scope.
 use ast_merge::{
-    LayoutAugmentation, LayoutOwner, NormalizedCommentEvidence, SourceLineDisposition,
-    SourcePreservingMergeEvidence, SourcePreservingOwnerDocument, augment_layout,
-    augment_normalized_comments_with_evidence_filter, native_analysis::NativeOwnerAnalysis,
-    source_line_dispositions_from_augmentations,
+    CommentScope, LayoutAugmentation, LayoutOwner, NormalizedCommentEvidence,
+    SourceLineDisposition, SourcePreservingMergeEvidence, SourcePreservingOwnerDocument,
+    augment_layout, augment_normalized_comments_with_evidence_scope,
+    native_analysis::NativeOwnerAnalysis, source_line_dispositions_from_augmentations,
 };
 use std::collections::HashMap;
 use tree_haver::service::ParsedResult;
@@ -90,13 +90,23 @@ pub fn source_line_analysis(parsed: &ParsedResult) -> Result<RustSourceLineAnaly
         native_owners.push(LayoutOwner { owner_id: primary_node_id.clone(), start_line, end_line });
         semantic_owners.push(LayoutOwner { owner_id: owner.id.clone(), start_line, end_line });
     }
-    let comments = augment_normalized_comments_with_evidence_filter(
+    let comments = augment_normalized_comments_with_evidence_scope(
         source,
         &native_owners,
         &nodes,
         "rust_comment",
         super::owner_policy().comment_attachment_policy,
-        |node| matches!(node.kind.as_str(), "line_comment" | "block_comment"),
+        |node| {
+            matches!(node.kind.as_str(), "line_comment" | "block_comment").then(|| {
+                if node.source_fragment.trim_start().starts_with("//!")
+                    || node.source_fragment.trim_start().starts_with("/*!")
+                {
+                    CommentScope::Root
+                } else {
+                    CommentScope::Owner
+                }
+            })
+        },
         normalize_rust_comment,
     )?;
     let mut comments = comments;
