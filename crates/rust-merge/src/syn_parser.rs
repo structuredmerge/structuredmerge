@@ -118,6 +118,14 @@ impl RustSynParserProvider {
             .filter(|attribute| attribute.path().is_ident("doc"))
             .map(|attribute| attribute.span().byte_range())
             .collect::<Vec<_>>();
+        let outer_doc_ranges = file
+            .items
+            .iter()
+            .flat_map(item_attributes)
+            .filter(|attribute| matches!(attribute.style, AttrStyle::Outer))
+            .filter(|attribute| attribute.path().is_ident("doc"))
+            .map(|attribute| attribute.span().byte_range())
+            .collect::<Vec<_>>();
 
         for (index, item) in file.items.iter().enumerate() {
             context.check().map_err(service_fault)?;
@@ -178,8 +186,9 @@ impl RustSynParserProvider {
                 attribute_range.start <= range.start && range.end <= attribute_range.end
             });
             let outer_doc = !inner_doc
-                && (source_text.starts_with("///") && !source_text.starts_with("////")
-                    || source_text.starts_with("/**") && !source_text.starts_with("/***"));
+                && outer_doc_ranges.iter().any(|attribute_range| {
+                    attribute_range.start <= range.start && range.end <= attribute_range.end
+                });
             let kind = if source_text.starts_with("//") { "line_comment" } else { "block_comment" };
             let comment_node = parse_node(
                 comment_id.clone(),
@@ -246,6 +255,28 @@ impl RustSynParserProvider {
             metadata: request.metadata,
             extra: request.extra,
         })
+    }
+}
+
+fn item_attributes(item: &Item) -> &[syn::Attribute] {
+    match item {
+        Item::Const(item) => &item.attrs,
+        Item::Enum(item) => &item.attrs,
+        Item::ExternCrate(item) => &item.attrs,
+        Item::Fn(item) => &item.attrs,
+        Item::ForeignMod(item) => &item.attrs,
+        Item::Impl(item) => &item.attrs,
+        Item::Macro(item) => &item.attrs,
+        Item::Mod(item) => &item.attrs,
+        Item::Static(item) => &item.attrs,
+        Item::Struct(item) => &item.attrs,
+        Item::Trait(item) => &item.attrs,
+        Item::TraitAlias(item) => &item.attrs,
+        Item::Type(item) => &item.attrs,
+        Item::Union(item) => &item.attrs,
+        Item::Use(item) => &item.attrs,
+        Item::Verbatim(_) => &[],
+        _ => &[],
     }
 }
 
@@ -725,6 +756,16 @@ mod tests {
                 "{}",
                 case["name"].as_str().unwrap()
             );
+            for comment_id in
+                analysis.attached_comment_node_ids.get(owner_path).into_iter().flatten()
+            {
+                let comment = parsed.document.node(comment_id).unwrap();
+                assert!(
+                    comment.semantic_roles.iter().any(|role| role == "doc_comment"),
+                    "{}",
+                    case["name"].as_str().unwrap()
+                );
+            }
         }
     }
 
