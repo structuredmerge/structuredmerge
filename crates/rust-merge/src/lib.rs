@@ -189,6 +189,14 @@ pub fn parse_rust(source: &str, _dialect: RustDialect) -> ParseResult<RustAnalys
     parse_rust_with_backend(source, RustDialect::Rust, RustBackend::TreeSitter)
 }
 
+fn unsupported_feature_result<T>(message: impl Into<String>) -> ParseResult<T> {
+    let mut result = parse_error_result(message);
+    if let Some(diagnostic) = result.diagnostics.first_mut() {
+        diagnostic.category = DiagnosticCategory::UnsupportedFeature;
+    }
+    result
+}
+
 pub fn parse_rust_with_backend(
     source: &str,
     _dialect: RustDialect,
@@ -243,7 +251,11 @@ pub fn parse_rust_with_backend(
                     ),
                 });
             }
-            kind => return parse_error_result(format!("unsupported top-level Rust node {kind:?}")),
+            kind => {
+                return unsupported_feature_result(format!(
+                    "unsupported top-level Rust node {kind:?}"
+                ));
+            }
         }
     }
     declarations.sort_by(|left, right| left.path.cmp(&right.path));
@@ -936,7 +948,7 @@ fn parse_rust_native(source: &str) -> ParseResult<RustAnalysis> {
                 "union",
             )),
             other => {
-                return parse_error_result(format!(
+                return unsupported_feature_result(format!(
                     "unsupported top-level native Rust item {:?}",
                     std::mem::discriminant(&other)
                 ));

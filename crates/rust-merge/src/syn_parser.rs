@@ -691,7 +691,11 @@ mod tests {
 
     #[test]
     fn native_parser_accepts_syntax_without_tree_sitter_as_an_acceptance_oracle() {
-        let source = "unsafe extern \"C\" { fn native_symbol(); }\n";
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/polyglot/typed-core/rust_parser_owner_profile_failure_boundary.json"
+        ))
+        .unwrap();
+        let source = fixture["cases"][0]["source"].as_str().unwrap();
         let output =
             RustSynParserProvider::new("rust.syn.test").parse(request(source), &context()).unwrap();
         assert!(output.ok, "{:?}", output.diagnostics);

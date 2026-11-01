@@ -320,6 +320,36 @@ fn classic_merge_backends_consume_shared_block_doc_owner_fixture() {
 }
 
 #[test]
+fn rust_backends_conform_to_shared_owner_profile_failure_boundary() {
+    let fixture = read_fixture(&[
+        "polyglot",
+        "typed-core",
+        "rust_parser_owner_profile_failure_boundary.json",
+    ]);
+    for case in fixture["cases"].as_array().unwrap() {
+        let source = case["source"].as_str().unwrap();
+        for backend in [RustBackend::Native, RustBackend::TreeSitter] {
+            let result = parse_rust_with_backend(source, RustDialect::Rust, backend);
+            assert_eq!(
+                result.ok,
+                case["expected"]["ok"].as_bool().unwrap(),
+                "{backend:?}: {}",
+                case["name"]
+            );
+            let diagnostics = diagnostic_shape(&result.diagnostics);
+            assert!(
+                diagnostics.as_array().unwrap().iter().any(|diagnostic| {
+                    diagnostic["category"] == case["expected"]["rust_family_category"]
+                }),
+                "{backend:?} lacked the expected failure category for {}: {:?}",
+                case["name"],
+                diagnostics
+            );
+        }
+    }
+}
+
+#[test]
 fn conforms_to_rust_backend_fixtures() {
     let backends_fixture =
         read_fixture(&["diagnostics", "slice-117-rust-family-backends", "rust-backends.json"]);
