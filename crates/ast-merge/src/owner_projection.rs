@@ -19,7 +19,7 @@ pub struct NamedOwnerProjectionPolicy<'a> {
     pub owner_kinds: &'a [NamedOwnerKind<'a>],
     pub ignored_kinds: &'a [&'a str],
     pub wrapper_kinds: &'a [&'a str],
-    /// Top-level syntax nodes that Ruby TreeHaver treats as a declaration prefix.
+    /// Top-level syntax nodes that the family treats as declaration prefixes.
     pub prefix_node_kinds: &'a [&'a str],
     pub name_fields: &'a [&'a str],
     pub fallback_name_kinds: &'a [&'a str],
@@ -204,7 +204,8 @@ fn starts_on_standalone_line(source: &str, start_byte: usize) -> bool {
 
 fn is_inner_doc_comment(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> bool {
     let fragment = node.source_fragment.trim_start();
-    fragment.starts_with("//!")
+    node.semantic_roles.iter().any(|role| role == "inner_doc_comment")
+        || fragment.starts_with("//!")
         || fragment.starts_with("/*!")
         || index.descendants(node).iter().any(|child| child.kind == "inner_doc_comment_marker")
 }

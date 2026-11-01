@@ -39,8 +39,20 @@ pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
         }
     }
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
-    let mut analysis =
-        ast_merge::project_named_top_level_analysis(source, root, &nodes, super::owner_policy())?;
+    let parser_is_syn = parsed.backend.parser == "syn";
+    let mut analysis = ast_merge::project_named_top_level_analysis_with_comment_scope(
+        source,
+        root,
+        &nodes,
+        super::owner_policy(),
+        |node| {
+            if parser_is_syn && node.semantic_roles.iter().any(|role| role == "inner_doc_comment") {
+                CommentScope::Root
+            } else {
+                CommentScope::Owner
+            }
+        },
+    )?;
     // A native `syn` provider already supplies authoritative Rust item spans.
     // Keep its projected owners and comment nodes as the source of truth instead
     // of reparsing through Tree-sitter as an acceptance gate. The legacy

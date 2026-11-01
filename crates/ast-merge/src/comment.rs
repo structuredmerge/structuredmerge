@@ -9,9 +9,9 @@ use crate::{
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CommentAttachmentPolicy {
-    /// Ruby ast-merge may attach a following full-line comment to its preceding owner.
+    /// Attach a following full-line comment to its preceding owner.
     PrecedingOwner,
-    /// Some native providers attach full-line comments to the next owner instead.
+    /// Attach a following full-line comment to the next owner.
     FollowingOwner,
 }
 

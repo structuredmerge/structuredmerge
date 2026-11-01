@@ -497,7 +497,7 @@ pub fn source_line_selections_for_owner_revisions(
     Ok(selections)
 }
 
-/// Convert Ruby-compatible removed-owner preservation line numbers into ordered
+/// Convert removed-owner preservation line numbers into ordered
 /// selections of complete semantic regions from the revision they came from.
 /// A caller supplies the order after applying its removal/rehome boundary plan.
 pub fn source_line_selections_for_preserved_lines(

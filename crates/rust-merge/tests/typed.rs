@@ -333,8 +333,11 @@ fn native_owner_prefix_projection_matches_shared_fixture() {
                 .map(|kind| kind.as_str().unwrap())
                 .collect::<Vec<_>>()
         );
-        let comment_texts = analysis.attached_comment_node_ids[owner_path]
-            .iter()
+        let comment_texts = analysis
+            .attached_comment_node_ids
+            .get(owner_path)
+            .into_iter()
+            .flatten()
             .map(|id| {
                 let node = parsed.document.node(id).unwrap();
                 std::str::from_utf8(parsed.source.slice(node.span.range.clone()).unwrap())

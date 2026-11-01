@@ -2,7 +2,7 @@
 //! Comments are lexed from source so shared ownership rules do not depend on a
 //! Tree-sitter Rust tree or its syntax acceptance.
 use std::ops::Range;
-use syn::{Item, spanned::Spanned};
+use syn::{AttrStyle, Item, spanned::Spanned};
 use tree_haver::{
     NodeRole, SourcePoint, SourceSpan,
     parsed::{
@@ -109,6 +109,16 @@ impl RustSynParserProvider {
         let mut comments = Vec::new();
         let mut item_ranges = Vec::new();
 
+        // `syn` represents crate-level inner documentation as `doc` attributes
+        // on `File`. Preserve this parser fact when assigning source comments.
+        let inner_doc_ranges = file
+            .attrs
+            .iter()
+            .filter(|attribute| matches!(attribute.style, AttrStyle::Inner(_)))
+            .filter(|attribute| attribute.path().is_ident("doc"))
+            .map(|attribute| attribute.span().byte_range())
+            .collect::<Vec<_>>();
+
         for (index, item) in file.items.iter().enumerate() {
             context.check().map_err(service_fault)?;
             if nodes.len().saturating_add(child_nodes.len()) >= context.max_nodes {
@@ -164,7 +174,9 @@ impl RustSynParserProvider {
                 })
                 .map(|(_, item_index)| format!("syn:item:{item_index}"));
             let source_text = &source[range.clone()];
-            let inner_doc = source_text.starts_with("//!") || source_text.starts_with("/*!");
+            let inner_doc = inner_doc_ranges.iter().any(|attribute_range| {
+                attribute_range.start <= range.start && range.end <= attribute_range.end
+            });
             let outer_doc = !inner_doc
                 && (source_text.starts_with("///") && !source_text.starts_with("////")
                     || source_text.starts_with("/**") && !source_text.starts_with("/***"));
@@ -178,7 +190,13 @@ impl RustSynParserProvider {
                 source_span(source, range.clone()),
                 parent.clone().or_else(|| Some(root_id.clone())),
                 vec![],
-                if outer_doc { vec!["doc_comment".into()] } else { vec![] },
+                if inner_doc {
+                    vec!["inner_doc_comment".into()]
+                } else if outer_doc {
+                    vec!["doc_comment".into()]
+                } else {
+                    vec![]
+                },
             );
             comments.push(ParseComment {
                 node_id: comment_id.clone(),
@@ -607,6 +625,27 @@ mod tests {
         );
         analysis.validate(&parsed).unwrap();
         assert!(nodes.iter().any(|node| node.id == root));
+    }
+
+    #[test]
+    fn syn_file_inner_doc_attributes_define_root_comment_scope() {
+        let source = "//! crate docs\n\nfn stable() {}\n";
+        let registry = ParserRegistry::default();
+        registry.register(Arc::new(RustSynParserProvider::new("rust.syn.test"))).unwrap();
+        let parsed = TreeHaverParseService::default()
+            .parse_batch(vec![request(source)], &registry.snapshot().unwrap(), &context())
+            .unwrap()
+            .remove(0);
+        let comment = parsed
+            .document
+            .output()
+            .nodes
+            .iter()
+            .find(|node| node.role == NodeRole::Comment)
+            .unwrap();
+        assert!(comment.semantic_roles.iter().any(|role| role == "inner_doc_comment"));
+        let analysis = crate::typed::analysis(&parsed).unwrap();
+        assert!(!analysis.attached_comment_node_ids.contains_key("/function:stable"));
     }
 
     #[test]
