@@ -170,6 +170,49 @@ fn merge3_preserves_native_decisions_and_verifies_every_clean_output() {
 }
 
 #[test]
+fn conflict_preview_localizes_the_go_owner_and_keeps_its_leading_comment() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/go_merge3_conflict.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let base = input["base"].as_str().unwrap();
+    let ours = input["ours"].as_str().unwrap();
+    let theirs = input["theirs"].as_str().unwrap();
+    let (result, _) = run(request("merge3", &[base, ours, theirs]));
+
+    assert!(!result.ok);
+    assert_eq!(result.output, None);
+    assert_eq!(
+        result.conflicted_output.as_deref(),
+        fixture["expected_conflicted_output"]["rust_host"].as_str()
+    );
+    assert_eq!(result.render_report["strategy"], "localized-conflict-review");
+    assert_eq!(result.render_report["artifact_kind"], "unresolved-conflict-review");
+}
+
+#[test]
+fn conflict_preview_falls_back_to_full_source_when_owner_ranges_are_unproven() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/go_merge3_membership_edit_conflict.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let base = input["base"].as_str().unwrap();
+    let ours = input["ours"].as_str().unwrap();
+    let theirs = input["theirs"].as_str().unwrap();
+    let (result, _) = run(request("merge3", &[base, ours, theirs]));
+
+    assert!(!result.ok);
+    assert_eq!(result.output, None);
+    assert_eq!(
+        result.conflicted_output.as_deref(),
+        fixture["expected_conflicted_output"]["rust_host"].as_str()
+    );
+    assert_eq!(result.render_report["strategy"], "full-file-conflict-review");
+}
+
+#[test]
 fn membership_additions_merge_with_independent_function_edits_like_ruby() {
     for texts in [
         [BASE.to_string(), OURS.to_string(), format!("{BASE}func added() {{}}\n")],

@@ -134,6 +134,84 @@ pub(crate) fn diagnostic(
     }));
 }
 
+fn go_conflict_preview(
+    execution: &NativeMergeExecution,
+    request: &ValidatedOperationRequest,
+) -> Result<(ast_merge::SourceRenderResult, bool), String> {
+    let input = request.request();
+    let source = |role| -> Result<String, String> {
+        let input_source = input
+            .sources
+            .get(&role)
+            .ok_or_else(|| format!("Go conflict preview lacks its {role:?} source"))?;
+        let document =
+            request.sources().get(&input_source.source_id).map_err(|error| error.to_string())?;
+        std::str::from_utf8(document.bytes()).map(str::to_string).map_err(|error| error.to_string())
+    };
+    let sources = [
+        (SourceRevision::Base, source(SourceRole::Base)?),
+        (SourceRevision::Ours, source(SourceRole::Ours)?),
+        (SourceRevision::Theirs, source(SourceRole::Theirs)?),
+    ]
+    .into_iter()
+    .collect::<std::collections::HashMap<_, _>>();
+    let local_plan = ast_merge::localized_conflict_render_plan(
+        sources.clone(),
+        &execution.rendered.result.conflicts,
+        7,
+    );
+    if let Ok(plan) = local_plan {
+        if let Ok(rendered) = ast_merge::render_source_plan(&plan) {
+            return Ok((rendered, false));
+        }
+    }
+
+    let conflict = execution
+        .rendered
+        .result
+        .conflicts
+        .first()
+        .ok_or_else(|| "Go conflict preview has no conflict record".to_string())?;
+    let alternatives = [SourceRevision::Base, SourceRevision::Ours, SourceRevision::Theirs]
+        .into_iter()
+        .map(|revision| {
+            let content = sources
+                .get(&revision)
+                .ok_or_else(|| "Go conflict preview source is missing".to_string())?;
+            let role = match revision {
+                SourceRevision::Base => "base",
+                SourceRevision::Ours => "ours",
+                SourceRevision::Theirs => "theirs",
+            };
+            Ok(ast_merge::ConflictAlternative {
+                revision,
+                state: ast_merge::ConflictAlternativeState::Present,
+                regions: vec![ast_merge::OwnedSourceRegion {
+                    node_id: format!("go:full-document:{role}"),
+                    region_kind: "document".into(),
+                    start_byte: 0,
+                    end_byte: content.len(),
+                    start_line: 1,
+                    end_line: content.lines().count().max(1),
+                }],
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let whole_document_conflict = ast_merge::MergeConflict {
+        conflict_id: conflict.conflict_id.clone(),
+        category: conflict.category.clone(),
+        path: conflict.path.clone(),
+        fallback_scope: "full_file".into(),
+        message: conflict.message.clone(),
+        alternatives,
+    };
+    let plan = ast_merge::localized_conflict_render_plan(sources, &[whole_document_conflict], 7)
+        .map_err(|error| error.to_string())?;
+    ast_merge::render_source_plan(&plan)
+        .map(|rendered| (rendered, true))
+        .map_err(|error| error.to_string())
+}
+
 pub(crate) fn service_failure(result: &mut OperationResult, error: ServiceError) {
     let category = match &error {
         ServiceError::Cancelled => PortableCategory::Cancelled,
@@ -975,6 +1053,41 @@ pub(crate) fn execute_native_operation_with_service(
                 result.verification.base_participated = Some(true);
                 result.verification.consumed_source_roles =
                     Some(input.operation.kind().source_roles().to_vec());
+            }
+            if family == "go" {
+                match go_conflict_preview(&execution, request) {
+                    Ok((preview, full_file_fallback)) => {
+                        result.conflicted_output = Some(preview.content.clone());
+                        result.render_report = [
+                            (
+                                "strategy".into(),
+                                serde_json::json!(if full_file_fallback {
+                                    "full-file-conflict-review"
+                                } else {
+                                    "localized-conflict-review"
+                                }),
+                            ),
+                            (
+                                "artifact_kind".into(),
+                                serde_json::json!("unresolved-conflict-review"),
+                            ),
+                            (
+                                "outside_conflicts".into(),
+                                serde_json::json!("ours-not-partially-merged"),
+                            ),
+                            ("evidence".into(), serde_json::to_value(preview).unwrap()),
+                        ]
+                        .into();
+                    }
+                    Err(message) => diagnostic(
+                        &mut result,
+                        PortableCategory::RenderError,
+                        "conflict_preview.render_failed",
+                        message,
+                        DiagnosticLayer::Renderer,
+                        vec![],
+                    ),
+                }
             }
             finish(result, request, &projection.evidence)
         }
