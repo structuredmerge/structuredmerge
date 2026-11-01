@@ -350,6 +350,24 @@ fn shared_comment_attachment_policy_cases_match_rubric() {
                     (attachment.owner_id.as_str(), content(&attachment.trailing_region_id))
                 })
                 .collect::<HashMap<_, _>>();
+            let actual_inline = augmentation
+                .attachments
+                .iter()
+                .map(|attachment| {
+                    (attachment.owner_id.as_str(), content(&attachment.inline_region_id))
+                })
+                .collect::<HashMap<_, _>>();
+            if let Some(expected_inline) = policy_case["expected"]["inline_by_owner"].as_object() {
+                for (owner_id, expected) in expected_inline {
+                    assert_eq!(
+                        actual_inline.get(owner_id.as_str()).cloned().unwrap_or(None),
+                        expected.as_str().map(str::to_string),
+                        "{} ({}) inline {owner_id}",
+                        case["name"].as_str().unwrap(),
+                        policy_case["id"].as_str().unwrap(),
+                    );
+                }
+            }
             for (owner_id, expected) in
                 policy_case["expected"]["leading_by_owner"].as_object().unwrap()
             {

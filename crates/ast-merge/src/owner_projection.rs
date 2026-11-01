@@ -147,7 +147,10 @@ fn select_owner_prefix_nodes<'a>(
     let mut selected = Vec::new();
     let mut cursor = owner.span.range.start_byte;
     for node in pending.iter().rev() {
-        if node.role == NodeRole::Comment && is_inner_doc_comment(node, index) {
+        if node.role == NodeRole::Comment
+            && (is_inner_doc_comment(node, index)
+                || !starts_on_standalone_line(source, node.span.range.start_byte))
+        {
             break;
         }
         let start = node.span.range.start_byte;
@@ -172,6 +175,14 @@ fn select_owner_prefix_nodes<'a>(
     }
     selected.reverse();
     Ok(selected)
+}
+
+fn starts_on_standalone_line(source: &str, start_byte: usize) -> bool {
+    if start_byte > source.len() || !source.is_char_boundary(start_byte) {
+        return false;
+    }
+    let line_start = source[..start_byte].rfind('\n').map_or(0, |offset| offset + 1);
+    source[line_start..start_byte].bytes().all(|byte| byte.is_ascii_whitespace())
 }
 
 fn is_inner_doc_comment(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> bool {
