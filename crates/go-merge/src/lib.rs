@@ -158,6 +158,23 @@ pub fn go_backends() -> Vec<GoBackend> {
     vec![GoBackend::TreeSitter]
 }
 
+fn validate_go_package_clause(index: &NormalizedTreeIndex, root_id: &str) -> Result<(), String> {
+    use tree_haver::NodeRole;
+
+    let root = index.root(root_id)?;
+    let declarations: Vec<_> = index
+        .children(root)
+        .into_iter()
+        .filter(|node| node.role != NodeRole::Comment && node.kind != "comment")
+        .collect();
+    if declarations.first().is_none_or(|node| node.kind != "package_clause")
+        || declarations.iter().filter(|node| node.kind == "package_clause").count() != 1
+    {
+        return Err("Go source must contain exactly one package clause".into());
+    }
+    Ok(())
+}
+
 pub fn parse_go(source: &str, _dialect: GoDialect) -> ParseResult<GoAnalysis> {
     let parsed = parse_normalized_with_language_pack(&parse_request(source));
     if !parsed.ok {
@@ -388,6 +405,7 @@ pub(crate) fn project_go_owners(
 
     let index = NormalizedTreeIndex::new(nodes)?;
     let root = index.root(root_id)?;
+    validate_go_package_clause(&index, root_id)?;
     let mut owners = Vec::new();
     let mut owner_node_ids = BTreeMap::new();
     let mut owner_ids = HashSet::new();

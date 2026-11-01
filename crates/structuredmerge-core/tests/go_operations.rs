@@ -186,6 +186,12 @@ fn membership_additions_merge_with_independent_function_edits_like_ruby() {
 
 #[test]
 fn unsupported_operations_syntax_selection_and_cancellation_remain_fail_closed() {
+    let (missing_package, _) = run(request("analyze", &["func f() {}\n"]));
+    assert!(!missing_package.ok);
+    let (missing_package_merge, _) = run(request("merge3", &["func f() {}\n"; 3]));
+    assert!(!missing_package_merge.ok);
+    assert!(missing_package_merge.output.is_none());
+
     let (result, _) = run(request("analyze", &["package main\nvar x=1\n"]));
     assert!(result.ok, "{:?}", result.diagnostics);
     assert!(
