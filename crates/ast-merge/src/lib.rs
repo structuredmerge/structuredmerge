@@ -76,6 +76,7 @@ pub enum DiagnosticCategory {
     ParseError,
     DestinationParseError,
     UnsupportedFeature,
+    UnsafeSourceRange,
     FallbackApplied,
     Ambiguity,
     MergeConflict,

@@ -45,6 +45,8 @@ fn diagnostic_category_name(category: ast_merge::DiagnosticCategory) -> &'static
         ast_merge::DiagnosticCategory::ParseError => "parse_error",
         ast_merge::DiagnosticCategory::DestinationParseError => "destination_parse_error",
         ast_merge::DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
+        ast_merge::DiagnosticCategory::UnsafeSourceRange => "unsafe_source_range",
+        DiagnosticCategory::UnsafeSourceRange => "unsafe_source_range",
         ast_merge::DiagnosticCategory::FallbackApplied => "fallback_applied",
         ast_merge::DiagnosticCategory::Ambiguity => "ambiguity",
         ast_merge::DiagnosticCategory::MergeConflict => "merge_conflict",

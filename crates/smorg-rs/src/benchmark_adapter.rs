@@ -261,6 +261,7 @@ fn diagnostic_category_name(category: DiagnosticCategory) -> &'static str {
         DiagnosticCategory::ParseError => "parse_error",
         DiagnosticCategory::DestinationParseError => "destination_parse_error",
         DiagnosticCategory::UnsupportedFeature => "unsupported_feature",
+        DiagnosticCategory::UnsafeSourceRange => "unsafe_source_range",
         DiagnosticCategory::FallbackApplied => "fallback_applied",
         DiagnosticCategory::Ambiguity => "ambiguity",
         DiagnosticCategory::MergeConflict => "merge_conflict",

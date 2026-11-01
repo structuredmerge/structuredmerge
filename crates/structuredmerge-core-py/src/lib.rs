@@ -7208,6 +7208,8 @@ pub enum DiagnosticCategory {
     ConfigurationError = 9,
     #[pyo3(name = "REPLAY_REJECTED")]
     ReplayRejected = 10,
+    #[pyo3(name = "UNSAFE_SOURCE_RANGE")]
+    UnsafeSourceRange = 11,
 }
 #[pymethods]
 impl DiagnosticCategory {
@@ -7244,6 +7246,8 @@ impl DiagnosticCategory {
                 "configuration_error" => return Ok(Self::ConfigurationError),
                 "replayrejected" => return Ok(Self::ReplayRejected),
                 "replay_rejected" => return Ok(Self::ReplayRejected),
+                "unsafesourcerange" => return Ok(Self::UnsafeSourceRange),
+                "unsafe_source_range" => return Ok(Self::UnsafeSourceRange),
                 _ => {}
             }
         }
@@ -7261,6 +7265,7 @@ impl DiagnosticCategory {
                 8 => return Ok(Self::AssumedDefault),
                 9 => return Ok(Self::ConfigurationError),
                 10 => return Ok(Self::ReplayRejected),
+                11 => return Ok(Self::UnsafeSourceRange),
                 _ => {}
             }
         }
@@ -14394,6 +14399,7 @@ impl From<DiagnosticCategory> for structuredmerge_core::DiagnosticCategory {
             DiagnosticCategory::AssumedDefault => Self::AssumedDefault,
             DiagnosticCategory::ConfigurationError => Self::ConfigurationError,
             DiagnosticCategory::ReplayRejected => Self::ReplayRejected,
+            DiagnosticCategory::UnsafeSourceRange => Self::UnsafeSourceRange,
         }
     }
 }
@@ -14420,6 +14426,7 @@ impl From<structuredmerge_core::DiagnosticCategory> for DiagnosticCategory {
                 Self::ConfigurationError
             }
             structuredmerge_core::DiagnosticCategory::ReplayRejected => Self::ReplayRejected,
+            structuredmerge_core::DiagnosticCategory::UnsafeSourceRange => Self::UnsafeSourceRange,
         }
     }
 }

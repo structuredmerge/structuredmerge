@@ -19183,6 +19183,7 @@ pub enum DiagnosticCategory {
     AssumedDefault,
     ConfigurationError,
     ReplayRejected,
+    UnsafeSourceRange,
 }
 
 impl Default for DiagnosticCategory {
@@ -19205,6 +19206,7 @@ impl magnus::IntoValue for DiagnosticCategory {
             DiagnosticCategory::AssumedDefault => "assumed_default",
             DiagnosticCategory::ConfigurationError => "configuration_error",
             DiagnosticCategory::ReplayRejected => "replay_rejected",
+            DiagnosticCategory::UnsafeSourceRange => "unsafe_source_range",
         };
         handle.to_symbol(sym).into_value_with(handle)
     }
@@ -19243,6 +19245,9 @@ impl magnus::TryConvert for DiagnosticCategory {
                 Ok(DiagnosticCategory::ConfigurationError)
             }
             "replay_rejected" | "ReplayRejected" => Ok(DiagnosticCategory::ReplayRejected),
+            "unsafe_source_range" | "UnsafeSourceRange" => {
+                Ok(DiagnosticCategory::UnsafeSourceRange)
+            }
             other => Err(magnus::Error::new(
                 unsafe { Ruby::get_unchecked() }.exception_arg_error(),
                 format!("invalid DiagnosticCategory value: {other}"),
@@ -26398,6 +26403,7 @@ impl From<DiagnosticCategory> for structuredmerge_core::DiagnosticCategory {
             DiagnosticCategory::AssumedDefault => Self::AssumedDefault,
             DiagnosticCategory::ConfigurationError => Self::ConfigurationError,
             DiagnosticCategory::ReplayRejected => Self::ReplayRejected,
+            DiagnosticCategory::UnsafeSourceRange => Self::UnsafeSourceRange,
         }
     }
 }
@@ -26424,6 +26430,7 @@ impl From<structuredmerge_core::DiagnosticCategory> for DiagnosticCategory {
                 Self::ConfigurationError
             }
             structuredmerge_core::DiagnosticCategory::ReplayRejected => Self::ReplayRejected,
+            structuredmerge_core::DiagnosticCategory::UnsafeSourceRange => Self::UnsafeSourceRange,
         }
     }
 }
