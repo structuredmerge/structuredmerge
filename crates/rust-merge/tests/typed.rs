@@ -79,6 +79,20 @@ const OURS: &str = "use std::fmt;\n\nfn left() -> i32 { 2 }\n\nfn right() -> i32
 const THEIRS: &str = "use std::fmt;\n\nfn left() -> i32 { 1 }\n\nfn right() -> i32 { 2 }\n";
 
 #[test]
+fn rust_source_line_analysis_uses_shared_dispositions_and_following_owner_policy() {
+    let parser = Parser::new("rust");
+    let parsed = parser.parse("// docs\nfn f() {}\n\nfn g() {}\n", SourceRole::Current);
+    let analysis = typed::source_line_analysis(&parsed).unwrap();
+
+    let docs = analysis.dispositions.iter().find(|line| line.line_number == 1).unwrap();
+    assert_eq!(docs.kind, "comment_owner");
+    assert_eq!(docs.comment_kind.as_deref(), Some("leading"));
+    assert_eq!(docs.owner_id.as_deref(), Some(analysis.owners.document.owners[0].id.as_str()));
+    assert_eq!(analysis.dispositions.len(), 4);
+    assert!(analysis.dispositions.iter().all(|line| line.kind != "unmanaged"));
+}
+
+#[test]
 fn merges_a_leading_comment_edit_with_an_independent_owner_edit() {
     let parser = Parser::new("rust");
     let base = "// left documentation\nfn left() -> i32 { 1 }\n\n// right documentation\nfn right() -> i32 { 1 }\n";
