@@ -43,6 +43,19 @@ pub fn analysis_with_diagnostics(
     analysis_with_mode(parsed, true)
 }
 
+/// Merge3 owner projection accepts parser-identified inline comments as part of
+/// their physical owner line. Public analyze and diff2 keep their conservative
+/// unsafe-range diagnostic contract.
+pub fn merge_analysis(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, String> {
+    merge_analysis_with_diagnostics(parsed).map_err(|error| error.message)
+}
+
+pub fn merge_analysis_with_diagnostics(
+    parsed: &ParsedResult,
+) -> Result<SourcePreservingOwnerDocument, ast_merge::typed_merge::NativeAnalysisError> {
+    analysis_with_mode(parsed, false).map(|analysis| analysis.document)
+}
+
 fn analysis_with_mode(
     parsed: &ParsedResult,
     reject_unsafe_source_ranges: bool,
@@ -114,7 +127,7 @@ pub struct BashSourceLineAnalysis {
 /// Compose the native Bash owner projection with TreeHaver comments and the
 /// shared comment/layout augmenters before a merge chooses source regions.
 pub fn source_line_analysis(parsed: &ParsedResult) -> Result<BashSourceLineAnalysis, String> {
-    let owners = analysis(parsed)?;
+    let owners = analysis_with_mode(parsed, false).map_err(|error| error.message)?;
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
     let nodes = parsed.normalized_nodes()?;
     let mut tree_to_semantic = HashMap::<String, String>::new();
@@ -284,7 +297,9 @@ fn verified_document(
             "Bash output verification changed source bytes, identity or selected parser".into()
         );
     }
-    owners(parsed)
+    analysis_with_mode(parsed, false)
+        .map(|analysis| analysis.document)
+        .map_err(|error| error.message)
 }
 
 /// Return the Ruby-compatible whole-document guard when unmanaged source differs.

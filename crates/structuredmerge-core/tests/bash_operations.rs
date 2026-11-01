@@ -143,7 +143,7 @@ fn bash_conflicts_and_failures_do_not_invent_outputs_or_capabilities() {
 }
 
 #[test]
-fn bash_unsafe_owner_ranges_keep_their_diagnostic_category() {
+fn bash_analyze_and_diff_reject_unsafe_owner_ranges() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
         "../../../../fixtures/polyglot/typed-core/bash_analysis_unsafe_source_range.json"
     ))
@@ -164,14 +164,26 @@ fn bash_unsafe_owner_ranges_keep_their_diagnostic_category() {
     let diagnostics = serde_json::to_value(&diff.diagnostics).unwrap();
     assert_eq!(diagnostics[0]["category"], expected["diagnostic_category"]);
     assert_eq!(diagnostics[0]["code"], expected["diagnostic_code"]);
+}
 
-    let ours = source.replace("x=1", "x=2");
-    let theirs = source.replace("y=1", "y=2");
-    let (merge, _) = run(request("merge3", &[source, &ours, &theirs]));
-    assert!(!merge.ok);
-    let diagnostics = serde_json::to_value(&merge.diagnostics).unwrap();
-    assert_eq!(diagnostics[0]["category"], expected["diagnostic_category"]);
-    assert_eq!(diagnostics[0]["code"], expected["diagnostic_code"]);
+#[test]
+fn bash_merge3_accepts_parser_owned_inline_comments() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/bash_merge3_inline_comment_owner_edits.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let (result, _) = run(request(
+        "merge3",
+        &[
+            input["base"].as_str().unwrap(),
+            input["ours"].as_str().unwrap(),
+            input["theirs"].as_str().unwrap(),
+        ],
+    ));
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
 }
 
 #[test]

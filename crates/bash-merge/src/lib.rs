@@ -241,6 +241,7 @@ fn project_bash_analysis(
     let mut owners = Vec::new();
     let mut owner_ids = HashSet::new();
     let mut owner_node_ids = std::collections::BTreeMap::new();
+    let mut attached_comment_node_ids = std::collections::BTreeMap::new();
 
     for top_level in index.children(root) {
         if top_level.role == NodeRole::Comment {
@@ -269,7 +270,14 @@ fn project_bash_analysis(
         if top_level.source_fragment.is_empty() {
             return Err(format!("Bash owner {path:?} has no source fragment").into());
         }
-        if reject_unsafe_source_ranges && !safe_owner_line_range(source, top_level) {
+        let Some((end_byte, inline_comment_id)) = safe_owner_line_range(source, top_level, nodes)
+        else {
+            return Err(BashAnalysisError::UnsafeSourceRange(format!(
+                "unsafe declaration range [:{}, {:?}]",
+                top_level.kind, name
+            )));
+        };
+        if reject_unsafe_source_ranges && inline_comment_id.is_some() {
             return Err(BashAnalysisError::UnsafeSourceRange(format!(
                 "unsafe declaration range [:{}, {:?}]",
                 top_level.kind, name
@@ -277,12 +285,19 @@ fn project_bash_analysis(
         }
 
         owner_node_ids.insert(path.clone(), vec![top_level.id.clone()]);
+        if let Some(comment_id) = inline_comment_id {
+            attached_comment_node_ids.insert(path.clone(), vec![comment_id]);
+        }
+        let fingerprint = source
+            .get(top_level.span.range.start_byte..end_byte)
+            .ok_or_else(|| format!("Bash owner {path:?} has an invalid source boundary"))?
+            .to_string();
         owners.push(ast_merge::SourcePreservingOwner {
             id: path.clone(),
             path,
-            fingerprint: top_level.source_fragment.clone(),
+            fingerprint,
             start_byte: top_level.span.range.start_byte,
-            end_byte: top_level.span.range.end_byte,
+            end_byte,
             start_line: top_level.span.start_point.row + 1,
             end_line: top_level.span.end_point.row + 1,
         });
@@ -295,16 +310,20 @@ fn project_bash_analysis(
     Ok(ast_merge::native_analysis::NativeOwnerAnalysis {
         document: SourcePreservingOwnerDocument { source: source.to_string(), owners },
         owner_node_ids,
-        attached_comment_node_ids: Default::default(),
+        attached_comment_node_ids,
     })
 }
 
-fn safe_owner_line_range(source: &str, node: &NormalizedTreeNode) -> bool {
+fn safe_owner_line_range(
+    source: &str,
+    node: &NormalizedTreeNode,
+    nodes: &[NormalizedTreeNode],
+) -> Option<(usize, Option<String>)> {
     let bytes = source.as_bytes();
     let start = node.span.range.start_byte;
     let end = node.span.range.end_byte;
     if start > end || end > bytes.len() {
-        return false;
+        return None;
     }
     let line_start =
         bytes[..start].iter().rposition(|byte| *byte == b'\n').map_or(0, |index| index + 1);
@@ -313,8 +332,27 @@ fn safe_owner_line_range(source: &str, node: &NormalizedTreeNode) -> bool {
         .position(|byte| *byte == b'\n')
         .map_or(bytes.len(), |offset| end + offset);
     let horizontal_whitespace = |byte: &u8| matches!(byte, b'\t' | b'\r' | b' ');
-    bytes[line_start..start].iter().all(horizontal_whitespace)
-        && bytes[end..line_end].iter().all(horizontal_whitespace)
+    if !bytes[line_start..start].iter().all(horizontal_whitespace) {
+        return None;
+    }
+    if bytes[end..line_end].iter().all(horizontal_whitespace) {
+        return Some((end, None));
+    }
+
+    let mut inline_comments = nodes.iter().filter(|candidate| {
+        candidate.role == NodeRole::Comment
+            && candidate.span.start_point.row == node.span.end_point.row
+            && candidate.span.range.start_byte >= end
+            && candidate.span.range.end_byte <= line_end
+    });
+    let comment = inline_comments.next()?;
+    if inline_comments.next().is_some()
+        || !bytes[end..comment.span.range.start_byte].iter().all(horizontal_whitespace)
+        || !bytes[comment.span.range.end_byte..line_end].iter().all(horizontal_whitespace)
+    {
+        return None;
+    }
+    Some((comment.span.range.end_byte, Some(comment.id.clone())))
 }
 
 fn named_child_source(

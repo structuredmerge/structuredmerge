@@ -979,10 +979,13 @@ pub(crate) fn execute_native_operation_with_service(
             "rust" => rust_merge::typed::merge_documents,
             _ => unreachable!("family was checked above"),
         };
-        let analyze_with_diagnostics = if family == "bash" {
-            Some(bash_merge::typed::analysis_document_with_diagnostics as _)
+        let (merge_analyzer, analyze_with_diagnostics) = if family == "bash" {
+            (
+                bash_merge::typed::merge_analysis as _,
+                Some(bash_merge::typed::merge_analysis_with_diagnostics as _),
+            )
         } else {
-            None
+            (analyzer, None)
         };
         ast_merge::typed_merge::merge_native_sources_with_engine(
             language,
@@ -991,7 +994,7 @@ pub(crate) fn execute_native_operation_with_service(
             snapshot,
             context,
             ast_merge::typed_merge::NativeOwnerEngine {
-                analyze: analyzer,
+                analyze: merge_analyzer,
                 analyze_with_diagnostics,
                 merge,
                 postprocess: (family == "rust").then_some(
