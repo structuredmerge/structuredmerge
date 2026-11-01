@@ -823,6 +823,32 @@ fn common_rust_syn_operation_composes_owner_membership_change_with_edit() {
 }
 
 #[test]
+fn common_rust_syn_operation_guards_unowned_removed_comment_separator() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_merge3_comment_rehome_on_owner_deletion_with_independent_edit.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let texts = [
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ];
+    let mut operation = request("merge3", &texts);
+    operation.parser_selection.backend = Some("rust.syn.core-test".into());
+    let (result, request) = run(operation);
+
+    assert!(!result.ok);
+    assert!(result.output.is_none());
+    assert_eq!(fixture["expected"]["outcome"], "conflict");
+    assert_eq!(result.conflicts.len(), 1);
+    let ConflictRecord::Canonical(conflict) = &result.conflicts[0] else { panic!() };
+    assert_eq!(conflict.code, "rust.membership_with_owner_edit");
+    assert_eq!(conflict.category, ConflictCategory::Ownership);
+    result.validate_against(&request).unwrap();
+}
+
+#[test]
 fn common_rust_syn_operation_composes_documented_enum_variant_with_function_edit() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
         "../../../../fixtures/polyglot/typed-core/rust_merge3_enum_doc_attributes_with_independent_function_edit.json"
