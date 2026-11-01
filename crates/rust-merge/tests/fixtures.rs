@@ -1147,6 +1147,26 @@ fn native_syn_composes_compatible_reorders_with_two_interior_additions() {
 }
 
 #[test]
+fn native_syn_composes_owner_membership_change_with_independent_edit() {
+    let fixture = read_fixture(&[
+        "polyglot",
+        "typed-core",
+        "rust_merge3_owner_membership_change_with_independent_edit.json",
+    ]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{result:?}");
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+}
+
+#[test]
 fn native_syn_composes_documented_enum_variant_with_independent_function_edit() {
     let fixture = read_fixture(&[
         "polyglot",

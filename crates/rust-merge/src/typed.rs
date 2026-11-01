@@ -352,13 +352,58 @@ pub fn line_selection_postprocessor(
     let base = input_for(tree_haver::source::SourceRole::Base)?;
     let ours = input_for(tree_haver::source::SourceRole::Ours)?;
     let theirs = input_for(tree_haver::source::SourceRole::Theirs)?;
+    let recoverable_syn_membership_guard = is_native_membership_guard_result(evidence)
+        && inputs.iter().all(|parsed| parsed.backend.parser == "syn");
+    if evidence.result.outcome != ast_merge::ThreeWayMergeOutcome::Clean
+        && !is_recoverable_owner_layout_error(evidence)
+        && !recoverable_syn_membership_guard
+    {
+        return Ok(false);
+    }
+    let analyses = match [
+        source_line_analysis(base),
+        source_line_analysis(ours),
+        source_line_analysis(theirs),
+    ] {
+        [Ok(base), Ok(ours), Ok(theirs)] => [base, ours, theirs],
+        [Err(_), _, _] | [_, Err(_), _] | [_, _, Err(_)] if recoverable_syn_membership_guard => {
+            return Ok(false);
+        }
+        [Err(message), _, _] | [_, Err(message), _] | [_, _, Err(message)] => {
+            return Err(message);
+        }
+    };
+    if recoverable_syn_membership_guard {
+        let line_ownership_complete = analyses
+            .iter()
+            .all(|analysis| analysis.dispositions.iter().all(|line| line.kind != "unmanaged"));
+        if !line_ownership_complete {
+            return Ok(false);
+        }
+        let mut verify_owner_source = |source: &str| {
+            let parsed = parse_output(source)?;
+            if !parsed.document.output().ok {
+                return Err("syn rejected rendered Rust output".to_string());
+            }
+            owners(&parsed)
+        };
+        let recovered = ast_merge::merge_source_preserving_owners_with_evidence(
+            analyses[0].owners.document.clone(),
+            analyses[1].owners.document.clone(),
+            analyses[2].owners.document.clone(),
+            &mut verify_owner_source,
+        );
+        if recovered.result.outcome == ast_merge::ThreeWayMergeOutcome::Clean
+            || is_recoverable_owner_layout_error(&recovered)
+        {
+            *evidence = recovered;
+        }
+    }
     if evidence.result.outcome != ast_merge::ThreeWayMergeOutcome::Clean
         && !is_recoverable_owner_layout_error(evidence)
     {
         return Ok(false);
     }
-    let analyses =
-        [source_line_analysis(base)?, source_line_analysis(ours)?, source_line_analysis(theirs)?];
     let order_error = evidence.result.diagnostics.iter().any(|diagnostic| {
         diagnostic.message
             == "source-preserving declaration merge cannot prove an agreed owner order"
@@ -593,6 +638,15 @@ fn record_divergent_owner_order_conflict(
             conflict_id: Some(conflict_id),
         }],
     });
+}
+
+fn is_native_membership_guard_result(evidence: &SourcePreservingMergeEvidence) -> bool {
+    evidence.result.outcome == ast_merge::ThreeWayMergeOutcome::Conflict
+        && evidence.result.conflicts.iter().any(|conflict| {
+            conflict.conflict_id == "rust-unmanaged-source"
+                && conflict.category == "unmanaged_source_change"
+                && conflict.path == "<unmanaged-source>"
+        })
 }
 
 fn is_recoverable_owner_layout_error(evidence: &SourcePreservingMergeEvidence) -> bool {
