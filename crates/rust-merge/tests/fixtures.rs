@@ -947,3 +947,35 @@ fn native_syn_rejects_divergent_edits_to_existing_crate_docs() {
     assert_eq!(result.diagnostics[0].category, ast_merge::DiagnosticCategory::MergeConflict);
     assert_eq!(result.conflicts[0].category, fixture["expected"]["conflict_category"]);
 }
+
+#[test]
+fn native_syn_merge3_composes_file_edge_additions_with_owner_removals() {
+    let fixture = read_fixture(&[
+        "polyglot",
+        "typed-core",
+        "rust_merge3_edge_additions_with_owner_removals.json",
+    ]);
+    for case in fixture["cases"].as_array().unwrap() {
+        let input = &case["input"];
+        let result = merge_rust_three_way_with_backend(
+            input["base"].as_str().unwrap(),
+            input["ours"].as_str().unwrap(),
+            input["theirs"].as_str().unwrap(),
+            RustDialect::Rust,
+            RustBackend::Native,
+        );
+        assert_eq!(
+            result.outcome,
+            ast_merge::ThreeWayMergeOutcome::Clean,
+            "{}: {:?}",
+            case["name"],
+            result.diagnostics
+        );
+        assert_eq!(
+            result.output.as_deref(),
+            Some(case["expected"]["output"].as_str().unwrap()),
+            "{}",
+            case["name"]
+        );
+    }
+}

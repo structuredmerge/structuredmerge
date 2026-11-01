@@ -334,6 +334,33 @@ fn common_rust_operation_reports_divergent_crate_doc_conflict() {
 }
 
 #[test]
+fn common_rust_operation_composes_file_edge_additions_with_owner_removals() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_merge3_edge_additions_with_owner_removals.json"
+    ))
+    .unwrap();
+    for case in fixture["cases"].as_array().unwrap() {
+        let input = &case["input"];
+        let texts = [
+            input["base"].as_str().unwrap(),
+            input["ours"].as_str().unwrap(),
+            input["theirs"].as_str().unwrap(),
+        ];
+        let (result, request) = run(request("merge3", &texts));
+
+        assert!(result.ok, "{}: {:?}", case["name"], result.diagnostics);
+        assert_eq!(
+            result.output.as_deref(),
+            case["expected"]["output"].as_str(),
+            "{}",
+            case["name"]
+        );
+        assert_eq!(result.verification.output_reparsed, Some(true));
+        result.validate_against(&request).unwrap();
+    }
+}
+
+#[test]
 fn family_guard_precedes_shortcuts_and_does_not_fabricate_owner_decisions() {
     for texts in [
         [BASE.to_string(), OURS.to_string(), format!("{BASE}fn added() {{}}\n")],
