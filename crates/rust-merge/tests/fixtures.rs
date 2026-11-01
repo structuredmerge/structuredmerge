@@ -303,6 +303,23 @@ fn classic_merge_backends_consume_shared_doc_owner_fixture() {
 }
 
 #[test]
+fn classic_merge_backends_consume_shared_block_doc_owner_fixture() {
+    let fixture =
+        read_fixture(&["polyglot", "typed-core", "rust_merge2_block_doc_comment_owner.json"]);
+    let input = &fixture["input"];
+    for backend in [RustBackend::Native, RustBackend::TreeSitter] {
+        let result = merge_rust_with_backend(
+            input["template"].as_str().unwrap(),
+            input["destination"].as_str().unwrap(),
+            RustDialect::Rust,
+            backend,
+        );
+        assert!(result.ok, "{backend:?} classic merge failed: {:?}", result.diagnostics);
+        assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+    }
+}
+
+#[test]
 fn conforms_to_rust_backend_fixtures() {
     let backends_fixture =
         read_fixture(&["diagnostics", "slice-117-rust-family-backends", "rust-backends.json"]);
