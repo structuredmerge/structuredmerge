@@ -1401,15 +1401,18 @@ mod tests {
 
     #[test]
     fn keeps_inline_comment_with_existing_member_when_appending_jsonc_member() {
-        let incoming = "{\n  \"config\": {\n    \"keep\": 9,\n    \"add\": 2\n  }\n}\n";
-        let current = "{\n  \"config\": {\n    \"keep\": 9 // keep inline\n  }\n}\n";
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/polyglot/typed-core/jsonc_inline_comment_member_append.json"
+        ))
+        .unwrap();
+        let input = fixture.get("input").unwrap();
+        let incoming = input.get("incoming").unwrap().as_str().unwrap();
+        let current = input.get("current").unwrap().as_str().unwrap();
+        let expected = fixture.get("expected").unwrap().get("output").unwrap().as_str().unwrap();
         let result = merge_json_source_preserving(incoming, current, JsonDialect::Jsonc);
 
         assert!(result.ok);
-        assert_eq!(
-            result.output.as_deref(),
-            Some("{\n  \"config\": {\n    \"keep\": 9, // keep inline\n    \"add\": 2\n  }\n}\n")
-        );
+        assert_eq!(result.output.as_deref(), Some(expected));
     }
 
     #[test]
