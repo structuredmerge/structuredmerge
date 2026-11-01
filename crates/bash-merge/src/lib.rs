@@ -1,10 +1,11 @@
 use std::collections::HashSet;
 
 use ast_merge::{
-    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile,
-    NamedOwnerKind, ParseResult, PolicyReference, SourcePreservingOwnerDocument,
-    ThreeWayMergeResult, merge_source_preserving_owners, normalized_parse_error_result,
-    parse_error_result, three_way_parse_error,
+    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, FamilyFeatureProfile, MergeConflict, NamedOwnerKind, ParseResult,
+    PolicyReference, SourcePreservingOwnerDocument, ThreeWayMergeResult,
+    merge_source_preserving_owners, normalized_parse_error_result, parse_error_result,
+    three_way_parse_error,
 };
 use tree_haver::{
     BackendReference, NodeRole, NormalizedTreeIndex, NormalizedTreeNode, ParserRequest,
@@ -155,7 +156,35 @@ pub fn merge_bash_three_way(
         Err(message) => return three_way_parse_error("theirs", message),
     };
 
+    if let Some(conflict) = typed::unmanaged_source_conflict(&base, &ours, &theirs) {
+        return conflict;
+    }
     merge_source_preserving_owners(base, ours, theirs, parse_source_preserving_bash)
+}
+
+pub(crate) fn unmanaged_source_conflict_result() -> ThreeWayMergeResult<String> {
+    let message = "Bash owner merge cannot prove ownership of changed unmanaged source";
+    let conflict = MergeConflict {
+        conflict_id: "bash-unmanaged-source".into(),
+        category: "unmanaged_source_change".into(),
+        path: "<unmanaged-source>".into(),
+        fallback_scope: "full_file".into(),
+        message: message.into(),
+        alternatives: vec![],
+    };
+    ThreeWayMergeResult {
+        outcome: ast_merge::ThreeWayMergeOutcome::Conflict,
+        diagnostics: vec![Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            category: DiagnosticCategory::MergeConflict,
+            message: message.into(),
+            path: Some("<unmanaged-source>".into()),
+            review: None,
+        }],
+        conflicts: vec![conflict],
+        output: None,
+        policies: vec![],
+    }
 }
 
 fn parse_source_preserving_bash(source: &str) -> Result<SourcePreservingOwnerDocument, String> {

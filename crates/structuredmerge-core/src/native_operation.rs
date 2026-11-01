@@ -818,21 +818,20 @@ pub(crate) fn execute_native_operation_with_service(
         }
         return finish(result, request, &evidence);
     }
-    let executed = if matches!(family, "go" | "rust") {
+    let executed = if matches!(family, "bash" | "go" | "rust") {
+        let merge = match family {
+            "bash" => bash_merge::typed::merge_documents,
+            "go" => go_merge::typed::merge_documents,
+            "rust" => rust_merge::typed::merge_documents,
+            _ => unreachable!("family was checked above"),
+        };
         ast_merge::typed_merge::merge_native_sources_with_engine(
             language,
             parses.clone(),
             service,
             snapshot,
             context,
-            ast_merge::typed_merge::NativeOwnerEngine {
-                analyze: analyzer,
-                merge: if family == "rust" {
-                    rust_merge::typed::merge_documents
-                } else {
-                    go_merge::typed::merge_documents
-                },
-            },
+            ast_merge::typed_merge::NativeOwnerEngine { analyze: analyzer, merge },
         )
     } else {
         merge_native_sources_with_evidence(
@@ -879,7 +878,7 @@ pub(crate) fn execute_native_operation_with_service(
                 .collect();
             result.diagnostics =
                 projection.diagnostics.into_iter().map(DiagnosticRecord::Canonical).collect();
-            if matches!(family, "go" | "rust") && !classified {
+            if matches!(family, "bash" | "go" | "rust") && !classified {
                 // The family guard classified an ownership conflict, but did
                 // not run the generic owner classifier (owner_classification
                 // remains null). The common contract counts either decision.

@@ -83,7 +83,7 @@ pub fn project_native_merge_conflicts(
             }
         }
     }
-    if matches!(provider_id, "kernel.go" | "kernel.rust")
+    if matches!(provider_id, "kernel.bash" | "kernel.go" | "kernel.rust")
         && execution.rendered.classification.is_none()
     {
         return project_membership_guard(execution, request, provider_id);
@@ -279,6 +279,12 @@ fn project_membership_guard(
     type Guard =
         fn(&Document, &Document, &Document) -> Option<ast_merge::ThreeWayMergeResult<String>>;
     let (profile, code, analyze, guard) = match provider {
+        "kernel.bash" => (
+            crate::profiles::BASH_OWNERS,
+            "bash.unmanaged_source_change",
+            bash_merge::typed::owners as Analyzer,
+            bash_merge::typed::unmanaged_source_conflict as Guard,
+        ),
         "kernel.go" => (
             crate::profiles::GO_OWNERS,
             "go.membership_with_owner_edit",

@@ -64,6 +64,37 @@ fn verified_document(
     owners(parsed)
 }
 
+/// Return the Ruby-compatible whole-document guard when unmanaged source differs.
+pub fn unmanaged_source_conflict(
+    base: &SourcePreservingOwnerDocument,
+    ours: &SourcePreservingOwnerDocument,
+    theirs: &SourcePreservingOwnerDocument,
+) -> Option<ast_merge::ThreeWayMergeResult<String>> {
+    if ours.source == theirs.source || base.source == theirs.source || base.source == ours.source {
+        return None;
+    }
+    (ast_merge::unmanaged_source_fingerprint(ours)
+        != ast_merge::unmanaged_source_fingerprint(theirs))
+    .then(crate::unmanaged_source_conflict_result)
+}
+
+/// Shared-core merge callback with Bash's Ruby-compatible unmanaged-source guard.
+pub fn merge_documents(
+    base: SourcePreservingOwnerDocument,
+    ours: SourcePreservingOwnerDocument,
+    theirs: SourcePreservingOwnerDocument,
+    verify: &mut dyn FnMut(&str) -> Result<SourcePreservingOwnerDocument, String>,
+) -> SourcePreservingMergeEvidence {
+    if let Some(result) = unmanaged_source_conflict(&base, &ours, &theirs) {
+        return SourcePreservingMergeEvidence {
+            result,
+            source_segments: vec![],
+            classification: None,
+        };
+    }
+    ast_merge::merge_source_preserving_owners_with_evidence(base, ours, theirs, verify)
+}
+
 pub fn merge3(
     base: &ParsedResult,
     ours: &ParsedResult,
@@ -83,6 +114,18 @@ pub fn merge3(
     }
     let documents = [owners(base)?, owners(ours)?, owners(theirs)?];
     let [base_document, ours_document, theirs_document] = documents;
+    if let Some(result) =
+        unmanaged_source_conflict(&base_document, &ours_document, &theirs_document)
+    {
+        return Ok(BashMergeExecution {
+            evidence: SourcePreservingMergeEvidence {
+                result,
+                source_segments: vec![],
+                classification: None,
+            },
+            output_parse: None,
+        });
+    }
     let mut output_parse = None;
     let mut verify = |text: &str| {
         let parsed = parse_output(text)?;

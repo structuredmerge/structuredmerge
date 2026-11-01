@@ -337,24 +337,7 @@ fn go_membership_change_with_owner_edit(
     if !membership_changed {
         return false;
     }
-    unmanaged_fingerprint(ours) != unmanaged_fingerprint(theirs)
-}
-
-fn unmanaged_fingerprint(document: &SourcePreservingOwnerDocument) -> String {
-    use std::collections::HashSet;
-
-    let mut owned_lines = HashSet::new();
-    for owner in &document.owners {
-        for line in owner.start_line..=owner.end_line {
-            owned_lines.insert(line);
-        }
-    }
-    document
-        .source
-        .split_inclusive('\n')
-        .enumerate()
-        .filter_map(|(index, line)| (!owned_lines.contains(&(index + 1))).then_some(line))
-        .collect::<String>()
+    ast_merge::unmanaged_source_fingerprint(ours) != ast_merge::unmanaged_source_fingerprint(theirs)
 }
 
 fn conservative_membership_conflict() -> ThreeWayMergeResult<String> {

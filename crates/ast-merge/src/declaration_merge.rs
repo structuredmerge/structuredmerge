@@ -26,6 +26,24 @@ pub struct SourcePreservingOwnerDocument {
     pub owners: Vec<SourcePreservingOwner>,
 }
 
+/// Return source lines outside every structural owner, preserving their exact bytes.
+///
+/// Ruby providers use this fingerprint to fail closed when comments, gaps, or
+/// other unmanaged source differ across the two tips of a three-way merge.
+pub fn unmanaged_source_fingerprint(document: &SourcePreservingOwnerDocument) -> String {
+    let owned_lines = document
+        .owners
+        .iter()
+        .flat_map(|owner| owner.start_line..=owner.end_line)
+        .collect::<HashSet<_>>();
+    document
+        .source
+        .split_inclusive('\n')
+        .enumerate()
+        .filter_map(|(index, line)| (!owned_lines.contains(&(index + 1))).then_some(line))
+        .collect()
+}
+
 impl SourcePreservingOwnerDocument {
     pub(crate) fn validate(&self, role: &str) -> Result<(), String> {
         let mut ids = HashSet::new();

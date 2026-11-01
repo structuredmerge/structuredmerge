@@ -215,3 +215,46 @@ fn failed_changed_output_never_exposes_clean_result_or_source_evidence() {
     assert!(execution.evidence.source_segments.is_empty());
     assert!(execution.output_parse.is_none());
 }
+
+#[test]
+fn shared_unmanaged_source_fixture_is_guarded_by_the_core_engine_callback() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/ast-merge/bash_unmanaged_source_membership_conflict.json"
+    ))
+    .unwrap();
+    let parser = Parser::new("bash");
+    for case in fixture["cases"].as_array().unwrap() {
+        let input = &case["input"];
+        let [base, ours, theirs] = parser.inputs([
+            input["base"].as_str().unwrap(),
+            input["ours"].as_str().unwrap(),
+            input["theirs"].as_str().unwrap(),
+        ]);
+        let base = typed::owners(&base).unwrap();
+        let ours = typed::owners(&ours).unwrap();
+        let theirs = typed::owners(&theirs).unwrap();
+        let mut verify = |text: &str| {
+            let output = parser.parse(text, SourceRole::Output);
+            typed::owners(&output)
+        };
+        let execution = typed::merge_documents(base, ours, theirs, &mut verify);
+        assert_eq!(
+            execution.result.outcome == ThreeWayMergeOutcome::Clean,
+            case["expected"]["ok"].as_bool().unwrap(),
+            "{}",
+            case["name"].as_str().unwrap()
+        );
+        assert_eq!(
+            execution.result.output,
+            case["expected"]["output"].as_str().map(str::to_owned),
+            "{}",
+            case["name"].as_str().unwrap()
+        );
+        assert_eq!(
+            !execution.result.conflicts.is_empty(),
+            case["expected"]["conflict"].as_bool().unwrap(),
+            "{}",
+            case["name"].as_str().unwrap()
+        );
+    }
+}
