@@ -244,6 +244,52 @@ pub fn replace_parser_host(
         .map_err(|error| CoreError { code: "registration".into(), message: format!("{error:?}") })
 }
 
+/// Register the native Rust `syn` parser in the shared parser registry.
+/// Registration is explicit and idempotent for this provider ID.
+pub fn register_rust_syn_parser(id: String) -> Result<ParserProviderDescriptor, CoreError> {
+    if id.trim().is_empty() {
+        return Err(CoreError {
+            code: "request.invalid".into(),
+            message: "parser provider ID must not be empty".into(),
+        });
+    }
+    if let Some(existing) = registered_rust_syn_parser(&id)? {
+        return Ok(existing);
+    }
+    let provider = rust_merge::RustSynParserProvider::new(id.clone());
+    let descriptor = provider.descriptor().clone();
+    match registry().register(Arc::new(provider)) {
+        Ok(_) => Ok(descriptor),
+        Err(tree_haver::service::RegistrationError::DuplicateId) => {
+            registered_rust_syn_parser(&id)?.ok_or_else(|| CoreError {
+                code: "registration".into(),
+                message: format!(
+                    "parser provider ID {id:?} is already registered for another provider"
+                ),
+            })
+        }
+        Err(error) => Err(CoreError { code: "registration".into(), message: format!("{error:?}") }),
+    }
+}
+
+fn registered_rust_syn_parser(id: &str) -> Result<Option<ParserProviderDescriptor>, CoreError> {
+    let snapshot = registry()
+        .snapshot()
+        .map_err(|error| CoreError { code: "registry".into(), message: format!("{error:?}") })?;
+    let existing = snapshot.inventory().providers.into_iter().find(|provider| provider.id == id);
+    let expected = rust_merge::RustSynParserProvider::new(id).descriptor().clone();
+    match existing {
+        Some(provider) if provider == expected => Ok(Some(provider)),
+        Some(_) => Err(CoreError {
+            code: "registration".into(),
+            message: format!(
+                "parser provider ID {id:?} is already registered for another provider"
+            ),
+        }),
+        None => Ok(None),
+    }
+}
+
 /// Opt into a Rust-owned language-pack parser in TreeHaver's shared registry.
 /// Registration does not load a grammar or replace an existing provider. Probe
 /// and parse may load/download grammars under the configured language-pack policy.

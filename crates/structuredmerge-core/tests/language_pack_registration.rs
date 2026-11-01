@@ -68,3 +68,21 @@ fn native_registration_is_explicit_non_loading_and_shares_removal() {
     register_language_pack_parser(id.clone(), "json".into()).unwrap();
     unregister_parser_provider(id).unwrap();
 }
+
+#[test]
+fn rust_syn_registration_is_explicit_idempotent_and_uses_shared_registry() {
+    let _guard = REGISTRATION_LOCK.lock().unwrap();
+    let id = "core.registration.rust-syn".to_string();
+    assert_eq!(register_rust_syn_parser("".into()).unwrap_err().code, "request.invalid");
+    let first = register_rust_syn_parser(id.clone()).unwrap();
+    let second = register_rust_syn_parser(id.clone()).unwrap();
+    assert_eq!(first, second);
+    assert_eq!(first.parser, "syn");
+    assert_eq!(first.family, "rust");
+    unregister_parser_provider(id).unwrap();
+
+    let collision_id = "core.registration.rust-syn-collision".to_string();
+    register_language_pack_parser(collision_id.clone(), "rust".into()).unwrap();
+    assert!(register_rust_syn_parser(collision_id.clone()).is_err());
+    unregister_parser_provider(collision_id).unwrap();
+}

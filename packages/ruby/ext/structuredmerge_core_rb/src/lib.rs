@@ -21484,6 +21484,11 @@ fn plan_template_directory(options: magnus::Value) -> Result<TemplateSessionPlan
     Ok(result.into())
 }
 
+fn register_rust_syn_parser(id: String) -> Result<ParserProviderDescriptor, Error> {
+    let result = structuredmerge_core::register_rust_syn_parser(id).map_err(alef_magnus_err)?;
+    Ok(result.into())
+}
+
 fn register_cached_language_pack_parser(
     id: String,
     language: String,
@@ -29633,6 +29638,11 @@ fn ruby_init(ruby: &Ruby) -> Result<(), Error> {
 
     module
         .define_module_function("plan_template_directory", function!(plan_template_directory, 1))?;
+
+    module.define_module_function(
+        "register_rust_syn_parser",
+        function!(register_rust_syn_parser, 1),
+    )?;
 
     module.define_module_function(
         "register_cached_language_pack_parser",

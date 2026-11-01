@@ -1,5 +1,6 @@
-//! Rust declaration ownership uses syn AST identities/spans over validated source.
-//! TreeHaver supplies shared ordinary-comment facts; nested owner/member semantics stay out of scope.
+//! Rust declaration ownership uses native syn item identities and spans when that
+//! provider is selected, then applies shared comment and line ownership rules.
+//! Nested owner/member semantics stay out of scope.
 use ast_merge::{
     CommentScope, LayoutAugmentation, LayoutOwner, NormalizedCommentEvidence,
     SourceLineDisposition, SourcePreservingMergeEvidence, SourcePreservingOwnerDocument,
@@ -40,15 +41,21 @@ pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
     let mut analysis =
         ast_merge::project_named_top_level_analysis(source, root, &nodes, super::owner_policy())?;
-    let native_document = super::parse_source_preserving_rust_native(source)?;
-    let projected_ids =
-        analysis.document.owners.iter().map(|owner| owner.id.as_str()).collect::<Vec<_>>();
-    let native_ids =
-        native_document.owners.iter().map(|owner| owner.id.as_str()).collect::<Vec<_>>();
-    if projected_ids != native_ids {
-        return Err("syn and TreeHaver disagree on supported Rust owner identity/order".into());
+    // A native `syn` provider already supplies authoritative Rust item spans.
+    // Keep its projected owners and comment nodes as the source of truth instead
+    // of reparsing through Tree-sitter as an acceptance gate. The legacy
+    // Tree-sitter provider still gets the native identity cross-check.
+    if parsed.backend.parser != "syn" {
+        let native_document = super::parse_source_preserving_rust_native(source)?;
+        let projected_ids =
+            analysis.document.owners.iter().map(|owner| owner.id.as_str()).collect::<Vec<_>>();
+        let native_ids =
+            native_document.owners.iter().map(|owner| owner.id.as_str()).collect::<Vec<_>>();
+        if projected_ids != native_ids {
+            return Err("syn and TreeHaver disagree on supported Rust owner identity/order".into());
+        }
+        analysis.document = native_document;
     }
-    analysis.document = native_document;
     analysis.validate(parsed)?;
     Ok(analysis)
 }

@@ -1675,6 +1675,7 @@ module StructuredmergeCore
 
   def self.plan_template_directory: (TemplateSessionOptions options) -> TemplateSessionPlanReport
 
+  def self.register_rust_syn_parser: (String id) -> ParserProviderDescriptor
   def self.register_cached_language_pack_parser: (String id, String language) -> ParserProviderDescriptor
 
   def self.register_language_pack_parser: (String id, String language) -> ParserProviderDescriptor
