@@ -541,8 +541,7 @@ pub(crate) fn execute_native_operation_with_service(
             "python" => python_merge::declaration_analysis(&parsed[0])
                 .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported),
             "bash" => bash_merge::typed::analysis_with_diagnostics(&parsed[0]),
-            "go" => go_merge::typed::analysis(&parsed[0])
-                .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported),
+            "go" => go_merge::typed::analysis_with_diagnostics(&parsed[0]),
             "rust" => rust_merge::typed::analysis_with_diagnostics(&parsed[0]),
             "typescript" => typescript_merge::typed::analysis(&parsed[0])
                 .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported),

@@ -17,9 +17,24 @@ pub fn validate_package_clause(parsed: &ParsedResult) -> Result<(), String> {
 }
 
 pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
-    let analysis = project(parsed)?;
-    let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
-    validate_native_source_ranges(source, &analysis.document)?;
+    analysis_with_diagnostics(parsed).map_err(|error| error.message)
+}
+
+pub fn analysis_with_diagnostics(
+    parsed: &ParsedResult,
+) -> Result<NativeOwnerAnalysis, ast_merge::typed_merge::NativeAnalysisError> {
+    let analysis = project(parsed).map_err(|message| {
+        if message.starts_with("Go document has duplicate top-level owner identity ") {
+            ast_merge::typed_merge::NativeAnalysisError::ambiguous_owner(message)
+        } else {
+            ast_merge::typed_merge::NativeAnalysisError::unsupported(message)
+        }
+    })?;
+    let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| {
+        ast_merge::typed_merge::NativeAnalysisError::unsupported(error.to_string())
+    })?;
+    validate_native_source_ranges(source, &analysis.document)
+        .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported)?;
     Ok(analysis)
 }
 
