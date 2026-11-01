@@ -118,7 +118,16 @@ fn source_line_analysis_composes_native_comments_layout_and_owner_identity() {
     assert_eq!(analysis.dispositions[2].owner_id.as_deref(), Some("/variable:x"));
     assert_eq!(analysis.dispositions[2].comment_kind.as_deref(), Some("inline"));
     assert_eq!(analysis.dispositions[2].line, "x=1 # inline\n");
+    assert!(analysis.inline_promotion_owner_ids.contains("/variable:x"));
+    assert!(!analysis.inline_promotion_owner_ids.contains("/function:f"));
     assert_eq!(analysis.dispositions[3].owner_id.as_deref(), Some("/function:f"));
+
+    let harness =
+        parser.parse("test_expect_success 'title' 'echo one' # inline docs\n", SourceRole::Source);
+    let harness_analysis = typed::source_line_analysis(&harness).unwrap();
+    let harness_owner = &harness_analysis.owners.document.owners[0].id;
+    assert!(harness_owner.starts_with("/test_harness_call:"));
+    assert!(harness_analysis.inline_promotion_owner_ids.contains(harness_owner));
 }
 
 #[test]

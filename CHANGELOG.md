@@ -409,7 +409,7 @@
 
 - Convert removed-owner preservation lines into ordered semantic source selections for exact-byte rendering.
 
-- [kc] ast-merge-rehome-source-fragments: Add shared Ruby and Rust inline-comment promotion contract with Ruby-compatible LF emission.
+- [kc] ast-merge-rehome-source-fragments: Add shared Ruby and Rust inline-comment promotion contract, Ruby-compatible LF emission, and Bash native eligibility facts.
 
 ### Fixed
 

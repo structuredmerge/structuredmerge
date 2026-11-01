@@ -7,7 +7,7 @@ use ast_merge::{
     render_source_plan, source_line_dispositions_from_augmentations,
     source_line_selections_for_owner_revisions, source_render_plan_from_line_selections,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tree_haver::{service::ParsedResult, source::SourceRole};
 
 pub fn owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, String> {
@@ -50,6 +50,9 @@ pub struct BashSourceLineAnalysis {
     pub comments: NormalizedCommentEvidence,
     pub layout: LayoutAugmentation,
     pub dispositions: Vec<SourceLineDisposition>,
+    /// Provider-verified single-line owner kinds eligible for Ruby-compatible
+    /// inline-comment promotion during removal/rehome planning.
+    pub inline_promotion_owner_ids: HashSet<String>,
 }
 
 /// Compose the native Bash owner projection with TreeHaver comments and the
@@ -59,6 +62,7 @@ pub fn source_line_analysis(parsed: &ParsedResult) -> Result<BashSourceLineAnaly
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
     let nodes = parsed.normalized_nodes()?;
     let mut tree_to_semantic = HashMap::<String, String>::new();
+    let mut inline_promotion_owner_ids = HashSet::new();
     let mut native_layout_owners = Vec::with_capacity(owners.document.owners.len());
     let mut semantic_layout_owners = Vec::with_capacity(owners.document.owners.len());
     for owner in &owners.document.owners {
@@ -70,6 +74,15 @@ pub fn source_line_analysis(parsed: &ParsedResult) -> Result<BashSourceLineAnaly
             return Err(format!("Bash owner {} does not map to exactly one native node", owner.id));
         }
         let node_id = &node_ids[0];
+        let native_node = nodes
+            .iter()
+            .find(|node| node.id == *node_id)
+            .ok_or_else(|| format!("Bash owner {} references a missing native node", owner.id))?;
+        let ruby_inline_safe_kind = native_node.kind == "variable_assignment"
+            || (native_node.kind == "command" && owner.id.starts_with("/test_harness_call:"));
+        if owner.start_line == owner.end_line && ruby_inline_safe_kind {
+            inline_promotion_owner_ids.insert(owner.id.clone());
+        }
         if tree_to_semantic.insert(node_id.clone(), owner.id.clone()).is_some() {
             return Err(format!("native Bash node {node_id} maps to multiple owners"));
         }
@@ -106,7 +119,13 @@ pub fn source_line_analysis(parsed: &ParsedResult) -> Result<BashSourceLineAnaly
         &layout,
     )?;
 
-    Ok(BashSourceLineAnalysis { owners, comments, layout, dispositions })
+    Ok(BashSourceLineAnalysis {
+        owners,
+        comments,
+        layout,
+        dispositions,
+        inline_promotion_owner_ids,
+    })
 }
 
 fn normalize_bash_comment(text: &str) -> String {
