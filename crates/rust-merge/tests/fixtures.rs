@@ -872,6 +872,7 @@ fn native_syn_merge3_consumes_shared_two_tip_addition_fixtures() {
         "rust_merge3_two_tip_additions_distinct_source_gaps.json",
         "rust_merge3_two_tip_additions_same_internal_gap.json",
         "rust_merge3_two_tip_additions_file_edges.json",
+        "rust_syn_crate_doc_additions.json",
         "rust_merge3_two_tip_additions_same_preamble_gap.json",
         "rust_merge3_addition_with_crate_docs.json",
     ] {

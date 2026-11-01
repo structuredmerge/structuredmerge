@@ -642,6 +642,9 @@ fn position_additions_in_their_source_gaps(
         .collect::<HashSet<_>>();
     let mut positioned = Vec::<(String, SourceRevision, bool, Vec<SourceLineSelection>)>::new();
     let mut replaced_keys = HashSet::<(SourceRevision, String)>::new();
+    let base_has_preamble = base.iter().any(|record| {
+        record.kind == "root_region" && record.root_region_kind.as_deref() == Some("preamble")
+    });
 
     for ((previous, following), revisions) in additions_by_gap {
         let mut additions = revisions
@@ -757,7 +760,9 @@ fn position_additions_in_their_source_gaps(
             }
             for record in gap_records {
                 if record.kind == "root_region"
-                    && baseline_root_keys.contains(&record.selection_key)
+                    && (baseline_root_keys.contains(&record.selection_key)
+                        || (!base_has_preamble
+                            && record.root_region_kind.as_deref() == Some("preamble")))
                 {
                     continue;
                 }
@@ -941,6 +946,45 @@ fn position_additions_in_their_source_gaps(
     selections.retain(|selection| {
         !replaced_keys.contains(&(selection.revision, selection.selection_key.clone()))
     });
+    if !base_has_preamble {
+        selections.retain(|selection| {
+            !dispositions.get(&selection.revision).is_some_and(|records| {
+                records.iter().any(|record| {
+                    record.kind == "root_region"
+                        && record.root_region_kind.as_deref() == Some("preamble")
+                        && record.selection_key == selection.selection_key
+                })
+            })
+        });
+        // A newly added document preamble is document-scoped. Collect each
+        // distinct source region before owner additions so Rust inner docs from
+        // independent tips remain at crate scope instead of being dropped by
+        // the shared root:preamble identity or emitted between items.
+        let mut seen_root_regions = HashSet::<(String, Vec<String>)>::new();
+        let mut added_root_regions = Vec::new();
+        for revision in [SourceRevision::Ours, SourceRevision::Theirs] {
+            let Some(records) = dispositions.get(&revision) else { continue };
+            let mut regions = HashMap::<String, Vec<&crate::SourceLineDisposition>>::new();
+            for record in records.iter().filter(|record| {
+                record.kind == "root_region"
+                    && record.root_region_kind.as_deref() == Some("preamble")
+            }) {
+                regions.entry(record.selection_key.clone()).or_default().push(record);
+            }
+            let mut regions = regions.into_iter().collect::<Vec<_>>();
+            regions.sort_by_key(|(_, records)| {
+                records.iter().map(|record| record.line_number).min().unwrap_or(usize::MAX)
+            });
+            for (selection_key, mut records) in regions {
+                records.sort_by_key(|record| record.line_number);
+                let lines = records.iter().map(|record| record.line.clone()).collect::<Vec<_>>();
+                if seen_root_regions.insert((selection_key.clone(), lines)) {
+                    added_root_regions.push(SourceLineSelection { selection_key, revision });
+                }
+            }
+        }
+        selections.splice(0..0, added_root_regions);
+    }
     let mut positioned = positioned
         .into_iter()
         .filter_map(|(anchor_key, anchor_revision, after_anchor, chunk)| {
@@ -1529,7 +1573,7 @@ pub fn source_render_plan_from_line_selections(
     let mut fragments = Vec::with_capacity(selections.len());
     for selection in selections {
         if selection.selection_key.is_empty()
-            || !selected_keys.insert(selection.selection_key.as_str())
+            || !selected_keys.insert((selection.revision, selection.selection_key.as_str()))
         {
             return Err(SourceRenderError::new(
                 "source line selections have an empty or duplicate key",
