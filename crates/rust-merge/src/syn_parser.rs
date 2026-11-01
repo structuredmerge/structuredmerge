@@ -61,12 +61,14 @@ impl RustSynParserProvider {
                 syn::GenericParam::Const(parameter) => parameter.ident.to_string(),
             })
             .collect::<std::collections::HashSet<_>>();
-        let target = match impl_type_path(&item.self_ty) {
-            Some(_) if type_has_concrete_arguments(&item.self_ty, &generic_parameters) => {
-                token_identity(source, &item.self_ty, &item.generics)?
+        let target = match item.self_ty.as_ref() {
+            syn::Type::Path(path)
+                if path.qself.is_none()
+                    && !type_has_concrete_arguments(&item.self_ty, &generic_parameters) =>
+            {
+                impl_type_path(&item.self_ty)?
             }
-            Some(target) => target,
-            None => token_identity(source, &item.self_ty, &item.generics)?,
+            _ => token_identity(source, &item.self_ty, &item.generics)?,
         };
         let trait_path = match item.trait_.as_ref() {
             Some((_, path, _)) => {
@@ -905,6 +907,10 @@ mod tests {
         let source = concat!(
             "trait Convert<T> {}\n",
             "trait Marker {}\n",
+            "trait Borrowed<T> {}\n",
+            "struct BorrowedValue<T>(T);\n",
+            "impl<T> Borrowed<T> for BorrowedValue<T> {}\n",
+            "impl<T> Borrowed<T> for &BorrowedValue<T> {}\n",
             "struct Value<T>(T);\n",
             "impl Convert<u8> for Value<u8> {}\n",
             "impl Convert<String> for Value<String> {}\n",
@@ -928,6 +934,8 @@ mod tests {
         assert_eq!(
             impl_paths,
             [
+                "/impl:Borrowed|BorrowedValue|positive|1",
+                "/impl:Borrowed|& BorrowedValue < __sm_type_0 >|positive|1",
                 "/impl:Convert < u8 >|Value < u8 >|positive|0",
                 "/impl:Convert < String >|Value < String >|positive|0",
                 "/impl:Convert < Vec < __sm_type_0 >>|Value < Vec < __sm_type_0 >>|positive|1",
