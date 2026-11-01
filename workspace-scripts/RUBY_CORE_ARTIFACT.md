@@ -213,3 +213,12 @@ cleared. Native-extension origin, RBS validation, 53 installed core examples,
 116 generated E2E examples, and 116 consumer-app examples passed. The report
 records `registry_install=local-candidate` and `publication_gate=false`; this is
 not evidence of a RubyGems registry installation, and no package was published.
+
+Local candidate rerun against current Rust core commit `0fdce8d` (2026-11-01):
+the x86_64 Linux / Ruby 4.0.9 platform gem `structuredmerge-core 0.2.1` has
+SHA-256 `fcf17527cc442c1a4b562ea1c7c5f6786a372054084c1488480661851964f247`.
+The exact archive installed into a fresh `GEM_HOME` with checkout load paths
+cleared. Native-extension origin, RBS validation, 53 installed core examples,
+116 generated E2E examples, and 116 consumer-app examples passed. The report
+records `registry_install=local-candidate` and `publication_gate=false`; the
+registry-installed release gate remains open, and no package was published.
