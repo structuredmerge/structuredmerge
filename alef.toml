@@ -5,6 +5,7 @@ languages = ["ruby", "python"]
 [workspace.ownership]
 user_owned = [
   "rustfmt.toml",
+  "rust-toolchain.toml",
   # Frozen review evidence, owned by check_typed_api_baselines.py --record.
   # Never regenerate these alongside the live API: that would erase drift.
   "contracts/typed-api/python/snapshot/**",
