@@ -222,3 +222,14 @@ cleared. Native-extension origin, RBS validation, 53 installed core examples,
 116 generated E2E examples, and 116 consumer-app examples passed. The report
 records `registry_install=local-candidate` and `publication_gate=false`; the
 registry-installed release gate remains open, and no package was published.
+
+Local candidate rerun after Bash inline-comment merge3 ownership (2026-11-01):
+structuredmerge commit `7c1d3a8` produced the x86_64 Linux / Ruby 4.0.9
+platform artifact with SHA-256
+`9d8e8947eefb41bd926a213f4236809d50f7af8f4076b9a228c81e6655513172`. The exact
+gem installed into a fresh `GEM_HOME` with checkout load paths cleared. Native
+extension origin, RBS validation, 53 installed core examples, 116 generated E2E
+examples, and 116 consumer-app examples passed. The verifier reports
+`registry_install=local-candidate` and `publication_gate=false`; registry
+installation and release verification remain pending, and no package was
+published.
