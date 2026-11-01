@@ -12,6 +12,20 @@ pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
     }
     let nodes = parsed.normalized_nodes()?;
     let root = parsed.document.output().root_id.as_deref().ok_or("Rust parse omitted its root")?;
+    let index = tree_haver::NormalizedTreeIndex::new(&nodes)?;
+    let root_node = index.root(root)?;
+    for node in index.children(root_node) {
+        if node.kind == "attribute_item" {
+            let attribute =
+                parsed.source.slice(node.span.range.clone()).map_err(|error| error.to_string())?;
+            let attribute = std::str::from_utf8(attribute).map_err(|error| error.to_string())?;
+            if attribute.trim() == "#[test]" || attribute.trim_start().starts_with("#[test(") {
+                return Err(
+                    "Rust test-selector attributes are unsupported by this owner profile".into()
+                );
+            }
+        }
+    }
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
     let analysis =
         ast_merge::project_named_top_level_analysis(source, root, &nodes, super::owner_policy())?;
