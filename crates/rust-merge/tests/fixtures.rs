@@ -1134,6 +1134,26 @@ fn native_syn_keeps_same_spelling_rust_namespaces_as_distinct_owners() {
 }
 
 #[test]
+fn native_syn_keeps_file_preamble_and_removes_comment_owned_by_deleted_item() {
+    let fixture = read_fixture(&[
+        "polyglot",
+        "typed-core",
+        "rust_merge3_multiple_deletions_keep_preamble_comment_and_remove_attached_comment.json",
+    ]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(fixture["expected"]["output"].as_str().unwrap()));
+}
+
+#[test]
 fn native_syn_rehomes_comment_when_deleted_owner_precedes_reordered_edit() {
     let fixture = read_fixture(&[
         "polyglot",
