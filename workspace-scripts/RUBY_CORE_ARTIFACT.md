@@ -194,3 +194,13 @@ extension origin checks, RBS validation, 53 installed core examples, 116 generat
 E2E examples, and 116 consumer-app examples passed. The verifier reports
 `registry_install=local-candidate` and `publication_gate=false`; registry-installed
 verification remains open and no package was published.
+
+Local candidate rerun after Rust membership/edit comment ownership (2026-11-01):
+structuredmerge commit `0f1cc77942fc56725692b4234b5fe30ca24204ef` produced
+`structuredmerge-core 0.2.1` for x86_64 Linux / Ruby 4.0.9. Artifact SHA-256:
+`70e2613f7d09dea2d9ba935adfa438f049fe919921d0b8fc91c7ead35e9177f9`. The
+exact gem installed into a fresh GEM_HOME with checkout load paths cleared. The
+verifier report confirms native extension origin, installed core tests, generated
+E2E, consumer-app tests, and RBS validation all passed. The report records
+`registry_install=local-candidate` and `publication_gate=false`; this is local
+candidate evidence, not registry-install or release evidence.
