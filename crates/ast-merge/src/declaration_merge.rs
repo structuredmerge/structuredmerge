@@ -285,29 +285,40 @@ fn merge_owners(
         .collect::<HashSet<_>>();
     let membership_changed =
         base.owner_ids() != ours.owner_ids() || base.owner_ids() != theirs.owner_ids();
-    let layout_matches = if membership_changed && stable_ids.is_empty() {
+    let owner_order_changed = if stable_ids.is_empty() {
         false
-    } else if membership_changed {
+    } else {
         let base_order = owner_order_for_ids(base, &stable_ids);
         let ours_order = owner_order_for_ids(ours, &stable_ids);
         let theirs_order = owner_order_for_ids(theirs, &stable_ids);
-        if base_order != ours_order || base_order != theirs_order {
+        if ours_order != theirs_order {
             return error_result(
                 DiagnosticCategory::UnsupportedFeature,
-                "source-preserving declaration merge cannot prove stable owner order",
+                "source-preserving declaration merge cannot prove an agreed owner order",
             );
         }
+        base_order != ours_order
+    };
+    let layout_matches = if membership_changed && stable_ids.is_empty() {
+        false
+    } else if membership_changed {
         let base_layout = layout_segments_for_ids(base, &stable_ids);
         let ours_layout = layout_segments_for_ids(ours, &stable_ids);
         let theirs_layout = layout_segments_for_ids(theirs, &stable_ids);
         match (base_layout, ours_layout, theirs_layout) {
             (Ok(base_layout), Ok(ours_layout), Ok(theirs_layout)) => {
-                base_layout == ours_layout && base_layout == theirs_layout
+                if owner_order_changed {
+                    ours_layout == theirs_layout
+                } else {
+                    base_layout == ours_layout && base_layout == theirs_layout
+                }
             }
             (Err(message), _, _) | (_, Err(message), _) | (_, _, Err(message)) => {
                 return error_result(DiagnosticCategory::ConfigurationError, message);
             }
         }
+    } else if owner_order_changed {
+        ours.layout_segments() == theirs.layout_segments()
     } else {
         base.layout_segments() == ours.layout_segments()
             && base.layout_segments() == theirs.layout_segments()
@@ -730,6 +741,54 @@ mod tests {
 
         assert_eq!(result.outcome, ThreeWayMergeOutcome::Clean);
         assert_eq!(result.output.as_deref(), Some("ONE\n\nTWO\n"));
+    }
+
+    #[test]
+    fn merges_independent_edits_when_both_tips_agree_on_reordered_owner_order() {
+        let base = SourcePreservingOwnerDocument {
+            source: "left\n\nright\n".into(),
+            owners: vec![owner("left", "left", 0, 4, 1), owner("right", "right", 6, 11, 3)],
+        };
+        let ours = SourcePreservingOwnerDocument {
+            source: "right\n\nLEFT\n".into(),
+            owners: vec![owner("right", "right", 0, 5, 1), owner("left", "LEFT", 7, 11, 3)],
+        };
+        let theirs = SourcePreservingOwnerDocument {
+            source: "RIGHT\n\nleft\n".into(),
+            owners: vec![owner("right", "RIGHT", 0, 5, 1), owner("left", "left", 7, 11, 3)],
+        };
+
+        let result = merge_source_preserving_owners(base, ours, theirs, |source| {
+            Ok(SourcePreservingOwnerDocument {
+                source: source.to_string(),
+                owners: vec![owner("right", "RIGHT", 0, 5, 1), owner("left", "LEFT", 7, 11, 3)],
+            })
+        });
+
+        assert_eq!(result.outcome, ThreeWayMergeOutcome::Clean);
+        assert_eq!(result.output.as_deref(), Some("RIGHT\n\nLEFT\n"));
+    }
+
+    #[test]
+    fn rejects_reordered_owner_sequences_that_disagree_between_tips() {
+        let base = SourcePreservingOwnerDocument {
+            source: "left\n\nright\n".into(),
+            owners: vec![owner("left", "left", 0, 4, 1), owner("right", "right", 6, 11, 3)],
+        };
+        let ours = SourcePreservingOwnerDocument {
+            source: "right\n\nLEFT\n".into(),
+            owners: vec![owner("right", "right", 0, 5, 1), owner("left", "LEFT", 7, 11, 3)],
+        };
+        let theirs = SourcePreservingOwnerDocument {
+            source: "left\n\nRIGHT\n".into(),
+            owners: vec![owner("left", "left", 0, 4, 1), owner("right", "RIGHT", 6, 12, 3)],
+        };
+
+        let result = merge_source_preserving_owners(base, ours, theirs, |_| unreachable!());
+
+        assert_eq!(result.outcome, ThreeWayMergeOutcome::Error);
+        assert_eq!(result.diagnostics[0].category, DiagnosticCategory::UnsupportedFeature);
+        assert!(result.diagnostics[0].message.contains("agreed owner order"));
     }
 
     #[test]
