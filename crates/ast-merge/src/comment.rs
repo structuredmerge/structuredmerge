@@ -60,8 +60,14 @@ pub fn augment_normalized_comments_with_evidence(
     let comments = tracked.iter().map(|(comment, _)| comment.clone()).collect::<Vec<_>>();
     let mut region_node_ids = std::collections::BTreeMap::<String, Vec<String>>::new();
     let mut claimed = HashSet::new();
-    let augmentation =
-        augment_comments_observed(&lines, owners, &comments, style, &mut |region, indices| {
+    let owner_indents = normalized_owner_indents(owners, nodes);
+    let augmentation = augment_comments_observed(
+        &lines,
+        owners,
+        &comments,
+        style,
+        &owner_indents,
+        &mut |region, indices| {
             let ids = region_node_ids.entry(region.to_string()).or_default();
             for index in indices {
                 claimed.insert(*index);
@@ -70,7 +76,8 @@ pub fn augment_normalized_comments_with_evidence(
                     ids.push(id.clone());
                 }
             }
-        })?;
+        },
+    )?;
     let mut unclaimed_node_ids = vec![];
     for (index, (_, id)) in tracked.iter().enumerate() {
         if !claimed.contains(&index) && !unclaimed_node_ids.contains(id) {
@@ -104,7 +111,8 @@ pub fn augment_normalized_comments_with_owners(
         .filter(|node| node.role == NodeRole::Comment)
         .flat_map(|node| tracked_normalized_comment(&lines, node, &normalize_comment))
         .collect::<Vec<_>>();
-    augment_comments(&lines, owners, &comments, style)
+    let owner_indents = normalized_owner_indents(owners, nodes);
+    augment_comments_with_owner_indents(&lines, owners, &comments, style, &owner_indents)
 }
 
 pub fn normalized_root_layout_owners(
@@ -251,7 +259,42 @@ pub fn augment_comments(
     comments: &[TrackedComment],
     style: &str,
 ) -> Result<CommentAugmentation, String> {
-    augment_comments_observed(lines, owners, comments, style, &mut |_, _| {})
+    augment_comments_with_owner_indents(
+        lines,
+        owners,
+        comments,
+        style,
+        &std::collections::HashMap::new(),
+    )
+}
+
+/// Augment comments when providers have reliable indentation facts for owners.
+/// Missing facts preserve Ruby's permissive behavior: the comment is not
+/// rejected based on indentation that the owner API did not expose.
+pub fn augment_comments_with_owner_indents(
+    lines: &[String],
+    owners: &[LayoutOwner],
+    comments: &[TrackedComment],
+    style: &str,
+    owner_indents: &std::collections::HashMap<String, usize>,
+) -> Result<CommentAugmentation, String> {
+    augment_comments_observed(lines, owners, comments, style, owner_indents, &mut |_, _| {})
+}
+
+fn normalized_owner_indents(
+    owners: &[LayoutOwner],
+    nodes: &[NormalizedTreeNode],
+) -> std::collections::HashMap<String, usize> {
+    let columns = nodes
+        .iter()
+        .map(|node| (node.id.as_str(), node.span.start_point.column))
+        .collect::<std::collections::HashMap<_, _>>();
+    owners
+        .iter()
+        .filter_map(|owner| {
+            columns.get(owner.owner_id.as_str()).map(|column| (owner.owner_id.clone(), *column))
+        })
+        .collect()
 }
 
 fn augment_comments_observed(
@@ -259,6 +302,7 @@ fn augment_comments_observed(
     owners: &[LayoutOwner],
     comments: &[TrackedComment],
     style: &str,
+    owner_indents: &std::collections::HashMap<String, usize>,
     observed: &mut dyn FnMut(&str, &[usize]),
 ) -> Result<CommentAugmentation, String> {
     validate_comments(lines, comments)?;
@@ -289,6 +333,7 @@ fn augment_comments_observed(
             owners.get(owner_index + 1),
             &comments,
             &claimed,
+            owner_indents.get(&owner.owner_id).copied(),
         );
         let leading_floating = leading.last().is_some_and(|index| {
             ((comments[*index].line + 1)..owner.start_line).any(|line| blank_line(lines, line))
@@ -448,6 +493,7 @@ fn trailing_comment_indices(
     next_owner: Option<&LayoutOwner>,
     comments: &[TrackedComment],
     claimed: &HashSet<usize>,
+    owner_indent: Option<usize>,
 ) -> Vec<usize> {
     let max_line = next_owner.map_or(lines.len(), |next| next.start_line - 1);
     let mut current = owner.end_line + 1;
@@ -461,10 +507,8 @@ fn trailing_comment_indices(
         }) else {
             break;
         };
-        if let Some(indent) = comment.indent {
-            let owner_indent =
-                lines[owner.start_line - 1].chars().take_while(|char| char.is_whitespace()).count();
-            if indent != owner_indent {
+        if let (Some(comment_indent), Some(owner_indent)) = (comment.indent, owner_indent) {
+            if comment_indent != owner_indent {
                 break;
             }
         }
