@@ -1,5 +1,5 @@
 //! Conservative Go declaration ownership over validated Tree-sitter facts.
-//! Package clauses and supported declarations are owners; import bytes remain unowned layout.
+//! Package clauses, imports, and supported declarations are whole owners.
 use ast_merge::{
     SourcePreservingMergeEvidence, SourcePreservingOwnerDocument,
     native_analysis::NativeOwnerAnalysis,

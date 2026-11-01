@@ -111,7 +111,7 @@ fn directional_planner_checks_native_owners_even_when_there_are_no_additions() {
 }
 
 #[test]
-fn analysis_preserves_native_function_references_and_unowned_header_bytes() {
+fn analysis_owns_imports_and_preserves_native_function_references() {
     let parser = Parser::new("go");
     let parsed = parser.parse(
         "package main\nimport \"fmt\"\n// é\nfunc f() { fmt.Println(\"雪\") }\n",
@@ -119,10 +119,14 @@ fn analysis_preserves_native_function_references_and_unowned_header_bytes() {
     );
     let analysis = typed::analysis(&parsed).unwrap();
     analysis.validate(&parsed).unwrap();
-    assert_eq!(analysis.document.owners.len(), 2);
+    assert_eq!(analysis.document.owners.len(), 3);
     let package =
         analysis.document.owners.iter().find(|owner| owner.id == "/package:main").unwrap();
     assert_eq!(package.start_line, 1);
+    let import =
+        analysis.document.owners.iter().find(|owner| owner.id.starts_with("/import:")).unwrap();
+    assert_eq!(import.start_line, 2);
+    assert!(import.fingerprint.contains("import \"fmt\""));
     let owner = analysis.document.owners.iter().find(|owner| owner.id == "/function:f").unwrap();
     let ids = &analysis.owner_node_ids[&owner.id];
     assert_eq!(ids.len(), 2);
@@ -136,11 +140,9 @@ fn analysis_preserves_native_function_references_and_unowned_header_bytes() {
         &parsed.source.bytes()[owner.start_byte..owner.end_byte]
     );
     let gaps = analysis.layout_gaps().unwrap();
-    assert!(gaps[0].range.is_empty());
-    assert_eq!(
-        parsed.source.slice(gaps[1].range.clone()).unwrap(),
-        "\nimport \"fmt\"\n".as_bytes()
-    );
+    assert!(gaps.iter().all(|gap| {
+        !parsed.source.slice(gap.range.clone()).unwrap().windows(4).any(|window| window == b"fmt\"")
+    }));
     let mut wrong = parsed.clone();
     wrong.source = parser.parse(BASE, SourceRole::Source).source;
     assert!(typed::analysis(&wrong).is_err());

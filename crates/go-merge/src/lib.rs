@@ -302,6 +302,7 @@ fn go_membership_change_with_owner_edit(
                 owner.id.starts_with("/var_group:")
                     || owner.id.starts_with("/type_group:")
                     || owner.id.starts_with("/const_group:")
+                    || owner.id.starts_with("/import_group:")
             })
             .map(|owner| owner.id.clone())
             .collect::<std::collections::BTreeSet<_>>()
@@ -392,9 +393,9 @@ fn parse_source_preserving_go(source: &str) -> Result<SourcePreservingOwnerDocum
     project_go_owners(source, &parsed.root_id, &parsed.nodes).map(|analysis| analysis.document)
 }
 
-/// Project supported Go declarations as whole source owners.
-/// Grouped type, const, and variable declarations use ordered member identities,
-/// matching the Ruby provider's whole-declaration ownership boundary.
+/// Project supported Go declarations and imports as whole source owners.
+/// Grouped type, const, variable, and import declarations use stable member
+/// identities, matching the Ruby provider's whole-declaration ownership boundary.
 pub(crate) fn project_go_owners(
     source: &str,
     root_id: &str,
@@ -435,12 +436,8 @@ pub(crate) fn project_go_owners(
             pending_comments.push(node);
             continue;
         }
-        if node.kind == "import_declaration" {
-            pending_comments.clear();
-            last_owner = None;
-            continue;
-        }
         let id = match node.kind.as_str() {
+            "import_declaration" => go_import_owner_id(node, &index)?,
             "package_clause" => {
                 let name = index
                     .descendants(node)
@@ -606,6 +603,52 @@ pub(crate) fn project_go_owners(
         document: SourcePreservingOwnerDocument { source: source.to_string(), owners },
         owner_node_ids,
     })
+}
+
+fn go_import_owner_id(
+    node: &NormalizedTreeNode,
+    index: &NormalizedTreeIndex<'_>,
+) -> Result<String, String> {
+    let specs = index
+        .descendants(node)
+        .into_iter()
+        .filter(|child| child.kind == "import_spec")
+        .collect::<Vec<_>>();
+    if specs.is_empty() {
+        return Err("Go import declaration has no stable import specs".into());
+    }
+    let mut members = specs
+        .iter()
+        .map(|spec| {
+            let descendants = index.descendants(spec);
+            let path = descendants
+                .iter()
+                .find(|child| {
+                    matches!(
+                        child.kind.as_str(),
+                        "interpreted_string_literal" | "raw_string_literal"
+                    )
+                })
+                .map(|child| unquote(child.source_fragment.trim()))
+                .ok_or("Go import spec has no stable path")?;
+            let alias = index
+                .children(spec)
+                .into_iter()
+                .find(|child| {
+                    matches!(child.kind.as_str(), "package_identifier" | "dot" | "blank_identifier")
+                })
+                .map(|child| child.source_fragment.trim().to_string());
+            Ok((alias, path))
+        })
+        .collect::<Result<Vec<_>, &str>>()?;
+    let grouped = index.descendants(node).iter().any(|child| child.kind == "import_spec_list");
+    if grouped {
+        members.sort();
+        Ok(format!("/import_group:{members:?}"))
+    } else {
+        let (alias, path) = members.pop().expect("nonempty imports checked above");
+        Ok(format!("/import:{alias:?}:{path:?}"))
+    }
 }
 
 fn go_import_paths(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> Vec<String> {

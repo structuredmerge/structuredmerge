@@ -104,8 +104,8 @@ pub fn operation_profile_catalog() -> OperationProfileCatalog {
             "kernel.go",
             "go",
             vec!["go"],
-            "top-level package, function, method, type, const, and variable declarations as whole owners",
-            "no import reconciliation or nested-body merge; grouped member identity changes and unsupported top-level constructs fail closed",
+            "top-level package, import, function, method, type, const, and variable declarations as whole owners",
+            "imports are whole owners without semantic reconciliation; no nested-body merge; grouped member identity changes and unsupported top-level constructs fail closed",
         ),
         (
             JSON_NESTED,
