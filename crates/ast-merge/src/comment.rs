@@ -425,6 +425,40 @@ fn augment_comments_observed(
     for group in groups {
         let is_preamble = preamble_region_id.is_none()
             && first_owner_start.is_some_and(|line| comments[*group.last().unwrap()].line < line);
+        if is_preamble && comments[*group.first().unwrap()].line == 1 && group.len() > 1 {
+            if let Some(gap_line) = (comments[*group.first().unwrap()].line
+                ..comments[*group.last().unwrap()].line)
+                .filter(|line| blank_line(lines, *line))
+                .last()
+                .filter(|line| first_owner_start.is_some_and(|owner_line| *line < owner_line))
+            {
+                let (preamble, detached): (Vec<_>, Vec<_>) =
+                    group.iter().copied().partition(|index| comments[*index].line < gap_line);
+                if !preamble.is_empty() {
+                    preamble_region_id = push_document_region(
+                        &mut regions,
+                        "preamble",
+                        &preamble,
+                        &comments,
+                        lines,
+                        style,
+                        observed,
+                    );
+                    if let Some(region_id) = push_document_region(
+                        &mut regions,
+                        "orphan",
+                        &detached,
+                        &comments,
+                        lines,
+                        style,
+                        observed,
+                    ) {
+                        orphan_region_ids.push(region_id);
+                    }
+                    continue;
+                }
+            }
+        }
         let kind = if is_preamble { "preamble" } else { "orphan" };
         if let Some(region_id) =
             push_document_region(&mut regions, kind, &group, &comments, lines, style, observed)

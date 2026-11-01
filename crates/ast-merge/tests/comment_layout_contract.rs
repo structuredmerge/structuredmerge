@@ -131,4 +131,83 @@ fn shared_comment_line_ownership_fixture_matches_regions_and_layout() {
         assert_eq!(trailing.as_deref(), case["expected_trailing"].as_str());
         assert_eq!(postlude.as_deref(), case["expected_postlude"].as_str());
     }
+
+    for case in fixture["document_cases"].as_array().unwrap() {
+        let source = case["source"].as_str().unwrap();
+        let mut case_lines = source.split(char::from(10)).map(str::to_string).collect::<Vec<_>>();
+        if source.ends_with(char::from(10)) && case_lines.last().is_some_and(String::is_empty) {
+            case_lines.pop();
+        }
+        let case_owners = case["owners"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|owner| LayoutOwner {
+                owner_id: owner["id"].as_str().unwrap().to_string(),
+                start_line: owner["start_line"].as_u64().unwrap() as usize,
+                end_line: owner["end_line"].as_u64().unwrap() as usize,
+            })
+            .collect::<Vec<_>>();
+        let case_comments = case["comments"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|comment| TrackedComment {
+                line: comment["line"].as_u64().unwrap() as usize,
+                text: comment["text"].as_str().unwrap().to_string(),
+                normalized_content: comment["normalized_content"].as_str().unwrap().to_string(),
+                full_line: comment["full_line"].as_bool().unwrap(),
+                indent: Some(comment["indent"].as_u64().unwrap() as usize),
+            })
+            .collect::<Vec<_>>();
+        let augmentation = augment_comments(
+            &case_lines,
+            &case_owners,
+            &case_comments,
+            fixture["style"].as_str().unwrap(),
+        )
+        .unwrap();
+        let regions = augmentation
+            .regions
+            .iter()
+            .map(|region| (region.id.as_str(), region))
+            .collect::<HashMap<_, _>>();
+        let content = |id: &Option<String>| {
+            id.as_ref()
+                .and_then(|id| regions.get(id.as_str()).copied())
+                .map(|region| region.normalized_content())
+        };
+        let leading_by_owner = augmentation
+            .attachments
+            .iter()
+            .map(|attachment| {
+                (attachment.owner_id.as_str(), content(&attachment.leading_region_id))
+            })
+            .collect::<HashMap<_, _>>();
+        let orphans = augmentation
+            .orphan_region_ids
+            .iter()
+            .filter_map(|id| regions.get(id.as_str()).copied())
+            .map(|region| region.normalized_content())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            content(&augmentation.preamble_region_id).as_deref(),
+            case["expected"]["preamble"].as_str()
+        );
+        assert_eq!(
+            orphans,
+            case["expected"]["orphans"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|item| item.as_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+        );
+        for (owner_id, expected) in case["expected"]["leading_by_owner"].as_object().unwrap() {
+            assert_eq!(
+                leading_by_owner.get(owner_id.as_str()).and_then(Option::as_deref),
+                expected.as_str()
+            );
+        }
+    }
 }
