@@ -163,3 +163,13 @@ examples, with installed native-extension path and RBS checks green. The report
 states registry_install=local-candidate and publication_gate=false. This verifies
 the current local platform candidate, not a RubyGems-installed source package;
 no package was published.
+
+
+Local candidate rerun after the shared Rust owner-order resolver (2026-11-01):
+the freshly compiled x86_64 Linux / Ruby 4.0.9 artifact has SHA-256
+`e7d438c1a3b70fe65a05ff1ed0b146af397e6748892103fde95fb48bd1e0bbfc`.
+The isolated candidate verifier passed native-extension origin checks, RBS,
+53 core examples, 116 generated e2e examples, and 116 consumer-app examples.
+The report remains `registry_install=local-candidate` and
+`publication_gate=false`; it does not verify registry installation or authorize
+publication.
