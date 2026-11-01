@@ -237,6 +237,55 @@ fn span(parsed: &ParsedResult, range: crate::ByteRange) -> Result<SourceSpan, St
     })
 }
 
+/// Merge regions may include attached comments for exact source selection. The
+/// analysis span reports syntax ownership: native declaration nodes and
+/// structural documentation prefixes, excluding ordinary attached comments.
+fn analysis_owner_range(
+    parsed: &ParsedResult,
+    analysis: &NativeOwnerAnalysis,
+    owner: &ast_merge::SourcePreservingOwner,
+    family: &str,
+) -> Result<crate::ByteRange, String> {
+    if family != "rust" {
+        return Ok(crate::ByteRange { start_byte: owner.start_byte, end_byte: owner.end_byte });
+    }
+
+    let mut ranges = analysis.owner_node_ids[&owner.id]
+        .iter()
+        .map(|id| {
+            parsed.document.node(id).map(|node| node.span.range.clone()).ok_or_else(|| {
+                format!("Rust owner {} references missing native node {id}", owner.id)
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if let Some(comment_ids) = analysis.attached_comment_node_ids.get(&owner.id) {
+        for id in comment_ids {
+            let node = parsed.document.node(id).ok_or_else(|| {
+                format!("Rust owner {} references missing comment node {id}", owner.id)
+            })?;
+            let text =
+                parsed.source.slice(node.span.range.clone()).map_err(|error| error.to_string())?;
+            let structural_doc = node.semantic_roles.iter().any(|role| role == "doc_comment")
+                || text.starts_with(b"///")
+                || text.starts_with(b"/**");
+            if structural_doc {
+                ranges.push(node.span.range.clone());
+            }
+        }
+    }
+    let start_byte = ranges
+        .iter()
+        .map(|range| range.start_byte)
+        .min()
+        .ok_or_else(|| format!("Rust owner {} has no structural native nodes", owner.id))?;
+    let end_byte = ranges
+        .iter()
+        .map(|range| range.end_byte)
+        .max()
+        .ok_or_else(|| format!("Rust owner {} has no structural native nodes", owner.id))?;
+    Ok(crate::ByteRange { start_byte, end_byte })
+}
+
 /// Comments are intentionally unsupported by this bounded analysis policy.
 /// Exact source gaps may contain comments, but are not classified as comments.
 pub(crate) fn project(
@@ -255,7 +304,7 @@ pub(crate) fn project(
     let mut owners = vec![];
     for owner in &analysis.document.owners {
         let nodes = &analysis.owner_node_ids[&owner.id];
-        let range = crate::ByteRange { start_byte: owner.start_byte, end_byte: owner.end_byte };
+        let range = analysis_owner_range(parsed, analysis, owner, family)?;
         owners.push(Owner {
             id: owner.id.clone(),
             node_id: nodes[0].clone(),
