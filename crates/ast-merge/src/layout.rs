@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -64,6 +64,43 @@ pub struct LayoutAttachment {
     pub owner_id: String,
     pub leading_gap_id: Option<String>,
     pub trailing_gap_id: Option<String>,
+}
+
+impl LayoutAttachment {
+    pub fn leading_controls_output(&self, gaps: &[LayoutGap]) -> bool {
+        self.leading_controls_output_after_removal(gaps, &HashSet::new())
+    }
+
+    pub fn trailing_controls_output(&self, gaps: &[LayoutGap]) -> bool {
+        self.trailing_controls_output_after_removal(gaps, &HashSet::new())
+    }
+
+    pub fn leading_controls_output_after_removal(
+        &self,
+        gaps: &[LayoutGap],
+        removed_owners: &HashSet<&str>,
+    ) -> bool {
+        self.controls_gap_output(&self.leading_gap_id, gaps, removed_owners)
+    }
+
+    pub fn trailing_controls_output_after_removal(
+        &self,
+        gaps: &[LayoutGap],
+        removed_owners: &HashSet<&str>,
+    ) -> bool {
+        self.controls_gap_output(&self.trailing_gap_id, gaps, removed_owners)
+    }
+
+    fn controls_gap_output(
+        &self,
+        gap_id: &Option<String>,
+        gaps: &[LayoutGap],
+        removed_owners: &HashSet<&str>,
+    ) -> bool {
+        gap_id.as_deref().and_then(|id| gaps.iter().find(|gap| gap.id == id)).is_some_and(|gap| {
+            gap.controls_output_for_after_removal(&self.owner_id, removed_owners)
+        })
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

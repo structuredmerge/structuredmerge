@@ -609,7 +609,15 @@ impl LayoutGap {
     }
 
     pub fn controls_output_for(&self, owner_id: &str) -> bool {
-        self.controller_owner_id() == Some(owner_id)
+        self.controls_output_for_after_removal(owner_id, &HashSet::new())
+    }
+
+    pub fn controls_output_for_after_removal(
+        &self,
+        owner_id: &str,
+        removed_owners: &HashSet<&str>,
+    ) -> bool {
+        self.effective_controller_owner_id(removed_owners) == Some(owner_id)
     }
 }
 

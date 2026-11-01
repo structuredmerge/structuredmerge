@@ -62,4 +62,22 @@ fn shared_line_layout_fixture_matches_gap_ownership_and_fallback() {
 
     assert_eq!(actual_gaps, *fixture["gaps"].as_array().unwrap());
     assert_eq!(actual_attachments, *fixture["attachments"].as_array().unwrap());
+
+    for check in fixture["controller_checks"].as_array().unwrap() {
+        let owner_id = check["owner_id"].as_str().unwrap();
+        let attachment =
+            actual.attachments.iter().find(|entry| entry.owner_id == owner_id).unwrap();
+        let removed = check["removed_owner_ids"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|id| id.as_str().unwrap())
+            .collect::<HashSet<_>>();
+        let controls = match check["edge"].as_str().unwrap() {
+            "leading" => attachment.leading_controls_output_after_removal(&actual.gaps, &removed),
+            "trailing" => attachment.trailing_controls_output_after_removal(&actual.gaps, &removed),
+            edge => panic!("unknown layout edge: {edge}"),
+        };
+        assert_eq!(controls, check["expected"].as_bool().unwrap(), "{check}");
+    }
 }
