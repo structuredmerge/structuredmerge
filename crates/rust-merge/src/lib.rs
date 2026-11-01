@@ -393,6 +393,28 @@ fn parse_source_preserving_rust(source: &str) -> Result<SourcePreservingOwnerDoc
 fn parse_source_preserving_rust_native(
     source: &str,
 ) -> Result<SourcePreservingOwnerDocument, String> {
+    let parsed = parse_rust_with_syn_provider(source)?;
+    if !parsed.document.output().ok {
+        let message = parsed
+            .document
+            .output()
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.message.as_str())
+            .collect::<Vec<_>>()
+            .join("; ");
+        return Err(if message.is_empty() {
+            "native Rust parser rejected input".into()
+        } else {
+            message
+        });
+    }
+    typed::analysis(&parsed).map(|analysis| analysis.document)
+}
+
+fn parse_source_preserving_rust_native_with_treesitter_comments(
+    source: &str,
+) -> Result<SourcePreservingOwnerDocument, String> {
     let file = syn::parse_file(source).map_err(|error| error.to_string())?;
     let mut owners = Vec::with_capacity(file.items.len());
     for item in file.items {
@@ -428,9 +450,6 @@ fn parse_source_preserving_rust_native(
             end_line,
         });
     }
-    // syn supplies Rust item identity and syntax spans. Ordinary comments are
-    // not represented in syn's AST, so use the established shared Rust comment
-    // attachment projection only to extend those native owner spans.
     let comment_projection = parse_source_preserving_rust(source)?;
     for owner in &mut owners {
         let comment_owner = comment_projection
@@ -453,6 +472,66 @@ fn parse_source_preserving_rust_native(
         owner.fingerprint = source[owner.start_byte..owner.end_byte].to_string();
     }
     Ok(SourcePreservingOwnerDocument { source: source.to_string(), owners })
+}
+
+fn parse_rust_with_syn_provider(source: &str) -> Result<tree_haver::service::ParsedResult, String> {
+    use std::sync::{Arc, atomic::AtomicBool};
+    use tree_haver::{
+        service::{
+            ExecutionContext, PARSE_REQUEST_SCHEMA, ParseOptions, ParseRequest, ParseService,
+            ParserRegistry, ParserSelection, TreeHaverParseService,
+        },
+        source::{SourceEncoding, SourceRole, source_input},
+    };
+
+    let provider_id = "rust.syn.direct";
+    let registry = ParserRegistry::default();
+    registry
+        .register(Arc::new(RustSynParserProvider::new(provider_id)))
+        .map_err(|error| format!("could not register native Rust parser: {error:?}"))?;
+    let snapshot = registry
+        .snapshot()
+        .map_err(|error| format!("could not snapshot native Rust parser: {error:?}"))?;
+    let request = ParseRequest {
+        schema: PARSE_REQUEST_SCHEMA.into(),
+        request_id: "rust-native-parse".into(),
+        source: source_input(
+            "source".into(),
+            SourceRole::Source,
+            SourceEncoding::Utf8,
+            source.as_bytes().to_vec(),
+        )
+        .map_err(|error| error.to_string())?,
+        language: "rust".into(),
+        dialect: Some("rust".into()),
+        selection: ParserSelection {
+            backend_id: Some(provider_id.into()),
+            preference: vec![],
+            required_capabilities: vec![],
+        },
+        options: ParseOptions {
+            comments: true,
+            tokens: false,
+            diagnostics: true,
+            native_extensions: true,
+        },
+        metadata: Default::default(),
+        extra: Default::default(),
+    };
+    let context = ExecutionContext {
+        cancelled: Arc::new(AtomicBool::new(false)),
+        deadline: None,
+        max_batch_items: 1,
+        max_input_bytes: u64::MAX,
+        max_nodes: usize::MAX,
+        max_diagnostics: usize::MAX,
+    };
+    TreeHaverParseService::default()
+        .parse_batch(vec![request], &snapshot, &context)
+        .map_err(|error| format!("native Rust parser service failed: {error:?}"))?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "native Rust parser service returned no result".into())
 }
 
 fn owner_policy() -> NamedOwnerProjectionPolicy<'static> {

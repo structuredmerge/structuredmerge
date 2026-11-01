@@ -552,9 +552,12 @@ fn native_syn_uses_doc_attributes_and_exact_item_source_spans() {
 
 #[test]
 fn native_syn_merge3_uses_shared_source_line_selection() {
-    let base = "//! crate docs\n\nfn left() -> i32 { 1 }\n\nfn right() -> i32 { 1 }\n";
-    let ours = "//! crate docs\n\nfn left() -> i32 { 2 }\n\nfn right() -> i32 { 1 }\n";
-    let theirs = "//! crate docs\n\nfn left() -> i32 { 1 }\n\nfn right() -> i32 { 2 }\n";
+    let base =
+        "//! crate docs\n\n// left docs\nfn left() -> i32 { 1 }\n\nfn right() -> i32 { 1 }\n";
+    let ours =
+        "//! crate docs\n\n// left docs\nfn left() -> i32 { 2 }\n\nfn right() -> i32 { 1 }\n";
+    let theirs =
+        "//! crate docs\n\n// left docs\nfn left() -> i32 { 1 }\n\nfn right() -> i32 { 2 }\n";
     let result = merge_rust_three_way_with_backend(
         base,
         ours,
@@ -565,7 +568,7 @@ fn native_syn_merge3_uses_shared_source_line_selection() {
     assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
     assert_eq!(
         result.output.as_deref(),
-        Some("//! crate docs\n\nfn left() -> i32 { 2 }\n\nfn right() -> i32 { 2 }\n")
+        Some("//! crate docs\n\n// left docs\nfn left() -> i32 { 2 }\n\nfn right() -> i32 { 2 }\n")
     );
 }
 

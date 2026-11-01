@@ -46,7 +46,8 @@ pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
     // of reparsing through Tree-sitter as an acceptance gate. The legacy
     // Tree-sitter provider still gets the native identity cross-check.
     if parsed.backend.parser != "syn" {
-        let native_document = super::parse_source_preserving_rust_native(source)?;
+        let native_document =
+            super::parse_source_preserving_rust_native_with_treesitter_comments(source)?;
         let projected_ids =
             analysis.document.owners.iter().map(|owner| owner.id.as_str()).collect::<Vec<_>>();
         let native_ids =
