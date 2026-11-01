@@ -114,6 +114,7 @@ pub fn declaration_analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis
     let analysis = NativeOwnerAnalysis {
         document: SourcePreservingOwnerDocument { source: source.into(), owners },
         owner_node_ids,
+        attached_comment_node_ids: Default::default(),
     };
     analysis.validate(parsed)?;
     Ok(analysis)

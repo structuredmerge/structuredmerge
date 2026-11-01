@@ -587,6 +587,7 @@ pub(crate) fn project_go_owners(
     Ok(ast_merge::native_analysis::NativeOwnerAnalysis {
         document: SourcePreservingOwnerDocument { source: source.to_string(), owners },
         owner_node_ids,
+        attached_comment_node_ids: Default::default(),
     })
 }
 

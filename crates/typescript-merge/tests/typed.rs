@@ -117,14 +117,23 @@ fn analysis_retains_supported_owner_kinds_and_complete_wrapper_spans() {
             let ids = &analysis.owner_node_ids[&owner.id];
             assert_eq!(ids.len(), 1);
             let node = parsed.document.output().nodes.iter().find(|n| n.id == ids[0]).unwrap();
-            assert_eq!(node.span.range.start_byte, owner.start_byte);
-            assert_eq!(node.span.range.end_byte, owner.end_byte);
+            assert!(node.span.range.start_byte >= owner.start_byte);
+            assert!(node.span.range.end_byte <= owner.end_byte);
             assert_eq!(
-                parsed.source.slice(node.span.range.clone()).unwrap(),
+                &parsed.source.bytes()[owner.start_byte..owner.end_byte],
                 owner.fingerprint.as_bytes()
             );
+            for comment_id in
+                analysis.attached_comment_node_ids.get(&owner.id).into_iter().flatten()
+            {
+                assert_eq!(
+                    parsed.document.node(comment_id).unwrap().role,
+                    tree_haver::NodeRole::Comment
+                );
+            }
         }
-        assert_eq!(analysis.document.owners[0].fingerprint, "export class C {}");
+        assert_eq!(analysis.document.owners[0].fingerprint, "// é\nexport class C {}");
+        assert_eq!(analysis.attached_comment_node_ids["/class:C"].len(), 1);
         assert_eq!(analysis.document.owners[3].fingerprint, "declare function signature(): void;");
         // The retained policy uses the native name-field fragment even for a
         // binding pattern. This is opaque identity, not per-binding ownership.

@@ -7,6 +7,14 @@ use crate::{
     CommentAttachment, CommentLine, CommentRegion, LayoutGap, LayoutOwner, augment_layout,
 };
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CommentAttachmentPolicy {
+    /// Ruby ast-merge may attach a following full-line comment to its preceding owner.
+    PrecedingOwner,
+    /// Some native providers attach full-line comments to the next owner instead.
+    FollowingOwner,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TrackedComment {
     pub line: usize,
@@ -44,11 +52,30 @@ pub fn augment_normalized_comments_with_evidence(
     style: &str,
     normalize_comment: impl Fn(&str) -> String,
 ) -> Result<NormalizedCommentEvidence, String> {
+    augment_normalized_comments_with_evidence_policy(
+        source,
+        owners,
+        nodes,
+        style,
+        CommentAttachmentPolicy::PrecedingOwner,
+        normalize_comment,
+    )
+}
+
+pub fn augment_normalized_comments_with_evidence_policy(
+    source: &str,
+    owners: &[LayoutOwner],
+    nodes: &[NormalizedTreeNode],
+    style: &str,
+    policy: CommentAttachmentPolicy,
+    normalize_comment: impl Fn(&str) -> String,
+) -> Result<NormalizedCommentEvidence, String> {
     augment_normalized_comments_with_evidence_filter(
         source,
         owners,
         nodes,
         style,
+        policy,
         |_| true,
         normalize_comment,
     )
@@ -61,6 +88,7 @@ pub fn augment_normalized_comments_with_evidence_filter(
     owners: &[LayoutOwner],
     nodes: &[NormalizedTreeNode],
     style: &str,
+    policy: CommentAttachmentPolicy,
     include_comment: impl Fn(&NormalizedTreeNode) -> bool,
     normalize_comment: impl Fn(&str) -> String,
 ) -> Result<NormalizedCommentEvidence, String> {
@@ -87,6 +115,7 @@ pub fn augment_normalized_comments_with_evidence_filter(
         &comments,
         style,
         &owner_indents,
+        policy,
         &mut |region, indices| {
             let ids = region_node_ids.entry(region.to_string()).or_default();
             for index in indices {
@@ -298,7 +327,25 @@ pub fn augment_comments_with_owner_indents(
     style: &str,
     owner_indents: &std::collections::HashMap<String, usize>,
 ) -> Result<CommentAugmentation, String> {
-    augment_comments_observed(lines, owners, comments, style, owner_indents, &mut |_, _| {})
+    augment_comments_with_owner_indents_policy(
+        lines,
+        owners,
+        comments,
+        style,
+        owner_indents,
+        CommentAttachmentPolicy::PrecedingOwner,
+    )
+}
+
+pub fn augment_comments_with_owner_indents_policy(
+    lines: &[String],
+    owners: &[LayoutOwner],
+    comments: &[TrackedComment],
+    style: &str,
+    owner_indents: &std::collections::HashMap<String, usize>,
+    policy: CommentAttachmentPolicy,
+) -> Result<CommentAugmentation, String> {
+    augment_comments_observed(lines, owners, comments, style, owner_indents, policy, &mut |_, _| {})
 }
 
 fn normalized_owner_indents(
@@ -323,6 +370,7 @@ fn augment_comments_observed(
     comments: &[TrackedComment],
     style: &str,
     owner_indents: &std::collections::HashMap<String, usize>,
+    policy: CommentAttachmentPolicy,
     observed: &mut dyn FnMut(&str, &[usize]),
 ) -> Result<CommentAugmentation, String> {
     validate_comments(lines, comments)?;
@@ -336,7 +384,7 @@ fn augment_comments_observed(
     let mut attachments = Vec::new();
 
     for (owner_index, owner) in owners.iter().enumerate() {
-        let leading = leading_comment_indices(lines, owner, &comments, &claimed);
+        let leading = leading_comment_indices(lines, owner, &comments, &claimed, policy);
         let inline = comments
             .iter()
             .enumerate()
@@ -354,6 +402,7 @@ fn augment_comments_observed(
             &comments,
             &claimed,
             owner_indents.get(&owner.owner_id).copied(),
+            policy,
         );
         let leading_floating = leading.last().is_some_and(|index| {
             ((comments[*index].line + 1)..owner.start_line).any(|line| blank_line(lines, line))
@@ -515,6 +564,7 @@ fn leading_comment_indices(
     owner: &LayoutOwner,
     comments: &[TrackedComment],
     claimed: &HashSet<usize>,
+    policy: CommentAttachmentPolicy,
 ) -> Vec<usize> {
     let mut selected = Vec::new();
     let mut current = owner.start_line.saturating_sub(1);
@@ -524,7 +574,7 @@ fn leading_comment_indices(
         }) {
             selected.push(index);
             current -= 1;
-        } else if blank_line(lines, current) {
+        } else if policy == CommentAttachmentPolicy::PrecedingOwner && blank_line(lines, current) {
             current -= 1;
         } else {
             break;
@@ -548,7 +598,11 @@ fn trailing_comment_indices(
     comments: &[TrackedComment],
     claimed: &HashSet<usize>,
     owner_indent: Option<usize>,
+    policy: CommentAttachmentPolicy,
 ) -> Vec<usize> {
+    if policy == CommentAttachmentPolicy::FollowingOwner {
+        return vec![];
+    }
     let max_line = next_owner.map_or(lines.len(), |next| next.start_line - 1);
     let mut current = owner.end_line + 1;
     if current > max_line || blank_line(lines, current) {

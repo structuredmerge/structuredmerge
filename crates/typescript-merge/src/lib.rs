@@ -1,9 +1,9 @@
 use ast_merge::{
-    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult,
-    NamedOwnerKind, NamedOwnerProjectionPolicy, ParseResult, PolicyReference, PolicySurface,
-    SourcePreservingOwnerDocument, ThreeWayMergeResult, merge_source_preserving_owners,
-    normalized_parse_error_result, parse_error_result, project_named_top_level_owners,
-    three_way_parse_error,
+    CommentAttachmentPolicy, ConformanceFamilyPlanContext, ConformanceFeatureProfileView,
+    FamilyFeatureProfile, MergeResult, NamedOwnerKind, NamedOwnerProjectionPolicy, ParseResult,
+    PolicyReference, PolicySurface, SourcePreservingOwnerDocument, ThreeWayMergeResult,
+    merge_source_preserving_owners, normalized_parse_error_result, parse_error_result,
+    project_named_top_level_owners, three_way_parse_error,
 };
 use tree_haver::{
     BackendReference, NormalizedTreeIndex, NormalizedTreeNode, ParserRequest,
@@ -341,6 +341,7 @@ fn owner_policy() -> NamedOwnerProjectionPolicy<'static> {
         name_fields: &["name"],
         fallback_name_kinds: &["identifier", "type_identifier"],
         accept_any_named_kind: false,
+        comment_attachment_policy: CommentAttachmentPolicy::PrecedingOwner,
     }
 }
 

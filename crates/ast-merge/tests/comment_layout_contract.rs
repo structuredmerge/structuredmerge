@@ -1,5 +1,6 @@
 use ast_merge::{
-    LayoutOwner, TrackedComment, augment_comments, augment_comments_with_owner_indents,
+    CommentAttachmentPolicy, LayoutOwner, TrackedComment, augment_comments,
+    augment_comments_with_owner_indents, augment_comments_with_owner_indents_policy,
 };
 use serde_json::{Value, json};
 use std::{collections::HashMap, fs, path::PathBuf};
@@ -268,6 +269,125 @@ fn shared_comment_line_ownership_fixture_matches_regions_and_layout() {
             assert_eq!(
                 leading_by_owner.get(owner_id.as_str()).and_then(Option::as_deref),
                 expected.as_str()
+            );
+        }
+    }
+}
+
+#[test]
+fn shared_comment_attachment_policy_cases_match_rubric() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../fixtures/polyglot/ast-merge/comment_line_ownership.json");
+    let fixture: Value = serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+
+    for case in fixture["policy_cases"].as_array().unwrap() {
+        let source = case["source"].as_str().unwrap();
+        let lines = source.split('\n').map(str::to_string).collect::<Vec<_>>();
+        let owners = case["owners"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|owner| LayoutOwner {
+                owner_id: owner["id"].as_str().unwrap().to_string(),
+                start_line: owner["start_line"].as_u64().unwrap() as usize,
+                end_line: owner["end_line"].as_u64().unwrap() as usize,
+            })
+            .collect::<Vec<_>>();
+        let comments = case["comments"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|comment| TrackedComment {
+                line: comment["line"].as_u64().unwrap() as usize,
+                text: comment["text"].as_str().unwrap().to_string(),
+                normalized_content: comment["normalized_content"].as_str().unwrap().to_string(),
+                full_line: comment["full_line"].as_bool().unwrap(),
+                indent: Some(comment["indent"].as_u64().unwrap() as usize),
+            })
+            .collect::<Vec<_>>();
+
+        for policy_case in case["policies"].as_array().unwrap() {
+            let policy = match policy_case["id"].as_str().unwrap() {
+                "preceding_owner" => CommentAttachmentPolicy::PrecedingOwner,
+                "following_owner" => CommentAttachmentPolicy::FollowingOwner,
+                value => panic!("unexpected fixture policy: {value}"),
+            };
+            let augmentation = augment_comments_with_owner_indents_policy(
+                &lines,
+                &owners,
+                &comments,
+                case["style"].as_str().unwrap(),
+                &HashMap::new(),
+                policy,
+            )
+            .unwrap();
+            let regions = augmentation
+                .regions
+                .iter()
+                .map(|region| (region.id.as_str(), region))
+                .collect::<HashMap<_, _>>();
+            let content = |id: &Option<String>| {
+                id.as_ref()
+                    .and_then(|id| regions.get(id.as_str()).copied())
+                    .map(|region| region.normalized_content())
+            };
+            let actual_leading = augmentation
+                .attachments
+                .iter()
+                .map(|attachment| {
+                    (attachment.owner_id.as_str(), content(&attachment.leading_region_id))
+                })
+                .collect::<HashMap<_, _>>();
+            let actual_trailing = augmentation
+                .attachments
+                .iter()
+                .map(|attachment| {
+                    (attachment.owner_id.as_str(), content(&attachment.trailing_region_id))
+                })
+                .collect::<HashMap<_, _>>();
+            for (owner_id, expected) in
+                policy_case["expected"]["leading_by_owner"].as_object().unwrap()
+            {
+                assert_eq!(
+                    actual_leading.get(owner_id.as_str()).cloned().unwrap_or(None),
+                    expected.as_str().map(str::to_string),
+                    "{} ({}) leading {owner_id}",
+                    case["name"].as_str().unwrap(),
+                    policy_case["id"].as_str().unwrap(),
+                );
+            }
+            for (owner_id, expected) in
+                policy_case["expected"]["trailing_by_owner"].as_object().unwrap()
+            {
+                assert_eq!(
+                    actual_trailing.get(owner_id.as_str()).cloned().unwrap_or(None),
+                    expected.as_str().map(str::to_string),
+                    "{} ({}) trailing {owner_id}",
+                    case["name"].as_str().unwrap(),
+                    policy_case["id"].as_str().unwrap(),
+                );
+            }
+            assert_eq!(
+                content(&augmentation.postlude_region_id),
+                policy_case["expected"]["postlude"].as_str().map(str::to_string),
+            );
+            let actual_orphans = augmentation
+                .orphan_region_ids
+                .iter()
+                .filter_map(|id| regions.get(id.as_str()).copied())
+                .map(|region| region.normalized_content())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                actual_orphans,
+                policy_case["expected"]["orphans"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|item| item.as_str().unwrap().to_string())
+                    .collect::<Vec<_>>(),
+                "{} ({}) orphan regions",
+                case["name"].as_str().unwrap(),
+                policy_case["id"].as_str().unwrap(),
             );
         }
     }

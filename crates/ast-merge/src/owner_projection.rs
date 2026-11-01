@@ -2,7 +2,10 @@ use std::collections::HashSet;
 
 use tree_haver::{NodeRole, NormalizedTreeIndex, NormalizedTreeNode};
 
-use crate::{SourcePreservingOwner, SourcePreservingOwnerDocument};
+use crate::{
+    CommentAttachmentPolicy, LayoutOwner, SourcePreservingOwner, SourcePreservingOwnerDocument,
+    augment_normalized_comments_with_evidence_policy,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NamedOwnerKind<'a> {
@@ -19,6 +22,7 @@ pub struct NamedOwnerProjectionPolicy<'a> {
     pub name_fields: &'a [&'a str],
     pub fallback_name_kinds: &'a [&'a str],
     pub accept_any_named_kind: bool,
+    pub comment_attachment_policy: CommentAttachmentPolicy,
 }
 
 pub fn project_named_top_level_owners(
@@ -84,10 +88,127 @@ pub fn project_named_top_level_analysis(
         return Err(format!("{} document has no supported top-level named owners", policy.family));
     }
 
+    let attached_comment_node_ids = attach_normalized_comment_ranges(
+        source,
+        &mut owners,
+        &owner_node_ids,
+        nodes,
+        policy.comment_attachment_policy,
+    )?;
+
     Ok(crate::native_analysis::NativeOwnerAnalysis {
         document: SourcePreservingOwnerDocument { source: source.to_string(), owners },
         owner_node_ids,
+        attached_comment_node_ids,
     })
+}
+
+/// Extend structural owner source ranges with the comments assigned by the
+/// shared Ruby-compatible comment augmenter. Family projections still decide
+/// which syntax nodes are owners; line ownership is resolved here once for all
+/// source-preserving providers.
+fn attach_normalized_comment_ranges(
+    source: &str,
+    owners: &mut [SourcePreservingOwner],
+    owner_node_ids: &std::collections::BTreeMap<String, Vec<String>>,
+    nodes: &[NormalizedTreeNode],
+    policy: CommentAttachmentPolicy,
+) -> Result<std::collections::BTreeMap<String, Vec<String>>, String> {
+    if !nodes.iter().any(|node| node.role == NodeRole::Comment) {
+        return Ok(std::collections::BTreeMap::new());
+    }
+    let node_owner_ids = owner_node_ids
+        .iter()
+        .filter_map(|(owner_id, node_ids)| {
+            node_ids.first().map(|node_id| (node_id.as_str(), owner_id.as_str()))
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+    let layout_owners = owners
+        .iter()
+        .filter_map(|owner| {
+            owner_node_ids.get(&owner.id)?.first().map(|node_id| LayoutOwner {
+                owner_id: node_id.clone(),
+                start_line: owner.start_line,
+                end_line: owner.end_line,
+            })
+        })
+        .collect::<Vec<_>>();
+    if layout_owners.is_empty() {
+        return Ok(std::collections::BTreeMap::new());
+    }
+
+    let evidence = augment_normalized_comments_with_evidence_policy(
+        source,
+        &layout_owners,
+        nodes,
+        "source",
+        policy,
+        str::to_string,
+    )?;
+    let nodes_by_id = nodes
+        .iter()
+        .map(|node| (node.id.as_str(), node))
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut attached_by_owner = std::collections::BTreeMap::<String, Vec<String>>::new();
+    for attachment in &evidence.augmentation.attachments {
+        let Some(owner_id) = node_owner_ids.get(attachment.owner_id.as_str()).copied() else {
+            continue;
+        };
+        let Some(owner_index) = owners.iter().position(|owner| owner.id == owner_id) else {
+            continue;
+        };
+        let owner = &mut owners[owner_index];
+        for (kind, region_id) in [
+            ("leading", attachment.leading_region_id.as_ref()),
+            ("inline", attachment.inline_region_id.as_ref()),
+            ("trailing", attachment.trailing_region_id.as_ref()),
+        ] {
+            let Some(region_id) = region_id else { continue };
+            let comment_nodes = evidence
+                .region_node_ids
+                .get(region_id)
+                .into_iter()
+                .flatten()
+                .filter_map(|node_id| nodes_by_id.get(node_id.as_str()).copied())
+                .collect::<Vec<_>>();
+            if comment_nodes.is_empty() {
+                return Err(format!(
+                    "attached comment region {region_id} has no native source node"
+                ));
+            }
+            for node in &comment_nodes {
+                let ids = attached_by_owner.entry(owner_id.to_string()).or_default();
+                if !ids.contains(&node.id) {
+                    ids.push(node.id.clone());
+                }
+            }
+            if kind == "leading" {
+                let first = comment_nodes
+                    .iter()
+                    .min_by_key(|node| node.span.range.start_byte)
+                    .expect("comment node list is nonempty");
+                owner.start_byte = owner.start_byte.min(first.span.range.start_byte);
+                owner.start_line = owner.start_line.min(first.span.start_point.row + 1);
+            } else {
+                let last = comment_nodes
+                    .iter()
+                    .max_by_key(|node| node.span.range.end_byte)
+                    .expect("comment node list is nonempty");
+                owner.end_byte = owner.end_byte.max(last.span.range.end_byte);
+                owner.end_line = owner.end_line.max(last.span.end_point.row + 1);
+            }
+        }
+        owner.fingerprint = source[owner.start_byte..owner.end_byte].to_string();
+    }
+    for owner in owners {
+        if let Some(ids) = attached_by_owner.get_mut(&owner.id) {
+            ids.sort_by_key(|id| {
+                nodes_by_id.get(id.as_str()).map_or(usize::MAX, |node| node.span.range.start_byte)
+            });
+        }
+        owner.fingerprint = source[owner.start_byte..owner.end_byte].to_string();
+    }
+    Ok(attached_by_owner)
 }
 
 fn resolve_owner_node<'a>(
@@ -217,6 +338,7 @@ mod tests {
             name_fields: &["name"],
             fallback_name_kinds: &[],
             accept_any_named_kind: false,
+            comment_attachment_policy: CommentAttachmentPolicy::PrecedingOwner,
         }
     }
 
@@ -345,6 +467,7 @@ mod tests {
             name_fields: &["name"],
             fallback_name_kinds: &[],
             accept_any_named_kind: true,
+            comment_attachment_policy: CommentAttachmentPolicy::PrecedingOwner,
         };
 
         let document = project_named_top_level_owners(source, "root", &nodes, generic).unwrap();

@@ -79,6 +79,26 @@ const OURS: &str = "use std::fmt;\n\nfn left() -> i32 { 2 }\n\nfn right() -> i32
 const THEIRS: &str = "use std::fmt;\n\nfn left() -> i32 { 1 }\n\nfn right() -> i32 { 2 }\n";
 
 #[test]
+fn merges_a_leading_comment_edit_with_an_independent_owner_edit() {
+    let parser = Parser::new("rust");
+    let base = "// left documentation\nfn left() -> i32 { 1 }\n\n// right documentation\nfn right() -> i32 { 1 }\n";
+    let ours = base.replace("// left documentation", "// left documentation updated");
+    let theirs = base.replace("fn right() -> i32 { 1 }", "fn right() -> i32 { 2 }");
+    let [base, ours, theirs] = parser.inputs([base, &ours, &theirs]);
+    let result =
+        typed::merge3(&base, &ours, &theirs, |source| Ok(parser.parse(source, SourceRole::Output)))
+            .unwrap();
+
+    assert_eq!(result.evidence.result.outcome, ThreeWayMergeOutcome::Clean);
+    assert_eq!(
+        result.evidence.result.output.as_deref(),
+        Some(
+            "// left documentation updated\nfn left() -> i32 { 1 }\n\n// right documentation\nfn right() -> i32 { 2 }\n"
+        )
+    );
+}
+
+#[test]
 fn directional_planning_revalidates_documents_before_noop_selection() {
     let parser = Parser::new("rust");
     let incoming = parser.parse(BASE, SourceRole::Incoming);
@@ -159,16 +179,19 @@ fn native_analysis_retains_all_supported_declaration_kinds_and_exact_references(
         let ids = &analysis.owner_node_ids[&owner.id];
         assert_eq!(ids.len(), 1);
         let native = parsed.document.node(&ids[0]).unwrap();
-        assert_eq!(native.span.range.start_byte, owner.start_byte);
-        assert_eq!(native.span.range.end_byte, owner.end_byte);
+        assert!(native.span.range.start_byte >= owner.start_byte);
+        assert!(native.span.range.end_byte <= owner.end_byte);
         assert_eq!(
-            parsed.source.slice(native.span.range.clone()).unwrap(),
+            &parsed.source.bytes()[owner.start_byte..owner.end_byte],
             owner.fingerprint.as_bytes()
         );
     }
+    let attached = &analysis.attached_comment_node_ids["/const:C"];
+    assert_eq!(attached.len(), 1);
+    assert_eq!(parsed.document.node(&attached[0]).unwrap().role, tree_haver::NodeRole::Comment);
     let gaps = analysis.layout_gaps().unwrap();
     assert_eq!(parsed.source.slice(gaps[0].range.clone()).unwrap(), b"");
-    assert_eq!(parsed.source.slice(gaps[1].range.clone()).unwrap(), "\n// é\n".as_bytes());
+    assert_eq!(parsed.source.slice(gaps[1].range.clone()).unwrap(), "\n".as_bytes());
     let mut wrong = parsed.clone();
     wrong.source = parser.parse(BASE, SourceRole::Source).source;
     assert!(typed::analysis(&wrong).is_err());

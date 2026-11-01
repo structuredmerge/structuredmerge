@@ -1,7 +1,8 @@
 use ast_merge::{
-    NamedOwnerProjectionPolicy, ParseResult, SourcePreservingOwnerDocument, ThreeWayMergeResult,
-    merge_source_preserving_owners, normalized_parse_error_result, parse_error_result,
-    project_named_top_level_owners, three_way_parse_error,
+    CommentAttachmentPolicy, NamedOwnerProjectionPolicy, ParseResult,
+    SourcePreservingOwnerDocument, ThreeWayMergeResult, merge_source_preserving_owners,
+    normalized_parse_error_result, parse_error_result, project_named_top_level_owners,
+    three_way_parse_error,
 };
 use serde::Serialize;
 use tree_haver::{ParserRequest, parse_normalized_with_language_pack};
@@ -182,6 +183,7 @@ fn parse_source_preserving_generic(
             name_fields: &["name"],
             fallback_name_kinds: &[],
             accept_any_named_kind: true,
+            comment_attachment_policy: CommentAttachmentPolicy::PrecedingOwner,
         },
     )
     .map_err(GenericParseFailure::Projection)

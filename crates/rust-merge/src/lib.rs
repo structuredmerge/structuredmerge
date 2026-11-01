@@ -1,10 +1,10 @@
 use ast_merge::{
-    ConformanceFamilyPlanContext, ConformanceFeatureProfileView, Diagnostic, DiagnosticCategory,
-    DiagnosticSeverity, FamilyFeatureProfile, MergeConflict, MergeResult, NamedOwnerKind,
-    NamedOwnerProjectionPolicy, ParseResult, PolicyReference, PolicySurface,
-    SourcePreservingOwnerDocument, ThreeWayMergeOutcome, ThreeWayMergeResult, error_diagnostic,
-    merge_source_preserving_owners, normalized_parse_error_result, parse_error_result,
-    project_named_top_level_owners, three_way_parse_error,
+    CommentAttachmentPolicy, ConformanceFamilyPlanContext, ConformanceFeatureProfileView,
+    Diagnostic, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile, MergeConflict,
+    MergeResult, NamedOwnerKind, NamedOwnerProjectionPolicy, ParseResult, PolicyReference,
+    PolicySurface, SourcePreservingOwnerDocument, ThreeWayMergeOutcome, ThreeWayMergeResult,
+    error_diagnostic, merge_source_preserving_owners, normalized_parse_error_result,
+    parse_error_result, project_named_top_level_owners, three_way_parse_error,
 };
 use syn::File;
 use tree_haver::{
@@ -413,6 +413,7 @@ fn owner_policy() -> NamedOwnerProjectionPolicy<'static> {
             "use_wildcard",
         ],
         accept_any_named_kind: false,
+        comment_attachment_policy: CommentAttachmentPolicy::FollowingOwner,
     }
 }
 

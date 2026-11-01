@@ -1,6 +1,7 @@
 //! Current-preferred Rust declaration insertion over native ownership.
 //! Use declarations and inner documentation stay at module scope. Byte scans
 //! locate newline framing only; syntax and comment kinds come from native nodes.
+use ast_merge::native_analysis::NativeOwnerAnalysis;
 use ast_merge::{SourcePreservingOwnerDocument, directional_render::DirectionalInsertion};
 use std::collections::BTreeMap;
 use tree_haver::{ByteRange, NodeRole, service::ParsedResult};
@@ -33,16 +34,22 @@ pub fn owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, St
     Ok(SourcePreservingOwnerDocument { source: source.into(), owners: vec![] })
 }
 
+fn directional_analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
+    let mut analysis = crate::typed::analysis(parsed)?;
+    analysis.document.owners.retain(|owner| !owner.id.starts_with("/use:"));
+    analysis.owner_node_ids.retain(|owner_id, _| !owner_id.starts_with("/use:"));
+    analysis.attached_comment_node_ids.retain(|owner_id, _| !owner_id.starts_with("/use:"));
+    Ok(analysis)
+}
+
 struct Layout {
     uses: Vec<String>,
     ranges: BTreeMap<String, ByteRange>,
     empty_offset: usize,
 }
 
-fn layout(
-    parsed: &ParsedResult,
-    document: &SourcePreservingOwnerDocument,
-) -> Result<Layout, String> {
+fn layout(parsed: &ParsedResult, analysis: &NativeOwnerAnalysis) -> Result<Layout, String> {
+    let document = &analysis.document;
     let nodes = parsed.normalized_nodes()?;
     let index = tree_haver::NormalizedTreeIndex::new(&nodes)?;
     let root =
@@ -54,8 +61,20 @@ fn layout(
         .filter(|node| node.role == NodeRole::Comment)
         .map(|node| (node.span.range.start_byte, &node.span.range))
         .collect();
-    let owners_by_span: BTreeMap<_, _> =
-        document.owners.iter().map(|owner| ((owner.start_byte, owner.end_byte), owner)).collect();
+    let nodes_by_id = nodes.iter().map(|node| (node.id.as_str(), node)).collect::<BTreeMap<_, _>>();
+    let owners_by_span: BTreeMap<_, _> = document
+        .owners
+        .iter()
+        .flat_map(|owner| {
+            let node_ids = &analysis.owner_node_ids[&owner.id];
+            let nodes_by_id = &nodes_by_id;
+            node_ids.iter().filter_map(move |node_id| {
+                nodes_by_id
+                    .get(node_id.as_str())
+                    .map(|node| ((node.span.range.start_byte, node.span.range.end_byte), owner))
+            })
+        })
+        .collect();
     let trivia = |start: usize, end: usize| {
         if start > end || end > bytes.len() {
             return false;
@@ -129,7 +148,9 @@ pub fn plan_insertions(
     current_parse: &ParsedResult,
     current: &SourcePreservingOwnerDocument,
 ) -> Result<Vec<DirectionalInsertion>, String> {
-    if owners(incoming_parse)? != *incoming || owners(current_parse)? != *current {
+    let incoming_analysis = directional_analysis(incoming_parse)?;
+    let current_analysis = directional_analysis(current_parse)?;
+    if incoming_analysis.document != *incoming || current_analysis.document != *current {
         return Err("Rust directional ownership differs from native facts".into());
     }
     let positions: BTreeMap<_, _> = current
@@ -141,8 +162,8 @@ pub fn plan_insertions(
     if incoming.owners.iter().all(|owner| positions.contains_key(owner.id.as_str())) {
         return Ok(vec![]);
     }
-    let incoming_layout = layout(incoming_parse, incoming)?;
-    let current_layout = layout(current_parse, current)?;
+    let incoming_layout = layout(incoming_parse, &incoming_analysis)?;
+    let current_layout = layout(current_parse, &current_analysis)?;
     if incoming_layout.uses != current_layout.uses {
         return Err("Rust declaration insertion requires identical use declarations".into());
     }

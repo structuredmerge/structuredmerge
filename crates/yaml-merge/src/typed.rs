@@ -134,6 +134,7 @@ pub fn mapping_analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, St
     let analysis = NativeOwnerAnalysis {
         document: SourcePreservingOwnerDocument { source: source.to_owned(), owners },
         owner_node_ids,
+        attached_comment_node_ids: Default::default(),
     };
     analysis.validate(parsed)?;
     Ok(analysis)

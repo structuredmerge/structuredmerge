@@ -76,6 +76,7 @@ fn analysis_with_mode(
         ast_merge::native_analysis::NativeOwnerAnalysis {
             document: SourcePreservingOwnerDocument { source: source.into(), owners: vec![] },
             owner_node_ids: Default::default(),
+            attached_comment_node_ids: Default::default(),
         }
     } else {
         super::project_bash_analysis(source, root, &nodes, reject_unsafe_source_ranges).map_err(
@@ -157,6 +158,7 @@ pub fn source_line_analysis(parsed: &ParsedResult) -> Result<BashSourceLineAnaly
         &native_layout_owners,
         &nodes,
         "hash_comment",
+        ast_merge::CommentAttachmentPolicy::PrecedingOwner,
         |node| !(node.span.start_point.row == 0 && first_line.starts_with("#!")),
         normalize_bash_comment,
     )?;
