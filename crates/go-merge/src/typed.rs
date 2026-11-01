@@ -6,10 +6,18 @@ use ast_merge::{
 };
 use tree_haver::service::ParsedResult;
 
-pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
+pub fn validate_package_clause(parsed: &ParsedResult) -> Result<(), String> {
     if !parsed.backend.languages.iter().any(|language| language == "go") {
         return Err("Go analysis requires a Go parser".into());
     }
+    let nodes = parsed.normalized_nodes()?;
+    let root = parsed.document.output().root_id.as_deref().ok_or("Go parse omitted its root")?;
+    let index = tree_haver::NormalizedTreeIndex::new(&nodes)?;
+    super::validate_go_package_clause(&index, root)
+}
+
+pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
+    validate_package_clause(parsed)?;
     let nodes = parsed.normalized_nodes()?;
     let root = parsed.document.output().root_id.as_deref().ok_or("Go parse omitted its root")?;
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;

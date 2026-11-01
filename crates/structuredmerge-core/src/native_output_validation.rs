@@ -31,9 +31,20 @@ pub(crate) fn validate(
         return Err(Invalid);
     }
     let first = &inputs[0].selection;
-    let exact_incoming_selection = result.operation == OperationKind::Merge2
-        && result.render_report.get("strategy").and_then(|value| value.as_str())
-            == Some("exact-incoming-source-selection");
+    let exact_selected_role = match (
+        result.operation,
+        result.render_report.get("strategy").and_then(|value| value.as_str()),
+    ) {
+        (OperationKind::Merge2, Some("exact-incoming-source-selection")) => {
+            Some(SourceRole::Incoming)
+        }
+        (OperationKind::Merge3, Some("exact-revision-source-selection")) => result
+            .render_report
+            .get("selected_role")
+            .cloned()
+            .and_then(|value| serde_json::from_value(value).ok()),
+        _ => None,
+    };
     for (parsed, role) in inputs.iter().zip(roles) {
         let source = request
             .sources()
@@ -42,7 +53,7 @@ pub(crate) fn validate(
         validate_parse_with_failure(
             parsed,
             source,
-            exact_incoming_selection && *role == SourceRole::Current,
+            exact_selected_role.is_some_and(|selected| *role != selected),
         )?;
         if parsed.selection.generation != first.generation
             || parsed.selection.digest != first.digest
@@ -148,6 +159,47 @@ fn validate_partition(
             }
             validate_property(result, "all-current-bytes-retained")?;
         }
+    } else if result.operation == OperationKind::Merge3
+        && result.render_report.get("strategy").and_then(|value| value.as_str())
+            == Some("exact-revision-source-selection")
+    {
+        strategy = "exact-revision-source-selection";
+        let selected_role: SourceRole = serde_json::from_value(
+            result.render_report.get("selected_role").ok_or(Invalid)?.clone(),
+        )
+        .map_err(|_| Invalid)?;
+        let selected = source(selected_role)?;
+        let segments: Vec<byte_evidence::SourceByteSegment> =
+            serde_json::from_value(raw.clone()).map_err(|_| Invalid)?;
+        if segments.len() != 1 || regions.len() != 1 {
+            return Err(Invalid);
+        }
+        let segment = &segments[0];
+        let full_range = ByteRange { start_byte: 0, end_byte: selected.bytes().len() };
+        let expected_revision = match selected_role {
+            SourceRole::Base => SourceRevision::Base,
+            SourceRole::Ours => SourceRevision::Ours,
+            SourceRole::Theirs => SourceRevision::Theirs,
+            _ => return Err(Invalid),
+        };
+        if segment.id != "exact-source"
+            || segment.revision != expected_revision
+            || segment.source_range != full_range
+            || segment.output_range != full_range
+            || segment.sha256 != selected.descriptor().sha256
+            || segment.owner_id.is_some()
+            || selected.bytes() != output
+        {
+            return Err(Invalid);
+        }
+        validate_region(
+            &regions[0],
+            &selected.descriptor().source_id,
+            selected_role,
+            &segment.source_range,
+            &segment.output_range,
+            &segment.sha256,
+        )?;
     } else {
         strategy = "source-plan";
         let segments: Vec<byte_evidence::SourceByteSegment> =

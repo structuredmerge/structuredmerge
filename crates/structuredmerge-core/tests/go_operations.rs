@@ -217,6 +217,23 @@ fn unsupported_operations_syntax_selection_and_cancellation_remain_fail_closed()
 }
 
 #[test]
+fn go_merge3_exact_revision_ignores_rejected_unselected_base() {
+    let malformed_base = "package main\nfunc f() {\n";
+    let valid_tips = "package main\nfunc f() {}\n";
+    let (result, _) = run(request("merge3", &[malformed_base, valid_tips, valid_tips]));
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(valid_tips));
+    assert_eq!(result.verification.base_participated, Some(true));
+    assert_eq!(result.verification.output_reparsed, Some(true));
+    assert_eq!(result.diagnostics.len(), 1);
+    let DiagnosticRecord::Canonical(diagnostic) = &result.diagnostics[0] else { panic!() };
+    assert_eq!(diagnostic.severity, DiagnosticSeverity::Warning);
+    assert_eq!(diagnostic.category, PortableCategory::ParseError);
+    assert!(!diagnostic.blocking);
+    assert_eq!(diagnostic.source_refs[0].role, SourceRole::Base);
+}
+
+#[test]
 fn directional_go_retains_current_bytes_and_native_function_comments() {
     for (incoming, current, expected) in [
         (
