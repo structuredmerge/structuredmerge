@@ -55,6 +55,8 @@ fn shared_remove_rehome_fixture_matches_ruby() {
                 "kind": match entry.kind { ast_merge::RehomeFragmentKind::Leading => "leading", ast_merge::RehomeFragmentKind::Ambiguous => "ambiguous", ast_merge::RehomeFragmentKind::Trailing => "trailing" },
                 "comment_region_ids": entry.comment_region_ids,
                 "layout_gap_ids": entry.layout_gap_ids,
+                "comment_attachment": entry.comment_attachment(),
+                "layout_attachment": entry.layout_attachment(),
             })).collect::<Vec<_>>()
         });
         assert_eq!(actual, case["expected"], "{}", case["name"].as_str().unwrap());

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
 /// Source-preserving replacement of a one-based inclusive line range.
@@ -213,6 +214,25 @@ pub struct RehomePlan {
     pub kind: RehomeFragmentKind,
     pub comment_region_ids: Vec<String>,
     pub layout_gap_ids: Vec<String>,
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RehomedCommentAttachment {
+    pub owner_id: Option<String>,
+    pub leading_region_id: Option<String>,
+    pub inline_region_id: Option<String>,
+    pub trailing_region_id: Option<String>,
+    pub orphan_region_ids: Vec<String>,
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RehomedLayoutAttachment {
+    pub owner_id: Option<String>,
+    pub leading_gap_id: Option<String>,
+    pub trailing_gap_id: Option<String>,
+    pub metadata: HashMap<String, serde_json::Value>,
 }
 
 impl RehomePlan {
@@ -226,6 +246,41 @@ impl RehomePlan {
 
     pub fn is_empty(&self) -> bool {
         self.comment_region_ids.is_empty() && self.layout_gap_ids.is_empty()
+    }
+
+    pub fn comment_attachment(&self) -> RehomedCommentAttachment {
+        let primary = self.comment_region_ids.first().cloned();
+        let orphan_region_ids = self.comment_region_ids.iter().skip(1).cloned().collect();
+        let (leading_region_id, trailing_region_id) = match self.edge() {
+            BoundaryEdge::Leading => (None, primary),
+            BoundaryEdge::Trailing => (primary, None),
+        };
+        RehomedCommentAttachment {
+            owner_id: self.target_boundary.owner_id.clone(),
+            leading_region_id,
+            inline_region_id: None,
+            trailing_region_id,
+            orphan_region_ids,
+            metadata: self.attachment_metadata(),
+        }
+    }
+
+    pub fn layout_attachment(&self) -> RehomedLayoutAttachment {
+        let primary = self.layout_gap_ids.first().cloned();
+        let (leading_gap_id, trailing_gap_id) = match self.edge() {
+            BoundaryEdge::Leading => (None, primary),
+            BoundaryEdge::Trailing => (primary, None),
+        };
+        RehomedLayoutAttachment {
+            owner_id: self.target_boundary.owner_id.clone(),
+            leading_gap_id,
+            trailing_gap_id,
+            metadata: self.attachment_metadata(),
+        }
+    }
+
+    fn attachment_metadata(&self) -> HashMap<String, serde_json::Value> {
+        self.metadata.clone()
     }
 }
 
@@ -355,6 +410,23 @@ impl RemovePlan {
                 kind,
                 comment_region_ids,
                 layout_gap_ids,
+                metadata: HashMap::from([
+                    (
+                        "source".to_string(),
+                        serde_json::Value::String("structural_edit_remove_plan".to_string()),
+                    ),
+                    (
+                        "kind".to_string(),
+                        serde_json::Value::String(
+                            match kind {
+                                RehomeFragmentKind::Leading => "leading",
+                                RehomeFragmentKind::Ambiguous => "ambiguous",
+                                RehomeFragmentKind::Trailing => "trailing",
+                            }
+                            .to_string(),
+                        ),
+                    ),
+                ]),
             })
         })
         .collect()
