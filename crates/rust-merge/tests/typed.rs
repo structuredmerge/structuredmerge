@@ -229,6 +229,31 @@ fn two_tip_additions_in_preamble_and_postlude_gaps_keep_source_positions() {
 }
 
 #[test]
+fn same_gap_preamble_additions_follow_ours_then_theirs_with_blank_lines() {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions_same_preamble_gap.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let parser = Parser::new("rust");
+    let [base, ours, theirs] = parser.inputs([
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ]);
+    let execution =
+        typed::merge3(&base, &ours, &theirs, |source| Ok(parser.parse(source, SourceRole::Output)))
+            .unwrap();
+
+    assert_eq!(execution.evidence.result.outcome, ThreeWayMergeOutcome::Clean);
+    assert_eq!(
+        execution.evidence.result.output.as_deref(),
+        Some(fixture["expected"]["output"].as_str().unwrap())
+    );
+    assert!(execution.ordered_line_render_applied);
+}
+
+#[test]
 fn directional_planning_revalidates_documents_before_noop_selection() {
     let parser = Parser::new("rust");
     let incoming = parser.parse(BASE, SourceRole::Incoming);
