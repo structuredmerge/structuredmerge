@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use tree_haver::{NodeRole, NormalizedTreeIndex, NormalizedTreeNode};
 
 use crate::{
-    CommentAttachmentPolicy, LayoutOwner, SourcePreservingOwner, SourcePreservingOwnerDocument,
-    augment_normalized_comments_with_evidence_filter,
+    CommentAttachmentPolicy, CommentScope, LayoutOwner, SourcePreservingOwner,
+    SourcePreservingOwnerDocument, augment_normalized_comments_with_evidence_scope,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -45,6 +45,20 @@ pub fn project_named_top_level_analysis(
     nodes: &[NormalizedTreeNode],
     policy: NamedOwnerProjectionPolicy<'_>,
 ) -> Result<crate::native_analysis::NativeOwnerAnalysis, String> {
+    project_named_top_level_analysis_with_comment_scope(source, root_id, nodes, policy, |_| {
+        CommentScope::Owner
+    })
+}
+
+/// Project syntax owners while allowing a parser adapter to identify comments
+/// that belong to the document root. Attachment and emission remain shared.
+pub fn project_named_top_level_analysis_with_comment_scope(
+    source: &str,
+    root_id: &str,
+    nodes: &[NormalizedTreeNode],
+    policy: NamedOwnerProjectionPolicy<'_>,
+    comment_scope: impl Fn(&NormalizedTreeNode) -> CommentScope,
+) -> Result<crate::native_analysis::NativeOwnerAnalysis, String> {
     let index = NormalizedTreeIndex::new(nodes)?;
     let root = index.root(root_id)?;
     let mut owners = Vec::new();
@@ -55,7 +69,9 @@ pub fn project_named_top_level_analysis(
 
     for top_level in index.children(root) {
         if top_level.role == NodeRole::Comment {
-            if !policy.prefix_node_kinds.is_empty() {
+            if comment_scope(top_level) == CommentScope::Root {
+                pending_prefix_nodes.clear();
+            } else if !policy.prefix_node_kinds.is_empty() {
                 pending_prefix_nodes.push(top_level);
             }
             continue;
@@ -127,6 +143,7 @@ pub fn project_named_top_level_analysis(
         &owner_node_ids,
         nodes,
         policy.comment_attachment_policy,
+        &comment_scope,
         attached_comment_node_ids,
     )?;
 
@@ -210,6 +227,7 @@ fn attach_normalized_comment_ranges(
     owner_node_ids: &std::collections::BTreeMap<String, Vec<String>>,
     nodes: &[NormalizedTreeNode],
     policy: CommentAttachmentPolicy,
+    comment_scope: &dyn Fn(&NormalizedTreeNode) -> CommentScope,
     mut attached_by_owner: std::collections::BTreeMap<String, Vec<String>>,
 ) -> Result<std::collections::BTreeMap<String, Vec<String>>, String> {
     let nodes_by_id = nodes
@@ -259,18 +277,23 @@ fn attach_normalized_comment_ranges(
         .map(|node| node.span.range.clone())
         .collect::<Vec<_>>();
     let tree_index = NormalizedTreeIndex::new(nodes)?;
-    let evidence = augment_normalized_comments_with_evidence_filter(
+    let evidence = augment_normalized_comments_with_evidence_scope(
         source,
         &layout_owners,
         nodes,
         "source",
         policy,
         |node| {
-            !is_inner_doc_comment(node, &tree_index)
-                && !prefix_comment_ranges.iter().any(|range| {
+            if is_inner_doc_comment(node, &tree_index)
+                || prefix_comment_ranges.iter().any(|range| {
                     range.start_byte <= node.span.range.start_byte
                         && node.span.range.end_byte <= range.end_byte
                 })
+            {
+                None
+            } else {
+                Some(comment_scope(node))
+            }
         },
         str::to_string,
     )?;

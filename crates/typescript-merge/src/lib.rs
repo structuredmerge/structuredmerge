@@ -342,7 +342,7 @@ fn owner_policy() -> NamedOwnerProjectionPolicy<'static> {
         name_fields: &["name"],
         fallback_name_kinds: &["identifier", "type_identifier"],
         accept_any_named_kind: false,
-        comment_attachment_policy: CommentAttachmentPolicy::PrecedingOwner,
+        comment_attachment_policy: CommentAttachmentPolicy::FollowingOwner,
     }
 }
 

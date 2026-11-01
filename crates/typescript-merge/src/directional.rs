@@ -40,6 +40,23 @@ fn layout(
     parsed: &ParsedResult,
     document: &SourcePreservingOwnerDocument,
 ) -> Result<Layout, String> {
+    let primary_owner_by_node = if document.owners.is_empty() {
+        BTreeMap::new()
+    } else {
+        let analysis = crate::typed::analysis(parsed)?;
+        if analysis.document != *document {
+            return Err("TypeScript directional layout differs from native owner analysis".into());
+        }
+        analysis
+            .owner_node_ids
+            .iter()
+            .filter_map(|(owner_id, node_ids)| {
+                node_ids.last().map(|node_id| (node_id.clone(), owner_id.clone()))
+            })
+            .collect::<BTreeMap<_, _>>()
+    };
+    let owners_by_id =
+        document.owners.iter().map(|owner| (owner.id.as_str(), owner)).collect::<BTreeMap<_, _>>();
     let nodes = parsed.normalized_nodes()?;
     let index = tree_haver::NormalizedTreeIndex::new(&nodes)?;
     let root = index
@@ -51,8 +68,6 @@ fn layout(
         .filter(|node| node.role == NodeRole::Comment)
         .map(|node| (node.span.range.start_byte, &node.span.range))
         .collect();
-    let owners_by_span: BTreeMap<_, _> =
-        document.owners.iter().map(|owner| ((owner.start_byte, owner.end_byte), owner)).collect();
     let trivia = |start: usize, end: usize| {
         if start > end || end > bytes.len() {
             return false;
@@ -74,13 +89,47 @@ fn layout(
     let mut result = Layout { imports: vec![], ranges: BTreeMap::new(), empty_offset: bytes.len() };
     let mut previous_end = 0;
     for node in &children {
-        let is_import = node.kind == "import_statement";
-        let owner = owners_by_span.get(&(node.span.range.start_byte, node.span.range.end_byte));
-        if !is_import && owner.is_none() {
+        if node.role == NodeRole::Comment {
             continue;
         }
-        let start = node.span.range.start_byte;
-        let end = node.span.range.end_byte;
+        if node.kind == "import_statement" {
+            let start = node.span.range.start_byte;
+            let end = node.span.range.end_byte;
+            let line_start = bytes[..start]
+                .iter()
+                .rposition(|byte| *byte == b'\n')
+                .map_or(0, |offset| offset + 1);
+            let content_end = end - usize::from(end > start && bytes[end - 1] == b'\n');
+            let line_end = bytes[content_end..]
+                .iter()
+                .position(|byte| *byte == b'\n')
+                .map_or(bytes.len(), |offset| content_end + offset + 1);
+            if previous_end > line_start
+                || !bytes[line_start..start].iter().all(u8::is_ascii_whitespace)
+                || !trivia(previous_end, start)
+                || !trivia(end, line_end)
+            {
+                return Err(
+                    "TypeScript directional insertion requires standalone native declaration lines"
+                        .into(),
+                );
+            }
+            result.imports.push(node.source_fragment.clone());
+            // Module-scoped barriers never travel with inserted declarations.
+            result.empty_offset = line_end;
+            previous_end = line_end;
+            continue;
+        }
+
+        let Some(owner_id) = primary_owner_by_node.get(node.id.as_str()) else {
+            continue;
+        };
+        let owner = owners_by_id
+            .get(owner_id.as_str())
+            .copied()
+            .ok_or_else(|| format!("TypeScript native node refers to missing owner {owner_id}"))?;
+        let start = owner.start_byte;
+        let end = owner.end_byte;
         let line_start =
             bytes[..start].iter().rposition(|byte| *byte == b'\n').map_or(0, |offset| offset + 1);
         let content_end = end - usize::from(end > start && bytes[end - 1] == b'\n');
@@ -98,24 +147,16 @@ fn layout(
                     .into(),
             );
         }
-        if is_import {
-            result.imports.push(node.source_fragment.clone());
-        }
-        if is_import {
-            // Module-scoped barriers never travel with an inserted declaration.
-            result.empty_offset = line_end;
-        } else if let Some(owner) = owner {
-            result.ranges.insert(
-                owner.id.clone(),
-                ByteRange {
-                    // Before the first declaration/import, comments are a module
-                    // header. Do not move current directives after new statements.
-                    // After imports/owners, native leading trivia travels with additions.
-                    start_byte: if previous_end == 0 { line_start } else { previous_end },
-                    end_byte: line_end,
-                },
-            );
-        }
+        result.ranges.insert(
+            owner.id.clone(),
+            ByteRange {
+                // Before the first declaration/import, comments are a module
+                // header. Do not move current directives after new statements.
+                // After imports/owners, attached trivia travels with additions.
+                start_byte: if previous_end == 0 { line_start } else { previous_end },
+                end_byte: line_end,
+            },
+        );
         previous_end = line_end;
     }
     Ok(result)
@@ -164,12 +205,31 @@ pub fn plan_insertions(
             .iter()
             .find(|owner| positions.contains_key(owner.id.as_str()));
         let offset = match next {
-            Some(anchor) => current_layout.ranges[&anchor.id].start_byte,
-            None => current.owners.last().map_or(current_layout.empty_offset, |owner| {
-                current_layout.ranges[&owner.id].end_byte
-            }),
+            Some(anchor) => {
+                current_layout
+                    .ranges
+                    .get(&anchor.id)
+                    .ok_or_else(|| {
+                        format!("TypeScript anchor {} has no source line range", anchor.id)
+                    })?
+                    .start_byte
+            }
+            None => match current.owners.last() {
+                Some(owner) => {
+                    current_layout
+                        .ranges
+                        .get(&owner.id)
+                        .ok_or_else(|| {
+                            format!("TypeScript owner {} has no source line range", owner.id)
+                        })?
+                        .end_byte
+                }
+                None => current_layout.empty_offset,
+            },
         };
-        let source_range = incoming_layout.ranges[&owner.id].clone();
+        let source_range = incoming_layout.ranges.get(&owner.id).cloned().ok_or_else(|| {
+            format!("TypeScript incoming owner {} has no source line range", owner.id)
+        })?;
         if !incoming_parse.source.bytes()[source_range.start_byte..source_range.end_byte]
             .ends_with(b"\n")
             || (offset > 0 && current_parse.source.bytes()[offset - 1] != b'\n')

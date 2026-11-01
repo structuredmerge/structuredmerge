@@ -110,7 +110,7 @@ fn diff_reports_owners_and_import_comment_layout_for_both_dialects() {
         for changed in [BASE.replace("// é", "// changed"), BASE.replace("'x'", "'y'")] {
             let (result, _) = run(request(dialect, "diff2", &[BASE, &changed]));
             assert!(result.ok);
-            assert_eq!(result.changes.len(), 1);
+            assert_eq!(result.changes.len(), 1, "{changed:?} => {:?}", result.changes);
             assert_eq!(result.changes[0].subject_ref.as_deref(), Some("document"));
         }
         assert!(run(request(dialect, "diff2", &[BASE, BASE])).0.changes.is_empty());

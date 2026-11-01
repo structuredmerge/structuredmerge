@@ -1,6 +1,8 @@
 //! Existing TypeScript/TSX declaration ownership over validated native facts.
 //! Import/comment bytes remain layout; wrapper spans remain whole source owners.
-use ast_merge::{SourcePreservingOwnerDocument, native_analysis::NativeOwnerAnalysis};
+use ast_merge::{
+    CommentScope, SourcePreservingOwnerDocument, native_analysis::NativeOwnerAnalysis,
+};
 use tree_haver::service::ParsedResult;
 
 pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
@@ -16,8 +18,31 @@ pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
     let root =
         parsed.document.output().root_id.as_deref().ok_or("TypeScript parse omitted its root")?;
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
-    let analysis =
-        ast_merge::project_named_top_level_analysis(source, root, &nodes, super::owner_policy())?;
+    let index = tree_haver::NormalizedTreeIndex::new(&nodes)?;
+    let root_node = index.root(root)?;
+    let top_level = index.children(root_node);
+    let analysis = ast_merge::project_named_top_level_analysis_with_comment_scope(
+        source,
+        root,
+        &nodes,
+        super::owner_policy(),
+        |node| {
+            let text = node.source_fragment.trim_start();
+            let structural_doc = text.starts_with("///") || text.starts_with("/**");
+            let precedes_first_owner = top_level
+                .iter()
+                .filter(|candidate| candidate.span.range.end_byte <= node.span.range.start_byte)
+                .all(|candidate| {
+                    candidate.role == tree_haver::NodeRole::Comment
+                        || candidate.kind == "import_statement"
+                });
+            if precedes_first_owner && !structural_doc {
+                CommentScope::Root
+            } else {
+                CommentScope::Owner
+            }
+        },
+    )?;
     analysis.validate(parsed)?;
     Ok(analysis)
 }
