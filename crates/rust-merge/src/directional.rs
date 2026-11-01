@@ -23,7 +23,11 @@ pub fn owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, St
         }
     }
     if has_owner {
-        return crate::typed::owners(parsed);
+        let mut document = crate::typed::owners(parsed)?;
+        // `use` items are module-scoped compatibility facts for directional
+        // insertion, not declaration payloads to copy as incoming owners.
+        document.owners.retain(|owner| !owner.id.starts_with("/use:"));
+        return Ok(document);
     }
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
     Ok(SourcePreservingOwnerDocument { source: source.into(), owners: vec![] })

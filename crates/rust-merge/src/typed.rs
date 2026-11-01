@@ -1,5 +1,5 @@
 //! Existing conservative Rust declaration ownership over validated TreeHaver facts.
-//! Use-declaration bytes remain unowned layout, not newly supported merge owners.
+//! Use declarations are whole owners; nested owner/member semantics stay out of scope.
 use ast_merge::{
     SourcePreservingMergeEvidence, SourcePreservingOwnerDocument,
     native_analysis::NativeOwnerAnalysis,

@@ -28,6 +28,7 @@ const RUST_SOURCE_PRESERVING_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
     NamedOwnerKind { node_kind: "trait_item", path_kind: "trait" },
     NamedOwnerKind { node_kind: "type_item", path_kind: "type" },
     NamedOwnerKind { node_kind: "union_item", path_kind: "union" },
+    NamedOwnerKind { node_kind: "use_declaration", path_kind: "use" },
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -337,15 +338,17 @@ fn rust_membership_change_with_owner_edit(
     ours: &SourcePreservingOwnerDocument,
     theirs: &SourcePreservingOwnerDocument,
 ) -> bool {
-    let base_ids =
-        base.owners.iter().map(|owner| owner.id.as_str()).collect::<std::collections::HashSet<_>>();
-    let ours_ids =
-        ours.owners.iter().map(|owner| owner.id.as_str()).collect::<std::collections::HashSet<_>>();
-    let theirs_ids = theirs
-        .owners
-        .iter()
-        .map(|owner| owner.id.as_str())
-        .collect::<std::collections::HashSet<_>>();
+    let non_use_ids = |document: &SourcePreservingOwnerDocument| {
+        document
+            .owners
+            .iter()
+            .filter(|owner| !owner.id.starts_with("/use:"))
+            .map(|owner| owner.id.clone())
+            .collect::<std::collections::HashSet<_>>()
+    };
+    let base_ids = non_use_ids(base);
+    let ours_ids = non_use_ids(ours);
+    let theirs_ids = non_use_ids(theirs);
     let membership_changed = base_ids != ours_ids || base_ids != theirs_ids;
     membership_changed
         && base.owners.iter().any(|base_owner| {
@@ -398,10 +401,17 @@ fn owner_policy() -> NamedOwnerProjectionPolicy<'static> {
     NamedOwnerProjectionPolicy {
         family: "Rust",
         owner_kinds: RUST_SOURCE_PRESERVING_OWNER_KINDS,
-        ignored_kinds: &["use_declaration"],
+        ignored_kinds: &[],
         wrapper_kinds: &[],
         name_fields: &["name"],
-        fallback_name_kinds: &["identifier", "type_identifier"],
+        fallback_name_kinds: &[
+            "identifier",
+            "type_identifier",
+            "scoped_identifier",
+            "use_as_clause",
+            "scoped_use_list",
+            "use_wildcard",
+        ],
         accept_any_named_kind: false,
     }
 }

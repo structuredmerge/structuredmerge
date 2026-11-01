@@ -110,6 +110,30 @@ fn directional_planning_revalidates_documents_before_noop_selection() {
 }
 
 #[test]
+fn directional_insertion_keeps_use_items_as_shared_module_facts() {
+    let parser = Parser::new("rust");
+    let incoming =
+        parser.parse("use std::fmt;\n/// new declaration\nfn f() {}\n", SourceRole::Incoming);
+    let current = parser.parse("use std::fmt;\n// footer\n", SourceRole::Current);
+    let incoming_owners = rust_merge::directional::owners(&incoming).unwrap();
+    let current_owners = rust_merge::directional::owners(&current).unwrap();
+
+    assert_eq!(
+        incoming_owners.owners.iter().map(|owner| owner.id.as_str()).collect::<Vec<_>>(),
+        ["/function:f"]
+    );
+    let insertions = rust_merge::directional::plan_insertions(
+        &incoming,
+        &incoming_owners,
+        &current,
+        &current_owners,
+    )
+    .unwrap();
+    assert_eq!(insertions.len(), 1);
+    assert_eq!(insertions[0].owner_id, "/function:f");
+}
+
+#[test]
 fn native_analysis_retains_all_supported_declaration_kinds_and_exact_references() {
     let parser = Parser::new("rust");
     let source = "use std::fmt;\n// é\nconst C: i32 = 1;\nenum E { A }\nfn f() {}\nmod m {}\nstatic S: i32 = 1;\nstruct T;\ntrait Q {}\ntype A = i32;\nunion U { x: i32 }\n";
@@ -118,6 +142,7 @@ fn native_analysis_retains_all_supported_declaration_kinds_and_exact_references(
     assert_eq!(
         analysis.document.owners.iter().map(|owner| owner.id.as_str()).collect::<Vec<_>>(),
         [
+            "/use:std::fmt",
             "/const:C",
             "/enum:E",
             "/function:f",
@@ -142,10 +167,8 @@ fn native_analysis_retains_all_supported_declaration_kinds_and_exact_references(
         );
     }
     let gaps = analysis.layout_gaps().unwrap();
-    assert_eq!(
-        parsed.source.slice(gaps[0].range.clone()).unwrap(),
-        "use std::fmt;\n// é\n".as_bytes()
-    );
+    assert_eq!(parsed.source.slice(gaps[0].range.clone()).unwrap(), b"");
+    assert_eq!(parsed.source.slice(gaps[1].range.clone()).unwrap(), "\n// é\n".as_bytes());
     let mut wrong = parsed.clone();
     wrong.source = parser.parse(BASE, SourceRole::Source).source;
     assert!(typed::analysis(&wrong).is_err());
@@ -217,10 +240,29 @@ fn membership_plus_edit_keeps_the_rust_guard_before_generic_shortcuts() {
 }
 
 #[test]
+fn use_declarations_merge_with_independent_function_edits() {
+    let parser = Parser::new("rust");
+    let base = "fn f() { 1 }\n";
+    let ours = "use std::fmt;\nfn f() { 1 }\n";
+    let theirs = "fn f() { 2 }\n";
+    let [base, ours, theirs] = parser.inputs([base, ours, theirs]);
+    let result =
+        typed::merge3(&base, &ours, &theirs, |source| Ok(parser.parse(source, SourceRole::Output)))
+            .unwrap();
+
+    assert_eq!(
+        result.evidence.result.outcome,
+        ast_merge::ThreeWayMergeOutcome::Clean,
+        "{:?}",
+        result.evidence.result.diagnostics
+    );
+    assert_eq!(result.evidence.result.output.as_deref(), Some("use std::fmt;\nfn f() { 2 }\n"));
+}
+
+#[test]
 fn unsupported_native_constructs_and_wrong_roles_fail_closed() {
     let parser = Parser::new("rust");
     for source in [
-        "use std::fmt;\n",
         "impl T {}\nfn f() {}\n",
         "#[inline]\nfn f() {}\n",
         "m!();\nfn f() {}\n",
