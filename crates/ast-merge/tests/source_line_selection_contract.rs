@@ -1,7 +1,8 @@
 use ast_merge::{
     SourceLineCommentRegion, SourceLineDisposition, SourceLineLayoutGap, SourceLineOwner,
     SourceLineSelection, SourceRevision, render_source_plan, source_line_dispositions,
-    source_line_selections_for_owner_revisions, source_render_plan_from_line_selections,
+    source_line_owner_addition_range, source_line_selections_for_owner_revisions,
+    source_render_plan_from_line_selections,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -165,6 +166,11 @@ fn added_owner_selection_carries_its_leading_gap_from_the_selected_source() {
             &document.layout_gaps,
         )
         .expect("added owner line facts are unambiguous");
+        if source_revision == SourceRevision::Theirs {
+            let range = source_line_owner_addition_range(&document.source, &records, "added")
+                .expect("directly adjacent leading gap belongs to added owner");
+            assert_eq!(&document.source[range], "\nfn added() {}\n");
+        }
         sources.insert(source_revision, document.source);
         dispositions.insert(source_revision, records);
     }
@@ -184,4 +190,35 @@ fn added_owner_selection_carries_its_leading_gap_from_the_selected_source() {
         .expect("addition source line plan is valid");
     let rendered = render_source_plan(&plan).expect("added owner source lines render");
     assert_eq!(rendered.content, fixture.expected.content);
+}
+
+#[derive(Deserialize)]
+struct DispositionFixture {
+    cases: Vec<DispositionCase>,
+}
+
+#[derive(Deserialize)]
+struct DispositionCase {
+    name: String,
+    source: String,
+    expected: Vec<SourceLineDisposition>,
+}
+
+#[test]
+fn attached_comment_source_range_excludes_preceding_owner_postlude_gap() {
+    let fixture: DispositionFixture = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/ast-merge/source_line_disposition.json"
+    ))
+    .expect("shared source line disposition fixture is valid");
+    let case = fixture
+        .cases
+        .into_iter()
+        .find(|case| {
+            case.name
+                == "a blank gap before a leading comment remains controlled by the preceding owner"
+        })
+        .expect("shared leading-comment gap case exists");
+    let range = source_line_owner_addition_range(&case.source, &case.expected, "beta")
+        .expect("selected comment and owner lines form one source range");
+    assert_eq!(&case.source[range], "# beta docs\nbeta()\n");
 }

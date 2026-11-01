@@ -64,6 +64,12 @@ fn layout(parsed: &ParsedResult, analysis: &NativeOwnerAnalysis) -> Result<Layou
         index.root(parsed.document.output().root_id.as_deref().ok_or("missing Rust root")?)?;
     let children = index.children(root);
     let bytes = parsed.source.bytes();
+    let source = std::str::from_utf8(bytes).map_err(|error| error.to_string())?;
+    let source_line_dispositions = if document.owners.is_empty() {
+        Vec::new()
+    } else {
+        crate::typed::source_line_analysis(parsed)?.dispositions
+    };
     let comments: BTreeMap<_, _> = children
         .iter()
         .filter(|node| node.role == NodeRole::Comment)
@@ -136,9 +142,15 @@ fn layout(parsed: &ParsedResult, analysis: &NativeOwnerAnalysis) -> Result<Layou
             // Module-scoped barriers never travel with an inserted declaration.
             result.empty_offset = line_end;
         } else if let Some(owner) = owner {
+            let selected_range = ast_merge::source_line_owner_addition_range(
+                source,
+                &source_line_dispositions,
+                &owner.id,
+            )
+            .map_err(|error| error.to_string())?;
             result.ranges.insert(
                 owner.id.clone(),
-                ByteRange { start_byte: previous_end, end_byte: line_end },
+                ByteRange { start_byte: selected_range.start, end_byte: selected_range.end },
             );
         }
         previous_end = line_end;

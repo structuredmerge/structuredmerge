@@ -698,46 +698,9 @@ pub fn merge_rust_with_backend(
         };
     }
 
-    let template_analysis = template.analysis.expect("successful parse should include analysis");
-    let destination_analysis =
-        destination.analysis.expect("successful parse should include analysis");
-    let destination_declaration_keys = destination_analysis
-        .declarations
-        .iter()
-        .map(|item| item.match_key.clone())
-        .collect::<std::collections::HashSet<_>>();
-    let import_lines = destination_analysis
-        .imports
-        .iter()
-        .map(|item| item.text.clone())
-        .collect::<Vec<_>>()
-        .join("");
-    let merged_declarations = [
-        destination_analysis.declarations.iter().map(|item| item.text.clone()).collect::<Vec<_>>(),
-        template_analysis
-            .declarations
-            .iter()
-            .filter(|item| !destination_declaration_keys.contains(&item.match_key))
-            .map(|item| item.text.clone())
-            .collect::<Vec<_>>(),
-    ]
-    .concat()
-    .join("\n")
-    .trim()
-    .to_string();
-
-    let output = [import_lines.trim().to_string(), merged_declarations]
-        .into_iter()
-        .filter(|section| !section.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n\n");
-
-    MergeResult {
-        ok: true,
-        diagnostics: vec![],
-        output: Some(format!("{output}\n")),
-        policies: vec![destination_wins_array_policy()],
-    }
+    // Keep Tree-sitter as the selected backend acceptance gate. Rust-native syn
+    // item spans and shared source-line dispositions drive exact owner emission.
+    merge_rust_native_two_way(template_source, destination_source)
 }
 
 fn native_merge_error_result(message: impl Into<String>) -> MergeResult<String> {

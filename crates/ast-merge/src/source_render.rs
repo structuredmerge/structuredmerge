@@ -314,6 +314,58 @@ pub struct SourceLineSelection {
 /// Select source regions in baseline line order, taking structural and attached
 /// comment regions from their selected owner revision and each layout gap from
 /// its controller owner revision. Root and unmanaged regions stay with baseline.
+pub fn source_line_owner_addition_range(
+    source: &str,
+    dispositions: &[crate::SourceLineDisposition],
+    owner_id: &str,
+) -> Result<std::ops::Range<usize>, SourceRenderError> {
+    let lines = if source.is_empty() {
+        Vec::new()
+    } else {
+        source.split_inclusive("\n").collect::<Vec<_>>()
+    };
+    if lines.len() != dispositions.len() {
+        return Err(SourceRenderError::new("source line facts do not partition the source"));
+    }
+    let mut selected_lines = std::collections::HashSet::new();
+    let mut has_structural_owner = false;
+    for (index, disposition) in dispositions.iter().enumerate() {
+        if disposition.line_number != index + 1 || disposition.line != lines[index] {
+            return Err(SourceRenderError::new(
+                "source line facts do not match exact source lines",
+            ));
+        }
+        let selected = match disposition.kind.as_str() {
+            "structural_owner" | "comment_owner" => {
+                let selected = disposition.owner_id.as_deref() == Some(owner_id);
+                has_structural_owner |= selected && disposition.kind == "structural_owner";
+                selected
+            }
+            "layout_gap" => disposition.after_owner_id.as_deref() == Some(owner_id),
+            _ => false,
+        };
+        if selected {
+            selected_lines.insert(disposition.line_number);
+        }
+    }
+    if !has_structural_owner || selected_lines.is_empty() {
+        return Err(SourceRenderError::new(format!(
+            "owner {owner_id} has no source lines to insert"
+        )));
+    }
+    let start_line = *selected_lines.iter().min().unwrap();
+    let end_line = *selected_lines.iter().max().unwrap();
+    if (start_line..=end_line).any(|line| !selected_lines.contains(&line)) {
+        return Err(SourceRenderError::new(format!(
+            "owner {owner_id} insertion lines are not contiguous"
+        )));
+    }
+    let start_byte = lines[..start_line - 1].iter().map(|line| line.len()).sum();
+    let end_byte =
+        start_byte + lines[start_line - 1..end_line].iter().map(|line| line.len()).sum::<usize>();
+    Ok(start_byte..end_byte)
+}
+
 pub fn source_line_selections_for_owner_revisions(
     baseline_revision: SourceRevision,
     dispositions: &HashMap<SourceRevision, Vec<crate::SourceLineDisposition>>,

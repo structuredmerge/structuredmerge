@@ -287,17 +287,19 @@ fn conforms_to_rust_fixtures() {
 }
 
 #[test]
-fn native_syn_classic_merge_preserves_destination_and_adds_doc_owner_lines() {
-    let template = "fn shared() {}\n\n/// added docs\npub fn added() {}\n";
-    let destination = "/// destination docs\npub fn shared() {}\n";
-    let result =
-        merge_rust_with_backend(template, destination, RustDialect::Rust, RustBackend::Native);
-
-    assert!(result.ok, "native syn classic merge failed: {:?}", result.diagnostics);
-    assert_eq!(
-        result.output.as_deref(),
-        Some("/// destination docs\npub fn shared() {}\n/// added docs\npub fn added() {}\n")
-    );
+fn classic_merge_backends_consume_shared_doc_owner_fixture() {
+    let fixture = read_fixture(&["polyglot", "typed-core", "rust_merge2_comment_owner.json"]);
+    let input = &fixture["input"];
+    for backend in [RustBackend::Native, RustBackend::TreeSitter] {
+        let result = merge_rust_with_backend(
+            input["template"].as_str().unwrap(),
+            input["destination"].as_str().unwrap(),
+            RustDialect::Rust,
+            backend,
+        );
+        assert!(result.ok, "{backend:?} classic merge failed: {:?}", result.diagnostics);
+        assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+    }
 }
 
 #[test]
