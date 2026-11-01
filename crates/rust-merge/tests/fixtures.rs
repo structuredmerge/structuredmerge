@@ -1134,6 +1134,26 @@ fn native_syn_keeps_same_spelling_rust_namespaces_as_distinct_owners() {
 }
 
 #[test]
+fn native_syn_rehomes_comment_when_deleted_owner_precedes_reordered_edit() {
+    let fixture = read_fixture(&[
+        "polyglot",
+        "typed-core",
+        "rust_merge3_comment_rehome_with_reorder_and_independent_edit.json",
+    ]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(fixture["expected"]["output"].as_str().unwrap()));
+}
+
+#[test]
 fn native_syn_composes_reorder_with_stable_interior_addition_gap() {
     let fixture = read_fixture(&[
         "polyglot",
