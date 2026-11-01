@@ -1016,3 +1016,26 @@ fn native_syn_merges_foreign_module_as_one_comment_owned_source_owner() {
     assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{:?}", result.diagnostics);
     assert_eq!(result.output.as_deref(), Some(fixture["expected"]["output"].as_str().unwrap()));
 }
+
+#[test]
+fn native_syn_fails_closed_on_two_sided_owner_reorders() {
+    let fixture = read_fixture(&[
+        "polyglot",
+        "typed-core",
+        "rust_merge3_two_sided_owner_reorder_boundary.json",
+    ]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Error, "{:?}", result.diagnostics);
+    assert!(result.output.is_none());
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.category == ast_merge::DiagnosticCategory::UnsupportedFeature
+    }));
+}
