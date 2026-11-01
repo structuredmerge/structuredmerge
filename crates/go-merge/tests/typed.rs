@@ -211,6 +211,28 @@ fn membership_plus_owner_edit_retains_the_family_guard_without_false_proof() {
 }
 
 #[test]
+fn analysis_preserves_parser_recovery_nodes_as_unowned_layout() {
+    let parser = Parser::new("go");
+    let source = "package main\nfunc f() { return }\nfunc () {}\n";
+    let parsed = parser.parse(source, SourceRole::Source);
+    let analysis = typed::analysis(&parsed).unwrap();
+
+    assert_eq!(
+        analysis.document.owners.iter().map(|owner| owner.id.as_str()).collect::<Vec<_>>(),
+        vec!["/package:main", "/function:f"]
+    );
+    let unowned = analysis
+        .layout_gaps()
+        .unwrap()
+        .iter()
+        .map(|gap| parsed.source.slice(gap.range.clone()).unwrap())
+        .flatten()
+        .copied()
+        .collect::<Vec<_>>();
+    assert!(String::from_utf8(unowned).unwrap().contains("func () {}"));
+}
+
+#[test]
 fn analysis_projects_go_types_constants_and_methods_with_native_identities() {
     let parser = Parser::new("go");
     let source = "package main\n\ntype Widget struct{}\n\nconst Version, Alias = 1, 2\n\nfunc (w Widget) Name() string { return \"old\" }\n";
@@ -238,7 +260,11 @@ fn analysis_projects_go_types_constants_and_methods_with_native_identities() {
 #[test]
 fn unsupported_syntax_and_wrong_source_roles_fail_closed() {
     let parser = Parser::new("go");
-    for text in ["package main\nfunc f() {}\nfunc f() {}\n", "package main\nfunc f( {\n"] {
+    for text in [
+        "package main\nfunc f() {}\nfunc f() {}\n",
+        "package main\nfunc f( {\n",
+        "package main; func f() {}\n",
+    ] {
         assert!(typed::analysis(&parser.parse(text, SourceRole::Source)).is_err(), "{text}");
     }
     assert!(

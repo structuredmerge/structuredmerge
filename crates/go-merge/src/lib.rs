@@ -553,9 +553,11 @@ pub(crate) fn project_go_owners(
                     }
                 }
             }
-            kind => {
+            _kind => {
+                // The native FileAnalysis ignores parser-recovery/non-owner
+                // nodes and preserves their bytes as unmanaged layout.
                 pending_comments.clear();
-                return Err(format!("unsupported top-level Go node {kind:?}"));
+                continue;
             }
         };
         if !owner_ids.insert(id.clone()) {

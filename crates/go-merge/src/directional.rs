@@ -57,7 +57,11 @@ pub fn owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, St
         let mut document = crate::typed::owners(parsed)?;
         // Package and import declarations are validated header identity, not
         // insertable function owners. plan_insertions compares the exact header.
-        document.owners.retain(|owner| !owner.id.starts_with("/package:"));
+        document.owners.retain(|owner| {
+            !owner.id.starts_with("/package:")
+                && !owner.id.starts_with("/import:")
+                && !owner.id.starts_with("/import_group:")
+        });
         return Ok(document);
     }
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
