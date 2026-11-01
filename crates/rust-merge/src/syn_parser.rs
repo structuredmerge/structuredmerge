@@ -386,7 +386,7 @@ fn item_facts(
         Item::Enum(_) => ("enum_item", "syn::ItemEnum"),
         Item::ExternCrate(_) => ("extern_crate_declaration", "syn::ItemExternCrate"),
         Item::Fn(_) => ("function_item", "syn::ItemFn"),
-        Item::ForeignMod(_) => ("native_item", "syn::ItemForeignMod"),
+        Item::ForeignMod(_) => ("foreign_mod_item", "syn::ItemForeignMod"),
         Item::Impl(item) if RustSynParserProvider::impl_owner_identity(item, source).is_some() => {
             ("impl_item", "syn::ItemImpl")
         }
@@ -431,6 +431,10 @@ fn item_facts(
     };
     let semantic_identity = match item {
         Item::Impl(item) => RustSynParserProvider::impl_owner_identity(item, source),
+        Item::ForeignMod(item) => Some(format!(
+            "extern_mod:{}",
+            item.abi.name.as_ref().map(|name| name.value()).unwrap_or_else(|| "C".to_string())
+        )),
         _ => None,
     };
     (kind, native_type, name, semantic_identity)
@@ -978,7 +982,7 @@ mod tests {
     }
 
     #[test]
-    fn native_syntax_outside_the_owner_profile_fails_closed() {
+    fn native_foreign_module_is_a_source_preserving_owner() {
         let source = "unsafe extern \"C\" { fn native_symbol(); }\n";
         let registry = ParserRegistry::default();
         registry.register(Arc::new(RustSynParserProvider::new("rust.syn.test"))).unwrap();
@@ -987,10 +991,10 @@ mod tests {
             .unwrap()
             .remove(0);
         assert!(parsed.document.output().ok);
-        assert!(
-            crate::typed::analysis(&parsed)
-                .unwrap_err()
-                .contains("unsupported top-level Rust node")
+        let analysis = crate::typed::analysis(&parsed).unwrap();
+        assert_eq!(
+            analysis.document.owners.iter().map(|owner| owner.path.as_str()).collect::<Vec<_>>(),
+            vec!["/foreign_mod:extern_mod:C"]
         );
     }
 
@@ -1164,7 +1168,7 @@ mod tests {
         assert!(output.ok, "{:?}", output.diagnostics);
         assert!(
             output.nodes.iter().any(|node| {
-                node.kind == "syn::ItemForeignMod" && node.native_type == "native_item"
+                node.kind == "syn::ItemForeignMod" && node.native_type == "foreign_mod_item"
             }),
             "{:?}",
             output.nodes

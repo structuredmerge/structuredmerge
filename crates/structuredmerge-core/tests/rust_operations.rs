@@ -42,6 +42,9 @@ fn setup() -> (ParserRegistrySnapshot, ExecutionContext) {
     registry
         .register(Arc::new(LanguagePackProvider::new("rust.common".into(), "rust".into()).unwrap()))
         .unwrap();
+    registry
+        .register(Arc::new(rust_merge::RustSynParserProvider::new("rust.syn.core-test")))
+        .unwrap();
     (
         registry.snapshot().unwrap(),
         ExecutionContext {
@@ -208,7 +211,9 @@ fn common_rust_operation_preserves_two_tip_preamble_and_postlude_additions() {
         input["ours"].as_str().unwrap(),
         input["theirs"].as_str().unwrap(),
     ];
-    let (result, request) = run(request("merge3", &texts));
+    let mut operation = request("merge3", &texts);
+    operation.parser_selection.backend = Some("rust.syn.core-test".into());
+    let (result, request) = run(operation);
 
     assert!(result.ok, "{:?}", result.diagnostics);
     assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
@@ -601,4 +606,26 @@ fn guard_projection_recomputes_evidence_and_rejects_forged_results() {
     assert!(project(&execution, "kernel.rust").is_ok());
     execution.input_parses.swap(0, 1);
     assert!(project(&execution, "kernel.rust").is_err());
+}
+
+#[test]
+fn common_rust_operation_merges_foreign_module_with_independent_function_edit() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_foreign_mod_owner_merge3.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let texts = [
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ];
+    let mut operation = request("merge3", &texts);
+    operation.parser_selection.backend = Some("rust.syn.core-test".into());
+    let (result, request) = run(operation);
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+    assert_eq!(result.verification.output_reparsed, Some(true));
+    result.validate_against(&request).unwrap();
 }

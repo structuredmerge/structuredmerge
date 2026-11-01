@@ -330,21 +330,25 @@ fn rust_backends_conform_to_shared_owner_profile_failure_boundary() {
         let source = case["source"].as_str().unwrap();
         for backend in [RustBackend::Native, RustBackend::TreeSitter] {
             let result = parse_rust_with_backend(source, RustDialect::Rust, backend);
-            assert_eq!(
-                result.ok,
-                case["expected"]["ok"].as_bool().unwrap(),
-                "{backend:?}: {}",
-                case["name"]
-            );
-            let diagnostics = diagnostic_shape(&result.diagnostics);
-            assert!(
-                diagnostics.as_array().unwrap().iter().any(|diagnostic| {
-                    diagnostic["category"] == case["expected"]["rust_family_category"]
-                }),
-                "{backend:?} lacked the expected failure category for {}: {:?}",
-                case["name"],
-                diagnostics
-            );
+            let expected_ok_key = match backend {
+                RustBackend::Native => "native_rust_ok",
+                RustBackend::TreeSitter => "tree_sitter_rust_ok",
+            };
+            let expected_ok = case["expected"][expected_ok_key]
+                .as_bool()
+                .unwrap_or_else(|| case["expected"]["ok"].as_bool().unwrap());
+            assert_eq!(result.ok, expected_ok, "{backend:?}: {}", case["name"]);
+            if !expected_ok {
+                let diagnostics = diagnostic_shape(&result.diagnostics);
+                assert!(
+                    diagnostics.as_array().unwrap().iter().any(|diagnostic| {
+                        diagnostic["category"] == case["expected"]["rust_family_category"]
+                    }),
+                    "{backend:?} lacked the expected failure category for {}: {:?}",
+                    case["name"],
+                    diagnostics
+                );
+            }
         }
     }
 }
@@ -984,6 +988,22 @@ fn native_syn_merge3_composes_file_edge_additions_with_owner_removals() {
 fn native_syn_merge3_composes_edge_addition_with_one_sided_reorder() {
     let fixture =
         read_fixture(&["polyglot", "typed-core", "rust_merge3_edge_addition_with_reorder.json"]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(fixture["expected"]["output"].as_str().unwrap()));
+}
+
+#[test]
+fn native_syn_merges_foreign_module_as_one_comment_owned_source_owner() {
+    let fixture = read_fixture(&["polyglot", "typed-core", "rust_foreign_mod_owner_merge3.json"]);
     let input = &fixture["input"];
     let result = merge_rust_three_way_with_backend(
         input["base"].as_str().unwrap(),

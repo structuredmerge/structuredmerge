@@ -41,6 +41,7 @@ const RUST_SYN_SOURCE_PRESERVING_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
     NamedOwnerKind { node_kind: "enum_item", path_kind: "enum" },
     NamedOwnerKind { node_kind: "extern_crate_declaration", path_kind: "extern_crate" },
     NamedOwnerKind { node_kind: "function_item", path_kind: "function" },
+    NamedOwnerKind { node_kind: "foreign_mod_item", path_kind: "foreign_mod" },
     NamedOwnerKind { node_kind: "impl_item", path_kind: "impl" },
     NamedOwnerKind { node_kind: "macro_definition", path_kind: "macro" },
     NamedOwnerKind { node_kind: "macro_invocation", path_kind: "macro_invocation" },
@@ -1027,6 +1028,20 @@ fn parse_rust_native(source: &str) -> ParseResult<RustAnalysis> {
                 item.sig.ident.to_string(),
                 "function",
             )),
+            Item::ForeignMod(item) => {
+                let abi = item
+                    .abi
+                    .name
+                    .as_ref()
+                    .map(|name| name.value())
+                    .unwrap_or_else(|| "C".to_string());
+                let identity = format!("extern_mod:{abi}");
+                let path = format!("/declarations/{identity}");
+                if declarations.iter().any(|declaration| declaration.path == path) {
+                    return ambiguity_result(format!("ambiguous Rust foreign module owner {path}"));
+                }
+                declarations.push(native_declaration(source, item.span(), identity, "foreign_mod"));
+            }
             Item::Macro(item) if item.ident.is_none() => {
                 let name = item
                     .mac
