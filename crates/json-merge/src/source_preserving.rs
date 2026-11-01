@@ -1027,6 +1027,9 @@ fn render_plan(source: &str, mut plan: MergePlan) -> Result<(String, Vec<SourceE
 
 fn addition_edits(source: &str, additions: ObjectAdditions) -> Result<Vec<SourceEdit>, String> {
     let newline = if source.contains("\r\n") { "\r\n" } else { "\n" };
+    if let Some(edits) = append_after_trailing_inline_comment(source, &additions, newline)? {
+        return Ok(edits);
+    }
     let object_source = source
         .get(additions.object_range.start_byte..additions.object_range.end_byte)
         .ok_or_else(|| format!("invalid object span for {}", additions.node_id))?;
@@ -1054,6 +1057,82 @@ fn addition_edits(source: &str, additions: ObjectAdditions) -> Result<Vec<Source
         }
     }
     Ok(edits)
+}
+
+fn append_after_trailing_inline_comment(
+    source: &str,
+    additions: &ObjectAdditions,
+    newline: &str,
+) -> Result<Option<Vec<SourceEdit>>, String> {
+    if additions.additions.is_empty()
+        || additions.additions.iter().any(|addition| addition.before_byte.is_some())
+    {
+        return Ok(None);
+    }
+    let Some(last_member_end) = additions.last_member_end else { return Ok(None) };
+    let Some(comment) = trailing_inline_comment(source, last_member_end, additions.closing_byte)
+    else {
+        return Ok(None);
+    };
+    let Some(close_line_start) =
+        source[..additions.closing_byte].rfind('\n').map(|index| index + 1)
+    else {
+        return Ok(None);
+    };
+    if close_line_start <= comment.end || !source[comment.end..close_line_start].trim().is_empty() {
+        return Ok(None);
+    }
+
+    let member_indent = format!("{}  ", line_indent(source, additions.closing_byte));
+    let pair_sources = additions
+        .additions
+        .iter()
+        .map(|addition| addition.pair_source.as_str())
+        .collect::<Vec<_>>();
+    let joined = pair_sources.join(&format!(",{newline}{member_indent}"));
+    let mut edits = Vec::with_capacity(2);
+    let before_comment = source[last_member_end..comment.start].trim_start();
+    let after_comment = source[comment.end..additions.closing_byte].trim_start();
+    if !before_comment.starts_with(',') && !after_comment.starts_with(',') {
+        edits.push(SourceEdit::insert(last_member_end, ","));
+    }
+    edits.push(SourceEdit::insert(close_line_start, format!("{member_indent}{joined}{newline}")));
+    Ok(Some(edits))
+}
+
+struct InlineCommentSpan {
+    start: usize,
+    end: usize,
+}
+
+fn trailing_inline_comment(source: &str, start: usize, end: usize) -> Option<InlineCommentSpan> {
+    let bytes = source.as_bytes();
+    let mut cursor = start;
+    while cursor < end && matches!(bytes[cursor], b' ' | b'\t') {
+        cursor += 1;
+    }
+    if cursor < end && bytes[cursor] == b',' {
+        cursor += 1;
+        while cursor < end && matches!(bytes[cursor], b' ' | b'\t') {
+            cursor += 1;
+        }
+    }
+    let comment_start = cursor;
+    if bytes.get(cursor..cursor + 2) == Some(b"//") {
+        while cursor < end && !matches!(bytes[cursor], b'\n' | b'\r') {
+            cursor += 1;
+        }
+        return Some(InlineCommentSpan { start: comment_start, end: cursor });
+    }
+    if bytes.get(cursor..cursor + 2) == Some(b"/*") {
+        let rest = std::str::from_utf8(bytes.get(cursor + 2..end)?).ok()?;
+        let comment_end = rest.find("*/")? + cursor + 4;
+        if bytes[cursor..comment_end].contains(&b'\n') {
+            return None;
+        }
+        return Some(InlineCommentSpan { start: comment_start, end: comment_end });
+    }
+    None
 }
 
 fn compact_inline_object_edit(additions: ObjectAdditions) -> Result<SourceEdit, String> {
@@ -1317,6 +1396,19 @@ mod tests {
             Some(
                 "{\n  // retained owner note\n  \"managed\": 1,\n\n  \"local\": true,\n  \"added\": true\n}\n"
             )
+        );
+    }
+
+    #[test]
+    fn keeps_inline_comment_with_existing_member_when_appending_jsonc_member() {
+        let incoming = "{\n  \"config\": {\n    \"keep\": 9,\n    \"add\": 2\n  }\n}\n";
+        let current = "{\n  \"config\": {\n    \"keep\": 9 // keep inline\n  }\n}\n";
+        let result = merge_json_source_preserving(incoming, current, JsonDialect::Jsonc);
+
+        assert!(result.ok);
+        assert_eq!(
+            result.output.as_deref(),
+            Some("{\n  \"config\": {\n    \"keep\": 9, // keep inline\n    \"add\": 2\n  }\n}\n")
         );
     }
 
