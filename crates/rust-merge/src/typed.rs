@@ -91,11 +91,44 @@ pub fn source_line_analysis(parsed: &ParsedResult) -> Result<RustSourceLineAnaly
         if structural_nodes.is_empty() {
             return Err(format!("Rust owner {} has no structural native nodes", owner.id));
         }
-        let start_line = structural_nodes
+        let mut start_line = structural_nodes
             .iter()
             .map(|node| node.span.start_point.row + 1)
             .min()
             .ok_or_else(|| format!("Rust owner {} has no starting line", owner.id))?;
+        // syn item spans include outer doc comments because Rust parses them as
+        // doc attributes. Those lines are also emitted as comment facts, so the
+        // structural line range starts after the leading doc-comment run.
+        let source_line_text = source_lines(source);
+        loop {
+            while source_line_text
+                .get(start_line.saturating_sub(1))
+                .is_some_and(|line| line.trim().is_empty())
+            {
+                start_line += 1;
+            }
+            let leading_doc_end = nodes
+                .iter()
+                .filter(|node| {
+                    node.role == tree_haver::NodeRole::Comment
+                        && owner.start_byte <= node.span.range.start_byte
+                        && node.span.range.end_byte <= owner.end_byte
+                })
+                .filter_map(|node| {
+                    if node.span.start_point.row + 1 != start_line {
+                        return None;
+                    }
+                    let text = node.source_fragment.trim_start();
+                    let outer_doc = (text.starts_with("///") && !text.starts_with("////"))
+                        || (text.starts_with("/**") && !text.starts_with("/***"));
+                    outer_doc.then_some(node.span.end_point.row + 1)
+                })
+                .max();
+            match leading_doc_end {
+                Some(end_line) => start_line = end_line + 1,
+                None => break,
+            }
+        }
         let end_line = structural_nodes
             .iter()
             .map(|node| node.span.end_point.row + 1)
