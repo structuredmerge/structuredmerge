@@ -107,7 +107,7 @@ fn rejects_an_independent_edit_with_an_added_rust_owner() {
 }
 
 #[test]
-fn rejects_ambiguous_or_spanless_rust_three_way_inputs_without_fallback() {
+fn rejects_ambiguous_and_malformed_rust_three_way_inputs_and_checks_native_conflicts() {
     let base = "fn value() -> i32 { 1 }\n";
     let ours = "fn value() -> i32 { 2 }\n";
     let theirs = "fn value() -> i32 { 3 }\n";
@@ -126,8 +126,8 @@ fn rejects_ambiguous_or_spanless_rust_three_way_inputs_without_fallback() {
         RustDialect::Rust,
         RustBackend::Native,
     );
-    assert_eq!(native.outcome, ast_merge::ThreeWayMergeOutcome::Error);
-    assert_eq!(native.diagnostics[0].category, ast_merge::DiagnosticCategory::UnsupportedFeature);
+    assert_eq!(native.outcome, ast_merge::ThreeWayMergeOutcome::Conflict);
+    assert_eq!(native.conflicts[0].path, "/function:value");
 }
 
 fn read_fixture(parts: &[&str]) -> Value {
@@ -548,4 +548,38 @@ fn native_syn_uses_doc_attributes_and_exact_item_source_spans() {
     let declaration = &parsed.analysis.as_ref().unwrap().declarations[0];
     assert!(declaration.text.starts_with("/// Public API docs\n#[inline]\npub fn answer"));
     assert!(declaration.text.ends_with("\n"));
+}
+
+#[test]
+fn native_syn_merge3_uses_shared_source_line_selection() {
+    let base = "//! crate docs\n\nfn left() -> i32 { 1 }\n\nfn right() -> i32 { 1 }\n";
+    let ours = "//! crate docs\n\nfn left() -> i32 { 2 }\n\nfn right() -> i32 { 1 }\n";
+    let theirs = "//! crate docs\n\nfn left() -> i32 { 1 }\n\nfn right() -> i32 { 2 }\n";
+    let result = merge_rust_three_way_with_backend(
+        base,
+        ours,
+        theirs,
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
+    assert_eq!(
+        result.output.as_deref(),
+        Some("//! crate docs\n\nfn left() -> i32 { 2 }\n\nfn right() -> i32 { 2 }\n")
+    );
+}
+
+#[test]
+fn native_syn_merge3_consumes_shared_two_tip_additions_fixture() {
+    let fixture = read_fixture(&["polyglot", "typed-core", "rust_merge3_two_tip_additions.json"]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
+    assert_eq!(result.output.as_deref(), Some(fixture["expected"]["output"].as_str().unwrap()));
 }

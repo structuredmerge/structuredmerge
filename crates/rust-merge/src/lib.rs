@@ -3,8 +3,8 @@ use ast_merge::{
     Diagnostic, DiagnosticCategory, DiagnosticSeverity, FamilyFeatureProfile, MergeConflict,
     MergeResult, NamedOwnerKind, NamedOwnerProjectionPolicy, ParseResult, PolicyReference,
     PolicySurface, SourcePreservingOwnerDocument, ThreeWayMergeOutcome, ThreeWayMergeResult,
-    error_diagnostic, merge_source_preserving_owners, normalized_parse_error_result,
-    parse_error_result, project_named_top_level_owners, three_way_parse_error,
+    merge_source_preserving_owners, normalized_parse_error_result, parse_error_result,
+    project_named_top_level_owners, three_way_parse_error,
 };
 use syn::{File, Item, spanned::Spanned};
 use tree_haver::{
@@ -300,28 +300,19 @@ pub fn merge_rust_three_way_with_backend(
     _dialect: RustDialect,
     backend: RustBackend,
 ) -> ThreeWayMergeResult<String> {
-    if backend == RustBackend::Native {
-        return ThreeWayMergeResult {
-            outcome: ThreeWayMergeOutcome::Error,
-            diagnostics: vec![error_diagnostic(
-                ast_merge::DiagnosticCategory::UnsupportedFeature,
-                "syn does not expose source spans required for source-preserving Rust merge3",
-            )],
-            conflicts: vec![],
-            output: None,
-            policies: vec![],
-        };
-    }
-
-    let base = match parse_source_preserving_rust(base_source) {
+    let parse = match backend {
+        RustBackend::Native => parse_source_preserving_rust_native,
+        RustBackend::TreeSitter => parse_source_preserving_rust,
+    };
+    let base = match parse(base_source) {
         Ok(document) => document,
         Err(message) => return three_way_parse_error("base", message),
     };
-    let ours = match parse_source_preserving_rust(ours_source) {
+    let ours = match parse(ours_source) {
         Ok(document) => document,
         Err(message) => return three_way_parse_error("ours", message),
     };
-    let theirs = match parse_source_preserving_rust(theirs_source) {
+    let theirs = match parse(theirs_source) {
         Ok(document) => document,
         Err(message) => return three_way_parse_error("theirs", message),
     };
@@ -330,7 +321,7 @@ pub fn merge_rust_three_way_with_backend(
         return conservative_membership_conflict();
     }
 
-    merge_source_preserving_owners(base, ours, theirs, parse_source_preserving_rust)
+    merge_source_preserving_owners(base, ours, theirs, parse)
 }
 
 fn rust_membership_change_with_owner_edit(
@@ -395,6 +386,71 @@ fn parse_source_preserving_rust(source: &str) -> Result<SourcePreservingOwnerDoc
         return Err("Rust parser did not retain source fragments".to_string());
     }
     project_named_top_level_owners(source, &parsed.root_id, &parsed.nodes, owner_policy())
+}
+
+fn parse_source_preserving_rust_native(
+    source: &str,
+) -> Result<SourcePreservingOwnerDocument, String> {
+    let file = syn::parse_file(source).map_err(|error| error.to_string())?;
+    let mut owners = Vec::with_capacity(file.items.len());
+    for item in file.items {
+        let span = item.span().byte_range();
+        let text = source
+            .get(span.clone())
+            .ok_or_else(|| "syn returned a source span outside the input buffer".to_string())?;
+        let path = match &item {
+            Item::Use(_) => format!("/use:{}", rust_use_key(text)),
+            Item::Const(item) => format!("/const:{}", item.ident),
+            Item::Enum(item) => format!("/enum:{}", item.ident),
+            Item::Fn(item) => format!("/function:{}", item.sig.ident),
+            Item::Mod(item) => format!("/mod:{}", item.ident),
+            Item::Static(item) => format!("/static:{}", item.ident),
+            Item::Struct(item) => format!("/struct:{}", item.ident),
+            Item::Trait(item) => format!("/trait:{}", item.ident),
+            Item::Type(item) => format!("/type:{}", item.ident),
+            Item::Union(item) => format!("/union:{}", item.ident),
+            _ => return Err("unsupported top-level native Rust item".to_string()),
+        };
+        if span.start >= span.end {
+            return Err(format!("native Rust owner {path:?} has an empty source span"));
+        }
+        let start_line = source[..span.start].bytes().filter(|byte| *byte == b'\n').count() + 1;
+        let end_line = source[..span.end].bytes().filter(|byte| *byte == b'\n').count() + 1;
+        owners.push(ast_merge::SourcePreservingOwner {
+            id: path.clone(),
+            path,
+            fingerprint: text.to_string(),
+            start_byte: span.start,
+            end_byte: span.end,
+            start_line,
+            end_line,
+        });
+    }
+    // syn supplies Rust item identity and syntax spans. Ordinary comments are
+    // not represented in syn's AST, so use the established shared Rust comment
+    // attachment projection only to extend those native owner spans.
+    let comment_projection = parse_source_preserving_rust(source)?;
+    for owner in &mut owners {
+        let comment_owner = comment_projection
+            .owners
+            .iter()
+            .find(|candidate| candidate.path == owner.path)
+            .ok_or_else(|| {
+                format!("shared comment projection could not match native owner {:?}", owner.path)
+            })?;
+        if comment_owner.start_byte > owner.start_byte || comment_owner.end_byte < owner.end_byte {
+            return Err(format!(
+                "shared comment projection does not contain native owner {:?}",
+                owner.path
+            ));
+        }
+        owner.start_byte = comment_owner.start_byte;
+        owner.start_line = comment_owner.start_line;
+        owner.end_byte = comment_owner.end_byte;
+        owner.end_line = comment_owner.end_line;
+        owner.fingerprint = source[owner.start_byte..owner.end_byte].to_string();
+    }
+    Ok(SourcePreservingOwnerDocument { source: source.to_string(), owners })
 }
 
 fn owner_policy() -> NamedOwnerProjectionPolicy<'static> {
