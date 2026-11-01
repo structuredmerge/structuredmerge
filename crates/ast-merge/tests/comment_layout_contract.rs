@@ -84,6 +84,67 @@ fn shared_comment_line_ownership_fixture_matches_regions_and_layout() {
     assert_eq!(actual_attachments, *fixture["expected"]["attachments"].as_array().unwrap());
     assert_eq!(actual_document_regions, fixture["expected"]["document_regions"]);
 
+    for case in fixture["attachment_cases"].as_array().unwrap() {
+        let source = case["source"].as_str().unwrap();
+        let mut case_lines = source.split('\n').map(str::to_string).collect::<Vec<_>>();
+        if source.ends_with('\n') && case_lines.last().is_some_and(String::is_empty) {
+            case_lines.pop();
+        }
+        let case_owners = case["owners"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|owner| LayoutOwner {
+                owner_id: owner["id"].as_str().unwrap().to_string(),
+                start_line: owner["start_line"].as_u64().unwrap() as usize,
+                end_line: owner["end_line"].as_u64().unwrap() as usize,
+            })
+            .collect::<Vec<_>>();
+        let case_comments = case["comments"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|comment| TrackedComment {
+                line: comment["line"].as_u64().unwrap() as usize,
+                text: comment["text"].as_str().unwrap().to_string(),
+                normalized_content: comment["normalized_content"].as_str().unwrap().to_string(),
+                full_line: comment["full_line"].as_bool().unwrap(),
+                indent: Some(comment["indent"].as_u64().unwrap() as usize),
+            })
+            .collect::<Vec<_>>();
+        let augmentation = augment_comments(
+            &case_lines,
+            &case_owners,
+            &case_comments,
+            case["style"].as_str().unwrap(),
+        )
+        .unwrap();
+        let regions = augmentation
+            .regions
+            .iter()
+            .map(|region| (region.id.as_str(), region))
+            .collect::<HashMap<_, _>>();
+        let region_content = |id: &Option<String>| {
+            id.as_ref()
+                .and_then(|id| regions.get(id.as_str()).copied())
+                .map(|region| region.normalized_content())
+        };
+        for (owner_id, expected) in case["expected"]["trailing_by_owner"].as_object().unwrap() {
+            let attachment = augmentation
+                .attachments
+                .iter()
+                .find(|attachment| attachment.owner_id == *owner_id)
+                .unwrap();
+            assert_eq!(
+                region_content(&attachment.trailing_region_id).as_deref(),
+                expected.as_str()
+            );
+        }
+        assert_eq!(
+            region_content(&augmentation.postlude_region_id),
+            case["expected"]["postlude"].as_str().map(str::to_string)
+        );
+    }
     for case in fixture["indent_cases"].as_array().unwrap() {
         let source = case["source"].as_str().unwrap();
         let mut case_lines = source.split('\n').map(str::to_string).collect::<Vec<_>>();
