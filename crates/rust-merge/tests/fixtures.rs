@@ -308,10 +308,29 @@ fn conforms_to_rust_backend_fixtures() {
         RustDialect::Rust,
         RustBackend::Native,
     );
-    assert!(!native_result.ok);
-    assert_eq!(
-        native_result.diagnostics.first().map(|diagnostic| diagnostic.category),
-        Some(ast_merge::DiagnosticCategory::UnsupportedFeature)
+    assert!(
+        native_result.ok,
+        "native syn parser should project Rust owners: {:?}",
+        native_result.diagnostics
+    );
+    let native_analysis = native_result.analysis.as_ref().unwrap();
+    let native_owners = native_analysis
+        .owners
+        .iter()
+        .map(|owner| {
+            serde_json::json!({
+                "path": owner.path,
+                "owner_kind": match owner.owner_kind {
+                    rust_merge::RustOwnerKind::Import => "import",
+                    rust_merge::RustOwnerKind::Declaration => "declaration",
+                },
+                "match_key": owner.match_key,
+            })
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(Value::Array(native_owners), parity_fixture["expected"]["owners"]);
+    assert!(
+        native_analysis.declarations.iter().any(|item| item.text.contains("pub struct Greeter;"))
     );
 
     let merge_result = merge_rust_with_backend(
@@ -320,10 +339,14 @@ fn conforms_to_rust_backend_fixtures() {
         RustDialect::Rust,
         RustBackend::Native,
     );
-    assert!(!merge_result.ok);
+    assert!(
+        merge_result.ok,
+        "native syn merge2 should consume native owner analysis: {:?}",
+        merge_result.diagnostics
+    );
     assert_eq!(
-        merge_result.diagnostics.first().map(|diagnostic| diagnostic.category),
-        Some(ast_merge::DiagnosticCategory::UnsupportedFeature)
+        merge_result.output.as_deref(),
+        Some(parity_fixture["expected"]["output"].as_str().unwrap())
     );
 
     let backend_profiles = read_fixture(&[
@@ -514,4 +537,15 @@ fn conforms_to_slice_131_canonical_manifest_fixture() {
                 [..],
         )
     );
+}
+
+#[test]
+fn native_syn_uses_doc_attributes_and_exact_item_source_spans() {
+    let source =
+        "//! crate docs\n\n/// Public API docs\n#[inline]\npub fn answer() -> u32 { 42 }\n";
+    let parsed = parse_rust_with_backend(source, RustDialect::Rust, RustBackend::Native);
+    assert!(parsed.ok, "native parse should accept Rust doc attributes: {:?}", parsed.diagnostics);
+    let declaration = &parsed.analysis.as_ref().unwrap().declarations[0];
+    assert!(declaration.text.starts_with("/// Public API docs\n#[inline]\npub fn answer"));
+    assert!(declaration.text.ends_with("\n"));
 }

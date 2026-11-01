@@ -6,7 +6,7 @@ use ast_merge::{
     error_diagnostic, merge_source_preserving_owners, normalized_parse_error_result,
     parse_error_result, project_named_top_level_owners, three_way_parse_error,
 };
-use syn::File;
+use syn::{File, Item, spanned::Spanned};
 use tree_haver::{
     BackendReference, NormalizedTreeIndex, NormalizedTreeNode, ParserRequest,
     kreuzberg_language_pack_backend, language_pack_adapter_info,
@@ -601,7 +601,7 @@ pub fn merge_rust_with_backend(
 }
 
 fn parse_rust_native(source: &str) -> ParseResult<RustAnalysis> {
-    let _file: File = match syn::parse_file(source) {
+    let file: File = match syn::parse_file(source) {
         Ok(file) => file,
         Err(error) => {
             return ParseResult {
@@ -619,16 +619,128 @@ fn parse_rust_native(source: &str) -> ParseResult<RustAnalysis> {
         }
     };
 
+    let mut imports = Vec::new();
+    let mut declarations = Vec::new();
+    for item in file.items {
+        let span = item.span().byte_range();
+        let Some(text) = source.get(span).map(str::trim) else {
+            return parse_error_result(
+                "syn returned a source span outside the input buffer".to_string(),
+            );
+        };
+        match item {
+            Item::Use(_item) => imports.push(ModuleImport {
+                path: format!("/imports/{}", imports.len()),
+                match_key: rust_use_key(text),
+                text: format!("{text}\n"),
+            }),
+            Item::Const(item) => declarations.push(native_declaration(
+                source,
+                item.span(),
+                item.ident.to_string(),
+                "const",
+            )),
+            Item::Enum(item) => declarations.push(native_declaration(
+                source,
+                item.span(),
+                item.ident.to_string(),
+                "enum",
+            )),
+            Item::Fn(item) => declarations.push(native_declaration(
+                source,
+                item.span(),
+                item.sig.ident.to_string(),
+                "function",
+            )),
+            Item::Mod(item) => declarations.push(native_declaration(
+                source,
+                item.span(),
+                item.ident.to_string(),
+                "module",
+            )),
+            Item::Static(item) => declarations.push(native_declaration(
+                source,
+                item.span(),
+                item.ident.to_string(),
+                "static",
+            )),
+            Item::Struct(item) => declarations.push(native_declaration(
+                source,
+                item.span(),
+                item.ident.to_string(),
+                "struct",
+            )),
+            Item::Trait(item) => declarations.push(native_declaration(
+                source,
+                item.span(),
+                item.ident.to_string(),
+                "trait",
+            )),
+            Item::Type(item) => declarations.push(native_declaration(
+                source,
+                item.span(),
+                item.ident.to_string(),
+                "type",
+            )),
+            Item::Union(item) => declarations.push(native_declaration(
+                source,
+                item.span(),
+                item.ident.to_string(),
+                "union",
+            )),
+            other => {
+                return parse_error_result(format!(
+                    "unsupported top-level native Rust item {:?}",
+                    std::mem::discriminant(&other)
+                ));
+            }
+        }
+    }
+    declarations.sort_by(|left, right| left.path.cmp(&right.path));
     ParseResult {
-        ok: false,
-        diagnostics: vec![ast_merge::Diagnostic {
-            severity: ast_merge::DiagnosticSeverity::Error,
-            category: ast_merge::DiagnosticCategory::UnsupportedFeature,
-            message: "syn backend parsed the file but does not expose source spans required for source-preserving Rust merges; enable a span-capable native backend before using RustBackend::Native.".to_string(),
-            path: None,
-            review: None,
-        }],
-        analysis: None,
+        ok: true,
+        diagnostics: vec![],
+        analysis: Some(RustAnalysis {
+            dialect: RustDialect::Rust,
+            source: source.to_string(),
+            owners: [
+                imports
+                    .iter()
+                    .map(|item| RustOwner {
+                        path: item.path.clone(),
+                        owner_kind: RustOwnerKind::Import,
+                        match_key: Some(item.match_key.clone()),
+                    })
+                    .collect::<Vec<_>>(),
+                declarations
+                    .iter()
+                    .map(|item| RustOwner {
+                        path: item.path.clone(),
+                        owner_kind: RustOwnerKind::Declaration,
+                        match_key: Some(item.match_key.clone()),
+                    })
+                    .collect::<Vec<_>>(),
+            ]
+            .concat(),
+            imports,
+            declarations,
+        }),
         policies: vec![],
+    }
+}
+
+fn native_declaration(
+    source: &str,
+    span: proc_macro2::Span,
+    name: String,
+    kind: &str,
+) -> ModuleDeclaration {
+    let text = span.byte_range();
+    let content = source.get(text).unwrap_or_default().trim();
+    ModuleDeclaration {
+        path: format!("/declarations/{name}"),
+        match_key: name,
+        declaration_kind: kind.to_string(),
+        text: format!("{content}\n"),
     }
 }
