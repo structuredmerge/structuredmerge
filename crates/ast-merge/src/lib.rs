@@ -1,3 +1,5 @@
+pub mod comment_layout_emission;
+pub use comment_layout_emission::*;
 use std::{
     collections::{HashMap, HashSet},
     env, fs, io,

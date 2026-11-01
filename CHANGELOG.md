@@ -397,6 +397,8 @@
 
 ### Fixed
 
+- Expose retained-owner leading segment line selection with shared Ruby/Rust fixture coverage.
+
 - Preserve Go package clauses in source-preserving two-way merges.
 
 - Expand Rust source-preserving merge3 ownership beyond functions to named top-level items.
