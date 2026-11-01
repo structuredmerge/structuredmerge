@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::ops::RangeInclusive;
 
 /// Source-preserving replacement of a one-based inclusive line range.
@@ -170,4 +171,197 @@ fn cap_junction(
     }
     head_chunks.truncate(head_chunks.len() - excess);
     format!("{}{tail}", head_chunks.concat())
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BoundaryEdge {
+    Leading,
+    Trailing,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuralBoundary {
+    pub edge: BoundaryEdge,
+    pub owner_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RemovedOwnerAttachments {
+    pub owner_id: Option<String>,
+    pub leading_region_id: Option<String>,
+    pub inline_region_id: Option<String>,
+    #[serde(default)]
+    pub orphan_region_ids: Vec<String>,
+    pub trailing_region_id: Option<String>,
+    pub leading_gap_id: Option<String>,
+    pub trailing_gap_id: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RehomeFragmentKind {
+    Leading,
+    Ambiguous,
+    Trailing,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RehomePlan {
+    pub source_owner_id: Option<String>,
+    pub target_boundary: StructuralBoundary,
+    pub kind: RehomeFragmentKind,
+    pub comment_region_ids: Vec<String>,
+    pub layout_gap_ids: Vec<String>,
+}
+
+impl RehomePlan {
+    pub fn target_owner_id(&self) -> Option<&str> {
+        self.target_boundary.owner_id.as_deref()
+    }
+
+    pub fn edge(&self) -> BoundaryEdge {
+        self.target_boundary.edge
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.comment_region_ids.is_empty() && self.layout_gap_ids.is_empty()
+    }
+}
+
+/// A contiguous source removal plus passive fragment-promotion decisions.
+///
+/// This mirrors Ruby RemovePlan: it does not mutate attachments, but it records
+/// which removed-owner regions and gaps can be reattached at surviving edges.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RemovePlan {
+    splice_plan: SplicePlan,
+    pub leading_boundary: Option<StructuralBoundary>,
+    pub trailing_boundary: Option<StructuralBoundary>,
+    pub removed_attachments: Vec<RemovedOwnerAttachments>,
+    pub removed_owner_ids: Vec<String>,
+    pub retained_owner_ids: Vec<String>,
+    pub rehome_plans: Vec<RehomePlan>,
+}
+
+impl RemovePlan {
+    pub fn new(
+        source: impl Into<String>,
+        remove_start_line: usize,
+        remove_end_line: usize,
+        leading_boundary: Option<StructuralBoundary>,
+        trailing_boundary: Option<StructuralBoundary>,
+        removed_attachments: Vec<RemovedOwnerAttachments>,
+    ) -> Result<Self, String> {
+        if leading_boundary.as_ref().is_some_and(|boundary| boundary.edge != BoundaryEdge::Leading)
+        {
+            return Err("leading_boundary must use edge leading".into());
+        }
+        if trailing_boundary
+            .as_ref()
+            .is_some_and(|boundary| boundary.edge != BoundaryEdge::Trailing)
+        {
+            return Err("trailing_boundary must use edge trailing".into());
+        }
+        let splice_plan = SplicePlan::new(source, "", remove_start_line, remove_end_line)?;
+        let removed_owner_ids = unique_ids(
+            removed_attachments.iter().filter_map(|attachment| attachment.owner_id.clone()),
+        );
+        let retained_owner_ids = unique_ids(
+            leading_boundary
+                .iter()
+                .chain(trailing_boundary.iter())
+                .filter_map(|boundary| boundary.owner_id.clone()),
+        );
+        let mut plan = Self {
+            splice_plan,
+            leading_boundary,
+            trailing_boundary,
+            removed_attachments,
+            removed_owner_ids,
+            retained_owner_ids,
+            rehome_plans: vec![],
+        };
+        plan.rehome_plans = plan
+            .removed_attachments
+            .iter()
+            .flat_map(|attachment| plan.rehome_plans_for(attachment))
+            .collect();
+        Ok(plan)
+    }
+
+    pub fn source(&self) -> &str {
+        self.splice_plan.source()
+    }
+    pub fn remove_start_line(&self) -> usize {
+        self.splice_plan.replace_start_line()
+    }
+    pub fn remove_end_line(&self) -> usize {
+        self.splice_plan.replace_end_line()
+    }
+    pub fn before_content(&self) -> String {
+        self.splice_plan.before_content()
+    }
+    pub fn removed_content(&self) -> String {
+        self.splice_plan.removed_content()
+    }
+    pub fn after_content(&self) -> String {
+        self.splice_plan.after_content()
+    }
+    pub fn merged_content(&self) -> String {
+        self.splice_plan.merged_content()
+    }
+    pub fn changed(&self) -> bool {
+        self.splice_plan.changed()
+    }
+    pub fn apply_to(&self, alternate_source: &str) -> Result<String, String> {
+        self.splice_plan.apply_to(alternate_source)
+    }
+    pub fn promoted_comment_region_ids(&self) -> Vec<String> {
+        self.rehome_plans.iter().flat_map(|plan| plan.comment_region_ids.iter().cloned()).collect()
+    }
+    pub fn promoted_layout_gap_ids(&self) -> Vec<String> {
+        self.rehome_plans.iter().flat_map(|plan| plan.layout_gap_ids.iter().cloned()).collect()
+    }
+
+    fn rehome_plans_for(&self, attachment: &RemovedOwnerAttachments) -> Vec<RehomePlan> {
+        let leading_target =
+            self.leading_boundary.clone().or_else(|| self.trailing_boundary.clone());
+        let trailing_target =
+            self.trailing_boundary.clone().or_else(|| self.leading_boundary.clone());
+        let leading_comments = attachment.leading_region_id.iter().cloned().collect::<Vec<_>>();
+        let leading_gaps = attachment.leading_gap_id.iter().cloned().collect::<Vec<_>>();
+        let mut ambiguous_comments =
+            attachment.inline_region_id.iter().cloned().collect::<Vec<_>>();
+        ambiguous_comments.extend(attachment.orphan_region_ids.iter().cloned());
+        let trailing_comments = attachment.trailing_region_id.iter().cloned().collect::<Vec<_>>();
+        let trailing_gaps = attachment.trailing_gap_id.iter().cloned().collect::<Vec<_>>();
+        [
+            (leading_target, RehomeFragmentKind::Leading, leading_comments, leading_gaps),
+            (
+                self.leading_boundary.clone().or_else(|| self.trailing_boundary.clone()),
+                RehomeFragmentKind::Ambiguous,
+                ambiguous_comments,
+                vec![],
+            ),
+            (trailing_target, RehomeFragmentKind::Trailing, trailing_comments, trailing_gaps),
+        ]
+        .into_iter()
+        .filter_map(|(target_boundary, kind, comment_region_ids, layout_gap_ids)| {
+            let target_boundary = target_boundary?;
+            (comment_region_ids.len() + layout_gap_ids.len() > 0).then_some(RehomePlan {
+                source_owner_id: attachment.owner_id.clone(),
+                target_boundary,
+                kind,
+                comment_region_ids,
+                layout_gap_ids,
+            })
+        })
+        .collect()
+    }
+}
+
+fn unique_ids(ids: impl IntoIterator<Item = String>) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    ids.into_iter().filter(|id| seen.insert(id.clone())).collect()
 }
