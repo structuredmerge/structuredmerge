@@ -1037,10 +1037,11 @@ fn position_additions_in_their_source_gaps(
                         let revision_lines = boundary_lines(records, &record.selection_key);
                         !baseline_lines.is_empty() && baseline_lines != revision_lines
                     }
-                    "structural_owner" | "comment_owner" => record
-                        .owner_id
-                        .as_deref()
-                        .is_none_or(|owner_id| !allowed_ids.contains(owner_id)),
+                    "structural_owner" | "comment_owner" => {
+                        record.owner_id.as_deref().is_none_or(|owner_id| {
+                            !allowed_ids.contains(owner_id) && !deleted_owner_ids.contains(owner_id)
+                        })
+                    }
                     _ => true,
                 })
             {
@@ -1069,13 +1070,29 @@ fn position_additions_in_their_source_gaps(
                 .iter()
                 .filter(|record| (start..=end).contains(&record.line_number))
                 .collect::<Vec<_>>();
-            if gap_records
-                .iter()
-                .any(|record| !matches!(record.kind.as_str(), "layout_gap" | "root_region"))
-            {
+            let is_deleted_owner_line = |record: &crate::SourceLineDisposition| {
+                matches!(record.kind.as_str(), "structural_owner" | "comment_owner")
+                    && record
+                        .owner_id
+                        .as_deref()
+                        .is_some_and(|owner_id| deleted_owner_ids.contains(owner_id))
+            };
+            if gap_records.iter().any(|record| {
+                !matches!(record.kind.as_str(), "layout_gap" | "root_region")
+                    && !is_deleted_owner_line(record)
+            }) {
                 return false;
             }
             for record in gap_records {
+                if is_deleted_owner_line(record) {
+                    continue;
+                }
+                if record.kind == "layout_gap"
+                    && record.controller_owner_id.is_some()
+                    && effective_gap_controller_after_removal(record, deleted_owner_ids).is_none()
+                {
+                    continue;
+                }
                 if record.kind == "root_region"
                     && (baseline_root_keys.contains(&record.selection_key)
                         || (!base_has_preamble
