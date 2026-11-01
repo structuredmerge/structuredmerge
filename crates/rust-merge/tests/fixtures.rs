@@ -1109,3 +1109,37 @@ fn native_syn_fails_closed_when_reorder_crosses_an_added_owner_gap() {
     assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Error, "{result:?}");
     assert!(result.output.is_none());
 }
+
+#[test]
+fn rust_backends_preserve_test_attributes_and_attached_docs() {
+    let fixture = read_fixture(&[
+        "polyglot",
+        "typed-core",
+        "rust_parser_owner_profile_failure_boundary.json",
+    ]);
+    let case = fixture["cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["name"] == "Rust test attribute and doc comment stay with their item")
+        .unwrap();
+    let input = &case["merge3"];
+    let expected = &case["expected"];
+    let merge = |backend| {
+        merge_rust_three_way_with_backend(
+            input["base"].as_str().unwrap(),
+            input["ours"].as_str().unwrap(),
+            input["theirs"].as_str().unwrap(),
+            RustDialect::Rust,
+            backend,
+        )
+    };
+
+    let native = merge(RustBackend::Native);
+    assert_eq!(native.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{native:?}");
+    assert_eq!(native.output.as_deref(), expected["rust_syn_host_merge_output"].as_str());
+
+    let tree_sitter = merge(RustBackend::TreeSitter);
+    assert_eq!(tree_sitter.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{tree_sitter:?}");
+    assert_eq!(tree_sitter.output.as_deref(), expected["rust_treesitter_merge_output"].as_str());
+}

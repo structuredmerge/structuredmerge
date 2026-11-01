@@ -416,10 +416,34 @@ fn family_guard_precedes_shortcuts_and_does_not_fabricate_owner_decisions() {
 }
 
 #[test]
+fn rust_test_attribute_is_supported_with_its_item_and_doc_comment() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_parser_owner_profile_failure_boundary.json"
+    ))
+    .unwrap();
+    let case = fixture["cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["name"] == "Rust test attribute and doc comment stay with their item")
+        .unwrap();
+    let input = &case["merge3"];
+    let texts = [
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ];
+    let (result, request) = run(request("merge3", &texts));
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), case["expected"]["rust_treesitter_merge_output"].as_str());
+    result.validate_against(&request).unwrap();
+}
+
+#[test]
 fn unsupported_shapes_and_policies_fail_closed() {
     for source in [
         "impl X {}\nfn f() {}\n",
-        "#[test]\nfn f() {}\n",
         "fn f( {",
         "fn f() {}\nfn f() {}\n",
         "macro_rules! x { () => {} }\nfn f() {}\n",
