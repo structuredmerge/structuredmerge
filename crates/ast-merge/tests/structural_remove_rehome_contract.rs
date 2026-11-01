@@ -33,7 +33,7 @@ fn shared_remove_rehome_fixture_matches_ruby() {
                 trailing_gap_id: entry["trailing_gap_id"].as_str().map(str::to_string),
             })
             .collect();
-        let plan = RemovePlan::new(
+        let mut plan = RemovePlan::new(
             case["source"].as_str().unwrap(),
             case["remove_start_line"].as_u64().unwrap() as usize,
             case["remove_end_line"].as_u64().unwrap() as usize,
@@ -42,6 +42,14 @@ fn shared_remove_rehome_fixture_matches_ruby() {
             removed_attachments,
         )
         .unwrap();
+        if let Some(overrides) = case.get("owner_overrides") {
+            let ids = |key: &str| {
+                overrides[key].as_array().map(|values| {
+                    values.iter().filter_map(Value::as_str).map(str::to_string).collect()
+                })
+            };
+            plan = plan.with_owner_overrides(ids("removed_owner_ids"), ids("retained_owner_ids"));
+        }
         let actual = json!({
             "merged": plan.merged_content(),
             "removed_owner_ids": plan.removed_owner_ids,

@@ -372,6 +372,22 @@ impl RemovePlan {
     pub fn apply_to(&self, alternate_source: &str) -> Result<String, String> {
         self.splice_plan.apply_to(alternate_source)
     }
+    /// Override owner inventories with caller-provided identities, matching
+    /// Ruby RemovePlan's explicit removed_owners/retained_owners options.
+    pub fn with_owner_overrides(
+        mut self,
+        removed_owner_ids: Option<Vec<String>>,
+        retained_owner_ids: Option<Vec<String>>,
+    ) -> Self {
+        if let Some(owner_ids) = removed_owner_ids {
+            self.removed_owner_ids = unique_ids(owner_ids);
+        }
+        if let Some(owner_ids) = retained_owner_ids {
+            self.retained_owner_ids = unique_ids(owner_ids);
+        }
+        self
+    }
+
     pub fn promoted_comment_region_ids(&self) -> Vec<String> {
         self.rehome_plans.iter().flat_map(|plan| plan.comment_region_ids.iter().cloned()).collect()
     }
