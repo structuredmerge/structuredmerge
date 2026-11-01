@@ -334,6 +334,7 @@ fn item_facts(
         Item::Macro(item) if item.mac.path.is_ident("macro_rules") && item.ident.is_some() => {
             ("macro_definition", "syn::ItemMacro")
         }
+        Item::Macro(item) if item.ident.is_none() => ("macro_invocation", "syn::ItemMacro"),
         Item::Macro(_) => ("native_item", "syn::ItemMacro"),
         Item::Mod(_) => ("mod_item", "syn::ItemMod"),
         Item::Static(_) => ("static_item", "syn::ItemStatic"),
@@ -349,6 +350,22 @@ fn item_facts(
     let name = if matches!(item, Item::Use(_)) {
         let text = source.get(item_range.clone()).unwrap_or_default();
         Some((super::rust_use_key(text), item_range, "scoped_identifier"))
+    } else if let Item::Macro(item) = item {
+        if item.ident.is_none() {
+            Some((
+                item.mac
+                    .path
+                    .segments
+                    .iter()
+                    .map(|segment| segment.ident.to_string())
+                    .collect::<Vec<_>>()
+                    .join("::"),
+                item.mac.path.span().byte_range(),
+                "identifier",
+            ))
+        } else {
+            ident.map(|ident| (ident.to_string(), ident.span().byte_range(), "identifier"))
+        }
     } else {
         ident.map(|ident| (ident.to_string(), ident.span().byte_range(), "identifier"))
     };
