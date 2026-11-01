@@ -620,6 +620,22 @@ fn position_additions_in_their_source_gaps(
         });
         Some((start, end))
     };
+    let baseline_records = dispositions.get(&baseline_revision).ok_or_else(|| {
+        SourceRenderError::new("baseline dispositions are required to preserve root regions")
+    })?;
+    for (previous, following) in additions_by_gap.keys() {
+        let (Some(previous), Some(following)) = (previous.as_deref(), following.as_deref()) else {
+            continue;
+        };
+        if let (Some((previous_start, _)), Some((following_start, _))) =
+            (owner_bounds(baseline_records, previous), owner_bounds(baseline_records, following))
+            && previous_start >= following_start
+        {
+            return Err(SourceRenderError::new(
+                "added owner gap anchors are crossed by the selected owner order",
+            ));
+        }
+    }
     let boundary_lines = |records: &[crate::SourceLineDisposition], selection_key: &str| {
         records
             .iter()
@@ -627,9 +643,6 @@ fn position_additions_in_their_source_gaps(
             .map(|record| record.line.clone())
             .collect::<Vec<_>>()
     };
-    let baseline_records = dispositions.get(&baseline_revision).ok_or_else(|| {
-        SourceRenderError::new("baseline dispositions are required to preserve root regions")
-    })?;
     let baseline_root_keys = selections
         .iter()
         .filter(|selection| selection.revision == baseline_revision)
