@@ -1,7 +1,11 @@
 //! Existing JSON semantics over validated TreeHaver facts. No parser loading,
 //! registry, source-text discovery or host-owned merge decisions live here.
 use crate::{JsonAnalysis, JsonDialect, source_preserving::*};
-use ast_merge::{MergeResult, ThreeWayMergeResult};
+use ast_merge::{
+    ConflictAlternative, ConflictAlternativeState, Diagnostic, DiagnosticCategory,
+    DiagnosticSeverity, MergeConflict, MergeResult, OwnedSourceRegion, SourceRevision,
+    ThreeWayMergeOutcome, ThreeWayMergeResult,
+};
 use tree_haver::{service::ParsedResult, source::SourceRole};
 
 /// Nested source owners may overlap their descendants. They are comparison
@@ -315,6 +319,10 @@ pub fn merge2_with_evidence(
     if incoming.source.descriptor().source_id == current.source.descriptor().source_id {
         return Err("typed JSON inputs must have distinct source IDs".into());
     }
+    if incoming.source.bytes() != current.source.bytes() {
+        owner_analysis(incoming, dialect)?;
+        owner_analysis(current, dialect)?;
+    }
     let mut render = None;
     let mut result = merge_documents_two_way(
         document(incoming, dialect)?,
@@ -347,6 +355,90 @@ pub fn merge2_with_evidence(
     Ok(JsonMergeExecution { result, render })
 }
 
+fn duplicate_member_paths(value: &JsonSyntaxValue) -> Vec<String> {
+    fn visit(value: &JsonSyntaxValue, path: &str, paths: &mut std::collections::BTreeSet<String>) {
+        let mut seen = std::collections::HashSet::new();
+        for member in &value.members {
+            let escaped = member.key.replace('~', "~0").replace('/', "~1");
+            let child_path = format!("{path}/{escaped}");
+            if !seen.insert(member.key.as_str()) {
+                paths.insert(child_path.clone());
+            }
+            visit(&member.value, &child_path, paths);
+        }
+        for (index, element) in value.elements.iter().enumerate() {
+            visit(element, &format!("{path}/{index}"), paths);
+        }
+    }
+
+    let mut paths = std::collections::BTreeSet::new();
+    visit(value, "", &mut paths);
+    paths.into_iter().collect()
+}
+
+fn path_segments(path: &str) -> Vec<String> {
+    path.strip_prefix('/').unwrap_or(path).split('/').map(str::to_string).collect()
+}
+
+fn decode_path_segment(segment: &str) -> String {
+    segment.replace("~1", "/").replace("~0", "~")
+}
+
+fn descend<'a>(current: Vec<&'a JsonSyntaxValue>, segments: &[String]) -> Vec<&'a JsonSyntaxValue> {
+    let Some((segment, rest)) = segments.split_first() else {
+        return current;
+    };
+    let mut next = Vec::new();
+    for value in current {
+        if !value.members.is_empty() || matches!(value.semantic, JsonSemanticValue::Object(_)) {
+            let key = decode_path_segment(segment);
+            next.extend(
+                value.members.iter().filter(|member| member.key == key).map(|member| &member.value),
+            );
+        } else if let Ok(index) = segment.parse::<usize>() {
+            if let Some(element) = value.elements.get(index) {
+                next.push(element);
+            }
+        }
+    }
+    descend(next, rest)
+}
+
+fn member_values_at_path(root: &JsonSyntaxValue, path: &str) -> Vec<JsonSemanticValue> {
+    descend(vec![root], &path_segments(path))
+        .into_iter()
+        .map(|value| value.semantic.clone())
+        .collect()
+}
+
+fn duplicate_conflict_alternative(
+    root: &JsonSyntaxValue,
+    path: &str,
+    revision: SourceRevision,
+) -> ConflictAlternative {
+    let mut segments = path_segments(path);
+    let key = segments.pop().unwrap_or_default();
+    let regions = descend(vec![root], &segments)
+        .into_iter()
+        .flat_map(|parent| {
+            parent
+                .members
+                .iter()
+                .filter(|member| member.key == decode_path_segment(&key))
+                .map(|member| member.owned_region.clone())
+        })
+        .collect::<Vec<OwnedSourceRegion>>();
+    ConflictAlternative {
+        revision,
+        state: if regions.is_empty() {
+            ConflictAlternativeState::Absent
+        } else {
+            ConflictAlternativeState::Present
+        },
+        regions,
+    }
+}
+
 pub fn merge3(
     base: &ParsedResult,
     ours: &ParsedResult,
@@ -371,11 +463,79 @@ pub fn merge3_with_evidence(
     if ids[0] == ids[1] || ids[0] == ids[2] || ids[1] == ids[2] {
         return Err("typed JSON inputs must have distinct source IDs".into());
     }
+    let base_document = document(base, dialect)?;
+    let ours_document = document(ours, dialect)?;
+    let theirs_document = document(theirs, dialect)?;
+    let duplicate_paths = duplicate_member_paths(&base_document.root)
+        .into_iter()
+        .chain(duplicate_member_paths(&ours_document.root))
+        .chain(duplicate_member_paths(&theirs_document.root))
+        .collect::<std::collections::BTreeSet<_>>();
+    let contested_paths = duplicate_paths
+        .into_iter()
+        .filter(|path| {
+            let base_values = member_values_at_path(&base_document.root, path);
+            let ours_values = member_values_at_path(&ours_document.root, path);
+            let theirs_values = member_values_at_path(&theirs_document.root, path);
+            ours_values != base_values
+                && theirs_values != base_values
+                && ours_values != theirs_values
+        })
+        .collect::<Vec<_>>();
+    if !contested_paths.is_empty() {
+        let conflicts = contested_paths
+            .into_iter()
+            .map(|path| MergeConflict {
+                conflict_id: format!("json:duplicate-owner:{}", path),
+                category: "edit_edit".into(),
+                fallback_scope: path.clone(),
+                message: format!("both sides changed duplicate JSON member {path}"),
+                alternatives: vec![
+                    duplicate_conflict_alternative(
+                        &base_document.root,
+                        &path,
+                        SourceRevision::Base,
+                    ),
+                    duplicate_conflict_alternative(
+                        &ours_document.root,
+                        &path,
+                        SourceRevision::Ours,
+                    ),
+                    duplicate_conflict_alternative(
+                        &theirs_document.root,
+                        &path,
+                        SourceRevision::Theirs,
+                    ),
+                ],
+                path,
+            })
+            .collect::<Vec<_>>();
+        let diagnostics = conflicts
+            .iter()
+            .map(|conflict| Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                category: DiagnosticCategory::MergeConflict,
+                message: conflict.message.clone(),
+                path: Some(conflict.path.clone()),
+                review: None,
+            })
+            .collect();
+        return Ok(JsonMergeExecution {
+            result: ThreeWayMergeResult {
+                outcome: ThreeWayMergeOutcome::Conflict,
+                diagnostics,
+                conflicts,
+                output: None,
+                policies: vec![],
+            },
+            render: None,
+        });
+    }
     let mut render = None;
     let result = merge_documents_three_way(
-        document(base, dialect)?,
-        document(ours, dialect)?,
-        document(theirs, dialect)?,
+        base_document,
+        ours_document,
+        theirs_document,
         |source, role, edits| {
             let baseline = match role {
                 SourceRole::Ours => ours,

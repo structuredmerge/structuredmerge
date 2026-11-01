@@ -606,6 +606,61 @@ fn common_merge3_proves_selected_theirs_and_nested_independent_changes() {
 }
 
 #[test]
+fn duplicate_member_keys_preserve_exact_revisions_and_fail_closed_on_ambiguity() {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/json_duplicate_object_keys.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let expected = &fixture["expected"]["rust_tslp"];
+    let base = input["base"].as_str().unwrap();
+    let ours = input["ours"].as_str().unwrap();
+    let theirs = input["theirs"].as_str().unwrap();
+
+    for (operation, texts) in
+        [("analyze", vec![base]), ("diff2", vec![base, ours]), ("merge2", vec![ours, base])]
+    {
+        let (result, _) = run(request(operation, "json", &texts));
+        assert!(!result.ok, "{operation} should reject ambiguous duplicate owners");
+        let portable_diagnostic::DiagnosticRecord::Canonical(diagnostic) = &result.diagnostics[0]
+        else {
+            panic!("expected canonical diagnostic")
+        };
+        assert_eq!(diagnostic.category, PortableCategory::Ambiguity, "{operation}");
+        assert_eq!(
+            serde_json::to_value(diagnostic.category).unwrap(),
+            expected[operation]["diagnostic_category"]
+        );
+    }
+
+    for (texts, key) in
+        [([base, base, base], "merge3_exact"), ([base, ours, base], "merge3_one_sided")]
+    {
+        let (result, _) = run(request("merge3", "json", &texts));
+        assert!(result.ok, "{:?}", result.diagnostics);
+        assert_eq!(result.output.as_deref(), expected[key]["output"].as_str());
+    }
+
+    let (result, _) = run(request("merge3", "json", &[base, ours, theirs]));
+    assert!(!result.ok);
+    assert!(result.output.is_none());
+    assert_eq!(result.conflicts.len(), 1);
+    let portable_conflict::ConflictRecord::Canonical(conflict) = &result.conflicts[0] else {
+        panic!("expected canonical duplicate-owner conflict")
+    };
+    assert_eq!(
+        conflict.subject.structural_path.as_deref(),
+        expected["merge3_conflicting"]["conflict_path"].as_str()
+    );
+    assert_eq!(conflict.alternatives.len(), 3);
+    assert!(conflict.alternatives.iter().all(|alternative| !alternative.regions.is_empty()));
+    assert_eq!(
+        conflict.classification.extra["native_conflict"]["category"],
+        expected["merge3_conflicting"]["conflict_category"]
+    );
+}
+
+#[test]
 fn common_conflicts_keep_native_categories_and_real_present_absent_regions() {
     for texts in [
         [r#"{"x":1}"#, r#"{"x":2}"#, r#"{"x":3}"#],

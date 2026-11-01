@@ -128,6 +128,28 @@ pub(crate) fn validate_render(
     Ok(())
 }
 
+fn analysis_rejected(result: &mut OperationResult, error: &str) {
+    if error.contains("duplicate JSON owner identity is ambiguous") {
+        diagnostic(
+            result,
+            PortableCategory::Ambiguity,
+            "json.duplicate_owner_ambiguous",
+            "Duplicate JSON member identity is ambiguous.",
+            DiagnosticLayer::Analysis,
+            vec![],
+        );
+    } else {
+        diagnostic(
+            result,
+            PortableCategory::UnsupportedFeature,
+            "json.analysis_rejected",
+            "JSON family analysis rejected the parsed input",
+            DiagnosticLayer::Analysis,
+            vec![],
+        );
+    }
+}
+
 pub(crate) fn execute(
     request: &ValidatedOperationRequest,
     snapshot: &ParserRegistrySnapshot,
@@ -284,14 +306,7 @@ pub(crate) fn execute(
                 result.verification.classification_reached = Some(true);
                 result.verification.consumed_source_roles = Some(roles.to_vec());
             }
-            Err(_) => diagnostic(
-                &mut result,
-                PortableCategory::UnsupportedFeature,
-                "json.analysis_rejected",
-                "JSON family analysis rejected the parsed input",
-                DiagnosticLayer::Analysis,
-                vec![],
-            ),
+            Err(error) => analysis_rejected(&mut result, &error),
         }
         return finish(result);
     }
@@ -304,14 +319,7 @@ pub(crate) fn execute(
                 result.verification.classification_reached = Some(true);
                 result.verification.consumed_source_roles = Some(roles.to_vec());
             }
-            Err(_) => diagnostic(
-                &mut result,
-                PortableCategory::UnsupportedFeature,
-                "json.analysis_rejected",
-                "JSON family analysis rejected the parsed input",
-                DiagnosticLayer::Analysis,
-                vec![],
-            ),
+            Err(error) => analysis_rejected(&mut result, &error),
         }
         return finish(result);
     }
@@ -389,15 +397,8 @@ pub(crate) fn execute(
     };
     let (output, diagnostics, conflicts, render) = match execution {
         Ok(execution) => execution,
-        Err(_) => {
-            diagnostic(
-                &mut result,
-                PortableCategory::UnsupportedFeature,
-                "json.analysis_rejected",
-                "JSON family analysis rejected the parsed input",
-                DiagnosticLayer::Analysis,
-                vec![],
-            );
+        Err(error) => {
+            analysis_rejected(&mut result, &error);
             return finish(result);
         }
     };
