@@ -4,7 +4,7 @@
 use ast_merge::{
     CommentScope, LayoutAugmentation, LayoutOwner, NormalizedCommentEvidence,
     SourceLineDisposition, SourcePreservingMergeEvidence, SourcePreservingOwnerDocument,
-    augment_layout, augment_normalized_comments_with_evidence_scope,
+    augment_layout_with_comment_augmentation, augment_normalized_comments_with_evidence_scope,
     native_analysis::NativeOwnerAnalysis, source_line_dispositions_from_augmentations,
 };
 use std::collections::{HashMap, HashSet};
@@ -203,7 +203,12 @@ pub fn source_line_analysis(parsed: &ParsedResult) -> Result<RustSourceLineAnaly
         remap_optional_owner(&mut gap.before_owner_id, &tree_to_semantic)?;
         remap_optional_owner(&mut gap.after_owner_id, &tree_to_semantic)?;
     }
-    let mut layout = augment_layout(&source_lines(source), &native_owners)?;
+    let layout_lines = source_lines(source);
+    let mut layout = augment_layout_with_comment_augmentation(
+        &layout_lines,
+        &semantic_owners,
+        &comments.augmentation,
+    )?;
     for gap in &mut layout.gaps {
         remap_optional_owner(&mut gap.before_owner_id, &tree_to_semantic)?;
         remap_optional_owner(&mut gap.after_owner_id, &tree_to_semantic)?;
@@ -366,7 +371,13 @@ pub fn line_selection_postprocessor(
         source_line_analysis(theirs),
     ] {
         [Ok(base), Ok(ours), Ok(theirs)] => [base, ours, theirs],
-        [Err(_), _, _] | [_, Err(_), _] | [_, _, Err(_)] if recoverable_syn_membership_guard => {
+        [Err(_), _, _] if recoverable_syn_membership_guard => {
+            return Ok(false);
+        }
+        [_, Err(_), _] if recoverable_syn_membership_guard => {
+            return Ok(false);
+        }
+        [_, _, Err(_)] if recoverable_syn_membership_guard => {
             return Ok(false);
         }
         [Err(message), _, _] | [_, Err(message), _] | [_, _, Err(message)] => {

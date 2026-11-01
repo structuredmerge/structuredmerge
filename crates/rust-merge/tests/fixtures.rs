@@ -1167,7 +1167,7 @@ fn native_syn_composes_owner_membership_change_with_independent_edit() {
 }
 
 #[test]
-fn native_syn_fails_closed_for_unowned_removed_comment_separator() {
+fn native_syn_rehomes_comment_and_preserves_separator_after_owner_deletion() {
     let fixture = read_fixture(&[
         "polyglot",
         "typed-core",
@@ -1182,10 +1182,10 @@ fn native_syn_fails_closed_for_unowned_removed_comment_separator() {
         RustBackend::Native,
     );
 
-    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Conflict, "{result:?}");
-    assert_eq!(result.conflicts[0].category, "unmanaged_source_change");
-    assert_eq!(result.conflicts[0].path, "<unmanaged-source>");
-    assert_eq!(fixture["expected"]["outcome"], "conflict");
+    let expected = &fixture["rust_host_expected"]["rust_syn"];
+    assert_eq!(expected["outcome"], "clean");
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{result:?}");
+    assert_eq!(result.output.as_deref(), expected["output"].as_str());
 }
 
 #[test]

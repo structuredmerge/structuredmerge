@@ -1,8 +1,9 @@
 use ast_merge::{
     CommentAttachment, CommentAugmentation, CommentLine, CommentRegion, LayoutAugmentation,
     LayoutOwner, SourceLineCommentRegion, SourceLineDisposition, SourceLineLayoutGap,
-    SourceLineOwner, TrackedComment, augment_comments_with_owner_indents, augment_layout,
-    source_line_dispositions, source_line_dispositions_from_augmentations,
+    SourceLineOwner, TrackedComment, augment_comments_with_owner_indents,
+    augment_layout_with_comment_augmentation, source_line_dispositions,
+    source_line_dispositions_from_augmentations,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -42,7 +43,7 @@ fn source_lines(source: &str) -> Vec<String> {
 }
 
 #[test]
-fn shared_source_line_disposition_fixture_matches_ruby_ownership_facts() {
+fn shared_source_line_disposition_fixture_matches_common_contract() {
     let fixture: Fixture = serde_json::from_str(include_str!(
         "../../../../fixtures/polyglot/ast-merge/source_line_disposition.json"
     ))
@@ -71,8 +72,8 @@ fn shared_source_line_disposition_fixture_matches_ruby_ownership_facts() {
             &owner_indents,
         )
         .expect("Rust comment augmenter classifies comments");
-        let layout = augment_layout(&lines, &layout_owners)
-            .expect("Rust layout augmenter classifies blank runs");
+        let layout = augment_layout_with_comment_augmentation(&lines, &layout_owners, &comments)
+            .expect("Rust layout augmenter classifies owner and comment boundary gaps");
         assert_eq!(
             source_line_dispositions_from_augmentations(
                 &case.source,

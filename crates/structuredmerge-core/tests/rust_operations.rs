@@ -823,7 +823,7 @@ fn common_rust_syn_operation_composes_owner_membership_change_with_edit() {
 }
 
 #[test]
-fn common_rust_syn_operation_guards_unowned_removed_comment_separator() {
+fn common_rust_syn_operation_rehomes_comment_and_preserves_separator() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
         "../../../../fixtures/polyglot/typed-core/rust_merge3_comment_rehome_on_owner_deletion_with_independent_edit.json"
     ))
@@ -838,13 +838,10 @@ fn common_rust_syn_operation_guards_unowned_removed_comment_separator() {
     operation.parser_selection.backend = Some("rust.syn.core-test".into());
     let (result, request) = run(operation);
 
-    assert!(!result.ok);
-    assert!(result.output.is_none());
-    assert_eq!(fixture["expected"]["outcome"], "conflict");
-    assert_eq!(result.conflicts.len(), 1);
-    let ConflictRecord::Canonical(conflict) = &result.conflicts[0] else { panic!() };
-    assert_eq!(conflict.code, "rust.membership_with_owner_edit");
-    assert_eq!(conflict.category, ConflictCategory::Ownership);
+    let expected = &fixture["rust_host_expected"]["rust_syn"];
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), expected["output"].as_str());
+    assert!(result.conflicts.is_empty());
     result.validate_against(&request).unwrap();
 }
 

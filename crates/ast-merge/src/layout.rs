@@ -59,6 +59,17 @@ pub struct LayoutOwner {
     pub end_line: usize,
 }
 
+/// A comment-region edge that can control a blank gap even when comments
+/// separate the gap from the structural owner span.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LayoutCommentBoundary {
+    pub owner_id: String,
+    /// `leading` anchors the after-owner edge; `trailing` anchors before-owner.
+    pub kind: String,
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct LayoutAttachment {
     pub owner_id: String,
@@ -113,6 +124,76 @@ pub fn augment_layout(
     lines: &[String],
     owners: &[LayoutOwner],
 ) -> Result<LayoutAugmentation, String> {
+    augment_layout_with_comment_boundaries(lines, owners, &[])
+}
+
+/// Infer blank-line ownership from structural owners and attached comment
+/// boundaries. Leading/trailing comment regions act as edges of their owner,
+/// so a blank run between comment regions is controlled by the neighboring
+/// owner's normal layout policy.
+pub fn augment_layout_with_comment_augmentation(
+    lines: &[String],
+    owners: &[LayoutOwner],
+    comments: &crate::CommentAugmentation,
+) -> Result<LayoutAugmentation, String> {
+    let regions = comments
+        .regions
+        .iter()
+        .map(|region| (region.id.as_str(), region))
+        .collect::<HashMap<_, _>>();
+    let mut boundaries = Vec::new();
+    for attachment in &comments.attachments {
+        for (kind, region_id) in [
+            ("leading", attachment.leading_region_id.as_ref()),
+            ("trailing", attachment.trailing_region_id.as_ref()),
+        ] {
+            let Some(region_id) = region_id else { continue };
+            let Some(region) = regions.get(region_id.as_str()) else {
+                return Err(format!("comment attachment refers to missing region {region_id}"));
+            };
+            let (Some(start_line), Some(end_line)) = (region.start_line(), region.end_line())
+            else {
+                return Err(format!("comment boundary region {region_id} has no source lines"));
+            };
+            // Nested comment nodes can be reported by a parser's comment lexer
+            // under the following item. They remain inside their structural
+            // owner and do not form an external layout boundary.
+            if owners
+                .iter()
+                .any(|owner| start_line >= owner.start_line && end_line <= owner.end_line)
+            {
+                continue;
+            }
+            let Some(owner) = owners.iter().find(|owner| owner.owner_id == attachment.owner_id)
+            else {
+                return Err(format!(
+                    "comment attachment refers to missing owner {}",
+                    attachment.owner_id
+                ));
+            };
+            let is_external_edge = match kind {
+                "leading" => end_line < owner.start_line,
+                "trailing" => start_line > owner.end_line,
+                _ => false,
+            };
+            if is_external_edge {
+                boundaries.push(LayoutCommentBoundary {
+                    owner_id: attachment.owner_id.clone(),
+                    kind: kind.to_string(),
+                    start_line,
+                    end_line,
+                });
+            }
+        }
+    }
+    augment_layout_with_comment_boundaries(lines, owners, &boundaries)
+}
+
+pub fn augment_layout_with_comment_boundaries(
+    lines: &[String],
+    owners: &[LayoutOwner],
+    comment_boundaries: &[LayoutCommentBoundary],
+) -> Result<LayoutAugmentation, String> {
     let mut owners = owners.to_vec();
     for owner in &owners {
         if owner.owner_id.is_empty() {
@@ -134,20 +215,74 @@ pub fn augment_layout(
             ));
         }
     }
+    for boundary in comment_boundaries {
+        let owner =
+            owners.iter().find(|owner| owner.owner_id == boundary.owner_id).ok_or_else(|| {
+                format!("layout comment boundary refers to unknown owner {}", boundary.owner_id)
+            })?;
+        if boundary.start_line == 0
+            || boundary.end_line < boundary.start_line
+            || boundary.end_line > lines.len()
+        {
+            return Err(format!(
+                "layout comment boundary for {} has an invalid line range",
+                boundary.owner_id
+            ));
+        }
+        match boundary.kind.as_str() {
+            "leading" if boundary.end_line < owner.start_line => {}
+            "trailing" if boundary.start_line > owner.end_line => {}
+            "leading" | "trailing" => {
+                return Err(format!(
+                    "layout comment boundary for {} overlaps its owner",
+                    boundary.owner_id
+                ));
+            }
+            _ => {
+                return Err(format!(
+                    "layout comment boundary for {} has invalid kind",
+                    boundary.owner_id
+                ));
+            }
+        }
+    }
 
     let mut gaps = Vec::new();
     for (start_line, end_line) in blank_runs(lines) {
-        let before = owners.iter().rev().find(|owner| owner.end_line + 1 == start_line);
-        let after = owners.iter().find(|owner| owner.start_line == end_line + 1);
+        let structural_before = owners.iter().rev().find(|owner| owner.end_line + 1 == start_line);
+        let structural_after = owners.iter().find(|owner| owner.start_line == end_line + 1);
+        let comment_before = comment_boundaries
+            .iter()
+            .rev()
+            .filter(|boundary| boundary.kind == "trailing" && boundary.end_line + 1 == start_line)
+            .find_map(|boundary| owners.iter().find(|owner| owner.owner_id == boundary.owner_id));
+        let comment_after = comment_boundaries
+            .iter()
+            .filter(|boundary| boundary.kind == "leading" && boundary.start_line == end_line + 1)
+            .find_map(|boundary| owners.iter().find(|owner| owner.owner_id == boundary.owner_id));
+        // Structural edges control their side. An attached comment can supply
+        // the opposite edge, which remains necessary when the structural owner
+        // is later deleted and the gap transfers to its surviving neighbor.
+        let before = structural_before.or(comment_before);
+        let after = structural_after.or(comment_after);
         if before.is_none() && after.is_none() {
             continue;
         }
-        let (kind, controller_side) = match (before, after) {
-            (None, Some(_)) => ("preamble", "after"),
-            (Some(_), None) => ("postlude", "before"),
-            (Some(_), Some(_)) => ("interstitial", "after"),
+        let kind = match (before, after) {
+            (None, Some(_)) => "preamble",
+            (Some(_), None) => "postlude",
+            (Some(_), Some(_)) => "interstitial",
             (None, None) => unreachable!(),
         };
+        let controller_side =
+            if structural_before.is_some() && structural_after.is_none() && comment_after.is_some()
+            {
+                "before"
+            } else if structural_after.is_some() || after.is_some() {
+                "after"
+            } else {
+                "before"
+            };
         gaps.push(LayoutGap {
             id: format!("layout-gap:{start_line}-{end_line}"),
             kind: kind.to_string(),

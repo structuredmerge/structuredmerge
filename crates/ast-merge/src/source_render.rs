@@ -817,6 +817,68 @@ pub fn source_line_selections_for_owner_revisions_with_deletions(
                 selection_key: record.selection_key.clone(),
                 revision,
             });
+        } else if record.kind == "layout_gap"
+            && record.after_owner_id.as_deref().is_some_and(|owner_id| {
+                !deleted_owner_ids.contains(owner_id)
+                    && owner_revisions.get(owner_id) == Some(&revision)
+            })
+        {
+            let Some(controller) = record.after_owner_id.as_deref() else {
+                continue;
+            };
+            let gap_end_line = baseline
+                .iter()
+                .filter(|candidate| candidate.selection_key == record.selection_key)
+                .map(|candidate| candidate.line_number)
+                .max()
+                .unwrap_or(record.line_number);
+            let Some(boundary) = baseline.iter().find(|candidate| {
+                candidate.line_number == gap_end_line + 1
+                    && matches!(candidate.kind.as_str(), "structural_owner" | "comment_owner")
+                    && candidate.owner_id.as_deref() == Some(controller)
+            }) else {
+                continue;
+            };
+            let target_records = dispositions.get(&revision).ok_or_else(|| {
+                SourceRenderError::new(format!("selected {revision:?} gap revision is missing"))
+            })?;
+            let Some(target_boundary) = target_records.iter().find(|candidate| {
+                candidate.selection_key == boundary.selection_key
+                    && matches!(candidate.kind.as_str(), "structural_owner" | "comment_owner")
+            }) else {
+                continue;
+            };
+            let mut transferred_gaps = target_records
+                .iter()
+                .filter(|candidate| {
+                    candidate.kind == "layout_gap"
+                        && effective_gap_controller_after_removal(candidate, deleted_owner_ids)
+                            == Some(controller)
+                        && candidate.after_owner_id.as_deref() == Some(controller)
+                        && candidate.line_number < target_boundary.line_number
+                        && target_boundary.line_number
+                            == target_records
+                                .iter()
+                                .filter(|line| line.selection_key == candidate.selection_key)
+                                .map(|line| line.line_number)
+                                .max()
+                                .unwrap_or(0)
+                                + 1
+                })
+                .map(|candidate| candidate.selection_key.clone())
+                .collect::<std::collections::HashSet<_>>();
+            match transferred_gaps.len() {
+                0 => {}
+                1 => selections.push(SourceLineSelection {
+                    selection_key: transferred_gaps.drain().next().unwrap(),
+                    revision,
+                }),
+                _ => {
+                    return Err(SourceRenderError::new(
+                        "following-owner gap has multiple replacement edges",
+                    ));
+                }
+            }
         } else if matches!(record.kind.as_str(), "structural_owner" | "unmanaged") {
             return Err(SourceRenderError::new(format!(
                 "selected {kind} region {} is absent from {revision:?}",
