@@ -601,6 +601,19 @@ mod tests {
     }
 
     #[test]
+    fn comment_lexer_skips_raw_byte_strings_c_strings_and_lifetimes() {
+        let source = concat!(
+            "let raw = br###\"/* no */ // no\"###;\n",
+            "let text = c\"// no\";\n",
+            "fn borrow<'a>(text: &'a str) {}\n",
+            "// actual comment\n",
+        );
+        let comments =
+            scan_comments(source).into_iter().map(|range| &source[range]).collect::<Vec<_>>();
+        assert_eq!(comments, vec!["// actual comment"]);
+    }
+
+    #[test]
     fn native_parser_conforms_to_shared_owner_prefix_fixture() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
             "../../../../fixtures/polyglot/ast-merge/native_owner_prefix_ownership.json"
