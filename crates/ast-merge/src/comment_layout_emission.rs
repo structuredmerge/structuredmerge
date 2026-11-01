@@ -308,6 +308,22 @@ pub fn source_line_dispositions_from_augmentations(
             end_line: owner.end_line,
         })
         .collect::<Vec<_>>();
+    // A structural owner owns every source line inside its span. Comment
+    // lexers may also report comments nested in that span and attach them to
+    // the next top-level owner; normalize attached regions back to the
+    // containing owner before assigning one disposition per line. Root-scoped
+    // regions remain root-owned and are never rewritten here.
+    for region in &mut comment_regions {
+        if region.owner_id.is_none() {
+            continue;
+        }
+        if let Some(owner) = line_owners.iter().find(|owner| {
+            region.start_line >= owner.start_line && region.end_line <= owner.end_line
+        }) {
+            region.owner_id = Some(owner.id.clone());
+            region.selection_key = format!("comment:{}:{}", owner.id, region.kind);
+        }
+    }
     source_line_dispositions(source, &line_owners, &comment_regions, &layout_gaps)
 }
 
@@ -390,6 +406,30 @@ pub fn source_line_dispositions(
         } else if !matches!(region.kind.as_str(), "preamble" | "postlude" | "orphan") {
             return Err(format!("source comment region {} has an invalid root kind", region.id));
         }
+        let containing_owner = owners.iter().find(|owner| {
+            region.start_line >= owner.start_line && region.end_line <= owner.end_line
+        });
+        if root_region && containing_owner.is_some() {
+            let owner_id = &containing_owner.unwrap().id;
+            for line_number in region.start_line..=region.end_line {
+                let disposition = assigned[line_number - 1].as_mut().ok_or_else(|| {
+                    format!(
+                        "contained root comment region {} is not within its structural owner",
+                        region.id
+                    )
+                })?;
+                if disposition.kind != "structural_owner"
+                    || disposition.owner_id.as_ref() != Some(owner_id)
+                {
+                    return Err(format!(
+                        "source line {line_number} has conflicting owner and root-comment assignments"
+                    ));
+                }
+                disposition.comment_region_ids.push(region.id.clone());
+                disposition.root_region_kind = Some(region.kind.clone());
+            }
+            continue;
+        }
         for line_number in region.start_line..=region.end_line {
             let slot = &mut assigned[line_number - 1];
             if let Some(disposition) = slot {
@@ -398,7 +438,8 @@ pub fn source_line_dispositions(
                     || root_region
                 {
                     return Err(format!(
-                        "source line {line_number} has conflicting owner and comment assignments"
+                        "source line {line_number} has conflicting owner and comment assignments: structural={:?}, comment={:?}, lines={}..{}",
+                        disposition.owner_id, region.owner_id, region.start_line, region.end_line
                     ));
                 }
                 if disposition.comment_kind.as_ref().is_some_and(|kind| kind != &region.kind) {

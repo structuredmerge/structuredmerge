@@ -1,4 +1,5 @@
 use ast_merge::{
+    CommentAttachment, CommentAugmentation, CommentLine, CommentRegion, LayoutAugmentation,
     LayoutOwner, SourceLineCommentRegion, SourceLineDisposition, SourceLineLayoutGap,
     SourceLineOwner, TrackedComment, augment_comments_with_owner_indents, augment_layout,
     source_line_dispositions, source_line_dispositions_from_augmentations,
@@ -124,4 +125,52 @@ fn conflicting_line_dispositions_fail_closed() {
             .unwrap_err()
             .contains("conflicting layout-gap")
     );
+}
+
+#[test]
+fn nested_attached_comment_lines_belong_to_the_containing_structural_owner() {
+    let source = "extern \"C\" {\n    // nested comment\n}\nfn value() {}\n";
+    let owners = vec![
+        LayoutOwner { owner_id: "foreign".to_string(), start_line: 1, end_line: 3 },
+        LayoutOwner { owner_id: "value".to_string(), start_line: 4, end_line: 4 },
+    ];
+    let comments = CommentAugmentation {
+        regions: vec![CommentRegion {
+            id: "nested-comment".to_string(),
+            kind: "leading".to_string(),
+            style: "rust".to_string(),
+            owner_id: "value".to_string(),
+            floating: false,
+            nodes: vec![CommentLine {
+                text: "    // nested comment".to_string(),
+                line_number: 2,
+                normalized_content: "nested comment".to_string(),
+            }],
+        }],
+        gaps: vec![],
+        attachments: vec![CommentAttachment {
+            owner_id: "value".to_string(),
+            leading_region_id: Some("nested-comment".to_string()),
+            inline_region_id: None,
+            trailing_region_id: None,
+            orphan_region_ids: vec![],
+            leading_gap_id: None,
+            trailing_gap_id: None,
+            metadata: HashMap::new(),
+        }],
+        preamble_region_id: None,
+        postlude_region_id: None,
+        orphan_region_ids: vec![],
+    };
+    let dispositions = source_line_dispositions_from_augmentations(
+        source,
+        &owners,
+        &comments,
+        &LayoutAugmentation { gaps: vec![], attachments: vec![] },
+    )
+    .unwrap();
+    let nested = &dispositions[1];
+    assert_eq!(nested.kind, "structural_owner");
+    assert_eq!(nested.owner_id.as_deref(), Some("foreign"));
+    assert_eq!(nested.comment_region_ids, vec!["nested-comment"]);
 }
