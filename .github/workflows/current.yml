@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: structuredmerge/structuredmerge-fixtures
-          ref: 8ec4dfc
+          ref: f0d4d1425de551574f0daeb7f1345af190935b5d
           path: shared-fixtures
       - name: Place tooling fixtures beside kernel
         shell: bash
@@ -276,7 +276,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: structuredmerge/structuredmerge-fixtures
-          ref: 8ec4dfc
+          ref: f0d4d1425de551574f0daeb7f1345af190935b5d
           path: shared-fixtures
       - name: Place fixtures beside kernel
         shell: bash
@@ -366,7 +366,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: structuredmerge/structuredmerge-fixtures
-          ref: 8ec4dfc
+          ref: f0d4d1425de551574f0daeb7f1345af190935b5d
           path: shared-fixtures
       - name: Place fixtures beside kernel
         shell: bash
