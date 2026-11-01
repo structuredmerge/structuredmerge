@@ -6,6 +6,20 @@ use ast_merge::{
 use tree_haver::service::ParsedResult;
 
 pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
+    project_analysis(parsed, false)
+}
+
+/// Merge3 may treat one top-level multi-declarator statement as an atomic owner.
+/// Analyze, diff, and directional merge retain their existing per-operation
+/// support boundary.
+pub fn merge3_owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, String> {
+    project_analysis(parsed, true).map(|analysis| analysis.document)
+}
+
+fn project_analysis(
+    parsed: &ParsedResult,
+    include_grouped_lexical_owners: bool,
+) -> Result<NativeOwnerAnalysis, String> {
     if !parsed
         .backend
         .languages
@@ -14,10 +28,14 @@ pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
     {
         return Err("TypeScript analysis requires a TypeScript or TSX parser".into());
     }
-    let mut nodes = parsed.normalized_nodes()?;
-    super::annotate_lexical_declaration_owner_identities(&mut nodes)?;
     let root =
         parsed.document.output().root_id.as_deref().ok_or("TypeScript parse omitted its root")?;
+    let mut nodes = parsed.normalized_nodes()?;
+    super::annotate_lexical_declaration_owner_identities(
+        &mut nodes,
+        root,
+        include_grouped_lexical_owners,
+    )?;
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
     let index = tree_haver::NormalizedTreeIndex::new(&nodes)?;
     let root_node = index.root(root)?;
@@ -52,6 +70,26 @@ pub fn owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, St
     analysis(parsed).map(|analysis| analysis.document)
 }
 
+pub fn directional_owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, String> {
+    let nodes = parsed.normalized_nodes()?;
+    let index = tree_haver::NormalizedTreeIndex::new(&nodes)?;
+    let root = index
+        .root(parsed.document.output().root_id.as_deref().ok_or("missing TypeScript root")?)?;
+    for node in index.children(root).into_iter().filter(|node| node.kind == "lexical_declaration") {
+        let declarator_count = index
+            .children(node)
+            .into_iter()
+            .filter(|child| child.kind == "variable_declarator")
+            .count();
+        if declarator_count > 1 {
+            return Err(
+                "TypeScript directional merge does not support multi-declarator statements".into(),
+            );
+        }
+    }
+    owners(parsed)
+}
+
 pub type TypeScriptMergeExecution = ast_merge::typed_merge::ParsedOwnerMergeExecution;
 
 pub fn merge3(
@@ -67,7 +105,7 @@ pub fn merge3(
         theirs,
         ast_merge::typed_merge::NativeOwnerEngine {
             analyze_with_diagnostics: None,
-            analyze: owners,
+            analyze: merge3_owners,
             merge: |base, ours, theirs, verify| {
                 ast_merge::merge_source_preserving_owners_with_evidence(base, ours, theirs, verify)
             },

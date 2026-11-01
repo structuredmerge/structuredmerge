@@ -132,8 +132,8 @@ fn analysis_retains_supported_owner_kinds_and_complete_wrapper_spans() {
                 );
             }
         }
-        assert_eq!(analysis.document.owners[0].fingerprint, "// é\nexport class C {}");
-        assert_eq!(analysis.attached_comment_node_ids["/class:C"].len(), 1);
+        assert_eq!(analysis.document.owners[0].fingerprint, "export class C {}");
+        assert!(!analysis.attached_comment_node_ids.contains_key("/class:C"));
         assert_eq!(analysis.document.owners[3].fingerprint, "declare function signature(): void;");
         // The retained policy uses the native name-field fragment even for a
         // binding pattern. This is opaque identity, not per-binding ownership.

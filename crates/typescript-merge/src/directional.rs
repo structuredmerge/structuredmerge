@@ -24,7 +24,7 @@ pub fn owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, St
         .iter()
         .any(|node| node.role != NodeRole::Comment && node.kind != "import_statement")
     {
-        return crate::typed::owners(parsed);
+        return crate::typed::directional_owners(parsed);
     }
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
     Ok(SourcePreservingOwnerDocument { source: source.into(), owners: vec![] })

@@ -379,9 +379,15 @@ pub(crate) fn execute_native_operation_with_service(
         Some(crate::profiles::BASH_OWNERS) => ("bash", "kernel.bash", bash_merge::typed::owners),
         Some(crate::profiles::GO_OWNERS) => ("go", "kernel.go", go_merge::typed::owners),
         Some(crate::profiles::RUST_OWNERS) => ("rust", "kernel.rust", rust_merge::typed::owners),
-        Some(crate::profiles::TYPESCRIPT_OWNERS) => {
-            ("typescript", "kernel.typescript", typescript_merge::typed::owners)
-        }
+        Some(crate::profiles::TYPESCRIPT_OWNERS) => (
+            "typescript",
+            "kernel.typescript",
+            match input.operation.kind() {
+                OperationKind::Merge3 => typescript_merge::typed::merge3_owners,
+                OperationKind::Merge2 => typescript_merge::typed::directional_owners,
+                _ => typescript_merge::typed::owners,
+            },
+        ),
         _ => {
             // The rejecting executor is still identified in the result: a
             // diagnostic result with no provider identity reads upstream as

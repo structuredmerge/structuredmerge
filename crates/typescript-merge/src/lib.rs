@@ -1,9 +1,9 @@
 use ast_merge::{
-    CommentAttachmentPolicy, ConformanceFamilyPlanContext, ConformanceFeatureProfileView,
-    FamilyFeatureProfile, MergeResult, NamedOwnerKind, NamedOwnerProjectionPolicy, ParseResult,
-    PolicyReference, PolicySurface, SourcePreservingOwnerDocument, ThreeWayMergeResult,
-    merge_source_preserving_owners, normalized_parse_error_result, parse_error_result,
-    project_named_top_level_owners, three_way_parse_error,
+    CommentAttachmentPolicy, CommentScope, ConformanceFamilyPlanContext,
+    ConformanceFeatureProfileView, FamilyFeatureProfile, MergeResult, NamedOwnerKind,
+    NamedOwnerProjectionPolicy, ParseResult, PolicyReference, PolicySurface,
+    SourcePreservingOwnerDocument, ThreeWayMergeResult, merge_source_preserving_owners,
+    normalized_parse_error_result, parse_error_result, three_way_parse_error,
 };
 use tree_haver::{
     BackendReference, NormalizedTreeIndex, NormalizedTreeNode, ParserRequest,
@@ -331,18 +331,67 @@ fn parse_source_preserving_typescript(
         return Err("TypeScript parser did not retain source fragments".to_string());
     }
     let mut nodes = parsed.nodes;
-    annotate_lexical_declaration_owner_identities(&mut nodes)?;
-    project_named_top_level_owners(source, &parsed.root_id, &nodes, owner_policy())
+    annotate_lexical_declaration_owner_identities(&mut nodes, &parsed.root_id, true)?;
+    let index = NormalizedTreeIndex::new(&nodes)?;
+    let root_node = index.root(&parsed.root_id)?;
+    let top_level = index.children(root_node);
+    ast_merge::project_named_top_level_analysis_with_comment_scope(
+        source,
+        &parsed.root_id,
+        &nodes,
+        owner_policy(),
+        |node| {
+            let text = node.source_fragment.trim_start();
+            let structural_doc = text.starts_with("///") || text.starts_with("/**");
+            let precedes_first_owner = top_level
+                .iter()
+                .filter(|candidate| candidate.span.range.end_byte <= node.span.range.start_byte)
+                .all(|candidate| {
+                    candidate.role == tree_haver::NodeRole::Comment
+                        || candidate.kind == "import_statement"
+                });
+            if precedes_first_owner && !structural_doc {
+                CommentScope::Root
+            } else {
+                CommentScope::Owner
+            }
+        },
+    )
+    .map(|analysis| analysis.document)
 }
 
 pub(crate) fn annotate_lexical_declaration_owner_identities(
     nodes: &mut [NormalizedTreeNode],
+    root_id: &str,
+    allow_grouped_statements: bool,
 ) -> Result<(), String> {
     let identities = {
         let index = NormalizedTreeIndex::new(nodes)?;
-        nodes
+        let top_level_lexical = nodes
             .iter()
             .filter(|node| node.kind == "lexical_declaration")
+            .filter_map(|node| {
+                if node.parent_id.as_deref() == Some(root_id) {
+                    return Some(Ok(node));
+                }
+                let parent = node
+                    .parent_id
+                    .as_deref()
+                    .and_then(|id| nodes.iter().find(|candidate| candidate.id == id));
+                if parent.is_some_and(|parent| {
+                    matches!(parent.kind.as_str(), "export_statement" | "ambient_declaration")
+                        && parent.parent_id.as_deref() == Some(root_id)
+                }) {
+                    return Some(Err(
+                        "TypeScript lexical declarations inside export/ambient wrappers are unsupported"
+                            .to_string(),
+                    ));
+                }
+                None
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        top_level_lexical
+            .into_iter()
             .map(|node| {
                 let declarators = index
                     .children(node)
@@ -352,6 +401,11 @@ pub(crate) fn annotate_lexical_declaration_owner_identities(
                 if declarators.is_empty() {
                     return Err(
                         "TypeScript lexical declaration has no variable declarator".to_string()
+                    );
+                }
+                if declarators.len() > 1 && !allow_grouped_statements {
+                    return Err(
+                        "TypeScript analysis does not support multi-declarator statements".into()
                     );
                 }
                 let names = declarators
