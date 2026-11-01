@@ -844,6 +844,27 @@ fn common_rust_syn_operation_deletes_owner_with_its_trailing_block_comment() {
 }
 
 #[test]
+fn common_rust_syn_operation_deletes_owner_with_its_multiline_trailing_block_comment() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_merge3_delete_owner_multiline_trailing_block_comment_with_independent_edit.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let texts = [
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ];
+    let mut operation = request("merge3", &texts);
+    operation.parser_selection.backend = Some("rust.syn.core-test".into());
+    let (result, request) = run(operation);
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+    result.validate_against(&request).unwrap();
+}
+
+#[test]
 fn common_rust_syn_operation_composes_owner_membership_change_with_edit() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
         "../../../../fixtures/polyglot/typed-core/rust_merge3_owner_membership_change_with_independent_edit.json"
