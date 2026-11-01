@@ -208,6 +208,7 @@ fn typed_bash_line_plan_orders_added_owners_from_selected_membership_layout() {
     assert_eq!(legacy.outcome, ThreeWayMergeOutcome::Clean);
     assert_eq!(execution.evidence.result, legacy);
     assert_eq!(legacy.output.as_deref(), fixture["expected"]["output"].as_str());
+    assert!(execution.ordered_line_render_applied);
     assert!(execution.output_parse.is_some());
 }
 
@@ -248,6 +249,7 @@ fn removed_owner_layout_fixture_matches_ruby_output() {
 
     assert_eq!(execution.evidence.result.outcome, ThreeWayMergeOutcome::Clean);
     assert_eq!(execution.evidence.result.output.as_deref(), Some(expected));
+    assert!(execution.ordered_line_render_applied);
     assert!(execution.output_parse.is_some());
 }
 

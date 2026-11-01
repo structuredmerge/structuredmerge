@@ -648,6 +648,261 @@ pub fn source_render_plan_from_rehome_selections(
     SourceRenderPlan::new(sources, fragments)
 }
 
+/// Combine an ordered owner-line selection with boundary-anchored fragments
+/// promoted by structural removal plans. A trailing boundary targets the
+/// following owner's leading region; a leading boundary targets the preceding
+/// owner's trailing region. Existing attachment selections for that boundary
+/// remain adjacent to the owner, and duplicate source selections fail closed.
+pub fn source_render_plan_from_ordered_selections_with_rehomes(
+    sources: HashMap<SourceRevision, String>,
+    dispositions: HashMap<SourceRevision, Vec<crate::SourceLineDisposition>>,
+    comment_regions: HashMap<SourceRevision, Vec<crate::CommentRegion>>,
+    selections: &[SourceLineSelection],
+    rehomes: &[RehomeSourceLineSelections],
+) -> Result<SourceRenderPlan, SourceRenderError> {
+    let owner_plan =
+        source_render_plan_from_line_selections(sources.clone(), dispositions.clone(), selections)?;
+    let mut insertions = HashMap::<usize, Vec<RenderFragment>>::new();
+    let mut selected_keys = selections
+        .iter()
+        .map(|selection| selection.selection_key.clone())
+        .collect::<std::collections::HashSet<_>>();
+
+    for rehome in rehomes {
+        if rehome.fragments.is_empty() {
+            continue;
+        }
+        let target_owner_id = rehome.target_owner_id.as_deref().ok_or_else(|| {
+            SourceRenderError::new("rehome boundary has no surviving target owner")
+        })?;
+        let owner_index = selections
+            .iter()
+            .position(|selection| {
+                dispositions.get(&selection.revision).is_some_and(|records| {
+                    records.iter().any(|record| {
+                        record.selection_key == selection.selection_key
+                            && record.kind == "structural_owner"
+                            && record.owner_id.as_deref() == Some(target_owner_id)
+                    })
+                })
+            })
+            .ok_or_else(|| {
+                SourceRenderError::new(format!(
+                    "rehome target owner {target_owner_id} has no selected source region"
+                ))
+            })?;
+
+        let insertion_index = match rehome.edge {
+            crate::BoundaryEdge::Trailing => (0..=owner_index)
+                .find(|index| {
+                    selected_region_attaches_to_boundary(
+                        &selections[*index],
+                        &dispositions,
+                        target_owner_id,
+                    )
+                })
+                .unwrap_or(owner_index),
+            crate::BoundaryEdge::Leading => (owner_index + 1..selections.len())
+                .rev()
+                .find(|index| {
+                    selected_region_attaches_to_boundary(
+                        &selections[*index],
+                        &dispositions,
+                        target_owner_id,
+                    )
+                })
+                .map_or(owner_index + 1, |index| index + 1),
+        };
+
+        let fragment_plan = source_render_plan_from_rehome_selections(
+            sources.clone(),
+            dispositions.clone(),
+            rehome,
+        )?;
+        for fragment in fragment_plan.fragments {
+            if rehome_fragment_already_selected(
+                &fragment,
+                rehome,
+                &dispositions,
+                &comment_regions,
+                selections,
+                target_owner_id,
+            )? {
+                continue;
+            }
+            if let RenderFragment::Source(source) = &fragment
+                && let Some(key) =
+                    source.metadata.get("selection_key").and_then(|value| value.as_str())
+                && !selected_keys.insert(key.to_string())
+            {
+                return Err(SourceRenderError::new(format!(
+                    "rehome duplicates selected source region {key}"
+                )));
+            }
+            insertions.entry(insertion_index).or_default().push(fragment);
+        }
+    }
+
+    let mut fragments = Vec::with_capacity(owner_plan.fragments.len() + rehomes.len());
+    for index in 0..=owner_plan.fragments.len() {
+        if let Some(promoted) = insertions.remove(&index) {
+            fragments.extend(promoted);
+        }
+        if let Some(owner_fragment) = owner_plan.fragments.get(index) {
+            fragments.push(owner_fragment.clone());
+        }
+    }
+    if !insertions.is_empty() {
+        return Err(SourceRenderError::new("rehome insertion falls outside the owner render plan"));
+    }
+    SourceRenderPlan::new(sources, fragments)
+}
+
+/// A removed comment can already be present in the selected revision, attached
+/// to the same surviving boundary. Ruby ast-merge recognizes this by normalized
+/// comment content; use the same semantic region facts here rather than comparing
+/// rendered output bytes.
+fn rehome_fragment_already_selected(
+    fragment: &RenderFragment,
+    rehome: &RehomeSourceLineSelections,
+    dispositions: &HashMap<SourceRevision, Vec<crate::SourceLineDisposition>>,
+    comment_regions: &HashMap<SourceRevision, Vec<crate::CommentRegion>>,
+    selections: &[SourceLineSelection],
+    target_owner_id: &str,
+) -> Result<bool, SourceRenderError> {
+    let (revision, region_id) = match fragment {
+        RenderFragment::Source(source) => {
+            let Some(selection_key) = source.metadata.get("selection_key").and_then(|v| v.as_str())
+            else {
+                return Ok(false);
+            };
+            let matching = rehome.fragments.iter().find_map(|candidate| match candidate {
+                SourceLineRehomeFragment::Source(selection)
+                    if selection.revision == source.revision
+                        && selection.selection_key == selection_key =>
+                {
+                    Some(selection)
+                }
+                _ => None,
+            });
+            let Some(selection) = matching else { return Ok(false) };
+            let ids = dispositions
+                .get(&selection.revision)
+                .into_iter()
+                .flatten()
+                .filter(|record| record.selection_key == selection.selection_key)
+                .flat_map(|record| record.comment_region_ids.iter().cloned())
+                .collect::<std::collections::HashSet<_>>();
+            if ids.len() != 1 {
+                return Ok(false);
+            }
+            (selection.revision, ids.into_iter().next().unwrap())
+        }
+        RenderFragment::Synthesized(synthesized) => {
+            let Some(region_id) =
+                synthesized.metadata.get("comment_region_id").and_then(|v| v.as_str())
+            else {
+                return Ok(false);
+            };
+            let revision =
+                match synthesized.metadata.get("source_revision").and_then(|v| v.as_str()) {
+                    Some("base") => SourceRevision::Base,
+                    Some("ours") => SourceRevision::Ours,
+                    Some("theirs") => SourceRevision::Theirs,
+                    _ => return Ok(false),
+                };
+            (revision, region_id.to_string())
+        }
+        _ => return Ok(false),
+    };
+    let Some(source_region) = comment_regions
+        .get(&revision)
+        .and_then(|regions| regions.iter().find(|region| region.id == region_id))
+    else {
+        return Ok(false);
+    };
+    let expected_attachment = match rehome.edge {
+        crate::BoundaryEdge::Leading => "trailing",
+        crate::BoundaryEdge::Trailing => "leading",
+    };
+    let target_selection_index = selections.iter().position(|selection| {
+        dispositions.get(&selection.revision).is_some_and(|records| {
+            records.iter().any(|record| {
+                record.selection_key == selection.selection_key
+                    && record.kind == "structural_owner"
+                    && record.owner_id.as_deref() == Some(target_owner_id)
+            })
+        })
+    });
+    let equivalent = selections
+        .iter()
+        .enumerate()
+        .flat_map(|(selection_index, selection)| {
+            let Some(records) = dispositions.get(&selection.revision) else { return Vec::new() };
+            let ids = records
+                .iter()
+                .filter(|record| {
+                    record.selection_key == selection.selection_key
+                        && ((record.owner_id.as_deref() == Some(target_owner_id)
+                            && record.comment_kind.as_deref() == Some(expected_attachment))
+                            || (record.kind == "root_region"
+                                && record.root_region_kind.as_deref() == Some("preamble")
+                                && target_selection_index.is_some_and(|target_index| {
+                                    selection_index < target_index
+                                        && !selections[selection_index + 1..target_index]
+                                            .iter()
+                                            .any(|between| {
+                                                dispositions.get(&between.revision).is_some_and(
+                                                    |between_records| {
+                                                        between_records.iter().any(|candidate| {
+                                                            candidate.selection_key
+                                                                == between.selection_key
+                                                                && candidate.kind
+                                                                    == "structural_owner"
+                                                        })
+                                                    },
+                                                )
+                                            })
+                                })))
+                })
+                .flat_map(|record| record.comment_region_ids.iter());
+            ids.filter_map(|id| {
+                comment_regions
+                    .get(&selection.revision)
+                    .and_then(|regions| regions.iter().find(|region| region.id == *id))
+                    .filter(|region| {
+                        region.normalized_content() == source_region.normalized_content()
+                    })
+                    .map(|_| (selection.revision, id.clone()))
+            })
+            .collect::<Vec<_>>()
+        })
+        .collect::<std::collections::HashSet<_>>();
+    if equivalent.len() > 1 {
+        return Err(SourceRenderError::new(format!(
+            "rehome comment {} has multiple equivalent selected boundary regions",
+            source_region.id
+        )));
+    }
+    Ok(!equivalent.is_empty())
+}
+
+fn selected_region_attaches_to_boundary(
+    selection: &SourceLineSelection,
+    dispositions: &HashMap<SourceRevision, Vec<crate::SourceLineDisposition>>,
+    owner_id: &str,
+) -> bool {
+    dispositions.get(&selection.revision).is_some_and(|records| {
+        records.iter().any(|record| {
+            record.selection_key == selection.selection_key
+                && ((record.kind == "comment_owner"
+                    && record.owner_id.as_deref() == Some(owner_id))
+                    || (record.kind == "layout_gap"
+                        && record.controller_owner_id.as_deref() == Some(owner_id)))
+        })
+    })
+}
+
 /// Build an exact-byte render plan from ordered semantic line selections.
 /// Each selection names one contiguous ownership region in one source revision.
 pub fn source_render_plan_from_line_selections(

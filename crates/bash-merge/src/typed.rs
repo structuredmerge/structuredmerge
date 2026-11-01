@@ -1,11 +1,13 @@
 //! Existing Bash ownership/merge semantics over validated TreeHaver facts.
 //! Parsing and output verification are supplied by the shared service caller.
 use ast_merge::{
-    LayoutAugmentation, LayoutOwner, NormalizedCommentEvidence, SourceLineDisposition,
-    SourcePreservingMergeEvidence, SourcePreservingOwnerDocument, SourceRevision,
-    ThreeWayMergeOutcome, augment_layout, augment_normalized_comments_with_evidence_filter,
-    render_source_plan, source_line_dispositions_from_augmentations,
-    source_line_selections_for_owner_revisions, source_render_plan_from_line_selections,
+    BoundaryEdge, LayoutAugmentation, LayoutOwner, NormalizedCommentEvidence, RemovePlan,
+    RemovedOwnerAttachments, SourceLineDisposition, SourceLineOwner, SourcePreservingMergeEvidence,
+    SourcePreservingOwnerDocument, SourceRevision, StructuralBoundary, ThreeWayMergeOutcome,
+    augment_layout, augment_normalized_comments_with_evidence_filter, render_source_plan,
+    source_line_dispositions_from_augmentations, source_line_fragments_for_rehome_plan,
+    source_line_selections_for_owner_revisions,
+    source_render_plan_from_ordered_selections_with_rehomes,
 };
 use std::collections::{HashMap, HashSet};
 use tree_haver::{service::ParsedResult, source::SourceRole};
@@ -259,6 +261,9 @@ fn semantic_owner_id<'a>(
 #[derive(Clone, Debug)]
 pub struct BashMergeExecution {
     pub evidence: SourcePreservingMergeEvidence,
+    /// True only when the shared ordered physical-line plan produced the
+    /// verified owner-merge output.
+    pub ordered_line_render_applied: bool,
     /// Present only for a clean, freshly verified result. No input parse is
     /// relabeled as an output parse, including whole-source/no-op selections.
     pub output_parse: Option<ParsedResult>,
@@ -347,6 +352,7 @@ pub fn merge3(
                 source_segments: vec![],
                 classification: None,
             },
+            ordered_line_render_applied: false,
             output_parse: None,
         });
     }
@@ -364,7 +370,8 @@ pub fn merge3(
         &mut verify,
     );
     let source_line_analyses = [base_lines, ours_lines, theirs_lines];
-    apply_line_selected_output(&source_line_analyses, &mut evidence)?;
+    let ordered_line_render_applied =
+        apply_line_selected_output(&source_line_analyses, &mut evidence)?;
     // Existing whole-source shortcuts do not call verify. Typed execution must
     // verify these too, while preserving the engine's decisions and segments.
     if evidence.result.outcome == ThreeWayMergeOutcome::Clean {
@@ -377,7 +384,7 @@ pub fn merge3(
     } else {
         output_parse = None;
     }
-    Ok(BashMergeExecution { evidence, output_parse })
+    Ok(BashMergeExecution { evidence, ordered_line_render_applied, output_parse })
 }
 
 /// Use the shared ordered source-line renderer for clean merges with stable
@@ -386,9 +393,9 @@ pub fn merge3(
 fn apply_line_selected_output(
     analyses: &[BashSourceLineAnalysis; 3],
     evidence: &mut SourcePreservingMergeEvidence,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     if evidence.result.outcome != ThreeWayMergeOutcome::Clean {
-        return Ok(());
+        return Ok(false);
     }
     let owner_ids = analyses
         .iter()
@@ -407,15 +414,6 @@ fn apply_line_selected_output(
         .as_ref()
         .ok_or_else(|| "clean Bash owner merge omitted classification evidence".to_string())?;
     let membership_changed = owner_ids[0] != owner_ids[1] || owner_ids[0] != owner_ids[2];
-    if membership_changed
-        && classification
-            .decisions
-            .iter()
-            .any(|decision| decision.kind == ast_merge::OwnerDecisionKind::Delete)
-    {
-        // Removed-owner comments and gaps need the shared boundary rehome plan.
-        return Ok(());
-    }
     let baseline_revision = if let Some(revision) = classification.whole_source_selection {
         revision
     } else {
@@ -424,9 +422,7 @@ fn apply_line_selected_output(
             let revision = match &decision.kind {
                 ast_merge::OwnerDecisionKind::SelectOurs => SourceRevision::Ours,
                 ast_merge::OwnerDecisionKind::SelectTheirs => SourceRevision::Theirs,
-                ast_merge::OwnerDecisionKind::Delete => {
-                    return Err("same-membership Bash merge unexpectedly deleted an owner".into());
-                }
+                ast_merge::OwnerDecisionKind::Delete => continue,
                 _ => return Err("clean Bash owner merge contains a conflict decision".into()),
             };
             owner_revisions.insert(decision.owner_id.clone(), revision);
@@ -447,7 +443,12 @@ fn apply_line_selected_output(
     };
     let mut owner_revisions = HashMap::new();
     if classification.whole_source_selection.is_some() {
-        for owner_id in &owner_ids[0] {
+        let baseline_owner_ids = match baseline_revision {
+            SourceRevision::Base => &owner_ids[0],
+            SourceRevision::Ours => &owner_ids[1],
+            SourceRevision::Theirs => &owner_ids[2],
+        };
+        for owner_id in baseline_owner_ids {
             owner_revisions.insert((*owner_id).to_string(), baseline_revision);
         }
     } else {
@@ -455,6 +456,7 @@ fn apply_line_selected_output(
             let revision = match &decision.kind {
                 ast_merge::OwnerDecisionKind::SelectOurs => SourceRevision::Ours,
                 ast_merge::OwnerDecisionKind::SelectTheirs => SourceRevision::Theirs,
+                ast_merge::OwnerDecisionKind::Delete => continue,
                 _ => return Err("clean Bash owner merge contains a non-selection decision".into()),
             };
             owner_revisions.insert(decision.owner_id.clone(), revision);
@@ -471,23 +473,161 @@ fn apply_line_selected_output(
         .zip(analyses)
         .map(|(revision, analysis)| (*revision, analysis.dispositions.clone()))
         .collect::<HashMap<_, _>>();
+    let comment_regions = revisions
+        .iter()
+        .zip(analyses)
+        .map(|(revision, analysis)| (*revision, analysis.comments.augmentation.regions.clone()))
+        .collect::<HashMap<_, _>>();
     let selections = source_line_selections_for_owner_revisions(
         baseline_revision,
         &dispositions,
         &owner_revisions,
     )
     .map_err(|error| error.to_string())?;
-    let plan = source_render_plan_from_line_selections(sources, dispositions, &selections)
-        .map_err(|error| error.to_string())?;
-    let rendered = render_source_plan(&plan).map_err(|error| error.to_string())?;
+    let rehomes = if membership_changed {
+        match removed_owner_rehome_selections(analyses, classification, &owner_revisions) {
+            Ok(rehomes) => rehomes,
+            Err(error) => return Err(format!("removed-owner rehome: {error}")),
+        }
+    } else {
+        Vec::new()
+    };
+    let plan = match source_render_plan_from_ordered_selections_with_rehomes(
+        sources,
+        dispositions,
+        comment_regions,
+        &selections,
+        &rehomes,
+    ) {
+        Ok(plan) => plan,
+        Err(error) if membership_changed => return Err(format!("composite line plan: {error}")),
+        Err(error) => return Err(error.to_string()),
+    };
+    let rendered = match render_source_plan(&plan) {
+        Ok(rendered) => rendered,
+        Err(error) if membership_changed => return Err(format!("composite render: {error}")),
+        Err(error) => return Err(error.to_string()),
+    };
     let previous = evidence
         .result
         .output
         .as_deref()
         .ok_or_else(|| "clean Bash owner merge omitted output".to_string())?;
     if rendered.content != previous {
+        if membership_changed {
+            return Err(format!(
+                "composite output mismatch: expected {previous:?}, got {:?}",
+                rendered.content
+            ));
+        }
         return Err("Bash source-line render differs from the verified owner merge".into());
     }
     evidence.result.output = Some(rendered.content);
-    Ok(())
+    Ok(true)
+}
+
+fn removed_owner_rehome_selections(
+    analyses: &[BashSourceLineAnalysis; 3],
+    classification: &ast_merge::OwnerMergeClassification,
+    retained_revisions: &HashMap<String, SourceRevision>,
+) -> Result<Vec<ast_merge::RehomeSourceLineSelections>, String> {
+    let revisions = [SourceRevision::Base, SourceRevision::Ours, SourceRevision::Theirs];
+    let retained_ids = retained_revisions.keys().map(String::as_str).collect::<HashSet<_>>();
+    let mut rehomes = Vec::new();
+    for decision in classification
+        .decisions
+        .iter()
+        .filter(|decision| decision.kind == ast_merge::OwnerDecisionKind::Delete)
+    {
+        let (source_revision, source) = revisions
+            .iter()
+            .zip(analyses)
+            .find(|(_, analysis)| {
+                analysis.owners.document.owners.iter().any(|owner| owner.id == decision.owner_id)
+            })
+            .ok_or_else(|| format!("deleted owner {} has no source revision", decision.owner_id))?;
+        let owner_index = source
+            .owners
+            .document
+            .owners
+            .iter()
+            .position(|owner| owner.id == decision.owner_id)
+            .ok_or_else(|| format!("deleted owner {} has no source range", decision.owner_id))?;
+        let owner = &source.owners.document.owners[owner_index];
+        let leading_boundary = source.owners.document.owners[..owner_index]
+            .iter()
+            .rev()
+            .find(|candidate| retained_ids.contains(candidate.id.as_str()))
+            .map(|candidate| StructuralBoundary {
+                edge: BoundaryEdge::Leading,
+                owner_id: Some(candidate.id.clone()),
+            });
+        let trailing_boundary = source.owners.document.owners[owner_index + 1..]
+            .iter()
+            .find(|candidate| retained_ids.contains(candidate.id.as_str()))
+            .map(|candidate| StructuralBoundary {
+                edge: BoundaryEdge::Trailing,
+                owner_id: Some(candidate.id.clone()),
+            });
+        let comment_attachment = source
+            .comments
+            .augmentation
+            .attachments
+            .iter()
+            .find(|attachment| attachment.owner_id == decision.owner_id);
+        let layout_attachment = source
+            .layout
+            .attachments
+            .iter()
+            .find(|attachment| attachment.owner_id == decision.owner_id);
+        let removed_attachment = RemovedOwnerAttachments {
+            owner_id: Some(decision.owner_id.clone()),
+            leading_region_id: comment_attachment
+                .and_then(|attachment| attachment.leading_region_id.clone()),
+            inline_region_id: comment_attachment
+                .and_then(|attachment| attachment.inline_region_id.clone()),
+            orphan_region_ids: comment_attachment
+                .map(|attachment| attachment.orphan_region_ids.clone())
+                .unwrap_or_default(),
+            trailing_region_id: comment_attachment
+                .and_then(|attachment| attachment.trailing_region_id.clone()),
+            leading_gap_id: layout_attachment
+                .and_then(|attachment| attachment.leading_gap_id.clone()),
+            trailing_gap_id: layout_attachment
+                .and_then(|attachment| attachment.trailing_gap_id.clone()),
+        };
+        let remove_plan = RemovePlan::new(
+            source.owners.document.source.clone(),
+            owner.start_line,
+            owner.end_line,
+            leading_boundary,
+            trailing_boundary,
+            vec![removed_attachment],
+        )?;
+        let source_owners = source
+            .owners
+            .document
+            .owners
+            .iter()
+            .map(|owner| SourceLineOwner {
+                id: owner.id.clone(),
+                start_line: owner.start_line,
+                end_line: owner.end_line,
+            })
+            .collect::<Vec<_>>();
+        for rehome in &remove_plan.rehome_plans {
+            rehomes.push(
+                source_line_fragments_for_rehome_plan(
+                    *source_revision,
+                    &source.dispositions,
+                    &source_owners,
+                    &source.comments.augmentation.regions,
+                    &source.inline_promotion_owner_ids,
+                    rehome,
+                )
+                .map_err(|error| error.to_string())?,
+            );
+        }
+    }
+    Ok(rehomes)
 }
