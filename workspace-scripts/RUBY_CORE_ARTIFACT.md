@@ -233,3 +233,10 @@ examples, and 116 consumer-app examples passed. The verifier reports
 `registry_install=local-candidate` and `publication_gate=false`; registry
 installation and release verification remain pending, and no package was
 published.
+
+## Local installed-candidate result (2026-11-01, Rust f78fd84)
+
+Ruby 4.0.9, Linux x86_64: 53 core, 116 generated E2E and 116 consumer-app examples pass.
+Artifact structuredmerge-core-0.2.1-x86_64-linux.gem sha256
+6a15482cf900d312364170faf03934fe37a7a474338b614b59e769228a18126c. Local candidate
+evidence only; the registry-installed gate remains open pending publication prerequisites.
