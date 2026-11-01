@@ -40,6 +40,7 @@ pub fn merge3(
         ours,
         theirs,
         ast_merge::typed_merge::NativeOwnerEngine {
+            analyze_with_diagnostics: None,
             analyze: owners,
             merge: |base, ours, theirs, verify| {
                 ast_merge::merge_source_preserving_owners_with_evidence(base, ours, theirs, verify)

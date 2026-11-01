@@ -33,10 +33,29 @@ pub enum NativeMergeError {
     Unsupported(String),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NativeAnalysisFailureKind {
+    UnsupportedFeature,
+    UnsafeSourceRange,
+}
+
+#[derive(Debug)]
+pub struct NativeAnalysisError {
+    pub kind: NativeAnalysisFailureKind,
+    pub message: String,
+}
+
+impl NativeAnalysisError {
+    pub fn unsupported(message: impl Into<String>) -> Self {
+        Self { kind: NativeAnalysisFailureKind::UnsupportedFeature, message: message.into() }
+    }
+}
+
 #[derive(Debug)]
 pub struct NativeAnalysisFailure {
     pub source_id: String,
     pub source_role: SourceRole,
+    pub kind: NativeAnalysisFailureKind,
     pub message: String,
 }
 
@@ -85,6 +104,7 @@ pub fn merge_native_sources_with_evidence(
         context,
         NativeOwnerEngine {
             analyze,
+            analyze_with_diagnostics: None,
             merge: |base, ours, theirs, verify| {
                 merge_source_preserving_owners_with_evidence(base, ours, theirs, verify)
             },
@@ -95,6 +115,10 @@ pub fn merge_native_sources_with_evidence(
 /// A Rust family engine, never a host-provided matching or rendering callback.
 pub struct NativeOwnerEngine {
     pub analyze: fn(&ParsedResult) -> Result<SourcePreservingOwnerDocument, String>,
+    /// Optional typed error path for providers whose unsupported boundary has
+    /// a stable public diagnostic category beyond generic analysis rejection.
+    pub analyze_with_diagnostics:
+        Option<fn(&ParsedResult) -> Result<SourcePreservingOwnerDocument, NativeAnalysisError>>,
     pub merge: NativeOwnerMerger,
 }
 
@@ -163,7 +187,12 @@ pub fn merge_native_sources_with_engine(
     let mut documents = BTreeMap::new();
     let mut failures = Vec::new();
     for result in &parsed {
-        match analyze(result) {
+        let analysis = if let Some(analyzer) = engine.analyze_with_diagnostics {
+            analyzer(result)
+        } else {
+            (engine.analyze)(result).map_err(NativeAnalysisError::unsupported)
+        };
+        match analysis {
             Ok(document) => {
                 let checked = if document.source.as_bytes() != result.source.bytes() {
                     Err("family analysis changed the validated source bytes".into())
@@ -177,14 +206,16 @@ pub fn merge_native_sources_with_engine(
                     Err(message) => failures.push(NativeAnalysisFailure {
                         source_id: result.source.descriptor().source_id.clone(),
                         source_role: result.source.descriptor().role,
+                        kind: NativeAnalysisFailureKind::UnsupportedFeature,
                         message,
                     }),
                 }
             }
-            Err(message) => failures.push(NativeAnalysisFailure {
+            Err(error) => failures.push(NativeAnalysisFailure {
                 source_id: result.source.descriptor().source_id.clone(),
                 source_role: result.source.descriptor().role,
-                message,
+                kind: error.kind,
+                message: error.message,
             }),
         }
     }

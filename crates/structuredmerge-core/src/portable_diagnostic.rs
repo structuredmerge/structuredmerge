@@ -35,6 +35,7 @@ pub enum PortableCategory {
     ResourceLimit,
     ReplayRejected,
     InternalError,
+    UnsafeSourceRange,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

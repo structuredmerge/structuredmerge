@@ -102,6 +102,7 @@ pub fn merge_directional_native_sources(
         match analysis {
             Ok(doc) => documents.push(doc),
             Err(message) => failures.push(NativeAnalysisFailure {
+                kind: crate::typed_merge::NativeAnalysisFailureKind::UnsupportedFeature,
                 source_id: result.source.descriptor().source_id.clone(),
                 source_role: result.source.descriptor().role,
                 message,

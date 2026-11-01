@@ -8,6 +8,8 @@
 
 - **Generated Ruby data enums preserve boxed core payloads.** Magnus now keeps the core `Box<T>` shape in binding enums and boxes/unboxes symmetrically in constructors and conversions, preventing large-enum Clippy failures without changing Ruby payload accessors.
 
+- [kc] bash-typed-unsafe-owner-range-diagnostics: Preserve unsafe Bash owner-range failures as a stable source diagnostic in typed-core analysis and merge3.
+
 ### Changed
 
 - Point kernel crate metadata and new artifact provenance at structuredmerge/structuredmerge; remove kettle-rusty from this repository’s release inventory while accepting pre-split registry metadata.

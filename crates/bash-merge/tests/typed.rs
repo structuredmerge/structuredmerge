@@ -105,7 +105,7 @@ fn normalized_view_preserves_native_identity_topology_and_exact_bytes() {
 #[test]
 fn source_line_analysis_composes_native_comments_layout_and_owner_identity() {
     let parser = Parser::new("bash");
-    let source = "#!/usr/bin/env bash\n# docs\nx=1 # inline\nf() { :; }\n";
+    let source = "#!/usr/bin/env bash\n# docs\nx=1\nf() { :; }\n";
     let parsed = parser.parse(source, SourceRole::Source);
     let analysis = typed::source_line_analysis(&parsed).unwrap();
     assert!(analysis.comments.unclaimed_node_ids.is_empty());
@@ -116,14 +116,20 @@ fn source_line_analysis_composes_native_comments_layout_and_owner_identity() {
     assert_eq!(analysis.dispositions[1].selection_key, "comment:/variable:x:leading");
     assert_eq!(analysis.dispositions[2].kind, "structural_owner");
     assert_eq!(analysis.dispositions[2].owner_id.as_deref(), Some("/variable:x"));
-    assert_eq!(analysis.dispositions[2].comment_kind.as_deref(), Some("inline"));
-    assert_eq!(analysis.dispositions[2].line, "x=1 # inline\n");
+    assert_eq!(analysis.dispositions[2].comment_kind, None);
+    assert_eq!(analysis.dispositions[2].line, "x=1\n");
     assert!(analysis.inline_promotion_owner_ids.contains("/variable:x"));
     assert!(!analysis.inline_promotion_owner_ids.contains("/function:f"));
     assert_eq!(analysis.dispositions[3].owner_id.as_deref(), Some("/function:f"));
 
-    let harness =
-        parser.parse("test_expect_success 'title' 'echo one' # inline docs\n", SourceRole::Source);
+    let unsafe_inline = parser.parse("x=1 # inline docs\n", SourceRole::Source);
+    assert!(
+        typed::owners(&unsafe_inline)
+            .unwrap_err()
+            .contains("unsafe declaration range [:variable_assignment, \"x\"]")
+    );
+
+    let harness = parser.parse("test_expect_success 'title' 'echo one'\n", SourceRole::Source);
     let harness_analysis = typed::source_line_analysis(&harness).unwrap();
     let harness_owner = &harness_analysis.owners.document.owners[0].id;
     assert!(harness_owner.starts_with("/test_harness_call:"));

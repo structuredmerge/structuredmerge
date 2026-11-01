@@ -371,6 +371,7 @@ fn guard_projection_rejects_source_swaps_and_wrong_provider_identity() {
         &snapshot,
         &context,
         NativeOwnerEngine {
+            analyze_with_diagnostics: None,
             analyze: go_merge::typed::owners,
             merge: go_merge::typed::merge_documents,
         },

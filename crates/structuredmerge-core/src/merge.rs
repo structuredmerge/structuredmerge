@@ -369,6 +369,7 @@ mod tests {
             "test",
             Err(MappingMergeError::AnalysisRejected {
                 failures: vec![ast_merge::typed_merge::NativeAnalysisFailure {
+                    kind: ast_merge::typed_merge::NativeAnalysisFailureKind::UnsupportedFeature,
                     source_id: "ours".into(),
                     source_role: crate::SourceRole::Ours,
                     message: "unsupported owner".into(),

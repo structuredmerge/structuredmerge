@@ -30,6 +30,23 @@ pub fn diff_native_sources_with_evidence(
     context: &ExecutionContext,
     analyze: fn(&ParsedResult) -> Result<SourcePreservingOwnerDocument, String>,
 ) -> Result<NativeDiffExecution, NativeMergeError> {
+    diff_native_sources_with_engine(language, requests, service, snapshot, context, analyze, None)
+}
+
+pub fn diff_native_sources_with_engine(
+    language: &str,
+    requests: Vec<ParseRequest>,
+    service: &dyn ParseService,
+    snapshot: &ParserRegistrySnapshot,
+    context: &ExecutionContext,
+    analyze: fn(&ParsedResult) -> Result<SourcePreservingOwnerDocument, String>,
+    analyze_with_diagnostics: Option<
+        fn(
+            &ParsedResult,
+        )
+            -> Result<SourcePreservingOwnerDocument, crate::typed_merge::NativeAnalysisError>,
+    >,
+) -> Result<NativeDiffExecution, NativeMergeError> {
     let roles: BTreeSet<_> =
         requests.iter().map(|request| request.source.descriptor.role).collect();
     if requests.len() != 2
@@ -74,17 +91,30 @@ pub fn diff_native_sources_with_evidence(
     let mut documents = Vec::new();
     let mut failures = Vec::new();
     for result in &parsed {
-        let analysis = analyze(result).and_then(|document| {
+        let analysis = if let Some(analyzer) = analyze_with_diagnostics {
+            analyzer(result).map_err(|error| (error.kind, error.message))
+        } else {
+            analyze(result).map_err(|message| {
+                (crate::typed_merge::NativeAnalysisFailureKind::UnsupportedFeature, message)
+            })
+        }
+        .and_then(|document| {
             if document.source.as_bytes() != result.source.bytes() {
-                return Err("analysis source differs from validated source".into());
+                return Err((
+                    crate::typed_merge::NativeAnalysisFailureKind::UnsupportedFeature,
+                    "analysis source differs from validated source".into(),
+                ));
             }
-            document.validate("diff input")?;
+            document.validate("diff input").map_err(|message| {
+                (crate::typed_merge::NativeAnalysisFailureKind::UnsupportedFeature, message)
+            })?;
             Ok(document)
         });
         context.check().map_err(NativeMergeError::Parse)?;
         match analysis {
             Ok(document) => documents.push(document),
-            Err(message) => failures.push(NativeAnalysisFailure {
+            Err((kind, message)) => failures.push(NativeAnalysisFailure {
+                kind,
                 source_id: result.source.descriptor().source_id.clone(),
                 source_role: result.source.descriptor().role,
                 message,

@@ -343,6 +343,7 @@ fn guard_projection_recomputes_evidence_and_rejects_forged_results() {
         &snapshot,
         &context,
         NativeOwnerEngine {
+            analyze_with_diagnostics: None,
             analyze: rust_merge::typed::owners,
             merge: rust_merge::typed::merge_documents,
         },

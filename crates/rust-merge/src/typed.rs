@@ -61,7 +61,11 @@ pub fn merge3(
         base,
         ours,
         theirs,
-        ast_merge::typed_merge::NativeOwnerEngine { analyze: owners, merge: merge_documents },
+        ast_merge::typed_merge::NativeOwnerEngine {
+            analyze_with_diagnostics: None,
+            analyze: owners,
+            merge: merge_documents,
+        },
         parse_output,
     )
 }

@@ -79,8 +79,8 @@ pub fn plan_insertions(
     current_parse: &ParsedResult,
     current: &SourcePreservingOwnerDocument,
 ) -> Result<Vec<DirectionalInsertion>, String> {
-    if crate::typed::owners(incoming_parse)? != *incoming
-        || crate::typed::owners(current_parse)? != *current
+    if crate::typed::directional_owners(incoming_parse)? != *incoming
+        || crate::typed::directional_owners(current_parse)? != *current
     {
         return Err("Bash directional ownership differs from native facts".into());
     }

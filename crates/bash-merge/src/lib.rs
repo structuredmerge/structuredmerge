@@ -203,14 +203,39 @@ fn project_bash_functions(
     root_id: &str,
     nodes: &[NormalizedTreeNode],
 ) -> Result<SourcePreservingOwnerDocument, String> {
-    project_bash_analysis(source, root_id, nodes).map(|analysis| analysis.document)
+    project_bash_analysis(source, root_id, nodes, false)
+        .map(|analysis| analysis.document)
+        .map_err(|error| error.to_string())
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum BashAnalysisError {
+    Unsupported(String),
+    UnsafeSourceRange(String),
+}
+
+impl std::fmt::Display for BashAnalysisError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unsupported(message) | Self::UnsafeSourceRange(message) => {
+                formatter.write_str(message)
+            }
+        }
+    }
+}
+
+impl From<String> for BashAnalysisError {
+    fn from(message: String) -> Self {
+        Self::Unsupported(message)
+    }
 }
 
 fn project_bash_analysis(
     source: &str,
     root_id: &str,
     nodes: &[NormalizedTreeNode],
-) -> Result<ast_merge::native_analysis::NativeOwnerAnalysis, String> {
+    reject_unsafe_source_ranges: bool,
+) -> Result<ast_merge::native_analysis::NativeOwnerAnalysis, BashAnalysisError> {
     let index = NormalizedTreeIndex::new(nodes)?;
     let root = index.root(root_id)?;
     let mut owners = Vec::new();
@@ -222,7 +247,7 @@ fn project_bash_analysis(
             continue;
         }
 
-        let (path, _name) = if let Some(owner_kind) =
+        let (path, name) = if let Some(owner_kind) =
             BASH_OWNER_KINDS.iter().find(|candidate| candidate.node_kind == top_level.kind)
         {
             let name = named_child_source(&index, top_level)?;
@@ -233,21 +258,22 @@ fn project_bash_analysis(
                 .map_err(|error| format!("failed to encode Bash test identity: {error}"))?;
             (format!("/test_harness_call:{encoded}"), encoded)
         } else {
-            return Err(format!("unsupported top-level Bash node {:?}", top_level.kind));
+            return Err(format!("unsupported top-level Bash node {:?}", top_level.kind).into());
         };
 
         if !owner_ids.insert(path.clone()) {
-            return Err(format!("Bash document has duplicate top-level owner identity {path:?}"));
+            return Err(
+                format!("Bash document has duplicate top-level owner identity {path:?}").into()
+            );
         }
         if top_level.source_fragment.is_empty() {
-            return Err(format!("Bash owner {path:?} has no source fragment"));
+            return Err(format!("Bash owner {path:?} has no source fragment").into());
         }
-        if top_level.kind == "function_definition" {
-            let suffix = &source[top_level.span.range.end_byte..];
-            let line_suffix = suffix.split_once('\n').map_or(suffix, |(line, _)| line);
-            if line_suffix.trim_start().starts_with('#') {
-                return Err(format!("Bash function owner {path:?} has an inline trailing comment"));
-            }
+        if reject_unsafe_source_ranges && !safe_owner_line_range(source, top_level) {
+            return Err(BashAnalysisError::UnsafeSourceRange(format!(
+                "unsafe declaration range [:{}, {:?}]",
+                top_level.kind, name
+            )));
         }
 
         owner_node_ids.insert(path.clone(), vec![top_level.id.clone()]);
@@ -263,13 +289,31 @@ fn project_bash_analysis(
     }
 
     if owners.is_empty() {
-        return Err("Bash document has no supported top-level named owners".to_string());
+        return Err("Bash document has no supported top-level named owners".to_string().into());
     }
 
     Ok(ast_merge::native_analysis::NativeOwnerAnalysis {
         document: SourcePreservingOwnerDocument { source: source.to_string(), owners },
         owner_node_ids,
     })
+}
+
+fn safe_owner_line_range(source: &str, node: &NormalizedTreeNode) -> bool {
+    let bytes = source.as_bytes();
+    let start = node.span.range.start_byte;
+    let end = node.span.range.end_byte;
+    if start > end || end > bytes.len() {
+        return false;
+    }
+    let line_start =
+        bytes[..start].iter().rposition(|byte| *byte == b'\n').map_or(0, |index| index + 1);
+    let line_end = bytes[end..]
+        .iter()
+        .position(|byte| *byte == b'\n')
+        .map_or(bytes.len(), |offset| end + offset);
+    let horizontal_whitespace = |byte: &u8| matches!(byte, b'\t' | b'\r' | b' ');
+    bytes[line_start..start].iter().all(horizontal_whitespace)
+        && bytes[end..line_end].iter().all(horizontal_whitespace)
 }
 
 fn named_child_source(

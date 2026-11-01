@@ -14,19 +14,60 @@ pub fn owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, St
     analysis(parsed).map(|analysis| analysis.document)
 }
 
+pub fn directional_owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, String> {
+    analysis_with_mode(parsed, false)
+        .map(|analysis| analysis.document)
+        .map_err(|error| error.message)
+}
+
 pub fn analysis(
     parsed: &ParsedResult,
 ) -> Result<ast_merge::native_analysis::NativeOwnerAnalysis, String> {
+    analysis_with_diagnostics(parsed).map_err(|error| error.message)
+}
+
+pub fn analysis_document_with_diagnostics(
+    parsed: &ParsedResult,
+) -> Result<SourcePreservingOwnerDocument, ast_merge::typed_merge::NativeAnalysisError> {
+    analysis_with_diagnostics(parsed).map(|analysis| analysis.document)
+}
+
+pub fn analysis_with_diagnostics(
+    parsed: &ParsedResult,
+) -> Result<
+    ast_merge::native_analysis::NativeOwnerAnalysis,
+    ast_merge::typed_merge::NativeAnalysisError,
+> {
+    analysis_with_mode(parsed, true)
+}
+
+fn analysis_with_mode(
+    parsed: &ParsedResult,
+    reject_unsafe_source_ranges: bool,
+) -> Result<
+    ast_merge::native_analysis::NativeOwnerAnalysis,
+    ast_merge::typed_merge::NativeAnalysisError,
+> {
     if !parsed.backend.languages.iter().any(|language| language == "bash") {
-        return Err("Bash analysis requires a Bash parser".into());
+        return Err(ast_merge::typed_merge::NativeAnalysisError::unsupported(
+            "Bash analysis requires a Bash parser",
+        ));
     }
-    let nodes = parsed.normalized_nodes()?;
-    let root = parsed.document.output().root_id.as_deref().ok_or("Bash parse omitted its root")?;
-    let source = std::str::from_utf8(parsed.source.bytes()).map_err(|e| e.to_string())?;
+    let nodes = parsed
+        .normalized_nodes()
+        .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported)?;
+    let root = parsed.document.output().root_id.as_deref().ok_or_else(|| {
+        ast_merge::typed_merge::NativeAnalysisError::unsupported("Bash parse omitted its root")
+    })?;
+    let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| {
+        ast_merge::typed_merge::NativeAnalysisError::unsupported(error.to_string())
+    })?;
     // Empty/comment-only documents are valid directional endpoints. Derive this
     // from the native root's children, never from textual source classification.
-    let index = tree_haver::NormalizedTreeIndex::new(&nodes)?;
-    let root_node = index.root(root)?;
+    let index = tree_haver::NormalizedTreeIndex::new(&nodes)
+        .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported)?;
+    let root_node =
+        index.root(root).map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported)?;
     let analysis = if index
         .children(root_node)
         .iter()
@@ -37,9 +78,21 @@ pub fn analysis(
             owner_node_ids: Default::default(),
         }
     } else {
-        super::project_bash_analysis(source, root, &nodes)?
+        super::project_bash_analysis(source, root, &nodes, reject_unsafe_source_ranges).map_err(
+            |error| match error {
+                super::BashAnalysisError::Unsupported(message) => {
+                    ast_merge::typed_merge::NativeAnalysisError::unsupported(message)
+                }
+                super::BashAnalysisError::UnsafeSourceRange(message) => {
+                    ast_merge::typed_merge::NativeAnalysisError {
+                        kind: ast_merge::typed_merge::NativeAnalysisFailureKind::UnsafeSourceRange,
+                        message,
+                    }
+                }
+            },
+        )?
     };
-    analysis.validate(parsed)?;
+    analysis.validate(parsed).map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported)?;
     Ok(analysis)
 }
 

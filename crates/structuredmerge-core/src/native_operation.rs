@@ -190,6 +190,31 @@ pub(crate) fn retain_parses(result: &mut OperationResult, parses: &[ParsedResult
     );
 }
 
+fn analysis_failure_diagnostic(
+    result: &mut OperationResult,
+    error: ast_merge::typed_merge::NativeAnalysisError,
+    source_ref: DiagnosticSourceRef,
+) {
+    match error.kind {
+        ast_merge::typed_merge::NativeAnalysisFailureKind::UnsupportedFeature => diagnostic(
+            result,
+            PortableCategory::UnsupportedFeature,
+            "analysis.unsupported",
+            error.message,
+            DiagnosticLayer::Analysis,
+            vec![source_ref],
+        ),
+        ast_merge::typed_merge::NativeAnalysisFailureKind::UnsafeSourceRange => diagnostic(
+            result,
+            PortableCategory::UnsafeSourceRange,
+            "source.unsafe_range",
+            format!("source parse error: {}", error.message),
+            DiagnosticLayer::Analysis,
+            vec![source_ref],
+        ),
+    }
+}
+
 fn execution_failure(result: &mut OperationResult, error: NativeMergeError) {
     match error {
         NativeMergeError::Parse(error) | NativeMergeError::InputParseFailed { error, .. } => {
@@ -216,18 +241,18 @@ fn execution_failure(result: &mut OperationResult, error: NativeMergeError) {
         NativeMergeError::AnalysisRejected { failures, parses, .. } => {
             retain_parses(result, &parses);
             for failure in failures {
-                diagnostic(
+                analysis_failure_diagnostic(
                     result,
-                    PortableCategory::UnsupportedFeature,
-                    "analysis.unsupported",
-                    failure.message,
-                    DiagnosticLayer::Analysis,
-                    vec![DiagnosticSourceRef {
+                    ast_merge::typed_merge::NativeAnalysisError {
+                        kind: failure.kind,
+                        message: failure.message,
+                    },
+                    DiagnosticSourceRef {
                         source_id: failure.source_id,
                         role: failure.source_role,
                         span: None,
                         extra: Metadata::new(),
-                    }],
+                    },
                 );
             }
         }
@@ -378,7 +403,9 @@ pub(crate) fn execute_native_operation_with_service(
     let language =
         crate::profiles::native_language(family, input.provider_selection.dialect.as_deref())
             .expect("selection checked above");
-    let analyzer = if family == "go" && input.operation.kind() == OperationKind::Merge2 {
+    let analyzer = if family == "bash" && input.operation.kind() == OperationKind::Merge2 {
+        bash_merge::typed::directional_owners as Analyzer
+    } else if family == "go" && input.operation.kind() == OperationKind::Merge2 {
         go_merge::directional::owners as Analyzer
     } else if family == "rust" && input.operation.kind() == OperationKind::Merge2 {
         rust_merge::directional::owners as Analyzer
@@ -501,16 +528,22 @@ pub(crate) fn execute_native_operation_with_service(
             return finish(result, request, &evidence);
         }
         let analysis = match family {
-            "yaml" => yaml_merge::typed::mapping_analysis(&parsed[0]),
-            "python" => python_merge::declaration_analysis(&parsed[0]),
-            "bash" => bash_merge::typed::analysis(&parsed[0]),
-            "go" => go_merge::typed::analysis(&parsed[0]),
-            "rust" => rust_merge::typed::analysis(&parsed[0]),
-            "typescript" => typescript_merge::typed::analysis(&parsed[0]),
+            "yaml" => yaml_merge::typed::mapping_analysis(&parsed[0])
+                .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported),
+            "python" => python_merge::declaration_analysis(&parsed[0])
+                .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported),
+            "bash" => bash_merge::typed::analysis_with_diagnostics(&parsed[0]),
+            "go" => go_merge::typed::analysis(&parsed[0])
+                .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported),
+            "rust" => rust_merge::typed::analysis(&parsed[0])
+                .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported),
+            "typescript" => typescript_merge::typed::analysis(&parsed[0])
+                .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported),
             _ => unreachable!("profile already selected"),
         }
         .and_then(|analysis| {
             crate::native_analysis_projection::project(&parsed[0], &analysis, family)
+                .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported)
         });
         match analysis {
             Ok(analysis) => {
@@ -519,25 +552,33 @@ pub(crate) fn execute_native_operation_with_service(
                 result.verification.classification_reached = Some(true);
                 result.verification.consumed_source_roles = Some(vec![SourceRole::Source]);
             }
-            Err(message) => diagnostic(
+            Err(error) => analysis_failure_diagnostic(
                 &mut result,
-                PortableCategory::UnsupportedFeature,
-                "analysis.unsupported",
-                message,
-                DiagnosticLayer::Analysis,
-                vec![DiagnosticSourceRef {
+                error,
+                DiagnosticSourceRef {
                     source_id: parsed[0].source.descriptor().source_id.clone(),
                     role: SourceRole::Source,
                     span: None,
                     extra: Metadata::new(),
-                }],
+                },
             ),
         }
         return finish(result, request, &evidence);
     }
     if input.operation.kind() == OperationKind::Diff2 {
-        match ast_merge::typed_diff::diff_native_sources_with_evidence(
-            language, parses, service, snapshot, context, analyzer,
+        let analyze_with_diagnostics = if family == "bash" {
+            Some(bash_merge::typed::analysis_document_with_diagnostics as _)
+        } else {
+            None
+        };
+        match ast_merge::typed_diff::diff_native_sources_with_engine(
+            language,
+            parses,
+            service,
+            snapshot,
+            context,
+            analyzer,
+            analyze_with_diagnostics,
         ) {
             Ok(execution) => {
                 retain_parses(&mut result, &execution.input_parses);
@@ -825,13 +866,22 @@ pub(crate) fn execute_native_operation_with_service(
             "rust" => rust_merge::typed::merge_documents,
             _ => unreachable!("family was checked above"),
         };
+        let analyze_with_diagnostics = if family == "bash" {
+            Some(bash_merge::typed::analysis_document_with_diagnostics as _)
+        } else {
+            None
+        };
         ast_merge::typed_merge::merge_native_sources_with_engine(
             language,
             parses.clone(),
             service,
             snapshot,
             context,
-            ast_merge::typed_merge::NativeOwnerEngine { analyze: analyzer, merge },
+            ast_merge::typed_merge::NativeOwnerEngine {
+                analyze: analyzer,
+                analyze_with_diagnostics,
+                merge,
+            },
         )
     } else {
         merge_native_sources_with_evidence(

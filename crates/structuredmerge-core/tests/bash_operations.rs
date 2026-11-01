@@ -143,6 +143,38 @@ fn bash_conflicts_and_failures_do_not_invent_outputs_or_capabilities() {
 }
 
 #[test]
+fn bash_unsafe_owner_ranges_keep_their_diagnostic_category() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/bash_analysis_unsafe_source_range.json"
+    ))
+    .unwrap();
+    let source = fixture["input"]["source"].as_str().unwrap();
+    let expected = &fixture["expected"];
+
+    let (analysis, _) = run(request("analyze", &[source]));
+    assert!(!analysis.ok);
+    let diagnostics = serde_json::to_value(&analysis.diagnostics).unwrap();
+    assert_eq!(diagnostics[0]["category"], expected["diagnostic_category"]);
+    assert_eq!(diagnostics[0]["code"], expected["diagnostic_code"]);
+    assert_eq!(diagnostics[0]["message"], expected["diagnostic_message"]);
+
+    let after = source.replace("x=1", "x=2");
+    let (diff, _) = run(request("diff2", &[source, &after]));
+    assert!(!diff.ok);
+    let diagnostics = serde_json::to_value(&diff.diagnostics).unwrap();
+    assert_eq!(diagnostics[0]["category"], expected["diagnostic_category"]);
+    assert_eq!(diagnostics[0]["code"], expected["diagnostic_code"]);
+
+    let ours = source.replace("x=1", "x=2");
+    let theirs = source.replace("y=1", "y=2");
+    let (merge, _) = run(request("merge3", &[source, &ours, &theirs]));
+    assert!(!merge.ok);
+    let diagnostics = serde_json::to_value(&merge.diagnostics).unwrap();
+    assert_eq!(diagnostics[0]["category"], expected["diagnostic_category"]);
+    assert_eq!(diagnostics[0]["code"], expected["diagnostic_code"]);
+}
+
+#[test]
 fn exported_bash_profile_honors_explicit_selection_and_cancellation() {
     register_language_pack_parser("bash.facade".into(), "bash".into()).unwrap();
     let limits = ParseLimits {
