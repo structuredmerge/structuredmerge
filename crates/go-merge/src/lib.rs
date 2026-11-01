@@ -452,13 +452,14 @@ pub(crate) fn project_go_owners(
             }
             "type_declaration" | "const_declaration" => {
                 let is_type = node.kind == "type_declaration";
-                let spec_kind = if is_type { "type_spec" } else { "const_spec" };
+                let spec_kinds =
+                    if is_type { vec!["type_spec", "type_alias"] } else { vec!["const_spec"] };
                 let name_kind = if is_type { "type_identifier" } else { "identifier" };
                 let label = if is_type { "type" } else { "const" };
                 let member_groups = index
                     .descendants(node)
                     .into_iter()
-                    .filter(|child| child.kind == spec_kind)
+                    .filter(|child| spec_kinds.contains(&child.kind.as_str()))
                     .map(|spec| {
                         let mut names = index
                             .children(spec)
