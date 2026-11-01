@@ -574,6 +574,24 @@ fn directional_rust_preserves_current_bytes_comments_and_module_scope() {
 }
 
 #[test]
+fn directional_rust_matches_shared_comment_and_gap_ownership_fixture() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_merge2_directional_comment_gap_ownership.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let (result, _) = run(request(
+        "merge2",
+        &[input["incoming"].as_str().unwrap(), input["current"].as_str().unwrap()],
+    ));
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+    assert_eq!(result.verification.directional_roles_preserved, Some(true));
+    assert_eq!(result.verification.output_reparsed, Some(true));
+}
+
+#[test]
 fn directional_rust_rejects_unproven_dependencies_and_ambiguous_placement() {
     for (incoming, current) in [
         ("use std::io;\nfn g() {}\n", "use std::fmt;\nfn f() {}\n"),
