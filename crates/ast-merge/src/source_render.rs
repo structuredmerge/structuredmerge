@@ -1935,9 +1935,10 @@ pub fn source_render_plan_from_rehome_selections(
 
 /// Combine an ordered owner-line selection with boundary-anchored fragments
 /// promoted by structural removal plans. A trailing boundary targets the
-/// following owner's leading region; a leading boundary targets the preceding
-/// owner's trailing region. Existing attachment selections for that boundary
-/// remain adjacent to the owner, and duplicate source selections fail closed.
+/// following owner leading region; a leading boundary targets the preceding
+/// owner trailing region. Existing attachment selections for that boundary
+/// remain adjacent to the owner. Rehome fragments already selected by the
+/// owner plan are emitted once; duplicate new rehome selections fail closed.
 pub fn source_render_plan_from_ordered_selections_with_rehomes(
     sources: HashMap<SourceRevision, String>,
     dispositions: HashMap<SourceRevision, Vec<crate::SourceLineDisposition>>,
@@ -1948,10 +1949,11 @@ pub fn source_render_plan_from_ordered_selections_with_rehomes(
     let owner_plan =
         source_render_plan_from_line_selections(sources.clone(), dispositions.clone(), selections)?;
     let mut insertions = HashMap::<usize, Vec<RenderFragment>>::new();
-    let mut selected_keys = selections
+    let owner_selected_keys = selections
         .iter()
         .map(|selection| selection.selection_key.clone())
         .collect::<std::collections::HashSet<_>>();
+    let mut selected_keys = owner_selected_keys.clone();
 
     for rehome in rehomes {
         if rehome.fragments.is_empty() {
@@ -2018,11 +2020,15 @@ pub fn source_render_plan_from_ordered_selections_with_rehomes(
             if let RenderFragment::Source(source) = &fragment
                 && let Some(key) =
                     source.metadata.get("selection_key").and_then(|value| value.as_str())
-                && !selected_keys.insert(key.to_string())
             {
-                return Err(SourceRenderError::new(format!(
-                    "rehome duplicates selected source region {key}"
-                )));
+                if owner_selected_keys.contains(key) {
+                    continue;
+                }
+                if !selected_keys.insert(key.to_string()) {
+                    return Err(SourceRenderError::new(format!(
+                        "rehome duplicates selected source region {key}"
+                    )));
+                }
             }
             insertions.entry(insertion_index).or_default().push(fragment);
         }
