@@ -533,13 +533,14 @@ fn render_line_selected_output(
         .zip(analyses)
         .map(|(revision, analysis)| (*revision, analysis.comments.augmentation.regions.clone()))
         .collect::<HashMap<_, _>>();
-    let selections = ast_merge::source_line_selections_for_owner_revisions_with_deletions(
-        baseline_revision,
-        &dispositions,
-        &owner_revisions,
-        &deleted_owner_ids,
-    )
-    .map_err(|error| error.to_string())?;
+    let selections =
+        ast_merge::source_line_selections_for_owner_revisions_preserving_addition_gaps(
+            baseline_revision,
+            &dispositions,
+            &owner_revisions,
+            &deleted_owner_ids,
+        )
+        .map_err(|error| error.to_string())?;
     let plan = ast_merge::source_render_plan_from_ordered_selections_with_rehomes(
         sources,
         dispositions,

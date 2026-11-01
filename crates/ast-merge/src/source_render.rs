@@ -511,6 +511,229 @@ pub fn source_line_selections_for_owner_revisions_with_deletions(
     Ok(selections)
 }
 
+/// Select owner revisions, then place one-sided additions at their original
+/// source gaps. This is an explicit merge3 policy; directional and classic
+/// callers retain the conservative append behavior.
+pub fn source_line_selections_for_owner_revisions_preserving_addition_gaps(
+    baseline_revision: SourceRevision,
+    dispositions: &HashMap<SourceRevision, Vec<crate::SourceLineDisposition>>,
+    owner_revisions: &HashMap<String, SourceRevision>,
+    deleted_owner_ids: &HashSet<String>,
+) -> Result<Vec<SourceLineSelection>, SourceRenderError> {
+    let selections = source_line_selections_for_owner_revisions_with_deletions(
+        baseline_revision,
+        dispositions,
+        owner_revisions,
+        deleted_owner_ids,
+    )?;
+    position_additions_in_their_source_gaps(
+        baseline_revision,
+        dispositions,
+        owner_revisions,
+        deleted_owner_ids,
+        selections,
+    )
+}
+
+/// Place additions from one tip between the same selected baseline anchors they
+/// occupy in that tip. This replaces the baseline's empty gap with the full
+/// source gap from the addition's revision, including both controlled blank
+/// runs, attached comments, and added owners.
+fn position_additions_in_their_source_gaps(
+    baseline_revision: SourceRevision,
+    dispositions: &HashMap<SourceRevision, Vec<crate::SourceLineDisposition>>,
+    owner_revisions: &HashMap<String, SourceRevision>,
+    deleted_owner_ids: &HashSet<String>,
+    mut selections: Vec<SourceLineSelection>,
+) -> Result<Vec<SourceLineSelection>, SourceRenderError> {
+    let baseline = dispositions.get(&baseline_revision).ok_or_else(|| {
+        SourceRenderError::new(format!("baseline dispositions omit {baseline_revision:?}"))
+    })?;
+    let selected_baseline_owners = baseline
+        .iter()
+        .filter(|record| record.kind == "structural_owner")
+        .filter_map(|record| record.owner_id.as_deref())
+        .filter(|owner_id| {
+            owner_revisions.contains_key(*owner_id) && !deleted_owner_ids.contains(*owner_id)
+        })
+        .collect::<HashSet<_>>();
+    let mut additions_by_gap =
+        HashMap::<(Option<String>, Option<String>), HashMap<SourceRevision, Vec<String>>>::new();
+
+    for (owner_id, revision) in owner_revisions {
+        if *revision == baseline_revision || selected_baseline_owners.contains(owner_id.as_str()) {
+            continue;
+        }
+        let Some(records) = dispositions.get(revision) else {
+            continue;
+        };
+        let Some(owner_index) = records.iter().position(|record| {
+            record.kind == "structural_owner" && record.owner_id.as_deref() == Some(owner_id)
+        }) else {
+            continue;
+        };
+        let previous = records[..owner_index]
+            .iter()
+            .rev()
+            .find(|record| {
+                record.kind == "structural_owner"
+                    && record
+                        .owner_id
+                        .as_deref()
+                        .is_some_and(|id| selected_baseline_owners.contains(id))
+            })
+            .and_then(|record| record.owner_id.clone());
+        let following = records[owner_index + 1..]
+            .iter()
+            .find(|record| {
+                record.kind == "structural_owner"
+                    && record
+                        .owner_id
+                        .as_deref()
+                        .is_some_and(|id| selected_baseline_owners.contains(id))
+            })
+            .and_then(|record| record.owner_id.clone());
+        additions_by_gap
+            .entry((previous, following))
+            .or_default()
+            .entry(*revision)
+            .or_default()
+            .push(owner_id.clone());
+    }
+
+    let mut positioned = Vec::<(String, SourceRevision, Vec<SourceLineSelection>)>::new();
+    for ((previous, following), revisions) in additions_by_gap {
+        // Only reorder additions in a fully bounded interior gap. Appends,
+        // preambles, and same-gap additions retain their existing policy until
+        // their source boundaries and relative order are proven.
+        if previous.is_none() || following.is_none() || revisions.len() != 1 {
+            continue;
+        }
+        let (revision, mut added_owner_ids) = revisions.into_iter().next().unwrap();
+        let Some(records) = dispositions.get(&revision) else {
+            continue;
+        };
+        added_owner_ids.sort_by_key(|owner_id| {
+            records
+                .iter()
+                .find(|record| {
+                    record.kind == "structural_owner"
+                        && record.owner_id.as_deref() == Some(owner_id)
+                })
+                .map_or(usize::MAX, |record| record.line_number)
+        });
+        let previous_end = previous
+            .as_deref()
+            .and_then(|owner_id| {
+                records
+                    .iter()
+                    .filter(|record| record.owner_id.as_deref() == Some(owner_id))
+                    .map(|record| record.line_number)
+                    .max()
+            })
+            .unwrap_or(0);
+        let following_start = following
+            .as_deref()
+            .and_then(|owner_id| {
+                records
+                    .iter()
+                    .filter(|record| record.owner_id.as_deref() == Some(owner_id))
+                    .map(|record| record.line_number)
+                    .min()
+            })
+            .unwrap_or_else(|| records.last().map_or(0, |record| record.line_number) + 1);
+        if following_start <= previous_end + 1 {
+            continue;
+        }
+        let start_line = previous_end + 1;
+        let end_line = following_start - 1;
+        let added_ids = added_owner_ids.iter().cloned().collect::<HashSet<_>>();
+        let chunk_records = records
+            .iter()
+            .filter(|record| (start_line..=end_line).contains(&record.line_number))
+            .collect::<Vec<_>>();
+        if chunk_records.iter().any(|record| {
+            record.kind == "structural_owner"
+                && !record.owner_id.as_deref().is_some_and(|id| added_ids.contains(id))
+        }) || chunk_records.iter().any(|record| {
+            !matches!(record.kind.as_str(), "structural_owner" | "comment_owner" | "layout_gap")
+        }) {
+            continue;
+        }
+
+        let mut chunk_keys = HashSet::new();
+        let mut chunk = Vec::new();
+        for record in chunk_records {
+            if chunk_keys.insert(record.selection_key.clone()) {
+                chunk.push(SourceLineSelection {
+                    selection_key: record.selection_key.clone(),
+                    revision,
+                });
+            }
+        }
+        if chunk.is_empty() {
+            continue;
+        }
+
+        let mut replaced_keys = baseline
+            .iter()
+            .filter(|record| {
+                record.kind == "layout_gap"
+                    && record.before_owner_id == previous
+                    && record.after_owner_id == following
+            })
+            .map(|record| (baseline_revision, record.selection_key.clone()))
+            .collect::<HashSet<_>>();
+        replaced_keys.extend(
+            records
+                .iter()
+                .filter(|record| (start_line..=end_line).contains(&record.line_number))
+                .map(|record| (revision, record.selection_key.clone())),
+        );
+        selections.retain(|selection| {
+            !replaced_keys.contains(&(selection.revision, selection.selection_key.clone()))
+        });
+
+        let following_id = following.expect("bounded interior gap has a following owner");
+        let anchor = baseline
+            .iter()
+            .find(|record| {
+                record.kind == "structural_owner"
+                    && record.owner_id.as_deref() == Some(following_id.as_str())
+            })
+            .ok_or_else(|| SourceRenderError::new("selected gap anchor has no baseline owner"))?;
+        let anchor_revision =
+            owner_revisions.get(&following_id).copied().unwrap_or(baseline_revision);
+        if !selections.iter().any(|selection| {
+            selection.selection_key == anchor.selection_key && selection.revision == anchor_revision
+        }) {
+            continue;
+        }
+        positioned.push((anchor.selection_key.clone(), anchor_revision, chunk));
+    }
+
+    let mut positioned = positioned
+        .into_iter()
+        .filter_map(|(anchor_key, anchor_revision, chunk)| {
+            selections
+                .iter()
+                .position(|selection| {
+                    selection.selection_key == anchor_key && selection.revision == anchor_revision
+                })
+                .map(|index| (index, chunk))
+        })
+        .collect::<Vec<_>>();
+    positioned.sort_by_key(|(index, _)| *index);
+    let mut offset = 0usize;
+    for (index, chunk) in positioned {
+        let index = (index + offset).min(selections.len());
+        let count = chunk.len();
+        selections.splice(index..index, chunk);
+        offset += count;
+    }
+    Ok(selections)
+}
+
 /// Convert removed-owner preservation line numbers into ordered
 /// selections of complete semantic regions from the revision they came from.
 /// A caller supplies the order after applying its removal/rehome boundary plan.
