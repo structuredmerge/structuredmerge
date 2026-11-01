@@ -1121,3 +1121,28 @@ fn rust_syn_conflict_review_uses_native_owner_ranges() {
     );
     assert_eq!(result.render_report.get("strategy"), Some(&json!("localized-conflict-review")));
 }
+
+#[test]
+fn rust_syn_parse_diagnostic_preserves_utf8_byte_span_through_core() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_syn_parse_diagnostic_span.json"
+    ))
+    .unwrap();
+    let source = fixture["input"]["source"].as_str().unwrap();
+    let mut operation = request("analyze", &[source]);
+    operation.parser_selection.backend = Some("rust.syn.core-test".into());
+    let (result, _) = run(operation);
+
+    assert!(!result.ok);
+    let DiagnosticRecord::Canonical(diagnostic) = &result.diagnostics[0] else {
+        panic!("syn parse errors should retain the canonical diagnostic");
+    };
+    assert_eq!(diagnostic.category, PortableCategory::ParseError);
+    let span = &diagnostic.source_refs[0].span.as_ref().unwrap().range;
+    assert_eq!(span.start_byte, fixture["expected"]["diagnostic_byte_range"][0]);
+    assert_eq!(span.end_byte, fixture["expected"]["diagnostic_byte_range"][1]);
+    assert_eq!(
+        &source[span.start_byte..span.end_byte],
+        fixture["expected"]["diagnostic_text"].as_str().unwrap()
+    );
+}
