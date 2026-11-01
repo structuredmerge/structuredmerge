@@ -407,6 +407,8 @@
 
 - Compose Bash parser ownership, comments, layout gaps, and ordered source-line selections through the shared ast-merge renderer; retain the existing verified output until provider membership-change selections are supported.
 
+- Convert removed-owner preservation lines into ordered semantic source selections for exact-byte rendering.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

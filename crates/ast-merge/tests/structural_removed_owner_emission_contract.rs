@@ -1,4 +1,9 @@
-use ast_merge::{CommentLine, CommentRegion, LayoutGap, preserve_removed_owner_lines};
+use ast_merge::{
+    CommentLine, CommentRegion, LayoutGap, SourceLineCommentRegion, SourceLineLayoutGap,
+    SourceLineOwner, SourceRevision, preserve_removed_owner_lines, render_source_plan,
+    source_line_dispositions, source_line_selections_for_preserved_lines,
+    source_render_plan_from_line_selections,
+};
 use serde_json::{Value, json};
 use std::{collections::HashMap, fs, path::PathBuf};
 
@@ -78,5 +83,123 @@ fn shared_removed_owner_emission_fixture_matches_ruby() {
             "{}",
             case["name"].as_str().unwrap()
         );
+
+        let source_lines = strings("source");
+        let source = format!("{}\n", source_lines.join("\n"));
+        let removed_line = case["removed_owner_line_number"].as_u64().unwrap() as usize;
+        let retained_line = case["retained_owner_line_number"].as_u64().unwrap() as usize;
+        let owners = vec![
+            SourceLineOwner {
+                id: case["removed_owner_id"].as_str().unwrap().into(),
+                start_line: removed_line,
+                end_line: removed_line,
+            },
+            SourceLineOwner {
+                id: "later".into(),
+                start_line: retained_line,
+                end_line: retained_line,
+            },
+        ];
+        let leading_comment_lines = numbers("leading_segment_line_numbers")
+            .into_iter()
+            .filter(|line| source_lines[*line - 1].starts_with('#'))
+            .collect::<Vec<_>>();
+        let inline_lines = numbers("inline_line_numbers");
+        let trailing_numbers = region_data["line_numbers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|line| line.as_u64().unwrap() as usize)
+            .collect::<Vec<_>>();
+        let comment_regions = vec![
+            SourceLineCommentRegion {
+                id: "leading".into(),
+                selection_key: "comment:removed:leading".into(),
+                owner_id: Some("removed".into()),
+                kind: "leading".into(),
+                start_line: *leading_comment_lines.first().unwrap(),
+                end_line: *leading_comment_lines.last().unwrap(),
+            },
+            SourceLineCommentRegion {
+                id: "inline".into(),
+                selection_key: "comment:removed:inline".into(),
+                owner_id: Some("removed".into()),
+                kind: "inline".into(),
+                start_line: *inline_lines.first().unwrap(),
+                end_line: *inline_lines.last().unwrap(),
+            },
+            SourceLineCommentRegion {
+                id: "trailing".into(),
+                selection_key: "comment:removed:trailing".into(),
+                owner_id: Some("removed".into()),
+                kind: "trailing".into(),
+                start_line: *trailing_numbers.first().unwrap(),
+                end_line: *trailing_numbers.last().unwrap(),
+            },
+        ];
+        let leading_gap_lines = numbers("leading_segment_line_numbers")
+            .into_iter()
+            .filter(|line| source_lines[*line - 1].trim().is_empty())
+            .collect::<Vec<_>>();
+        let mut layout_gaps = vec![SourceLineLayoutGap {
+            id: "leading-gap".into(),
+            selection_key: "gap:preamble:root:removed".into(),
+            kind: "preamble".into(),
+            start_line: *leading_gap_lines.first().unwrap(),
+            end_line: *leading_gap_lines.last().unwrap(),
+            before_owner_id: None,
+            after_owner_id: Some("removed".into()),
+            controller_side: "after".into(),
+            controller_owner_id: Some("removed".into()),
+        }];
+        let trailing_gap = &case["trailing_gap"];
+        let before_owner_id = trailing_gap["before_owner_id"].as_str().map(str::to_owned);
+        let after_owner_id = trailing_gap["after_owner_id"].as_str().map(str::to_owned);
+        let controller_side = trailing_gap["controller_side"].as_str().unwrap();
+        let controller_owner_id = match controller_side {
+            "before" => before_owner_id.clone(),
+            "after" => after_owner_id.clone(),
+            _ => None,
+        };
+        let before = before_owner_id.as_deref().unwrap_or("root");
+        let after = after_owner_id.as_deref().unwrap_or("root");
+        let gap_kind = trailing_gap["kind"].as_str().unwrap();
+        let trailing_gap_line = trailing_gap["start_line"].as_u64().unwrap() as usize;
+        layout_gaps.push(SourceLineLayoutGap {
+            id: "trailing-gap".into(),
+            selection_key: format!("gap:{gap_kind}:{before}:{after}"),
+            kind: gap_kind.into(),
+            start_line: trailing_gap_line,
+            end_line: trailing_gap["end_line"].as_u64().unwrap() as usize,
+            before_owner_id,
+            after_owner_id,
+            controller_side: controller_side.into(),
+            controller_owner_id,
+        });
+        let dispositions =
+            source_line_dispositions(&source, &owners, &comment_regions, &layout_gaps)
+                .expect("removed-owner fixture assigns each preserved line a semantic region");
+        let selections = source_line_selections_for_preserved_lines(
+            SourceRevision::Ours,
+            &dispositions,
+            &actual.line_numbers,
+        )
+        .expect("Ruby-compatible preservation lines select complete source regions");
+        let plan = source_render_plan_from_line_selections(
+            HashMap::from([(SourceRevision::Ours, source)]),
+            HashMap::from([(SourceRevision::Ours, dispositions)]),
+            &selections,
+        )
+        .expect("removed-owner selections form a source render plan");
+        let rendered = render_source_plan(&plan).expect("preserved lines render exactly");
+        let expected = case["expected"]["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|line| line.as_str().unwrap())
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        assert_eq!(rendered.content, expected, "{}", case["name"].as_str().unwrap());
     }
 }

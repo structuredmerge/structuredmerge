@@ -398,6 +398,55 @@ pub fn source_line_selections_for_owner_revisions(
     Ok(selections)
 }
 
+/// Convert Ruby-compatible removed-owner preservation line numbers into ordered
+/// selections of complete semantic regions from the revision they came from.
+/// A caller supplies the order after applying its removal/rehome boundary plan.
+pub fn source_line_selections_for_preserved_lines(
+    revision: SourceRevision,
+    dispositions: &[crate::SourceLineDisposition],
+    line_numbers: &[usize],
+) -> Result<Vec<SourceLineSelection>, SourceRenderError> {
+    let mut requested = std::collections::HashSet::new();
+    let mut previous = 0;
+    let mut selections = Vec::new();
+    let mut selected_keys = std::collections::HashSet::new();
+    for line_number in line_numbers {
+        if *line_number <= previous || !requested.insert(*line_number) {
+            return Err(SourceRenderError::new(
+                "preserved source line numbers must be strictly increasing",
+            ));
+        }
+        previous = *line_number;
+        let record = dispositions
+            .get(line_number - 1)
+            .filter(|record| record.line_number == *line_number)
+            .ok_or_else(|| {
+                SourceRenderError::new(format!(
+                    "preserved source line {line_number} has no line disposition"
+                ))
+            })?;
+        if selected_keys.insert(record.selection_key.as_str()) {
+            selections.push(SourceLineSelection {
+                selection_key: record.selection_key.clone(),
+                revision,
+            });
+        }
+    }
+    for selection in &selections {
+        for record in
+            dispositions.iter().filter(|record| record.selection_key == selection.selection_key)
+        {
+            if !requested.contains(&record.line_number) {
+                return Err(SourceRenderError::new(format!(
+                    "preserved selection {} omits line {} from its ownership region",
+                    selection.selection_key, record.line_number
+                )));
+            }
+        }
+    }
+    Ok(selections)
+}
+
 /// Build an exact-byte render plan from ordered semantic line selections.
 /// Each selection names one contiguous ownership region in one source revision.
 pub fn source_render_plan_from_line_selections(
