@@ -315,6 +315,98 @@ pub struct SourceLineSelection {
     pub revision: SourceRevision,
 }
 
+/// Reorder complete owner/comment source selections using an explicit owner
+/// order. Layout gaps, root regions, and unmanaged lines need a separate shared
+/// placement decision and therefore make this operation inapplicable.
+pub fn source_line_selections_for_owner_order(
+    selections: Vec<SourceLineSelection>,
+    dispositions: &HashMap<SourceRevision, Vec<crate::SourceLineDisposition>>,
+    owner_revisions: &HashMap<String, SourceRevision>,
+    owner_order: &[String],
+) -> Result<Option<Vec<SourceLineSelection>>, SourceRenderError> {
+    if dispositions
+        .values()
+        .flatten()
+        .any(|record| !matches!(record.kind.as_str(), "structural_owner" | "comment_owner"))
+    {
+        return Ok(None);
+    }
+    let ordered_owners = owner_order.iter().map(String::as_str).collect::<HashSet<_>>();
+    if ordered_owners.len() != owner_order.len()
+        || ordered_owners != owner_revisions.keys().map(String::as_str).collect::<HashSet<_>>()
+    {
+        return Ok(None);
+    }
+    let mut selection_owners = HashMap::<&str, &str>::new();
+    for record in dispositions.values().flatten() {
+        let Some(owner_id) = record.owner_id.as_deref() else {
+            return Err(SourceRenderError::new(format!(
+                "{} line {} has no owner for explicit owner ordering",
+                record.kind, record.line_number
+            )));
+        };
+        if selection_owners
+            .insert(record.selection_key.as_str(), owner_id)
+            .is_some_and(|previous| previous != owner_id)
+        {
+            return Err(SourceRenderError::new(format!(
+                "selection {} belongs to multiple owners",
+                record.selection_key
+            )));
+        }
+    }
+    let owner_positions = owner_order
+        .iter()
+        .enumerate()
+        .map(|(index, id)| (id.as_str(), index))
+        .collect::<HashMap<_, _>>();
+    if selections.iter().any(|selection| {
+        selection_owners
+            .get(selection.selection_key.as_str())
+            .and_then(|owner| owner_positions.get(owner))
+            .is_none()
+    }) {
+        return Ok(None);
+    }
+    let selected_keys = selections
+        .iter()
+        .map(|selection| (selection.selection_key.as_str(), selection.revision))
+        .collect::<HashSet<_>>();
+    if selected_keys.len() != selections.len() {
+        return Err(SourceRenderError::new("owner ordering received duplicate line selections"));
+    }
+    for (owner_id, revision) in owner_revisions {
+        let expected_keys = dispositions
+            .get(revision)
+            .into_iter()
+            .flatten()
+            .filter(|record| record.owner_id.as_deref() == Some(owner_id.as_str()))
+            .map(|record| record.selection_key.as_str())
+            .collect::<HashSet<_>>();
+        let actual_keys = selections
+            .iter()
+            .filter(|selection| selection.revision == *revision)
+            .filter(|selection| {
+                selection_owners.get(selection.selection_key.as_str()).copied()
+                    == Some(owner_id.as_str())
+            })
+            .map(|selection| selection.selection_key.as_str())
+            .collect::<HashSet<_>>();
+        if expected_keys.is_empty() || expected_keys != actual_keys {
+            return Ok(None);
+        }
+    }
+    let mut reordered = selections;
+    reordered.sort_by_key(|selection| {
+        selection_owners
+            .get(selection.selection_key.as_str())
+            .and_then(|owner| owner_positions.get(owner))
+            .copied()
+            .unwrap_or(usize::MAX)
+    });
+    Ok(Some(reordered))
+}
+
 /// Select source regions in baseline line order, taking structural and attached
 /// comment regions from their selected owner revision and each layout gap from
 /// its controller owner revision. Root and unmanaged regions stay with baseline.
@@ -2769,5 +2861,62 @@ mod tests {
 
         let outside = apply_source_edits("abc", &[SourceEdit::replace(0, 4, "x")]).unwrap_err();
         assert!(outside.message().contains("source length 3"));
+    }
+
+    #[test]
+    fn owner_order_selector_reorders_complete_attached_source_lines() {
+        let record = |line_number, line: &str, kind: &str, key: &str, owner: &str| {
+            crate::SourceLineDisposition {
+                line_number,
+                line: line.to_string(),
+                kind: kind.to_string(),
+                selection_key: key.to_string(),
+                owner_id: Some(owner.to_string()),
+                comment_region_ids: vec![],
+                comment_kind: None,
+                gap_id: None,
+                controller_owner_id: None,
+                before_owner_id: None,
+                after_owner_id: None,
+                root_region_kind: None,
+            }
+        };
+        let base = vec![
+            record(1, "// a\n", "comment_owner", "comment:a", "a"),
+            record(2, "fn a() {}\n", "structural_owner", "owner:a", "a"),
+            record(3, "// b\n", "comment_owner", "comment:b", "b"),
+            record(4, "fn b() {}\n", "structural_owner", "owner:b", "b"),
+        ];
+        let ours = base.clone();
+        let dispositions =
+            HashMap::from([(SourceRevision::Base, base), (SourceRevision::Ours, ours)]);
+        let owner_revisions = HashMap::from([
+            ("a".to_string(), SourceRevision::Base),
+            ("b".to_string(), SourceRevision::Ours),
+        ]);
+        let selections = vec![
+            SourceLineSelection {
+                selection_key: "comment:a".into(),
+                revision: SourceRevision::Base,
+            },
+            SourceLineSelection { selection_key: "owner:a".into(), revision: SourceRevision::Base },
+            SourceLineSelection {
+                selection_key: "comment:b".into(),
+                revision: SourceRevision::Ours,
+            },
+            SourceLineSelection { selection_key: "owner:b".into(), revision: SourceRevision::Ours },
+        ];
+        let reordered = source_line_selections_for_owner_order(
+            selections,
+            &dispositions,
+            &owner_revisions,
+            &["b".into(), "a".into()],
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            reordered.iter().map(|selection| selection.selection_key.as_str()).collect::<Vec<_>>(),
+            ["comment:b", "owner:b", "comment:a", "owner:a"]
+        );
     }
 }

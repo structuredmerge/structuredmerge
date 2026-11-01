@@ -697,63 +697,17 @@ fn render_line_selected_output(
         )
         .map_err(|error| error.to_string())?;
     if let Some(owner_order) = merged_owner_order {
-        let records = dispositions.get(&baseline_revision).ok_or_else(|| {
-            "baseline dispositions are required to order selected Rust owners".to_string()
-        })?;
-        if dispositions
-            .values()
-            .flatten()
-            .any(|record| !matches!(record.kind.as_str(), "structural_owner" | "comment_owner"))
-        {
+        let Some(ordered) = ast_merge::source_line_selections_for_owner_order(
+            selections,
+            &dispositions,
+            &owner_revisions,
+            owner_order,
+        )
+        .map_err(|error| error.to_string())?
+        else {
             return Ok(None);
-        }
-        let owner_positions = owner_order
-            .iter()
-            .enumerate()
-            .map(|(index, id)| (id.as_str(), index))
-            .collect::<HashMap<_, _>>();
-        let selection_owners = records
-            .iter()
-            .map(|record| (record.selection_key.as_str(), record.owner_id.as_deref()))
-            .collect::<HashMap<_, _>>();
-        if selections.iter().any(|selection| {
-            selection_owners
-                .get(selection.selection_key.as_str())
-                .and_then(|owner| *owner)
-                .and_then(|owner| owner_positions.get(owner))
-                .is_none()
-        }) {
-            return Ok(None);
-        }
-        for (owner_id, revision) in &owner_revisions {
-            let expected_keys = dispositions
-                .get(revision)
-                .into_iter()
-                .flatten()
-                .filter(|record| record.owner_id.as_deref() == Some(owner_id.as_str()))
-                .map(|record| record.selection_key.as_str())
-                .collect::<HashSet<_>>();
-            let selected_keys = selections
-                .iter()
-                .filter(|selection| selection.revision == *revision)
-                .filter(|selection| {
-                    selection_owners.get(selection.selection_key.as_str()).and_then(|owner| *owner)
-                        == Some(owner_id.as_str())
-                })
-                .map(|selection| selection.selection_key.as_str())
-                .collect::<HashSet<_>>();
-            if expected_keys.is_empty() || expected_keys != selected_keys {
-                return Ok(None);
-            }
-        }
-        selections.sort_by_key(|selection| {
-            selection_owners
-                .get(selection.selection_key.as_str())
-                .and_then(|owner| *owner)
-                .and_then(|owner| owner_positions.get(owner))
-                .copied()
-                .unwrap_or(usize::MAX)
-        });
+        };
+        selections = ordered;
     }
     let plan = ast_merge::source_render_plan_from_ordered_selections_with_rehomes(
         sources,
