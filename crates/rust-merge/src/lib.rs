@@ -35,6 +35,22 @@ const RUST_SOURCE_PRESERVING_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
     NamedOwnerKind { node_kind: "union_item", path_kind: "union" },
     NamedOwnerKind { node_kind: "use_declaration", path_kind: "use" },
 ];
+const RUST_SYN_SOURCE_PRESERVING_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
+    NamedOwnerKind { node_kind: "const_item", path_kind: "const" },
+    NamedOwnerKind { node_kind: "enum_item", path_kind: "enum" },
+    NamedOwnerKind { node_kind: "extern_crate_declaration", path_kind: "extern_crate" },
+    NamedOwnerKind { node_kind: "function_item", path_kind: "function" },
+    NamedOwnerKind { node_kind: "impl_item", path_kind: "impl" },
+    NamedOwnerKind { node_kind: "macro_definition", path_kind: "macro" },
+    NamedOwnerKind { node_kind: "macro_invocation", path_kind: "macro_invocation" },
+    NamedOwnerKind { node_kind: "mod_item", path_kind: "mod" },
+    NamedOwnerKind { node_kind: "static_item", path_kind: "static" },
+    NamedOwnerKind { node_kind: "struct_item", path_kind: "struct" },
+    NamedOwnerKind { node_kind: "trait_item", path_kind: "trait" },
+    NamedOwnerKind { node_kind: "type_item", path_kind: "type" },
+    NamedOwnerKind { node_kind: "union_item", path_kind: "union" },
+    NamedOwnerKind { node_kind: "use_declaration", path_kind: "use" },
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -443,6 +459,11 @@ fn parse_source_preserving_rust_native_with_treesitter_comments(
             Item::Enum(item) => format!("/enum:{}", item.ident),
             Item::ExternCrate(item) => format!("/extern_crate:{}", item.ident),
             Item::Fn(item) => format!("/function:{}", item.sig.ident),
+            Item::Impl(item) => format!(
+                "/impl:{}",
+                RustSynParserProvider::impl_owner_identity(item)
+                    .ok_or_else(|| "unsupported native Rust impl target type".to_string())?
+            ),
             Item::Mod(item) => format!("/mod:{}", item.ident),
             Item::Static(item) => format!("/static:{}", item.ident),
             Item::Struct(item) => format!("/struct:{}", item.ident),
@@ -551,9 +572,19 @@ fn parse_rust_with_syn_provider(source: &str) -> Result<tree_haver::service::Par
 }
 
 fn owner_policy() -> NamedOwnerProjectionPolicy<'static> {
+    owner_policy_with_kinds(RUST_SOURCE_PRESERVING_OWNER_KINDS)
+}
+
+fn owner_policy_for_syn() -> NamedOwnerProjectionPolicy<'static> {
+    owner_policy_with_kinds(RUST_SYN_SOURCE_PRESERVING_OWNER_KINDS)
+}
+
+fn owner_policy_with_kinds(
+    owner_kinds: &'static [NamedOwnerKind<'static>],
+) -> NamedOwnerProjectionPolicy<'static> {
     NamedOwnerProjectionPolicy {
         family: "Rust",
-        owner_kinds: RUST_SOURCE_PRESERVING_OWNER_KINDS,
+        owner_kinds,
         ignored_kinds: &["inner_attribute_item", "shebang"],
         wrapper_kinds: &[],
         prefix_node_kinds: &["attribute_item"],
@@ -578,6 +609,7 @@ fn supported_analysis_declaration(kind: &str) -> bool {
             | "enum_item"
             | "extern_crate_declaration"
             | "function_item"
+            | "impl_item"
             | "macro_definition"
             | "macro_invocation"
             | "mod_item"
@@ -595,6 +627,7 @@ fn rust_declaration_kind(node_kind: &str) -> &'static str {
         "enum_item" => "enum",
         "extern_crate_declaration" => "extern_crate",
         "function_item" => "function",
+        "impl_item" => "impl",
         "macro_definition" => "macro",
         "macro_invocation" => "macro_invocation",
         "mod_item" => "module",
@@ -927,6 +960,14 @@ fn parse_rust_native(source: &str) -> ParseResult<RustAnalysis> {
                 item.sig.ident.to_string(),
                 "function",
             )),
+            Item::Impl(item) => match RustSynParserProvider::impl_owner_identity(&item) {
+                Some(identity) => {
+                    declarations.push(native_declaration(source, item.span(), identity, "impl"))
+                }
+                None => {
+                    return unsupported_feature_result("unsupported native Rust impl target type");
+                }
+            },
             Item::Mod(item) => declarations.push(native_declaration(
                 source,
                 item.span(),

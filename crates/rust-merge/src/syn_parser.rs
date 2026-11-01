@@ -50,6 +50,28 @@ impl RustSynParserProvider {
         }
     }
 
+    pub(crate) fn impl_owner_identity(item: &syn::ItemImpl) -> Option<String> {
+        let target = impl_type_path(&item.self_ty)?;
+        let trait_path = item
+            .trait_
+            .as_ref()
+            .map(|(_, path, _)| {
+                path.segments
+                    .iter()
+                    .map(|segment| segment.ident.to_string())
+                    .collect::<Vec<_>>()
+                    .join("::")
+            })
+            .unwrap_or_else(|| "<inherent>".to_string());
+        let polarity = if item.trait_.as_ref().is_some_and(|(negative, _, _)| negative.is_some()) {
+            "negative"
+        } else {
+            "positive"
+        };
+        let generic_arity = item.generics.params.len();
+        Some(format!("{trait_path}|{target}|{polarity}|{generic_arity}"))
+    }
+
     fn parse(
         &self,
         request: ParseRequest,
@@ -135,7 +157,8 @@ impl RustSynParserProvider {
             let span = item.span().byte_range();
             validate_range(source, &span)?;
             let item_id = format!("syn:item:{index}");
-            let (owner_kind, native_type, name) = item_facts(item, source, span.clone());
+            let (owner_kind, native_type, name, semantic_identity) =
+                item_facts(item, source, span.clone());
             let mut item_child_edges = Vec::new();
             let mut item_descendants = Vec::new();
             if let Some((_name, name_range, name_kind)) = name {
@@ -164,7 +187,10 @@ impl RustSynParserProvider {
                 source_span(source, span.clone()),
                 Some(root_id.clone()),
                 item_child_edges,
-                vec![],
+                semantic_identity
+                    .map(|identity| format!("owner_identity:{identity}"))
+                    .into_iter()
+                    .collect(),
             );
             root_children.push((span.start, 1, item_id.clone()));
             child_nodes.push((item_id, item_node));
@@ -310,7 +336,7 @@ fn item_facts(
     item: &Item,
     source: &str,
     item_range: Range<usize>,
-) -> (&'static str, &'static str, Option<(String, Range<usize>, &'static str)>) {
+) -> (&'static str, &'static str, Option<(String, Range<usize>, &'static str)>, Option<String>) {
     let ident = match item {
         Item::Const(item) => Some(&item.ident),
         Item::Enum(item) => Some(&item.ident),
@@ -331,6 +357,9 @@ fn item_facts(
         Item::ExternCrate(_) => ("extern_crate_declaration", "syn::ItemExternCrate"),
         Item::Fn(_) => ("function_item", "syn::ItemFn"),
         Item::ForeignMod(_) => ("native_item", "syn::ItemForeignMod"),
+        Item::Impl(item) if RustSynParserProvider::impl_owner_identity(item).is_some() => {
+            ("impl_item", "syn::ItemImpl")
+        }
         Item::Impl(_) => ("native_item", "syn::ItemImpl"),
         Item::Macro(item) if item.mac.path.is_ident("macro_rules") && item.ident.is_some() => {
             ("macro_definition", "syn::ItemMacro")
@@ -370,7 +399,32 @@ fn item_facts(
     } else {
         ident.map(|ident| (ident.to_string(), ident.span().byte_range(), "identifier"))
     };
-    (kind, native_type, name)
+    let semantic_identity = match item {
+        Item::Impl(item) => RustSynParserProvider::impl_owner_identity(item),
+        _ => None,
+    };
+    (kind, native_type, name, semantic_identity)
+}
+
+fn impl_type_path(ty: &syn::Type) -> Option<String> {
+    match ty {
+        syn::Type::Path(path) if path.qself.is_none() => Some(
+            path.path
+                .segments
+                .iter()
+                .map(|segment| segment.ident.to_string())
+                .collect::<Vec<_>>()
+                .join("::"),
+        ),
+        syn::Type::Reference(reference) => impl_type_path(&reference.elem),
+        syn::Type::Ptr(pointer) => impl_type_path(&pointer.elem),
+        syn::Type::Paren(paren) => impl_type_path(&paren.elem),
+        syn::Type::Group(group) => impl_type_path(&group.elem),
+        syn::Type::Slice(slice) => {
+            impl_type_path(&slice.elem).map(|element| format!("[{element}]"))
+        }
+        _ => None,
+    }
 }
 
 fn parse_node(

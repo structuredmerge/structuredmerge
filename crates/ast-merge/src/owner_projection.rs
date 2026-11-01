@@ -456,6 +456,18 @@ fn owner_name(
     index: &NormalizedTreeIndex<'_>,
     policy: NamedOwnerProjectionPolicy<'_>,
 ) -> Result<String, String> {
+    if let Some(identity) =
+        node.semantic_roles.iter().find_map(|role| role.strip_prefix("owner_identity:"))
+    {
+        if identity.is_empty() {
+            return Err(format!(
+                "{} owner {:?} has an empty semantic identity",
+                policy.family, node.kind
+            ));
+        }
+        return Ok(identity.to_string());
+    }
+
     let children = index.children(node);
     let field_candidates = children
         .iter()

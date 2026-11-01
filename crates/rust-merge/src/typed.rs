@@ -50,7 +50,7 @@ pub fn analysis_with_diagnostics(
         source,
         root,
         &nodes,
-        super::owner_policy(),
+        if parser_is_syn { super::owner_policy_for_syn() } else { super::owner_policy() },
         |node| {
             if parser_is_syn && node.semantic_roles.iter().any(|role| role == "inner_doc_comment") {
                 CommentScope::Root
