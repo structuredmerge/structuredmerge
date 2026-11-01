@@ -49,7 +49,11 @@ pub fn analysis_with_diagnostics(
         &nodes,
         if parser_is_syn { super::owner_policy_for_syn() } else { super::owner_policy() },
         |node| {
-            if parser_is_syn && node.semantic_roles.iter().any(|role| role == "inner_doc_comment") {
+            let fragment = node.source_fragment.trim_start();
+            let inner_doc = node.semantic_roles.iter().any(|role| role == "inner_doc_comment")
+                || fragment.starts_with("//!")
+                || fragment.starts_with("/*!");
+            if inner_doc && node.parent_id.as_deref() == Some(root) {
                 CommentScope::Root
             } else {
                 CommentScope::Owner
@@ -90,6 +94,8 @@ pub fn source_line_analysis(parsed: &ParsedResult) -> Result<RustSourceLineAnaly
     let owners = analysis(parsed)?;
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
     let nodes = parsed.normalized_nodes()?;
+    let root_id =
+        parsed.document.output().root_id.as_deref().ok_or("Rust parse omitted its root")?;
     let parser_is_syn = parsed.backend.parser == "syn";
     let mut tree_to_semantic = HashMap::<String, String>::new();
     let mut native_owners = Vec::with_capacity(owners.document.owners.len());
@@ -179,8 +185,9 @@ pub fn source_line_analysis(parsed: &ParsedResult) -> Result<RustSourceLineAnaly
         super::owner_policy().comment_attachment_policy,
         |node| {
             matches!(node.kind.as_str(), "line_comment" | "block_comment").then(|| {
-                if node.source_fragment.trim_start().starts_with("//!")
-                    || node.source_fragment.trim_start().starts_with("/*!")
+                if node.parent_id.as_deref() == Some(root_id)
+                    && (node.source_fragment.trim_start().starts_with("//!")
+                        || node.source_fragment.trim_start().starts_with("/*!"))
                 {
                     CommentScope::Root
                 } else {

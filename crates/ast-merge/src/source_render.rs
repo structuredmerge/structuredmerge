@@ -674,6 +674,69 @@ fn effective_gap_controller_after_removal<'a>(
     })
 }
 
+/// Choose one source gap when deleting owners collapses several original gaps
+/// onto the same surviving owner boundary. A gap controlled by the surviving
+/// before owner takes precedence; otherwise the after-owner gap is retained.
+fn gap_keys_after_owner_removal(
+    records: &[crate::SourceLineDisposition],
+    deleted_owner_ids: &HashSet<String>,
+) -> HashSet<String> {
+    let gaps = records
+        .iter()
+        .enumerate()
+        .filter(|(_, record)| record.kind == "layout_gap")
+        .filter_map(|(index, record)| {
+            let key = record.selection_key.clone();
+            if records[..index]
+                .iter()
+                .any(|prior| prior.kind == "layout_gap" && prior.selection_key == key)
+            {
+                return None;
+            }
+            let surviving_owner = |candidate: &&crate::SourceLineDisposition| {
+                matches!(candidate.kind.as_str(), "structural_owner" | "comment_owner")
+                    && candidate
+                        .owner_id
+                        .as_deref()
+                        .is_some_and(|owner| !deleted_owner_ids.contains(owner))
+            };
+            let before = records[..index]
+                .iter()
+                .rev()
+                .find(surviving_owner)
+                .and_then(|owner| owner.owner_id.clone());
+            let after = records[index + 1..]
+                .iter()
+                .find(surviving_owner)
+                .and_then(|owner| owner.owner_id.clone());
+            let boundary = (before.clone(), after.clone());
+            if boundary.0.is_none() && boundary.1.is_none() {
+                return None;
+            }
+            let controller = effective_gap_controller_after_removal(record, deleted_owner_ids);
+            let priority = if controller.is_some() && controller == before.as_deref() {
+                0
+            } else if controller.is_some() && controller == after.as_deref() {
+                1
+            } else {
+                2
+            };
+            Some((boundary, priority, key, record.line_number))
+        })
+        .collect::<Vec<_>>();
+
+    let mut winners = HashMap::<(Option<String>, Option<String>), (u8, String, usize)>::new();
+    for (boundary, priority, key, line_number) in gaps {
+        let replace = winners.get(&boundary).is_none_or(|(old_priority, _, old_line)| {
+            (priority, line_number) < (*old_priority, *old_line)
+        });
+        if replace {
+            winners.insert(boundary, (priority, key, line_number));
+        }
+    }
+    winners.into_values().map(|(_, key, _)| key).collect()
+}
+
 /// Select source regions in baseline line order, taking structural and attached
 /// comment regions from their selected owner revision and each layout gap from
 /// its controller owner revision. Root and unmanaged regions stay with baseline.
@@ -751,6 +814,7 @@ pub fn source_line_selections_for_owner_revisions_with_deletions(
     let baseline = dispositions.get(&baseline_revision).ok_or_else(|| {
         SourceRenderError::new(format!("baseline dispositions omit {baseline_revision:?}"))
     })?;
+    let retained_gap_keys = gap_keys_after_owner_removal(baseline, deleted_owner_ids);
     let available = dispositions
         .iter()
         .map(|(revision, records)| {
@@ -788,6 +852,9 @@ pub fn source_line_selections_for_owner_revisions_with_deletions(
                 }
             }
             "layout_gap" => {
+                if !retained_gap_keys.contains(&record.selection_key) {
+                    continue;
+                }
                 let controller = effective_gap_controller_after_removal(record, deleted_owner_ids);
                 if record.controller_owner_id.is_some() && controller.is_none() {
                     None
@@ -1178,6 +1245,57 @@ fn position_additions_in_their_source_gaps(
 
         let mut chunk = Vec::new();
         let mut chunk_keys = HashSet::new();
+        let append_preceding_owner_gap =
+            |chunk: &mut Vec<SourceLineSelection>,
+             chunk_keys: &mut HashSet<String>,
+             revision: SourceRevision| {
+                let (Some(previous), Some(following)) = (previous.as_deref(), following.as_deref())
+                else {
+                    return;
+                };
+                let base_boundary_gaps = base
+                    .iter()
+                    .filter(|record| {
+                        record.kind == "layout_gap"
+                            && record.before_owner_id.as_deref() == Some(previous)
+                            && record.after_owner_id.as_deref() == Some(following)
+                            && record.controller_owner_id.as_deref() == Some(previous)
+                    })
+                    .map(|record| record.selection_key.clone())
+                    .collect::<HashSet<_>>();
+                let gap_source = if base_boundary_gaps.len() == 1 {
+                    base_boundary_gaps.into_iter().next().map(|key| (SourceRevision::Base, key))
+                } else if base_boundary_gaps.is_empty() {
+                    let alternate_gaps = [SourceRevision::Ours, SourceRevision::Theirs]
+                        .into_iter()
+                        .filter(|candidate_revision| *candidate_revision != revision)
+                        .flat_map(|candidate_revision| {
+                            dispositions
+                                .get(&candidate_revision)
+                                .into_iter()
+                                .flatten()
+                                .filter(move |record| {
+                                    record.kind == "layout_gap"
+                                        && record.before_owner_id.as_deref() == Some(previous)
+                                        && record.after_owner_id.as_deref() == Some(following)
+                                        && record.controller_owner_id.as_deref() == Some(previous)
+                                })
+                                .map(move |record| {
+                                    (candidate_revision, record.selection_key.clone())
+                                })
+                        })
+                        .collect::<HashSet<_>>();
+                    (alternate_gaps.len() == 1).then(|| alternate_gaps.into_iter().next().unwrap())
+                } else {
+                    None
+                };
+                if let Some((gap_revision, selection_key)) = gap_source
+                    && chunk_keys.insert(selection_key.clone())
+                {
+                    chunk.push(SourceLineSelection { selection_key, revision: gap_revision });
+                }
+            };
+
         let append_gap = |chunk: &mut Vec<SourceLineSelection>,
                           chunk_keys: &mut HashSet<String>,
                           records: &[crate::SourceLineDisposition],
@@ -1186,6 +1304,9 @@ fn position_additions_in_their_source_gaps(
                           start: usize,
                           end: usize| {
             if start > end {
+                if leading {
+                    append_preceding_owner_gap(chunk, chunk_keys, revision);
+                }
                 return true;
             }
             let gap_records = records
@@ -1205,7 +1326,7 @@ fn position_additions_in_their_source_gaps(
             }) {
                 return false;
             }
-            for record in gap_records {
+            for record in &gap_records {
                 if is_deleted_owner_line(record) {
                     continue;
                 }
@@ -1244,6 +1365,14 @@ fn position_additions_in_their_source_gaps(
                         revision,
                     });
                 }
+            }
+            // If a tip adds an owner into an existing base gap while the other
+            // tip changes that same gap's whitespace, carry a one-sided gap
+            // controlled by the preceding owner before the addition. This keeps
+            // the chosen gap at its owner boundary instead of losing it because
+            // the addition's source contains no blank line there.
+            if leading && !gap_records.iter().any(|record| record.kind == "layout_gap") {
+                append_preceding_owner_gap(chunk, chunk_keys, revision);
             }
             true
         };

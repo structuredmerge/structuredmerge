@@ -162,21 +162,15 @@ impl RustSynParserProvider {
 
         // `syn` represents crate-level inner documentation as `doc` attributes
         // on `File`. Preserve this parser fact when assigning source comments.
-        let inner_doc_ranges = file
+        let mut inner_doc_ranges = file
             .attrs
             .iter()
             .filter(|attribute| matches!(attribute.style, AttrStyle::Inner(_)))
             .filter(|attribute| attribute.path().is_ident("doc"))
             .map(|attribute| attribute.span().byte_range())
             .collect::<Vec<_>>();
-        let outer_doc_ranges = file
-            .items
-            .iter()
-            .flat_map(item_attributes)
-            .filter(|attribute| matches!(attribute.style, AttrStyle::Outer))
-            .filter(|attribute| attribute.path().is_ident("doc"))
-            .map(|attribute| attribute.span().byte_range())
-            .collect::<Vec<_>>();
+        let mut outer_doc_ranges = Vec::new();
+        collect_nested_module_doc_ranges(&file.items, &mut outer_doc_ranges, &mut inner_doc_ranges);
 
         for (index, item) in file.items.iter().enumerate() {
             context.check().map_err(service_fault)?;
@@ -310,6 +304,29 @@ impl RustSynParserProvider {
             metadata: request.metadata,
             extra: request.extra,
         })
+    }
+}
+
+fn collect_nested_module_doc_ranges(
+    items: &[Item],
+    outer_doc_ranges: &mut Vec<Range<usize>>,
+    inner_doc_ranges: &mut Vec<Range<usize>>,
+) {
+    for item in items {
+        for attribute in item_attributes(item) {
+            if !attribute.path().is_ident("doc") {
+                continue;
+            }
+            match attribute.style {
+                AttrStyle::Outer => outer_doc_ranges.push(attribute.span().byte_range()),
+                AttrStyle::Inner(_) => inner_doc_ranges.push(attribute.span().byte_range()),
+            }
+        }
+        if let Item::Mod(module) = item
+            && let Some((_, nested_items)) = &module.content
+        {
+            collect_nested_module_doc_ranges(nested_items, outer_doc_ranges, inner_doc_ranges);
+        }
     }
 }
 
@@ -910,6 +927,64 @@ mod tests {
         assert!(comment.semantic_roles.iter().any(|role| role == "inner_doc_comment"));
         let analysis = crate::typed::analysis(&parsed).unwrap();
         assert!(!analysis.attached_comment_node_ids.contains_key("/function:stable"));
+    }
+
+    #[test]
+    fn syn_inline_module_inner_docs_keep_module_scope() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/polyglot/typed-core/rust_merge3_delete_module_inner_doc_owner_with_independent_edit.json"
+        ))
+        .unwrap();
+        let source = fixture["input"]["base"].as_str().unwrap();
+        let expected = &fixture["syn_doc_scope_expected"];
+        let registry = ParserRegistry::default();
+        registry.register(Arc::new(RustSynParserProvider::new("rust.syn.test"))).unwrap();
+        let parsed = TreeHaverParseService::default()
+            .parse_batch(vec![request(source)], &registry.snapshot().unwrap(), &context())
+            .unwrap()
+            .remove(0);
+        let root = parsed.document.output().root_id.as_deref().unwrap();
+        let nodes = &parsed.document.output().nodes;
+        let comment_text = |node: &ParseNode| {
+            source.get(node.span.range.start_byte..node.span.range.end_byte).unwrap_or_default()
+        };
+        let root_doc = nodes
+            .iter()
+            .find(|node| {
+                node.role == NodeRole::Comment
+                    && comment_text(node).contains(expected["root_doc_text"].as_str().unwrap())
+            })
+            .unwrap();
+        let module_doc = nodes
+            .iter()
+            .find(|node| {
+                node.role == NodeRole::Comment
+                    && comment_text(node).contains(expected["module_doc_text"].as_str().unwrap())
+            })
+            .unwrap();
+        let module = nodes
+            .iter()
+            .find(|node| node.parent_id.as_deref() == Some(root) && node.kind == "syn::ItemMod")
+            .unwrap();
+
+        assert!(root_doc.semantic_roles.iter().any(|role| role == "inner_doc_comment"));
+        assert_eq!(root_doc.parent_id.as_deref(), Some(root));
+        assert!(module_doc.semantic_roles.iter().any(|role| role == "inner_doc_comment"));
+        assert_eq!(module_doc.parent_id.as_deref(), Some(module.id.as_str()));
+
+        let analysis = crate::typed::analysis(&parsed).unwrap();
+        let owner_path = expected["module_owner_path"].as_str().unwrap();
+        let module_owner =
+            analysis.document.owners.iter().find(|owner| owner.id == owner_path).unwrap();
+        assert!(module_owner.fingerprint.contains(expected["module_doc_text"].as_str().unwrap()));
+        assert!(!module_owner.fingerprint.contains(expected["root_doc_text"].as_str().unwrap()));
+        let line_analysis = crate::typed::source_line_analysis(&parsed).unwrap();
+        let module_doc_line = line_analysis
+            .dispositions
+            .iter()
+            .find(|line| line.line_number == module_doc.span.start_point.row + 1)
+            .unwrap();
+        assert_eq!(module_doc_line.owner_id.as_deref(), Some(owner_path));
     }
 
     #[test]
