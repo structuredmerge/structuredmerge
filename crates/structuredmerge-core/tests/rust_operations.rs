@@ -284,23 +284,32 @@ fn common_rust_operation_composes_empty_base_additions_and_root_docs() {
 }
 
 #[test]
-fn common_rust_operation_composes_divergent_native_crate_docs() {
-    let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/rust_syn_crate_doc_additions.json"
-    ))
-    .unwrap();
-    let input = &fixture["input"];
-    let texts = [
-        input["base"].as_str().unwrap(),
-        input["ours"].as_str().unwrap(),
-        input["theirs"].as_str().unwrap(),
-    ];
-    let (result, request) = run(request("merge3", &texts));
+fn common_rust_operation_composes_native_crate_doc_changes() {
+    for fixture_source in [
+        include_str!("../../../../fixtures/polyglot/typed-core/rust_syn_crate_doc_additions.json"),
+        include_str!(
+            "../../../../fixtures/polyglot/typed-core/rust_syn_crate_doc_edit_with_independent_addition.json"
+        ),
+    ] {
+        let fixture: serde_json::Value = serde_json::from_str(fixture_source).unwrap();
+        let input = &fixture["input"];
+        let texts = [
+            input["base"].as_str().unwrap(),
+            input["ours"].as_str().unwrap(),
+            input["theirs"].as_str().unwrap(),
+        ];
+        let (result, request) = run(request("merge3", &texts));
 
-    assert!(result.ok, "{:?}", result.diagnostics);
-    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
-    assert_eq!(result.verification.output_reparsed, Some(true));
-    result.validate_against(&request).unwrap();
+        assert!(result.ok, "{}: {:?}", fixture["id"], result.diagnostics);
+        assert_eq!(
+            result.output.as_deref(),
+            fixture["expected"]["output"].as_str(),
+            "{}",
+            fixture["id"]
+        );
+        assert_eq!(result.verification.output_reparsed, Some(true));
+        result.validate_against(&request).unwrap();
+    }
 }
 
 #[test]

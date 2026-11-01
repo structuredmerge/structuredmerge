@@ -946,7 +946,93 @@ fn position_additions_in_their_source_gaps(
     selections.retain(|selection| {
         !replaced_keys.contains(&(selection.revision, selection.selection_key.clone()))
     });
-    if !base_has_preamble {
+    if base_has_preamble {
+        let mut root_keys = base
+            .iter()
+            .filter(|record| {
+                record.kind == "root_region"
+                    && record.root_region_kind.as_deref() == Some("preamble")
+            })
+            .map(|record| record.selection_key.clone())
+            .collect::<HashSet<_>>();
+        root_keys.extend([SourceRevision::Ours, SourceRevision::Theirs].into_iter().flat_map(
+            |revision| {
+                dispositions
+                    .get(&revision)
+                    .into_iter()
+                    .flatten()
+                    .filter(|record| {
+                        record.kind == "root_region"
+                            && record.root_region_kind.as_deref() == Some("preamble")
+                    })
+                    .map(|record| record.selection_key.clone())
+            },
+        ));
+        let region_lines = |revision: SourceRevision, key: &str| {
+            let mut records = dispositions
+                .get(&revision)
+                .into_iter()
+                .flatten()
+                .filter(|record| {
+                    record.kind == "root_region"
+                        && record.root_region_kind.as_deref() == Some("preamble")
+                        && record.selection_key == key
+                })
+                .collect::<Vec<_>>();
+            records.sort_by_key(|record| record.line_number);
+            (!records.is_empty())
+                .then(|| records.into_iter().map(|record| record.line.clone()).collect::<Vec<_>>())
+        };
+        let mut chosen_regions = Vec::new();
+        for key in root_keys {
+            let base_lines = region_lines(SourceRevision::Base, &key);
+            let ours_lines = region_lines(SourceRevision::Ours, &key);
+            let theirs_lines = region_lines(SourceRevision::Theirs, &key);
+            let chosen_revision = if ours_lines == base_lines && theirs_lines == base_lines {
+                Some(baseline_revision)
+            } else if ours_lines != base_lines && theirs_lines == base_lines {
+                Some(SourceRevision::Ours)
+            } else if theirs_lines != base_lines && ours_lines == base_lines {
+                Some(SourceRevision::Theirs)
+            } else if ours_lines == theirs_lines {
+                Some(SourceRevision::Ours)
+            } else {
+                return Err(SourceRenderError::new(
+                    "both tips changed the same document preamble differently",
+                ));
+            };
+            selections.retain(|selection| {
+                !(selection.selection_key == key
+                    && dispositions.get(&selection.revision).is_some_and(|records| {
+                        records.iter().any(|record| {
+                            record.kind == "root_region"
+                                && record.root_region_kind.as_deref() == Some("preamble")
+                                && record.selection_key == key
+                        })
+                    }))
+            });
+            if let Some(revision) =
+                chosen_revision.filter(|revision| region_lines(*revision, &key).is_some())
+            {
+                let first_line = dispositions
+                    .get(&revision)
+                    .into_iter()
+                    .flatten()
+                    .filter(|record| {
+                        record.kind == "root_region"
+                            && record.root_region_kind.as_deref() == Some("preamble")
+                            && record.selection_key == key
+                    })
+                    .map(|record| record.line_number)
+                    .min()
+                    .unwrap_or(usize::MAX);
+                chosen_regions
+                    .push((first_line, SourceLineSelection { selection_key: key, revision }));
+            }
+        }
+        chosen_regions.sort_by_key(|(line, _)| *line);
+        selections.splice(0..0, chosen_regions.into_iter().map(|(_, selection)| selection));
+    } else {
         selections.retain(|selection| {
             !dispositions.get(&selection.revision).is_some_and(|records| {
                 records.iter().any(|record| {
