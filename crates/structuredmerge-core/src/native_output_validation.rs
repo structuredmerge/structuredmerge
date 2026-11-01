@@ -31,12 +31,19 @@ pub(crate) fn validate(
         return Err(Invalid);
     }
     let first = &inputs[0].selection;
+    let exact_incoming_selection = result.operation == OperationKind::Merge2
+        && result.render_report.get("strategy").and_then(|value| value.as_str())
+            == Some("exact-incoming-source-selection");
     for (parsed, role) in inputs.iter().zip(roles) {
         let source = request
             .sources()
             .get(&request.request().sources.get(role).ok_or(Invalid)?.source_id)
             .map_err(|_| Invalid)?;
-        validate_parse(parsed, source)?;
+        validate_parse_with_failure(
+            parsed,
+            source,
+            exact_incoming_selection && *role == SourceRole::Current,
+        )?;
         if parsed.selection.generation != first.generation
             || parsed.selection.digest != first.digest
         {
@@ -85,30 +92,62 @@ fn validate_partition(
     let regions = result.verification.retained_source_regions.as_ref().ok_or(Invalid)?;
     let strategy;
     if result.operation == OperationKind::Merge2 {
-        strategy = "directional-source-plan";
-        let segments: Vec<directional_render::DirectionalByteSegment> =
-            serde_json::from_value(raw.clone()).map_err(|_| Invalid)?;
-        directional_render::verify_directional_segments(
-            output,
-            source(SourceRole::Incoming)?,
-            source(SourceRole::Current)?,
-            &segments,
-        )
-        .map_err(|_| Invalid)?;
-        if regions.len() != segments.len() {
-            return Err(Invalid);
-        }
-        for (region, segment) in regions.iter().zip(&segments) {
+        if result.render_report.get("strategy").and_then(|value| value.as_str())
+            == Some("exact-incoming-source-selection")
+        {
+            strategy = "exact-incoming-source-selection";
+            let segments: Vec<directional_render::DirectionalByteSegment> =
+                serde_json::from_value(raw.clone()).map_err(|_| Invalid)?;
+            let incoming = source(SourceRole::Incoming)?;
+            if segments.len() != 1 || regions.len() != 1 {
+                return Err(Invalid);
+            }
+            let segment = &segments[0];
+            let full_range = ByteRange { start_byte: 0, end_byte: incoming.bytes().len() };
+            let digest = incoming.descriptor().sha256.as_str();
+            if segment.source_id != incoming.descriptor().source_id
+                || segment.source_role != SourceRole::Incoming
+                || segment.source_range != full_range
+                || segment.output_range != full_range
+                || segment.sha256 != digest
+                || incoming.bytes() != output
+            {
+                return Err(Invalid);
+            }
             validate_region(
-                region,
+                &regions[0],
                 &segment.source_id,
                 segment.source_role,
                 &segment.source_range,
                 &segment.output_range,
                 &segment.sha256,
             )?;
+        } else {
+            strategy = "directional-source-plan";
+            let segments: Vec<directional_render::DirectionalByteSegment> =
+                serde_json::from_value(raw.clone()).map_err(|_| Invalid)?;
+            directional_render::verify_directional_segments(
+                output,
+                source(SourceRole::Incoming)?,
+                source(SourceRole::Current)?,
+                &segments,
+            )
+            .map_err(|_| Invalid)?;
+            if regions.len() != segments.len() {
+                return Err(Invalid);
+            }
+            for (region, segment) in regions.iter().zip(&segments) {
+                validate_region(
+                    region,
+                    &segment.source_id,
+                    segment.source_role,
+                    &segment.source_range,
+                    &segment.output_range,
+                    &segment.sha256,
+                )?;
+            }
+            validate_property(result, "all-current-bytes-retained")?;
         }
-        validate_property(result, "all-current-bytes-retained")?;
     } else {
         strategy = "source-plan";
         let segments: Vec<byte_evidence::SourceByteSegment> =
@@ -193,11 +232,19 @@ fn validate_parse(
     core: &CoreParseResult,
     source: &SourceDocument,
 ) -> Result<(), ResultContractError> {
+    validate_parse_with_failure(core, source, false)
+}
+
+fn validate_parse_with_failure(
+    core: &CoreParseResult,
+    source: &SourceDocument,
+    allow_rejected: bool,
+) -> Result<(), ResultContractError> {
     use ResultContractError::InvalidSourceEvidence as Invalid;
     let selected: Vec<_> =
         core.selection.candidates.iter().filter(|candidate| candidate.selected).collect();
     if core.schema != service::PARSE_RESULT_SCHEMA
-        || !core.parsed.ok
+        || (!core.parsed.ok && !allow_rejected)
         || core.selection.selected_backend.as_ref() != Some(&core.backend.id)
         || selected.len() != 1
         || selected[0].backend_id != core.backend.id
@@ -215,7 +262,7 @@ fn validate_parse(
         parsed::ParseValidationLimits {
             max_nodes: core.parsed.nodes.len(),
             max_diagnostics: core.parsed.diagnostics.len(),
-            partial_tree_allowed: false,
+            partial_tree_allowed: allow_rejected,
             comments_supported: core
                 .backend
                 .capabilities

@@ -251,6 +251,26 @@ fn directional_go_retains_current_bytes_and_native_function_comments() {
 }
 
 #[test]
+fn go_merge2_exact_incoming_selects_and_reparses_incoming_source() {
+    use structuredmerge_core::operation::OperationPolicy;
+    let incoming = "package other\n\nfunc added() {}\n";
+    let current = "package main\nfunc broken( {\n";
+    let mut input = request("merge2", &[incoming, current]);
+    let OperationPolicy::Merge2(policy) = &mut input.operation else { panic!() };
+    policy.directional_merge = "select-incoming-exact".into();
+    let (result, _) = run(input);
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(incoming));
+    assert_eq!(result.verification.output_reparsed, Some(true));
+    assert_eq!(result.verification.directional_roles_preserved, Some(true));
+    assert_eq!(result.verification.base_participated, None);
+    assert!(result.conflicts.is_empty());
+    let regions = result.verification.retained_source_regions.unwrap();
+    assert_eq!(regions.len(), 1);
+    assert_eq!(regions[0].source_role, SourceRole::Incoming);
+}
+
+#[test]
 fn directional_go_rejects_unproven_headers_and_ambiguous_placement() {
     for (incoming, current) in [
         ("package other\nfunc g() {}\n", "package main\nfunc f() {}\n"),

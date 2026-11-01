@@ -393,7 +393,8 @@ pub(crate) fn execute_native_operation_with_service(
     .contains(&input.operation.kind())
         && match &input.operation {
             OperationPolicy::Merge2(policy) => {
-                policy.directional_merge == "template-into-current"
+                (policy.directional_merge == "template-into-current"
+                    || (family == "go" && policy.directional_merge == "select-incoming-exact"))
                     && policy.render_policy == "source-preserving"
                     && policy.extra.is_empty()
                     && policy.fallback_policy.as_deref().is_none_or(|p| p == "none")
@@ -615,6 +616,16 @@ pub(crate) fn execute_native_operation_with_service(
             Err(error) => execution_failure(&mut result, error),
         }
         return finish(result, request, &evidence);
+    }
+    if family == "go"
+        && matches!(
+            &input.operation,
+            OperationPolicy::Merge2(policy) if policy.directional_merge == "select-incoming-exact"
+        )
+    {
+        return execute_go_exact_incoming_merge2(
+            request, parses, snapshot, context, service, provider, &evidence,
+        );
     }
     if input.operation.kind() == OperationKind::Merge2 {
         use ast_merge::typed_merge2::{DirectionalFailureStage, merge_directional_native_sources};
@@ -931,6 +942,240 @@ pub(crate) fn execute_native_operation_with_service(
             finish(result, request, &evidence)
         }
     }
+}
+
+fn execute_go_exact_incoming_merge2(
+    request: &ValidatedOperationRequest,
+    parses: Vec<ParseRequest>,
+    snapshot: &ParserRegistrySnapshot,
+    context: &ExecutionContext,
+    service: &dyn ParseService,
+    provider: &str,
+    evidence: &ConflictEvidence,
+) -> Result<OperationResult, CoreError> {
+    let mut result = empty_result(request);
+    let input = request.request();
+    result.provider.provider_id =
+        input.provider_selection.provider_id.clone().or_else(|| Some(provider.into()));
+    result.provider.family = input.provider_selection.family.clone().or_else(|| Some("go".into()));
+    result.profile.profile_id = input.provider_selection.profile_id.clone();
+    let incoming = input.sources.get(&SourceRole::Incoming).ok_or_else(|| CoreError {
+        code: "operation.invalid_evidence".into(),
+        message: "exact incoming merge lacks its incoming source".into(),
+    })?;
+    let incoming_document = request.sources().get(&incoming.source_id).map_err(|error| {
+        CoreError { code: "operation.invalid_evidence".into(), message: error.to_string() }
+    })?;
+    let incoming_bytes = incoming_document.bytes();
+    let incoming_text = String::from_utf8(incoming_bytes.to_vec()).map_err(|error| CoreError {
+        code: "operation.invalid_source".into(),
+        message: error.to_string(),
+    })?;
+    let incoming_parse_request = parses
+        .iter()
+        .find(|parse| parse.source.descriptor.role == SourceRole::Incoming)
+        .cloned()
+        .ok_or_else(|| CoreError {
+            code: "operation.invalid_evidence".into(),
+            message: "exact incoming merge lacks its incoming parse request".into(),
+        })?;
+    let parsed = match service.parse_batch(parses, snapshot, context) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            service_failure(&mut result, error);
+            return finalize(result, request, evidence, context);
+        }
+    };
+    if let Err(error) = context.check() {
+        service_failure(&mut result, error);
+        return finalize(result, request, evidence, context);
+    }
+    let parsed_roles: std::collections::BTreeSet<_> =
+        parsed.iter().map(|parsed| parsed.source.descriptor().role).collect();
+    if parsed.len() != 2
+        || parsed_roles
+            != std::collections::BTreeSet::from([SourceRole::Incoming, SourceRole::Current])
+        || parsed.iter().any(|parsed| {
+            input.sources.get(&parsed.source.descriptor().role).is_none_or(|source| {
+                source.source_id != parsed.source.descriptor().source_id
+                    || match request.sources().get(&source.source_id) {
+                        Ok(document) => document.descriptor() != parsed.source.descriptor(),
+                        Err(_) => true,
+                    }
+            })
+        })
+        || parsed.iter().skip(1).any(|item| item.backend != parsed[0].backend)
+    {
+        diagnostic(
+            &mut result,
+            PortableCategory::InvalidRequest,
+            "request.invalid",
+            "exact incoming merge did not receive the validated incoming/current parses",
+            DiagnosticLayer::Transport,
+            vec![],
+        );
+        return finalize(result, request, evidence, context);
+    }
+    let mut parsed = parsed;
+    parsed.sort_by_key(|item| item.source.descriptor().role);
+    retain_parses(&mut result, &parsed);
+    for rejected in parsed.iter().filter(|item| !item.document.output().ok) {
+        if rejected.source.descriptor().role == SourceRole::Current {
+            let current = &input.sources[&SourceRole::Current];
+            result.diagnostics.push(DiagnosticRecord::Canonical(PortableDiagnostic {
+                schema: DIAGNOSTIC_SCHEMA.into(),
+                id: format!("diagnostic.current-parse-warning-{}", result.diagnostics.len()),
+                sequence: result.diagnostics.len() as u64,
+                severity: DiagnosticSeverity::Warning,
+                category: PortableCategory::ParseError,
+                code: "parse.rejected".into(),
+                message:
+                    "native parser rejected current source; exact incoming selection remains valid"
+                        .into(),
+                blocking: false,
+                operation: Some(OperationKind::Merge2),
+                request_id: Some(result.request_id.clone()),
+                source_refs: vec![DiagnosticSourceRef {
+                    source_id: current.source_id.clone(),
+                    role: SourceRole::Current,
+                    span: None,
+                    extra: Metadata::new(),
+                }],
+                subject_refs: None,
+                cause_ids: vec![],
+                related_ids: vec![],
+                origin: DiagnosticOrigin {
+                    layer: DiagnosticLayer::Parser,
+                    provider_id: result.provider.provider_id.clone(),
+                    backend_id: Some(rejected.backend.id.clone()),
+                    package: None,
+                    package_version: None,
+                    native_code: None,
+                    extra: Metadata::new(),
+                },
+                data: Metadata::new(),
+                extensions: vec![],
+                metadata: Metadata::new(),
+                extra: Metadata::new(),
+            }));
+        }
+    }
+    let incoming_parse = parsed
+        .iter()
+        .find(|item| item.source.descriptor().role == SourceRole::Incoming)
+        .expect("validated incoming parse");
+    if !incoming_parse.document.output().ok || incoming_parse.source.bytes() != incoming_bytes {
+        diagnostic(
+            &mut result,
+            PortableCategory::ParseError,
+            "parse.rejected",
+            "native parser rejected incoming source",
+            DiagnosticLayer::Parser,
+            vec![DiagnosticSourceRef {
+                source_id: incoming.source_id.clone(),
+                role: SourceRole::Incoming,
+                span: None,
+                extra: Metadata::new(),
+            }],
+        );
+        return finalize(result, request, evidence, context);
+    }
+    let mut output_id = "go-merge2-output".to_owned();
+    while input.sources.values().any(|source| source.source_id == output_id) {
+        output_id.push('_');
+    }
+    let mut verification = incoming_parse_request;
+    verification.request_id = format!("{}:verification", verification.request_id);
+    verification.source = tree_haver::source::source_input(
+        output_id,
+        SourceRole::Output,
+        tree_haver::source::SourceEncoding::Utf8,
+        incoming_bytes.to_vec(),
+    )
+    .map_err(|error| CoreError {
+        code: "operation.invalid_source".into(),
+        message: error.to_string(),
+    })?;
+    let mut output_parses = match service.parse_batch(vec![verification.clone()], snapshot, context)
+    {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            service_failure(&mut result, error);
+            return finalize(result, request, evidence, context);
+        }
+    };
+    if let Err(error) = context.check() {
+        service_failure(&mut result, error);
+        return finalize(result, request, evidence, context);
+    }
+    if output_parses.len() != 1
+        || output_parses[0].source.descriptor() != &verification.source.descriptor
+        || output_parses[0].backend != incoming_parse.backend
+        || output_parses[0].source.bytes() != incoming_bytes
+        || !output_parses[0].document.output().ok
+    {
+        diagnostic(
+            &mut result,
+            PortableCategory::VerificationError,
+            "merge2.output_rejected",
+            "exact incoming source failed native output verification",
+            DiagnosticLayer::Verifier,
+            vec![],
+        );
+        return finalize(result, request, evidence, context);
+    }
+    let output_parse = output_parses.remove(0);
+    result.extra.insert(
+        "output_parse".into(),
+        serde_json::to_value(CoreParseResult::from(output_parse)).unwrap(),
+    );
+    result.ok = true;
+    result.output = Some(incoming_text);
+    result.verification.classification_reached = Some(true);
+    result.verification.directional_roles_preserved = Some(true);
+    result.verification.consumed_source_roles =
+        Some(input.operation.kind().source_roles().to_vec());
+    result.verification.output_reparsed = Some(true);
+    result.verification.structural_equivalence = Some(true);
+    result.verification.preservation = Some(vec![PreservationProperty {
+        property: "exact-source-partition".into(),
+        required: true,
+        status: "passed".into(),
+        extra: Metadata::new(),
+    }]);
+    let output_range =
+        ResultRange { start_byte: 0, end_byte: incoming_bytes.len(), extra: Metadata::new() };
+    result.verification.retained_source_regions = Some(vec![ResultSourceRegion {
+        source_id: incoming.source_id.clone(),
+        source_role: SourceRole::Incoming,
+        range: output_range,
+        sha256: Some(incoming_document.descriptor().sha256.clone()),
+        extra: [(
+            "output_range".into(),
+            serde_json::json!({
+                "start_byte": 0,
+                "end_byte": incoming_bytes.len(),
+            }),
+        )]
+        .into(),
+    }]);
+    result.render_report = [
+        ("producer".into(), serde_json::json!(provider)),
+        ("strategy".into(), serde_json::json!("exact-incoming-source-selection")),
+        (
+            "source_segments".into(),
+            serde_json::json!([{
+                "id": "exact-incoming-source",
+                "source_id": incoming.source_id,
+                "source_role": "incoming",
+                "source_range": {"start_byte": 0, "end_byte": incoming_bytes.len()},
+                "output_range": {"start_byte": 0, "end_byte": incoming_bytes.len()},
+                "sha256": incoming_document.descriptor().sha256,
+            }]),
+        ),
+    ]
+    .into();
+    finalize(result, request, evidence, context)
 }
 
 fn revision_role(revision: SourceRevision) -> SourceRole {

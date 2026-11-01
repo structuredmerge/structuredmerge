@@ -139,7 +139,11 @@ pub fn operation_profile_catalog() -> OperationProfileCatalog {
             .map_or_else(|| vec![limits.into()], |profile| profile.limitations.clone());
         limitations.push("declared operations still require supported policies, valid source-bound parser facts and operation-specific syntax".into());
         if profile_operations(id).contains(&OperationKind::Merge2) {
-            limitations.push("merge2 is current-preferred template-into-current; unsupported ownership/layout plans fail closed".into());
+            if family == "go" {
+                limitations.push("merge2 supports current-preferred template-into-current and the Ruby-compatible exact incoming selection policy".into());
+            } else {
+                limitations.push("merge2 is current-preferred template-into-current; unsupported ownership/layout plans fail closed".into());
+            }
         }
         profiles.push(OperationProfileDeclaration {
             id: id.into(),
