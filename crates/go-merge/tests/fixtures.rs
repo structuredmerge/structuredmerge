@@ -65,6 +65,28 @@ fn consumes_shared_conflict_fixture_and_records_diagnostic_category() {
 }
 
 #[test]
+fn merge3_recovery_fixture_fails_closed_for_every_input_role() {
+    let fixture = read_fixture(&["go", "slice-114-native", "merge3-one-sided-parser-failure.json"]);
+    for case in fixture["cases"].as_array().unwrap() {
+        let result = merge_go_three_way(
+            case["base_source"].as_str().unwrap(),
+            case["ours_source"].as_str().unwrap(),
+            case["theirs_source"].as_str().unwrap(),
+            GoDialect::Go,
+        );
+        let name = case["name"].as_str().unwrap();
+        assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Error, "{name}: {result:?}");
+        assert_eq!(result.output, None, "{name}: {result:?}");
+        assert_eq!(result.conflicts.is_empty(), true, "{name}: {result:?}");
+        assert_eq!(
+            result.diagnostics.first().map(|diagnostic| diagnostic.category),
+            Some(ast_merge::DiagnosticCategory::ParseError),
+            "{name}: {result:?}"
+        );
+    }
+}
+
+#[test]
 fn rejects_owner_membership_changes_with_independent_edits() {
     let base = "package main\n\nfunc left() int { return 1 }\n\nfunc right() int { return 1 }\n";
     let ours = "package main\n\nfunc left() int { return 2 }\n\nfunc right() int { return 1 }\n";
