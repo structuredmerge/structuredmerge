@@ -213,6 +213,31 @@ fn typed_bash_line_plan_orders_added_owners_from_selected_membership_layout() {
 }
 
 #[test]
+fn typed_bash_line_plan_appends_independent_additions_from_both_tips() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/bash_merge3_additions_from_both_tips.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let sources = [
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ];
+    let parser = Parser::new("bash");
+    let [base, ours, theirs] = parser.inputs(sources);
+    let expected = fixture["expected"]["output"].as_str().unwrap();
+    let execution =
+        typed::merge3(&base, &ours, &theirs, |text| Ok(parser.parse(text, SourceRole::Output)))
+            .unwrap();
+
+    assert_eq!(execution.evidence.result.outcome, ThreeWayMergeOutcome::Clean);
+    assert_eq!(execution.evidence.result.output.as_deref(), Some(expected));
+    assert!(execution.ordered_line_render_applied);
+    assert!(execution.output_parse.is_some());
+}
+
+#[test]
 fn unsupported_or_ambiguous_bash_remains_rejected() {
     let parser = Parser::new("bash");
     for source in [

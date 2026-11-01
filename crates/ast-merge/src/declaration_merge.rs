@@ -260,10 +260,16 @@ fn merge_owners(
     let selected_ids = selected.keys().cloned().collect::<HashSet<_>>();
     let ours_ids = ours_by_id.keys().map(|id| (*id).to_string()).collect::<HashSet<_>>();
     let theirs_ids = theirs_by_id.keys().map(|id| (*id).to_string()).collect::<HashSet<_>>();
+    let combined_theirs_additions =
+        selected_ids != ours_ids && selected_ids != theirs_ids && ours_ids.is_subset(&selected_ids);
     let (baseline, baseline_revision) = if selected_ids == ours_ids {
         (&ours, SourceRevision::Ours)
     } else if selected_ids == theirs_ids {
         (&theirs, SourceRevision::Theirs)
+    } else if combined_theirs_additions {
+        // Ruby's declaration composite retains ours' layout, then appends
+        // declarations newly selected from theirs in their source order.
+        (&ours, SourceRevision::Ours)
     } else {
         return error_result(
             DiagnosticCategory::UnsupportedFeature,
@@ -361,6 +367,32 @@ fn merge_owners(
         None,
     );
 
+    let mut expected_owner_ids =
+        baseline.owner_ids().into_iter().map(str::to_string).collect::<Vec<_>>();
+    if combined_theirs_additions {
+        for added_owner in theirs.owners.iter().filter(|owner| {
+            !ours_by_id.contains_key(owner.id.as_str())
+                && selected.get(owner.id.as_str()) == Some(&SourceRevision::Theirs)
+        }) {
+            let line_range = match physical_line_range(&theirs, added_owner) {
+                Ok(range) => range,
+                Err(message) => {
+                    return error_result(DiagnosticCategory::ConfigurationError, message);
+                }
+            };
+            append_source_segment(
+                &mut output,
+                segments,
+                &theirs.source,
+                SourceRevision::Theirs,
+                ByteRange { start_byte: line_range.start, end_byte: line_range.end },
+                Some(added_owner.id.clone()),
+            );
+            expected.insert(added_owner.id.as_str(), added_owner.fingerprint.as_str());
+            expected_owner_ids.push(added_owner.id.clone());
+        }
+    }
+
     let rendered = match verify(&output) {
         Ok(document) => document,
         Err(message) => {
@@ -373,7 +405,7 @@ fn merge_owners(
     if let Err(message) = rendered.validate("output") {
         return error_result(DiagnosticCategory::ConfigurationError, message);
     }
-    if rendered.owner_ids() != baseline.owner_ids()
+    if rendered.owner_ids() != expected_owner_ids.iter().map(String::as_str).collect::<Vec<_>>()
         || rendered
             .owners
             .iter()
@@ -384,7 +416,20 @@ fn merge_owners(
             "source-preserving declaration render changed the planned owner structure",
         );
     }
-    if rendered.layout_segments() != baseline.layout_segments() {
+    let rendered_layout_matches = if membership_changed {
+        match (
+            layout_segments_for_ids(&rendered, &stable_ids),
+            layout_segments_for_ids(baseline, &stable_ids),
+        ) {
+            (Ok(rendered_layout), Ok(baseline_layout)) => rendered_layout == baseline_layout,
+            (Err(message), _) | (_, Err(message)) => {
+                return error_result(DiagnosticCategory::ConfigurationError, message);
+            }
+        }
+    } else {
+        rendered.layout_segments() == baseline.layout_segments()
+    };
+    if !rendered_layout_matches {
         return error_result(
             DiagnosticCategory::ConfigurationError,
             "source-preserving declaration render changed inter-owner layout",
