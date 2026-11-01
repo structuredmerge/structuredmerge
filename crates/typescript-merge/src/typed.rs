@@ -238,11 +238,7 @@ pub fn line_selection_postprocessor(
     evidence: &mut ast_merge::SourcePreservingMergeEvidence,
     parse_output: &mut dyn FnMut(&str) -> Result<ParsedResult, String>,
 ) -> Result<bool, String> {
-    use ast_merge::line_selection::{
-        is_recoverable_owner_layout_error, render_line_selected_output,
-        source_segments_from_line_render,
-    };
-    use std::collections::{HashMap, HashSet};
+    use ast_merge::line_selection::is_recoverable_owner_layout_error;
     use tree_haver::source::SourceRole;
 
     if inputs.len() != 3 || !is_recoverable_owner_layout_error(evidence) {
@@ -260,66 +256,15 @@ pub fn line_selection_postprocessor(
         return Ok(false);
     };
     let analyses = [base_lines, ours_lines, theirs_lines];
-    let Ok(Some(rendered)) = render_line_selected_output(&analyses, evidence) else {
-        return Ok(false);
-    };
-    let source_texts = HashMap::from([
-        (ast_merge::SourceRevision::Base, analyses[0].owners.document.source.clone()),
-        (ast_merge::SourceRevision::Ours, analyses[1].owners.document.source.clone()),
-        (ast_merge::SourceRevision::Theirs, analyses[2].owners.document.source.clone()),
-    ]);
-    let Ok(Some(segments)) = source_segments_from_line_render(&rendered, &source_texts) else {
-        return Ok(false);
-    };
-    let Ok(parsed) = parse_output(&rendered.content) else {
-        return Ok(false);
-    };
-    let input_ids = inputs
-        .iter()
-        .map(|input| input.source.descriptor().source_id.clone())
-        .collect::<HashSet<_>>();
-    if parsed.source.descriptor().role != SourceRole::Output
-        || input_ids.contains(&parsed.source.descriptor().source_id)
-        || parsed.source.bytes() != rendered.content.as_bytes()
-        || parsed.backend != ours.backend
-        || !parsed.document.output().ok
-    {
-        return Ok(false);
-    }
-    let Ok(output_analysis) = project_analysis(&parsed, true) else {
-        return Ok(false);
-    };
-    // Surviving owners are every owner any revision has, minus the ones the engine deleted.
-    let deleted = evidence
-        .classification
-        .as_ref()
-        .map(|classification| {
-            classification
-                .decisions
-                .iter()
-                .filter(|decision| decision.kind == ast_merge::OwnerDecisionKind::Delete)
-                .map(|decision| decision.owner_id.clone())
-                .collect::<HashSet<_>>()
-        })
-        .unwrap_or_default();
-    let expected = analyses
-        .iter()
-        .flat_map(|analysis| analysis.owners.document.owners.iter().map(|owner| owner.id.clone()))
-        .filter(|id| !deleted.contains(id))
-        .collect::<HashSet<_>>();
-    let actual = output_analysis
-        .document
-        .owners
-        .iter()
-        .map(|owner| owner.id.clone())
-        .collect::<HashSet<_>>();
-    if expected != actual {
-        return Ok(false);
-    }
-    evidence.source_segments = segments;
-    evidence.result.outcome = ast_merge::ThreeWayMergeOutcome::Clean;
-    evidence.result.diagnostics.clear();
-    evidence.result.conflicts.clear();
-    evidence.result.output = Some(rendered.content);
-    Ok(true)
+    Ok(ast_merge::line_selection::recover_with_line_selection(
+        inputs,
+        &analyses,
+        evidence,
+        parse_output,
+        &|parsed| {
+            project_analysis(parsed, true).map(|analysis| {
+                analysis.document.owners.iter().map(|owner| owner.id.clone()).collect()
+            })
+        },
+    ))
 }

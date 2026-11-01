@@ -340,9 +340,36 @@ fn go_membership_change_with_owner_edit(
     ast_merge::unmanaged_source_fingerprint(ours) != ast_merge::unmanaged_source_fingerprint(theirs)
 }
 
+/// True when grouped declarations and package clauses are identical in all three tips, so the only
+/// membership change is among individually named owners.
+pub(crate) fn go_plain_membership_change(
+    base: &SourcePreservingOwnerDocument,
+    ours: &SourcePreservingOwnerDocument,
+    theirs: &SourcePreservingOwnerDocument,
+) -> bool {
+    let structural_ids = |document: &SourcePreservingOwnerDocument| {
+        document
+            .owners
+            .iter()
+            .filter(|owner| {
+                owner.id.starts_with("/package:")
+                    || owner.id.starts_with("/var_group:")
+                    || owner.id.starts_with("/type_group:")
+                    || owner.id.starts_with("/const_group:")
+                    || owner.id.starts_with("/import_group:")
+            })
+            .map(|owner| owner.id.clone())
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    let base_ids = structural_ids(base);
+    structural_ids(ours) == base_ids && structural_ids(theirs) == base_ids
+}
+
+pub(crate) const GO_MEMBERSHIP_CONFLICT_ID: &str = "go-unmanaged-source";
+
 fn conservative_membership_conflict() -> ThreeWayMergeResult<String> {
     let conflict = MergeConflict {
-        conflict_id: "go-unmanaged-source".to_string(),
+        conflict_id: GO_MEMBERSHIP_CONFLICT_ID.to_string(),
         category: "unmanaged_source_change".to_string(),
         path: "<unmanaged-source>".to_string(),
         fallback_scope: "full_file".to_string(),

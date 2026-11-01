@@ -186,28 +186,60 @@ fn typed_merge_preserves_legacy_decisions_and_freshly_verifies_clean_output() {
 }
 
 #[test]
-fn membership_plus_owner_edit_retains_the_family_guard_without_false_proof() {
+fn plain_membership_plus_owner_edit_merges_by_proven_line_selection() {
     let parser = Parser::new("go");
-    for texts in [
-        [BASE.to_string(), OURS.to_string(), format!("{BASE}\nfunc added() {{}}\n")],
-        [BASE.to_string(), OURS.to_string(), "package main\nfunc left() int { return 1 }\n".into()],
-        // The guard also applies when one side equals base: do not take the
-        // generic whole-source shortcut before checking the family boundary.
-        [BASE.to_string(), format!("{OURS}\nfunc added() {{}}\n"), BASE.to_string()],
-        [BASE.to_string(), OURS.to_string(), BASE.replace("package main", "package changed")],
+    let added = format!("{OURS}\nfunc added() {{}}\n");
+    for (name, texts, expected) in [
+        (
+            "theirs adds an owner",
+            [BASE.to_string(), OURS.to_string(), format!("{BASE}\nfunc added() {{}}\n")],
+            added.clone(),
+        ),
+        (
+            "theirs deletes an owner",
+            [
+                BASE.to_string(),
+                OURS.to_string(),
+                "package main\n\nfunc left() int { return 1 }\n".into(),
+            ],
+            "package main\n\nfunc left() int { return 2 }\n".to_string(),
+        ),
+        (
+            "ours adds an owner while theirs equals base",
+            [BASE.to_string(), added.clone(), BASE.to_string()],
+            added.clone(),
+        ),
     ] {
-        let legacy = go_merge::merge_go_three_way(&texts[0], &texts[1], &texts[2], GoDialect::Go);
         let [base, ours, theirs] = parser.inputs([&texts[0], &texts[1], &texts[2]]);
         let result =
-            typed::merge3(&base, &ours, &theirs, |_| panic!("guard must not render output"))
+            typed::merge3(&base, &ours, &theirs, |text| Ok(parser.parse(text, SourceRole::Output)))
                 .unwrap();
-        assert_eq!(result.evidence.result, legacy);
-        assert_eq!(result.evidence.result.outcome, ThreeWayMergeOutcome::Conflict);
-        assert_eq!(result.evidence.result.conflicts[0].category, "unmanaged_source_change");
-        assert!(result.evidence.classification.is_none());
-        assert!(result.evidence.source_segments.is_empty());
-        assert!(result.output_parse.is_none());
+        assert_eq!(result.evidence.result.outcome, ThreeWayMergeOutcome::Clean, "{name}");
+        assert_eq!(result.evidence.result.output.as_deref(), Some(expected.as_str()), "{name}");
+        assert!(!result.evidence.source_segments.is_empty(), "{name}");
+        assert_eq!(
+            result.output_parse.unwrap().source.bytes(),
+            expected.as_bytes(),
+            "{name}: fresh output parse"
+        );
     }
+}
+
+#[test]
+fn package_changes_keep_the_family_guard_without_false_proof() {
+    let parser = Parser::new("go");
+    let texts =
+        [BASE.to_string(), OURS.to_string(), BASE.replace("package main", "package changed")];
+    let legacy = go_merge::merge_go_three_way(&texts[0], &texts[1], &texts[2], GoDialect::Go);
+    let [base, ours, theirs] = parser.inputs([&texts[0], &texts[1], &texts[2]]);
+    let result =
+        typed::merge3(&base, &ours, &theirs, |_| panic!("guard must not render output")).unwrap();
+    assert_eq!(result.evidence.result, legacy);
+    assert_eq!(result.evidence.result.outcome, ThreeWayMergeOutcome::Conflict);
+    assert_eq!(result.evidence.result.conflicts[0].category, "unmanaged_source_change");
+    assert!(result.evidence.classification.is_none());
+    assert!(result.evidence.source_segments.is_empty());
+    assert!(result.output_parse.is_none());
 }
 
 #[test]

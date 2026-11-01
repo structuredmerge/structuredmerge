@@ -88,6 +88,9 @@ fn summarize(request: OperationRequest) -> Value {
             "diagnostics": result.diagnostics.iter().map(|d| format!("{d:?}").chars().take(0).collect::<String>()).count(),
             "changes": result.changes.iter().map(|c| (c.path.clone(), c.subject_ref.clone())).collect::<Vec<_>>(),
             "conflicts": result.conflicts.len(),
+            "owners": result.analysis.as_ref().and_then(|a| a.extra.get("owners")).map(|owners| {
+                owners.as_array().map(|list| list.iter().map(|o| o["id"].clone()).collect::<Vec<_>>())
+            }),
         }),
         Err(error) => json!({"error": format!("{error:?}")}),
     }
@@ -237,4 +240,85 @@ fn owner_deletion_recovery_selects_whole_lines_and_keeps_conflicts_closed() {
             assert_eq!(result.output.as_deref(), expected, "{name} [{backend}]");
         }
     }
+}
+
+#[test]
+fn oxc_matches_tree_sitter_on_tsx_declaration_files_and_member_decorators() {
+    // (name, dialect, source)
+    let cases: Vec<(&str, &str, &str)> = vec![
+        (
+            "tsx jsx",
+            "tsx",
+            "import React from 'react';\nexport function App() { return <div className=\"a\">hi</div>; }\nconst x = <A b=\"c\" />;\n",
+        ),
+        (
+            "tsx generic arrow",
+            "tsx",
+            "export const f = <T,>(x: T) => x;\nexport function G() { return <></>; }\n",
+        ),
+        (
+            "declaration file",
+            "typescript",
+            "declare module 'x' {\n  export function f(): void;\n}\ndeclare function g(a: number): string;\ndeclare const k: number;\nexport declare class C { m(): void }\ndeclare namespace N { const y: number }\n",
+        ),
+        (
+            "member decorators",
+            "typescript",
+            "@Component({ selector: 'x' })\nexport class A {\n  @Input() name: string;\n  @HostListener('click') onClick() {}\n}\n\n@dec class B {}\n",
+        ),
+        (
+            "overloads and abstract",
+            "typescript",
+            "function f(a: string): void;\nfunction f(a: number): void;\nfunction f(a: any) {}\nabstract class Q<T> { abstract m(): T }\nexport default class D {}\n",
+        ),
+        (
+            "type imports and exports",
+            "typescript",
+            "import type { A } from 'a';\nexport { x } from 'y';\nexport * from 'z';\nexport type { B } from 'b';\nexport interface I { a: number }\nconst enum E { A = 1 }\ndeclare global { interface Window { x: number } }\n",
+        ),
+        ("non-ascii", "typescript", "// é\nexport function café() { return 'ü'; }\nconst ñ = 1;\n"),
+        ("crlf", "typescript", "export function a() {}\r\n\r\nexport function b() {}\r\n"),
+        ("var and multi-declarator", "typescript", "var a = 1;\nlet b = 2, c = 3;\nconst d = 4;\n"),
+        ("empty and comment only", "typescript", "// only a comment\n"),
+    ];
+    let mut differences = Vec::new();
+    let mut analyzed_ok = Vec::new();
+    for (name, dialect, source) in cases {
+        for (operation, input) in [
+            ("analyze", json!({"dialect": dialect, "source": source})),
+            (
+                "diff",
+                json!({"dialect": dialect, "before": source, "after": format!("{source}// changed\n")}),
+            ),
+            (
+                "merge3",
+                json!({"dialect": dialect, "base": source, "ours": source, "theirs": format!("{source}\nconst appended = 1;\n")}),
+            ),
+        ] {
+            let call = json!({"call": format!("typescript_common_{operation}"), "input": input});
+            let tree_sitter = summarize(request("{dialect}.common", &call).unwrap());
+            let oxc = summarize(request("typescript.oxc", &call).unwrap());
+            if operation == "analyze" && oxc["ok"] == true {
+                analyzed_ok.push(name);
+            }
+            if tree_sitter != oxc {
+                differences.push(format!(
+                    "{name} / {operation}:\n  tree-sitter {tree_sitter}\n  oxc         {oxc}"
+                ));
+            }
+        }
+    }
+    assert!(
+        differences.is_empty(),
+        "{} differences:\n{}",
+        differences.len(),
+        differences.join("\n")
+    );
+    // Both backends accept exactly these; every other case fails closed identically (unsupported
+    // declare/overload/export-only/var/multi-declarator/comment-only forms stay unowned).
+    assert_eq!(
+        analyzed_ok,
+        ["tsx jsx", "member decorators", "non-ascii", "crlf"],
+        "supported-source set changed"
+    );
 }

@@ -166,6 +166,35 @@ pub fn render_line_selected_output(
             owner_revisions.insert(decision.owner_id.clone(), revision);
         }
     }
+    // A deleted owner whose neighbours include unattached comment text (a floating comment between
+    // blank lines) can lose or gain a separator line; leave those to the fail-closed result.
+    if !deleted_owner_ids.is_empty() {
+        let base = &analyses[0].owners.document;
+        let lines = base.source.split_inclusive('\n').collect::<Vec<_>>();
+        let non_blank = |from: usize, to: usize| {
+            (from..=to).any(|line| {
+                line >= 1 && lines.get(line - 1).is_some_and(|text| !text.trim().is_empty())
+            })
+        };
+        for (index, owner) in base.owners.iter().enumerate() {
+            if !deleted_owner_ids.contains(&owner.id) {
+                continue;
+            }
+            if index > 0 {
+                let previous = &base.owners[index - 1];
+                if owner.start_line > previous.end_line + 1
+                    && non_blank(previous.end_line + 1, owner.start_line - 1)
+                {
+                    return Ok(None);
+                }
+            }
+            let next_start =
+                base.owners.get(index + 1).map_or(lines.len() + 1, |next| next.start_line);
+            if next_start > owner.end_line + 1 && non_blank(owner.end_line + 1, next_start - 1) {
+                return Ok(None);
+            }
+        }
+    }
     let selected_owner_ids = owner_revisions.keys().map(String::as_str).collect::<HashSet<_>>();
     let baseline_revision = if let Some(revision) = classification.whole_source_selection {
         revision
@@ -286,4 +315,80 @@ pub fn source_segments_from_line_render(
         return Ok(None);
     }
     Ok(Some(segments))
+}
+
+/// Render the engine's decisions by line selection and accept the result only when every output
+/// byte is proven against a source line, the output reparses with the ours parser, and the
+/// output's owners equal the surviving owners (all owners of any revision minus deletions).
+/// On success `evidence` becomes a clean result; otherwise it is left untouched.
+pub fn recover_with_line_selection(
+    inputs: &[tree_haver::service::ParsedResult],
+    analyses: &[LineSelectionAnalysis; 3],
+    evidence: &mut SourcePreservingMergeEvidence,
+    parse_output: &mut dyn FnMut(&str) -> Result<tree_haver::service::ParsedResult, String>,
+    output_owner_ids: &dyn Fn(
+        &tree_haver::service::ParsedResult,
+    ) -> Result<HashSet<String>, String>,
+) -> bool {
+    use tree_haver::source::SourceRole;
+    let Some(ours) =
+        inputs.iter().find(|parsed| parsed.source.descriptor().role == SourceRole::Ours)
+    else {
+        return false;
+    };
+    let Ok(Some(rendered)) = render_line_selected_output(analyses, evidence) else {
+        return false;
+    };
+    let source_texts = HashMap::from([
+        (SourceRevision::Base, analyses[0].owners.document.source.clone()),
+        (SourceRevision::Ours, analyses[1].owners.document.source.clone()),
+        (SourceRevision::Theirs, analyses[2].owners.document.source.clone()),
+    ]);
+    let Ok(Some(segments)) = source_segments_from_line_render(&rendered, &source_texts) else {
+        return false;
+    };
+    let Ok(parsed) = parse_output(&rendered.content) else {
+        return false;
+    };
+    let input_ids = inputs
+        .iter()
+        .map(|input| input.source.descriptor().source_id.clone())
+        .collect::<HashSet<_>>();
+    if parsed.source.descriptor().role != SourceRole::Output
+        || input_ids.contains(&parsed.source.descriptor().source_id)
+        || parsed.source.bytes() != rendered.content.as_bytes()
+        || parsed.backend != ours.backend
+        || !parsed.document.output().ok
+    {
+        return false;
+    }
+    let Ok(actual) = output_owner_ids(&parsed) else {
+        return false;
+    };
+    let deleted = evidence
+        .classification
+        .as_ref()
+        .map(|classification| {
+            classification
+                .decisions
+                .iter()
+                .filter(|decision| decision.kind == OwnerDecisionKind::Delete)
+                .map(|decision| decision.owner_id.clone())
+                .collect::<HashSet<_>>()
+        })
+        .unwrap_or_default();
+    let expected = analyses
+        .iter()
+        .flat_map(|analysis| analysis.owners.document.owners.iter().map(|owner| owner.id.clone()))
+        .filter(|id| !deleted.contains(id))
+        .collect::<HashSet<_>>();
+    if expected != actual {
+        return false;
+    }
+    evidence.source_segments = segments;
+    evidence.result.outcome = ThreeWayMergeOutcome::Clean;
+    evidence.result.diagnostics.clear();
+    evidence.result.conflicts.clear();
+    evidence.result.output = Some(rendered.content);
+    true
 }

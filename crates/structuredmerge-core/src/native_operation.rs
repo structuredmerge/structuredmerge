@@ -1007,6 +1007,10 @@ pub(crate) fn execute_native_operation_with_service(
                         rust_merge::typed::line_selection_postprocessor
                             as ast_merge::typed_merge::NativeOwnerPostprocessor,
                     ),
+                    "go" => Some(
+                        go_merge::typed::line_selection_postprocessor
+                            as ast_merge::typed_merge::NativeOwnerPostprocessor,
+                    ),
                     "typescript" => Some(
                         typescript_merge::typed::line_selection_postprocessor
                             as ast_merge::typed_merge::NativeOwnerPostprocessor,

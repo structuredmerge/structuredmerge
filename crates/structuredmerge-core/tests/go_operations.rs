@@ -192,7 +192,7 @@ fn conflict_preview_localizes_the_go_owner_and_keeps_its_leading_comment() {
 }
 
 #[test]
-fn conflict_preview_falls_back_to_full_source_when_owner_ranges_are_unproven() {
+fn owner_deletion_with_independent_edit_merges_cleanly_through_line_selection() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
         "../../../../fixtures/polyglot/typed-core/go_merge3_membership_edit_conflict.json"
     ))
@@ -201,15 +201,13 @@ fn conflict_preview_falls_back_to_full_source_when_owner_ranges_are_unproven() {
     let base = input["base"].as_str().unwrap();
     let ours = input["ours"].as_str().unwrap();
     let theirs = input["theirs"].as_str().unwrap();
-    let (result, _) = run(request("merge3", &[base, ours, theirs]));
+    let (result, request) = run(request("merge3", &[base, ours, theirs]));
 
-    assert!(!result.ok);
-    assert_eq!(result.output, None);
-    assert_eq!(
-        result.conflicted_output.as_deref(),
-        fixture["expected_conflicted_output"]["rust_host"].as_str()
-    );
-    assert_eq!(result.render_report["strategy"], "full-file-conflict-review");
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), fixture["rust_host_expected"]["output"].as_str());
+    assert_eq!(result.verification.output_reparsed, Some(true));
+    assert!(!result.verification.retained_source_regions.as_ref().unwrap().is_empty());
+    result.validate_against(&request).unwrap();
 }
 
 #[test]
