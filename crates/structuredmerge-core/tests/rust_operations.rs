@@ -1097,3 +1097,27 @@ fn common_rust_syn_operation_reports_conflict_when_reorder_crosses_added_gap() {
     assert_eq!(result.conflicts[0].id(), "rust-owner-order-divergence");
     assert_eq!(result.conflicts[0].matches_path("<owner-order>"), true);
 }
+
+#[test]
+fn rust_syn_conflict_review_uses_native_owner_ranges() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_merge3_conflict.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let texts = [
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ];
+    let mut operation = request("merge3", &texts);
+    operation.parser_selection.backend = Some("rust.syn.core-test".into());
+    let (result, _) = run(operation);
+
+    assert!(!result.ok);
+    assert_eq!(
+        result.conflicted_output.as_deref(),
+        fixture["expected_conflicted_output"]["rust_syn"].as_str()
+    );
+    assert_eq!(result.render_report.get("strategy"), Some(&json!("localized-conflict-review")));
+}

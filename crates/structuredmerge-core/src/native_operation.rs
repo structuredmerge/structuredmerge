@@ -134,7 +134,7 @@ pub(crate) fn diagnostic(
     }));
 }
 
-fn go_conflict_preview(
+fn owner_conflict_preview(
     execution: &NativeMergeExecution,
     request: &ValidatedOperationRequest,
 ) -> Result<(ast_merge::SourceRenderResult, bool), String> {
@@ -143,7 +143,7 @@ fn go_conflict_preview(
         let input_source = input
             .sources
             .get(&role)
-            .ok_or_else(|| format!("Go conflict preview lacks its {role:?} source"))?;
+            .ok_or_else(|| format!("Owner conflict preview lacks its {role:?} source"))?;
         let document =
             request.sources().get(&input_source.source_id).map_err(|error| error.to_string())?;
         std::str::from_utf8(document.bytes()).map(str::to_string).map_err(|error| error.to_string())
@@ -171,13 +171,13 @@ fn go_conflict_preview(
         .result
         .conflicts
         .first()
-        .ok_or_else(|| "Go conflict preview has no conflict record".to_string())?;
+        .ok_or_else(|| "Owner conflict preview has no conflict record".to_string())?;
     let alternatives = [SourceRevision::Base, SourceRevision::Ours, SourceRevision::Theirs]
         .into_iter()
         .map(|revision| {
             let content = sources
                 .get(&revision)
-                .ok_or_else(|| "Go conflict preview source is missing".to_string())?;
+                .ok_or_else(|| "Owner conflict preview source is missing".to_string())?;
             let role = match revision {
                 SourceRevision::Base => "base",
                 SourceRevision::Ours => "ours",
@@ -1054,8 +1054,8 @@ pub(crate) fn execute_native_operation_with_service(
                 result.verification.consumed_source_roles =
                     Some(input.operation.kind().source_roles().to_vec());
             }
-            if family == "go" {
-                match go_conflict_preview(&execution, request) {
+            if matches!(family, "go" | "rust") {
+                match owner_conflict_preview(&execution, request) {
                     Ok((preview, full_file_fallback)) => {
                         result.conflicted_output = Some(preview.content.clone());
                         result.render_report = [
