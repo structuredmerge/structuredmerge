@@ -69,6 +69,20 @@ pub fn project_native_merge_conflicts(
             return Err(E::Source);
         }
     }
+    if !execution.input_parses.is_empty() {
+        if execution.input_parses.len() != roles.len() {
+            return Err(E::Source);
+        }
+        for (parsed, role) in execution.input_parses.iter().zip(roles) {
+            let expected = request.request().sources.get(&role).ok_or(E::Source)?;
+            let source = request.sources().get(&expected.source_id).map_err(|_| E::Source)?;
+            if parsed.source.descriptor() != source.descriptor()
+                || parsed.source.descriptor().role != role
+            {
+                return Err(E::Source);
+            }
+        }
+    }
     if matches!(provider_id, "kernel.go" | "kernel.rust")
         && execution.rendered.classification.is_none()
     {

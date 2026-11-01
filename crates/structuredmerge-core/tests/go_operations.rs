@@ -100,11 +100,19 @@ fn common_analysis_retains_native_references_and_revalidates_owner_claims() {
     let (result, input) = run(request("analyze", &[BASE]));
     assert!(result.ok, "{:?}", result.diagnostics);
     let facts = &result.analysis.as_ref().unwrap().extra;
-    assert_eq!(facts["owners"][0]["id"], "/function:f");
-    assert_eq!(facts["owners"][1]["id"], "/function:g");
-    assert!(!facts["owners"][0]["node_ids"].as_array().unwrap().is_empty());
+    let owners = facts["owners"].as_array().unwrap();
+    let functions: Vec<_> = owners
+        .iter()
+        .filter(|owner| owner["id"].as_str().is_some_and(|id| id.starts_with("/function:")))
+        .collect();
+    assert_eq!(
+        functions.iter().map(|owner| owner["id"].as_str().unwrap()).collect::<Vec<_>>(),
+        ["/function:f", "/function:g"]
+    );
+    let function_index = owners.iter().position(|owner| owner["id"] == "/function:f").unwrap();
+    assert!(!owners[function_index]["node_ids"].as_array().unwrap().is_empty());
     let mut wrong = result.clone();
-    wrong.analysis.as_mut().unwrap().extra.get_mut("owners").unwrap()[0]["node_id"] =
+    wrong.analysis.as_mut().unwrap().extra.get_mut("owners").unwrap()[function_index]["node_id"] =
         json!("invented");
     assert!(wrong.validate_against(&input).is_err());
     let mut future = result;
@@ -123,8 +131,22 @@ fn diff_reports_owner_and_whole_document_changes() {
     {
         let (result, _) = run(request("diff2", &[BASE, &changed]));
         assert!(result.ok);
-        assert_eq!(result.changes.len(), 1);
-        assert_eq!(result.changes[0].subject_ref.as_deref(), Some("document"));
+        let owner_changes = result
+            .changes
+            .iter()
+            .filter(|change| change.subject_ref.as_deref() != Some("document"))
+            .count();
+        let expected_owner_changes = 1 + usize::from(changed.contains("package other"));
+        assert_eq!(owner_changes, expected_owner_changes);
+        assert_eq!(result.changes.len(), owner_changes + 1);
+        assert_eq!(
+            result
+                .changes
+                .iter()
+                .filter(|change| change.subject_ref.as_deref() == Some("document"))
+                .count(),
+            1
+        );
     }
 }
 
@@ -148,37 +170,31 @@ fn merge3_preserves_native_decisions_and_verifies_every_clean_output() {
 }
 
 #[test]
-fn family_guard_is_a_whole_document_conflict_without_invented_owner_decisions() {
+fn membership_additions_merge_with_independent_function_edits_like_ruby() {
     for texts in [
         [BASE.to_string(), OURS.to_string(), format!("{BASE}func added() {{}}\n")],
         [BASE.to_string(), format!("{OURS}func added() {{}}\n"), BASE.to_string()],
     ] {
-        let (result, input) = run(request("merge3", &[&texts[0], &texts[1], &texts[2]]));
-        assert!(!result.ok);
-        assert!(result.output.is_none());
-        assert_eq!(result.verification.classification_reached, Some(true));
-        assert!(result.verification.extra["owner_classification"].is_null());
-        assert_eq!(result.verification.base_participated, Some(true));
-        assert_eq!(result.verification.consumed_source_roles.as_ref().unwrap().len(), 3);
-        assert_eq!(result.conflicts.len(), 1);
-        let ConflictRecord::Canonical(conflict) = &result.conflicts[0] else { panic!() };
-        assert_eq!(conflict.category, ConflictCategory::Ownership);
-        assert_eq!(conflict.localization.status, LocalizationStatus::WholeDocument);
-        assert!(conflict.decision_ids.is_empty());
-        assert!(conflict.classification.decision_ids.is_empty());
-        for (alternative, text) in conflict.alternatives.iter().zip(&texts) {
-            assert_eq!(alternative.regions[0].byte_length, text.len() as u64);
-        }
-        // No trusted owner decision ID is needed for a whole-document guard.
-        result.validate_against(&input).unwrap();
+        let expected =
+            go_merge::merge_go_three_way(&texts[0], &texts[1], &texts[2], go_merge::GoDialect::Go);
+        let (result, _) = run(request("merge3", &[&texts[0], &texts[1], &texts[2]]));
+        assert!(result.ok, "{:?}", result.diagnostics);
+        assert_eq!(result.output, expected.output);
+        assert!(result.conflicts.is_empty());
     }
 }
 
 #[test]
 fn unsupported_operations_syntax_selection_and_cancellation_remain_fail_closed() {
     let (result, _) = run(request("analyze", &["package main\nvar x=1\n"]));
-    assert!(!result.ok);
-    assert!(!result.diagnostics.is_empty());
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert!(
+        result.analysis.unwrap().extra["owners"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|owner| owner["id"] == "/var:x")
+    );
     let mut input = request("analyze", &[BASE]);
     input.provider_selection.dialect = Some("bash".into());
     assert!(!run(input).0.ok);
@@ -296,10 +312,12 @@ fn directional_go_rejects_unproven_headers_and_ambiguous_placement() {
 }
 
 #[test]
-fn guard_projection_rejects_forged_messages_sources_and_provider_identity() {
+fn guard_projection_rejects_source_swaps_and_wrong_provider_identity() {
     use ast_merge::typed_merge::{NativeOwnerEngine, merge_native_sources_with_engine};
-    let added = format!("{BASE}func added() {{}}\n");
-    let input = request("merge3", &[BASE, OURS, &added]).validate(100000, |_, _| panic!()).unwrap();
+    let conflicting_theirs = BASE.replacen("println(1)", "println(3)", 1);
+    let input = request("merge3", &[BASE, OURS, &conflicting_theirs])
+        .validate(100000, |_, _| panic!())
+        .unwrap();
     let parses = [SourceRole::Base, SourceRole::Ours, SourceRole::Theirs]
         .map(|role| {
             let source = &input.request().sources[&role];
@@ -340,10 +358,7 @@ fn guard_projection_rejects_forged_messages_sources_and_provider_identity() {
     };
     assert!(project(&execution, "kernel.go").is_ok());
     assert!(project(&execution, "kernel.bash").is_err());
-    let original = execution.rendered.result.conflicts[0].message.clone();
-    execution.rendered.result.conflicts[0].message.push_str(" forged");
-    assert!(project(&execution, "kernel.go").is_err());
-    execution.rendered.result.conflicts[0].message = original;
+    execution.rendered.result.conflicts[0].message.push_str(" display-only wording");
     assert!(project(&execution, "kernel.go").is_ok());
     execution.input_parses.swap(0, 1);
     assert!(project(&execution, "kernel.go").is_err());
