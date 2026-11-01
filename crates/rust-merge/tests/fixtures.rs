@@ -422,6 +422,21 @@ fn rust_native_backend_distinguishes_concrete_generic_impl_arguments() {
 }
 
 #[test]
+fn rust_native_backend_merges_trait_aliases_with_independent_function_edits() {
+    let fixture = read_fixture(&["polyglot", "typed-core", "rust_trait_alias_merge3.json"]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(fixture["expected"]["output"].as_str().unwrap()));
+}
+
+#[test]
 fn rust_backends_merge_extern_crate_alias_edits_with_independent_function_edits() {
     let fixture = read_fixture(&["polyglot", "typed-core", "rust_extern_crate_owner_merge3.json"]);
     let input = &fixture["input"];

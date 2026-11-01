@@ -31,6 +31,7 @@ const RUST_SOURCE_PRESERVING_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
     NamedOwnerKind { node_kind: "static_item", path_kind: "static" },
     NamedOwnerKind { node_kind: "struct_item", path_kind: "struct" },
     NamedOwnerKind { node_kind: "trait_item", path_kind: "trait" },
+    NamedOwnerKind { node_kind: "trait_alias_item", path_kind: "trait_alias" },
     NamedOwnerKind { node_kind: "type_item", path_kind: "type" },
     NamedOwnerKind { node_kind: "union_item", path_kind: "union" },
     NamedOwnerKind { node_kind: "use_declaration", path_kind: "use" },
@@ -47,6 +48,7 @@ const RUST_SYN_SOURCE_PRESERVING_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
     NamedOwnerKind { node_kind: "static_item", path_kind: "static" },
     NamedOwnerKind { node_kind: "struct_item", path_kind: "struct" },
     NamedOwnerKind { node_kind: "trait_item", path_kind: "trait" },
+    NamedOwnerKind { node_kind: "trait_alias_item", path_kind: "trait_alias" },
     NamedOwnerKind { node_kind: "type_item", path_kind: "type" },
     NamedOwnerKind { node_kind: "union_item", path_kind: "union" },
     NamedOwnerKind { node_kind: "use_declaration", path_kind: "use" },
@@ -468,6 +470,7 @@ fn parse_source_preserving_rust_native_with_treesitter_comments(
             Item::Static(item) => format!("/static:{}", item.ident),
             Item::Struct(item) => format!("/struct:{}", item.ident),
             Item::Trait(item) => format!("/trait:{}", item.ident),
+            Item::TraitAlias(item) => format!("/trait_alias:{}", item.ident),
             Item::Type(item) => format!("/type:{}", item.ident),
             Item::Union(item) => format!("/union:{}", item.ident),
             _ => return Err("unsupported top-level native Rust item".to_string()),
@@ -616,6 +619,7 @@ fn supported_analysis_declaration(kind: &str) -> bool {
             | "static_item"
             | "struct_item"
             | "trait_item"
+            | "trait_alias_item"
             | "type_item"
             | "union_item"
     )
@@ -634,6 +638,7 @@ fn rust_declaration_kind(node_kind: &str) -> &'static str {
         "static_item" => "static",
         "struct_item" => "struct",
         "trait_item" => "trait",
+        "trait_alias_item" => "trait_alias",
         "type_item" => "type",
         "union_item" => "union",
         _ => "declaration",
@@ -991,6 +996,12 @@ fn parse_rust_native(source: &str) -> ParseResult<RustAnalysis> {
                 item.span(),
                 item.ident.to_string(),
                 "trait",
+            )),
+            Item::TraitAlias(item) => declarations.push(native_declaration(
+                source,
+                item.span(),
+                item.ident.to_string(),
+                "trait_alias",
             )),
             Item::Type(item) => declarations.push(native_declaration(
                 source,
