@@ -979,3 +979,20 @@ fn native_syn_merge3_composes_file_edge_additions_with_owner_removals() {
         );
     }
 }
+
+#[test]
+fn native_syn_merge3_composes_edge_addition_with_one_sided_reorder() {
+    let fixture =
+        read_fixture(&["polyglot", "typed-core", "rust_merge3_edge_addition_with_reorder.json"]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(fixture["expected"]["output"].as_str().unwrap()));
+}

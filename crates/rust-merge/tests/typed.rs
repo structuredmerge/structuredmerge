@@ -690,3 +690,19 @@ fn two_tip_additions_at_distinct_source_gaps_follow_native_owner_order() {
     );
     assert!(execution.ordered_line_render_applied);
 }
+
+#[test]
+fn edge_addition_composes_with_one_sided_reorder() {
+    let result = rust_merge::merge_rust_three_way_with_backend(
+        "fn a() {}\nfn b() {}\n",
+        "/// ours docs\nfn ours() {}\nfn a() {}\nfn b() {}\n",
+        "fn b() {}\nfn a() {}\n",
+        rust_merge::RustDialect::Rust,
+        rust_merge::RustBackend::Native,
+    );
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{:?}", result.diagnostics);
+    assert_eq!(
+        result.output.as_deref(),
+        Some("fn b() {}\n/// ours docs\nfn ours() {}\nfn a() {}\n")
+    );
+}

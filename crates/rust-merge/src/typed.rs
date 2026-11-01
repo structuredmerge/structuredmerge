@@ -371,6 +371,13 @@ pub fn line_selection_postprocessor(
     }
     let analyses =
         [source_line_analysis(base)?, source_line_analysis(ours)?, source_line_analysis(theirs)?];
+    let order_error = evidence.result.diagnostics.iter().any(|diagnostic| {
+        diagnostic.message
+            == "source-preserving declaration merge cannot prove an agreed owner order"
+    });
+    if order_error && one_sided_owner_order_revision(&analyses).is_none() {
+        return Ok(false);
+    }
     let rendered = match render_line_selected_output(&analyses, evidence) {
         Ok(Some(rendered)) => rendered,
         Ok(None) => return Ok(false),
@@ -454,6 +461,7 @@ fn is_recoverable_owner_layout_error(evidence: &SourcePreservingMergeEvidence) -
                 diagnostic.message.as_str(),
                 "source-preserving declaration merge cannot prove ownership of changed inter-owner layout"
                     | "source-preserving declaration merge cannot prove a combined owner membership layout"
+                    | "source-preserving declaration merge cannot prove an agreed owner order"
             )
         })
         && evidence.classification.as_ref().is_some_and(|classification| {
@@ -466,6 +474,60 @@ fn is_recoverable_owner_layout_error(evidence: &SourcePreservingMergeEvidence) -
                 )
             })
         })
+}
+
+fn one_sided_owner_order_revision(
+    analyses: &[RustSourceLineAnalysis; 3],
+) -> Option<ast_merge::SourceRevision> {
+    let base_ids = analyses[0]
+        .owners
+        .document
+        .owners
+        .iter()
+        .map(|owner| owner.id.clone())
+        .collect::<HashSet<_>>();
+    let ours_ids = analyses[1]
+        .owners
+        .document
+        .owners
+        .iter()
+        .map(|owner| owner.id.clone())
+        .collect::<HashSet<_>>();
+    let theirs_ids = analyses[2]
+        .owners
+        .document
+        .owners
+        .iter()
+        .map(|owner| owner.id.clone())
+        .collect::<HashSet<_>>();
+    let stable_ids = base_ids
+        .intersection(&ours_ids)
+        .cloned()
+        .filter(|id| theirs_ids.contains(id))
+        .collect::<HashSet<_>>();
+    if stable_ids.len() < 2 {
+        return None;
+    }
+    let order = |analysis: &RustSourceLineAnalysis| {
+        analysis
+            .owners
+            .document
+            .owners
+            .iter()
+            .map(|owner| owner.id.clone())
+            .filter(|id| stable_ids.contains(id))
+            .collect::<Vec<_>>()
+    };
+    let base_order = order(&analyses[0]);
+    let ours_order = order(&analyses[1]);
+    let theirs_order = order(&analyses[2]);
+    if ours_order == base_order && theirs_order != base_order {
+        Some(ast_merge::SourceRevision::Theirs)
+    } else if theirs_order == base_order && ours_order != base_order {
+        Some(ast_merge::SourceRevision::Ours)
+    } else {
+        None
+    }
 }
 
 /// Build a shared ordered source-line render from executed Rust owner decisions.
@@ -551,6 +613,7 @@ fn render_line_selected_output(
     } else {
         return Ok(None);
     };
+    let baseline_revision = one_sided_owner_order_revision(analyses).unwrap_or(baseline_revision);
     let revisions = [
         ast_merge::SourceRevision::Base,
         ast_merge::SourceRevision::Ours,
