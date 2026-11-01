@@ -173,3 +173,13 @@ The isolated candidate verifier passed native-extension origin checks, RBS,
 The report remains `registry_install=local-candidate` and
 `publication_gate=false`; it does not verify registry installation or authorize
 publication.
+
+
+Local candidate rerun after the Rust reorder/removal parity slices (2026-11-01):
+the current x86_64 Linux / Ruby 4.0.9 package-only artifact has SHA-256
+`0106d1ed2d3fe515bed7247683e3cfbaf0d5cf461b4c6a871e95977861a96e4e`.
+It installed into a fresh GEM_HOME isolated from checkout load paths. Native
+extension origin, RBS validation, 53 core examples, 116 generated e2e examples,
+and 116 consumer-app examples passed. The verifier report records
+`registry_install=local-candidate` and `publication_gate=false`; this is
+current local artifact evidence, not registry-install evidence.
