@@ -395,6 +395,53 @@ pub fn source_line_selections_for_owner_revisions(
             )));
         }
     }
+    // Owners absent from the baseline are additions. Append their complete
+    // comment and structural regions in the selected source order. Include the
+    // leading gap from that source when the destination has no matching gap;
+    // this keeps a gap attached to the newly added following owner.
+    let baseline_owner_ids = baseline
+        .iter()
+        .filter(|record| record.kind == "structural_owner")
+        .filter_map(|record| record.owner_id.as_deref())
+        .collect::<std::collections::HashSet<_>>();
+    let additions = owner_revisions
+        .iter()
+        .filter(|(owner_id, revision)| {
+            **revision != baseline_revision && !baseline_owner_ids.contains(owner_id.as_str())
+        })
+        .map(|(owner_id, revision)| (owner_id.as_str(), *revision))
+        .collect::<HashMap<_, _>>();
+    let mut selected_keys = selections
+        .iter()
+        .map(|selection| selection.selection_key.clone())
+        .collect::<std::collections::HashSet<_>>();
+    for revision in [SourceRevision::Base, SourceRevision::Ours, SourceRevision::Theirs] {
+        let Some(records) = dispositions.get(&revision) else {
+            continue;
+        };
+        for record in records {
+            let selected_owner = match record.kind.as_str() {
+                "structural_owner" | "comment_owner" => {
+                    record.owner_id.as_deref().and_then(|owner_id| {
+                        additions.get(owner_id).map(|revision| (owner_id, *revision))
+                    })
+                }
+                "layout_gap" => record.after_owner_id.as_deref().and_then(|owner_id| {
+                    additions.get(owner_id).map(|revision| (owner_id, *revision))
+                }),
+                _ => None,
+            };
+            if let Some((_owner_id, selected_revision)) = selected_owner
+                && selected_revision == revision
+                && selected_keys.insert(record.selection_key.clone())
+            {
+                selections.push(SourceLineSelection {
+                    selection_key: record.selection_key.clone(),
+                    revision,
+                });
+            }
+        }
+    }
     Ok(selections)
 }
 

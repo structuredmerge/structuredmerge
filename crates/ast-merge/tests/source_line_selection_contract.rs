@@ -118,3 +118,70 @@ fn shared_source_line_selection_fixture_renders_exact_bytes_and_provenance() {
         .collect::<Vec<_>>();
     assert_eq!(actual_records, expected_records);
 }
+
+#[derive(Deserialize)]
+struct AdditionFixture {
+    baseline_revision: String,
+    documents: Vec<AdditionDocument>,
+    owner_revisions: Vec<OwnerRevision>,
+    expected: AdditionExpected,
+}
+
+#[derive(Deserialize)]
+struct AdditionDocument {
+    revision: String,
+    source: String,
+    owners: Vec<SourceLineOwner>,
+    comment_regions: Vec<SourceLineCommentRegion>,
+    layout_gaps: Vec<SourceLineLayoutGap>,
+}
+
+#[derive(Deserialize)]
+struct OwnerRevision {
+    owner_id: String,
+    revision: String,
+}
+
+#[derive(Deserialize)]
+struct AdditionExpected {
+    selections: Vec<SourceLineSelection>,
+    content: String,
+}
+
+#[test]
+fn added_owner_selection_carries_its_leading_gap_from_the_selected_source() {
+    let fixture: AdditionFixture = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/ast-merge/source_line_addition_selection.json"
+    ))
+    .expect("shared source line addition fixture is valid");
+    let mut sources = HashMap::new();
+    let mut dispositions = HashMap::new();
+    for document in fixture.documents {
+        let source_revision = revision(&document.revision);
+        let records = source_line_dispositions(
+            &document.source,
+            &document.owners,
+            &document.comment_regions,
+            &document.layout_gaps,
+        )
+        .expect("added owner line facts are unambiguous");
+        sources.insert(source_revision, document.source);
+        dispositions.insert(source_revision, records);
+    }
+    let owner_revisions = fixture
+        .owner_revisions
+        .iter()
+        .map(|entry| (entry.owner_id.clone(), revision(&entry.revision)))
+        .collect::<HashMap<_, _>>();
+    let selections = source_line_selections_for_owner_revisions(
+        revision(&fixture.baseline_revision),
+        &dispositions,
+        &owner_revisions,
+    )
+    .expect("owner choices produce an addition line plan");
+    assert_eq!(selections, fixture.expected.selections);
+    let plan = source_render_plan_from_line_selections(sources, dispositions, &selections)
+        .expect("addition source line plan is valid");
+    let rendered = render_source_plan(&plan).expect("added owner source lines render");
+    assert_eq!(rendered.content, fixture.expected.content);
+}

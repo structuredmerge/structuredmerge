@@ -181,6 +181,10 @@ pub struct SourceLineDisposition {
     pub comment_kind: Option<String>,
     pub gap_id: Option<String>,
     pub controller_owner_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before_owner_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after_owner_id: Option<String>,
     pub root_region_kind: Option<String>,
 }
 
@@ -329,6 +333,8 @@ pub fn source_line_dispositions(
         comment_kind: None,
         gap_id: None,
         controller_owner_id: None,
+        before_owner_id: None,
+        after_owner_id: None,
         root_region_kind: None,
     };
     for owner in owners {
@@ -465,6 +471,8 @@ pub fn source_line_dispositions(
             disposition.selection_key = gap.selection_key.clone();
             disposition.gap_id = Some(gap.id.clone());
             disposition.controller_owner_id = gap.controller_owner_id.clone();
+            disposition.before_owner_id = gap.before_owner_id.clone();
+            disposition.after_owner_id = gap.after_owner_id.clone();
             *slot = Some(disposition);
         }
     }

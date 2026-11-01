@@ -482,39 +482,12 @@ fn apply_line_selected_output(
         .zip(analyses)
         .map(|(revision, analysis)| (*revision, analysis.comments.augmentation.regions.clone()))
         .collect::<HashMap<_, _>>();
-    let mut selections = source_line_selections_for_owner_revisions(
+    let selections = source_line_selections_for_owner_revisions(
         baseline_revision,
         &dispositions,
         &owner_revisions,
     )
     .map_err(|error| error.to_string())?;
-    let baseline_owner_ids = match baseline_revision {
-        SourceRevision::Base => &owner_ids[0],
-        SourceRevision::Ours => &owner_ids[1],
-        SourceRevision::Theirs => &owner_ids[2],
-    };
-    let mut selected_line_keys =
-        selections.iter().map(|selection| selection.selection_key.clone()).collect::<HashSet<_>>();
-    for (revision, analysis) in revisions.iter().zip(analyses) {
-        for owner in &analysis.owners.document.owners {
-            if baseline_owner_ids.contains(owner.id.as_str())
-                || owner_revisions.get(&owner.id) != Some(revision)
-            {
-                continue;
-            }
-            for record in analysis.dispositions.iter().filter(|record| {
-                record.owner_id.as_deref() == Some(owner.id.as_str())
-                    && matches!(record.kind.as_str(), "comment_owner" | "structural_owner")
-            }) {
-                if selected_line_keys.insert(record.selection_key.clone()) {
-                    selections.push(ast_merge::SourceLineSelection {
-                        selection_key: record.selection_key.clone(),
-                        revision: *revision,
-                    });
-                }
-            }
-        }
-    }
     let rehomes = if membership_changed {
         match removed_owner_rehome_selections(analyses, classification, &owner_revisions) {
             Ok(rehomes) => rehomes,

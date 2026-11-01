@@ -286,6 +286,20 @@ fn conforms_to_rust_fixtures() {
 }
 
 #[test]
+fn native_syn_classic_merge_preserves_destination_and_adds_doc_owner_lines() {
+    let template = "fn shared() {}\n\n/// added docs\npub fn added() {}\n";
+    let destination = "/// destination docs\npub fn shared() {}\n";
+    let result =
+        merge_rust_with_backend(template, destination, RustDialect::Rust, RustBackend::Native);
+
+    assert!(result.ok, "native syn classic merge failed: {:?}", result.diagnostics);
+    assert_eq!(
+        result.output.as_deref(),
+        Some("/// destination docs\npub fn shared() {}\n/// added docs\npub fn added() {}\n")
+    );
+}
+
+#[test]
 fn conforms_to_rust_backend_fixtures() {
     let backends_fixture =
         read_fixture(&["diagnostics", "slice-117-rust-family-backends", "rust-backends.json"]);

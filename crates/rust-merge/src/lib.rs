@@ -666,6 +666,9 @@ pub fn merge_rust_with_backend(
     dialect: RustDialect,
     backend: RustBackend,
 ) -> MergeResult<String> {
+    if backend == RustBackend::Native {
+        return merge_rust_native_two_way(template_source, destination_source);
+    }
     let template = parse_rust_with_backend(template_source, dialect, backend);
     if !template.ok {
         return MergeResult {
@@ -733,6 +736,150 @@ pub fn merge_rust_with_backend(
         ok: true,
         diagnostics: vec![],
         output: Some(format!("{output}\n")),
+        policies: vec![destination_wins_array_policy()],
+    }
+}
+
+fn native_merge_error_result(message: impl Into<String>) -> MergeResult<String> {
+    let parse = parse_error_result::<()>(message);
+    MergeResult { ok: false, diagnostics: parse.diagnostics, output: None, policies: vec![] }
+}
+
+fn merge_rust_native_two_way(
+    template_source: &str,
+    destination_source: &str,
+) -> MergeResult<String> {
+    use std::collections::{HashMap, HashSet};
+
+    let parse = |source: &str| -> Result<tree_haver::service::ParsedResult, String> {
+        let parsed = parse_rust_with_syn_provider(source)?;
+        if !parsed.document.output().ok {
+            let message = parsed
+                .document
+                .output()
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.message.as_str())
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(if message.is_empty() {
+                "native Rust parser rejected input".into()
+            } else {
+                message
+            });
+        }
+        Ok(parsed)
+    };
+    let incoming_parse = match parse(template_source) {
+        Ok(parsed) => parsed,
+        Err(message) => return native_merge_error_result(format!("template: {message}")),
+    };
+    let current_parse = match parse(destination_source) {
+        Ok(parsed) => parsed,
+        Err(message) => return native_merge_error_result(format!("destination: {message}")),
+    };
+    let incoming = match typed::source_line_analysis(&incoming_parse) {
+        Ok(analysis) => analysis,
+        Err(message) => return native_merge_error_result(format!("template ownership: {message}")),
+    };
+    let current = match typed::source_line_analysis(&current_parse) {
+        Ok(analysis) => analysis,
+        Err(message) => {
+            return native_merge_error_result(format!("destination ownership: {message}"));
+        }
+    };
+
+    let current_owner_ids = current
+        .owners
+        .document
+        .owners
+        .iter()
+        .map(|owner| owner.id.as_str())
+        .collect::<HashSet<_>>();
+    let mut owner_revisions = current
+        .owners
+        .document
+        .owners
+        .iter()
+        .map(|owner| (owner.id.clone(), ast_merge::SourceRevision::Ours))
+        .collect::<HashMap<_, _>>();
+    let additions = incoming
+        .owners
+        .document
+        .owners
+        .iter()
+        .filter(|owner| {
+            !owner.id.starts_with("/use:") && !current_owner_ids.contains(owner.id.as_str())
+        })
+        .collect::<Vec<_>>();
+    let addition_ids = additions.iter().map(|owner| owner.id.as_str()).collect::<HashSet<_>>();
+    for owner in &additions {
+        owner_revisions.insert(owner.id.clone(), ast_merge::SourceRevision::Theirs);
+    }
+
+    let sources = HashMap::from([
+        (ast_merge::SourceRevision::Ours, current.owners.document.source.clone()),
+        (ast_merge::SourceRevision::Theirs, incoming.owners.document.source.clone()),
+    ]);
+    let dispositions = HashMap::from([
+        (ast_merge::SourceRevision::Ours, current.dispositions.clone()),
+        (ast_merge::SourceRevision::Theirs, incoming.dispositions.clone()),
+    ]);
+    let selections = match ast_merge::source_line_selections_for_owner_revisions(
+        ast_merge::SourceRevision::Ours,
+        &dispositions,
+        &owner_revisions,
+    ) {
+        Ok(selections) => selections,
+        Err(error) => return native_merge_error_result(error.to_string()),
+    };
+    let plan = match ast_merge::source_render_plan_from_line_selections(
+        sources,
+        dispositions,
+        &selections,
+    ) {
+        Ok(plan) => plan,
+        Err(error) => return native_merge_error_result(error.to_string()),
+    };
+    let rendered = match ast_merge::render_source_plan(&plan) {
+        Ok(rendered) => rendered,
+        Err(error) => return native_merge_error_result(error.to_string()),
+    };
+    let verified = match parse_source_preserving_rust_native(&rendered.content) {
+        Ok(document) => document,
+        Err(message) => {
+            return native_merge_error_result(format!(
+                "native Rust output verification failed: {message}"
+            ));
+        }
+    };
+    let expected_owner_ids = current
+        .owners
+        .document
+        .owners
+        .iter()
+        .map(|owner| owner.id.as_str())
+        .chain(
+            incoming
+                .owners
+                .document
+                .owners
+                .iter()
+                .filter(|owner| addition_ids.contains(owner.id.as_str()))
+                .map(|owner| owner.id.as_str()),
+        )
+        .collect::<Vec<_>>();
+    if verified.owners.iter().map(|owner| owner.id.as_str()).collect::<Vec<_>>()
+        != expected_owner_ids
+    {
+        return native_merge_error_result(
+            "native Rust output changed destination-first owner selection or order",
+        );
+    }
+    MergeResult {
+        ok: true,
+        diagnostics: vec![],
+        output: Some(rendered.content),
         policies: vec![destination_wins_array_policy()],
     }
 }

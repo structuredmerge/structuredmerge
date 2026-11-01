@@ -591,10 +591,12 @@ mod tests {
         assert_eq!(native_function.kind, "syn::ItemFn");
         assert!(analysis.attached_comment_node_ids.contains_key("/function:café"));
         let line_analysis = crate::typed::source_line_analysis(&parsed).unwrap();
-        let doc_line = line_analysis.dispositions.iter().find(|line| line.line_number == 3).unwrap();
+        let doc_line =
+            line_analysis.dispositions.iter().find(|line| line.line_number == 3).unwrap();
         assert_eq!(doc_line.kind, "comment_owner");
         assert_eq!(doc_line.owner_id.as_deref(), Some("/function:café"));
-        let code_line = line_analysis.dispositions.iter().find(|line| line.line_number == 4).unwrap();
+        let code_line =
+            line_analysis.dispositions.iter().find(|line| line.line_number == 4).unwrap();
         assert_eq!(code_line.kind, "structural_owner");
         assert_eq!(code_line.owner_id.as_deref(), Some("/function:café"));
         assert!(

@@ -481,40 +481,12 @@ fn render_line_selected_output(
         .zip(analyses)
         .map(|(revision, analysis)| (*revision, analysis.comments.augmentation.regions.clone()))
         .collect::<HashMap<_, _>>();
-    let mut selections = ast_merge::source_line_selections_for_owner_revisions(
+    let selections = ast_merge::source_line_selections_for_owner_revisions(
         baseline_revision,
         &dispositions,
         &owner_revisions,
     )
     .map_err(|error| error.to_string())?;
-    let baseline_index = match baseline_revision {
-        ast_merge::SourceRevision::Base => 0,
-        ast_merge::SourceRevision::Ours => 1,
-        ast_merge::SourceRevision::Theirs => 2,
-    };
-    let baseline_owner_ids = &owner_ids[baseline_index];
-    let mut selected_line_keys =
-        selections.iter().map(|selection| selection.selection_key.clone()).collect::<HashSet<_>>();
-    for (revision, analysis) in revisions.iter().zip(analyses) {
-        for owner in &analysis.owners.document.owners {
-            if baseline_owner_ids.contains(owner.id.as_str())
-                || owner_revisions.get(&owner.id) != Some(revision)
-            {
-                continue;
-            }
-            for record in analysis.dispositions.iter().filter(|record| {
-                record.owner_id.as_deref() == Some(owner.id.as_str())
-                    && matches!(record.kind.as_str(), "comment_owner" | "structural_owner")
-            }) {
-                if selected_line_keys.insert(record.selection_key.clone()) {
-                    selections.push(ast_merge::SourceLineSelection {
-                        selection_key: record.selection_key.clone(),
-                        revision: *revision,
-                    });
-                }
-            }
-        }
-    }
     let plan = ast_merge::source_render_plan_from_ordered_selections_with_rehomes(
         sources,
         dispositions,
