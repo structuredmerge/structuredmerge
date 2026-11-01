@@ -1,6 +1,6 @@
 [workspace]
 alef_version = "0.115.14"
-languages = ["ruby", "python"]
+languages = ["ruby", "python", "ffi", "go"]
 
 [workspace.ownership]
 user_owned = [
@@ -85,19 +85,43 @@ scaffold_output = "packages/python"
 [crates.python.stubs]
 output = "packages/python/structuredmerge_core"
 
+[crates.node]
+exclude_functions = ["register_parser_host", "replace_parser_host", "unregister_parser_host", "register_workflow_host", "replace_workflow_host", "unregister_workflow_host"]
+package_name = "@structuredmerge/core"
+scaffold_output = "packages/node"
+
+[crates.wasm]
+exclude_functions = ["register_parser_host", "replace_parser_host", "unregister_parser_host", "register_workflow_host", "replace_workflow_host", "unregister_workflow_host"]
+package_name = "@structuredmerge/core-wasm"
+
+[crates.ffi]
+exclude_functions = ["register_parser_host", "replace_parser_host", "unregister_parser_host", "register_workflow_host", "replace_workflow_host", "unregister_workflow_host"]
+prefix = "smc"
+lib_name = "structuredmerge_core_ffi"
+header_name = "structuredmerge_core.h"
+
+[crates.go]
+exclude_functions = ["register_parser_host", "replace_parser_host", "unregister_parser_host", "register_workflow_host", "replace_workflow_host", "unregister_workflow_host"]
+module = "github.com/structuredmerge/structuredmerge-go/core"
+package_name = "core"
+
 [crates.output]
 ruby = "packages/ruby/ext/structuredmerge_core_rb/src/"
 python = "crates/structuredmerge-core-py/src/"
+ffi = "crates/structuredmerge-core-ffi/src/"
+go = "packages/go/"
 
 [[crates.trait_bridges]]
 trait_name = "ParserHost"
 type_alias = "ParserHost"
 param_name = "host"
+exclude_languages = ["ffi", "go"]
 
 [[crates.trait_bridges]]
 trait_name = "WorkflowHost"
 type_alias = "WorkflowHost"
 param_name = "host"
+exclude_languages = ["ffi", "go"]
 
 [crates.include]
 types = [

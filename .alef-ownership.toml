@@ -13,7 +13,14 @@
 # entries; run `alef adopt <path>`, read the diff it prints, and let it write.
 
 owned_paths = [
+  ".clang-format",
   ".gitattributes",
+  "crates/structuredmerge-core-ffi/README.md",
+  "crates/structuredmerge-core-ffi/cmake/structuredmerge-core-ffi-config.cmake",
+  "crates/structuredmerge-core-node/binding.cjs",
+  "crates/structuredmerge-core-node/index.mjs",
+  "docs/reference/api-c.md",
+  "docs/reference/api-go.md",
   "docs/reference/api-python.md",
   "docs/reference/api-ruby.md",
   "docs/reference/api-rust.md",
@@ -21,6 +28,7 @@ owned_paths = [
   "docs/reference/errors.md",
   "docs/reference/types.md",
   "e2e/ruby/Gemfile",
+  "packages/go/README.md",
   "packages/python/LICENSE",
   "packages/python/README.md",
   "packages/python/structuredmerge_core/_native.pyi",

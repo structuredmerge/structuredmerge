@@ -17,3 +17,7 @@ __pycache__/
 .venv/
 *.egg-info/
 dist/
+node_modules/
+*.node
+*.h.bak
+*.test
