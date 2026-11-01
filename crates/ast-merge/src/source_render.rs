@@ -324,14 +324,42 @@ pub enum SourceOwnerOrderResolution {
 
 /// Combine revision owner orders as pairwise constraints.
 ///
-/// Base owners must remain present in both tips. A tip's reordered relation
-/// wins for base-owner pairs; each added owner is constrained by its nearest
-/// base-owner gap anchors. A cycle means those source positions cannot coexist
-/// and must be surfaced as a merge conflict.
+/// This compatibility entry point requires every base owner to survive in both
+/// tips. Membership-aware callers should use the selected-owner variant below.
 pub fn merge_source_owner_order(
     base: &[String],
     ours: &[String],
     theirs: &[String],
+) -> SourceOwnerOrderResolution {
+    if base.is_empty() {
+        return SourceOwnerOrderResolution::Unsupported;
+    }
+    let base_ids = base.iter().cloned().collect::<HashSet<_>>();
+    if base_ids.len() != base.len()
+        || !base_ids.iter().all(|id| ours.contains(id) && theirs.contains(id))
+    {
+        return SourceOwnerOrderResolution::Unsupported;
+    }
+    let mut selected = base.to_vec();
+    for id in ours.iter().chain(theirs) {
+        if !selected.contains(id) {
+            selected.push(id.clone());
+        }
+    }
+    merge_source_owner_order_for_selected(base, ours, theirs, &selected)
+}
+
+/// Merge owner order while respecting the selected owner membership.
+///
+/// Surviving base owners contribute pairwise reorder constraints. Added owners
+/// retain their gap against the nearest surviving base anchors in each tip.
+/// Deleted base owners are omitted before graph construction, so their absence
+/// does not erase compatible ordering changes among the remaining owners.
+pub fn merge_source_owner_order_for_selected(
+    base: &[String],
+    ours: &[String],
+    theirs: &[String],
+    selected: &[String],
 ) -> SourceOwnerOrderResolution {
     let positions = |order: &[String]| {
         let mut result = HashMap::with_capacity(order.len());
@@ -342,42 +370,64 @@ pub fn merge_source_owner_order(
         }
         Some(result)
     };
-    let (Some(base_positions), Some(ours_positions), Some(theirs_positions)) =
-        (positions(base), positions(ours), positions(theirs))
+    let (
+        Some(base_positions),
+        Some(ours_positions),
+        Some(theirs_positions),
+        Some(selected_positions),
+    ) = (positions(base), positions(ours), positions(theirs), positions(selected))
     else {
         return SourceOwnerOrderResolution::Unsupported;
     };
-    if base.is_empty() {
+    if base.is_empty() || selected.is_empty() {
         return SourceOwnerOrderResolution::Unsupported;
     }
-    let base_ids = base_positions.keys().cloned().collect::<HashSet<_>>();
-    if !base_ids
+    let selected_ids = selected_positions.keys().cloned().collect::<HashSet<_>>();
+    if !selected_ids
         .iter()
-        .all(|id| ours_positions.contains_key(id) && theirs_positions.contains_key(id))
+        .all(|id| ours_positions.contains_key(id) || theirs_positions.contains_key(id))
     {
         return SourceOwnerOrderResolution::Unsupported;
     }
 
-    let mut order = base.to_vec();
+    let base_ids = base_positions.keys().cloned().collect::<HashSet<_>>();
+    let stable_base = base
+        .iter()
+        .filter(|id| {
+            selected_ids.contains(*id)
+                && ours_positions.contains_key(*id)
+                && theirs_positions.contains_key(*id)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let stable_base_ids = stable_base.iter().cloned().collect::<HashSet<_>>();
+
+    let mut order =
+        base.iter().filter(|id| selected_ids.contains(*id)).cloned().collect::<Vec<_>>();
     for id in ours.iter().chain(theirs) {
-        if !base_ids.contains(id) && !order.contains(id) {
+        if selected_ids.contains(id) && !order.contains(id) {
             order.push(id.clone());
         }
     }
+    if order.len() != selected_ids.len() {
+        return SourceOwnerOrderResolution::Unsupported;
+    }
+
     let mut outgoing =
         order.iter().cloned().map(|id| (id, HashSet::<String>::new())).collect::<HashMap<_, _>>();
     let mut indegree = order.iter().cloned().map(|id| (id, 0usize)).collect::<HashMap<_, _>>();
     let mut add_edge = |before: &str, after: &str| {
-        if outgoing.get_mut(before).is_some_and(|edges| edges.insert(after.to_string())) {
-            if let Some(degree) = indegree.get_mut(after) {
-                *degree += 1;
-            }
+        if before != after
+            && outgoing.get_mut(before).is_some_and(|edges| edges.insert(after.to_string()))
+            && let Some(degree) = indegree.get_mut(after)
+        {
+            *degree += 1;
         }
     };
-    for left_index in 0..base.len() {
-        for right_index in left_index + 1..base.len() {
-            let left = &base[left_index];
-            let right = &base[right_index];
+    for left_index in 0..stable_base.len() {
+        for right_index in left_index + 1..stable_base.len() {
+            let left = &stable_base[left_index];
+            let right = &stable_base[right_index];
             let merged_before = ours_positions[left] < ours_positions[right]
                 && theirs_positions[left] < theirs_positions[right];
             let (before, after) = if merged_before { (left, right) } else { (right, left) };
@@ -385,14 +435,16 @@ pub fn merge_source_owner_order(
         }
     }
     for tip in [ours, theirs] {
-        // Preserve insertion gaps by their nearest base-owner anchors. A new
-        // owner at a file edge stays at that edge; an interior addition is
-        // constrained only against its adjacent base anchors, so a reorder
-        // elsewhere does not drag it across unrelated owners.
-        for (index, id) in tip.iter().enumerate().filter(|(_, id)| !base_ids.contains(*id)) {
+        // Ignore deleted owners when finding the nearest surviving base anchors.
+        for (index, id) in tip
+            .iter()
+            .enumerate()
+            .filter(|(_, id)| selected_ids.contains(*id) && !stable_base_ids.contains(*id))
+        {
             let previous_base =
-                tip[..index].iter().rev().find(|candidate| base_ids.contains(*candidate));
-            let next_base = tip[index + 1..].iter().find(|candidate| base_ids.contains(*candidate));
+                tip[..index].iter().rev().find(|candidate| stable_base_ids.contains(*candidate));
+            let next_base =
+                tip[index + 1..].iter().find(|candidate| stable_base_ids.contains(*candidate));
             match (previous_base, next_base) {
                 (Some(previous), Some(next)) => {
                     add_edge(previous, id);
@@ -403,9 +455,11 @@ pub fn merge_source_owner_order(
                 (None, None) => {}
             }
         }
-        for pair in tip.windows(2) {
-            if !base_ids.contains(&pair[0]) || !base_ids.contains(&pair[1]) {
-                add_edge(&pair[0], &pair[1]);
+        let selected_in_tip =
+            tip.iter().filter(|id| selected_ids.contains(*id)).collect::<Vec<_>>();
+        for pair in selected_in_tip.windows(2) {
+            if !stable_base_ids.contains(pair[0]) || !stable_base_ids.contains(pair[1]) {
+                add_edge(pair[0], pair[1]);
             }
         }
     }
@@ -413,10 +467,16 @@ pub fn merge_source_owner_order(
 
     let mut tie_break = HashMap::<String, (u8, usize)>::new();
     for (index, id) in base.iter().enumerate() {
-        tie_break.insert(id.clone(), (0, index));
+        if selected_ids.contains(id) {
+            tie_break.insert(id.clone(), (0, index));
+        }
     }
     for (priority, tip) in [(1, ours), (2, theirs)] {
-        for (index, id) in tip.iter().enumerate().filter(|(_, id)| !base_ids.contains(*id)) {
+        for (index, id) in tip
+            .iter()
+            .enumerate()
+            .filter(|(_, id)| selected_ids.contains(*id) && !base_ids.contains(*id))
+        {
             tie_break.entry(id.clone()).or_insert((priority, index));
         }
     }
@@ -3241,6 +3301,20 @@ mod tests {
         assert_eq!(
             merge_source_owner_order(&base, &ours, &theirs),
             SourceOwnerOrderResolution::Cycle
+        );
+    }
+
+    #[test]
+    fn owner_order_constraints_compose_compatible_reorders_with_additions_and_removal() {
+        let base = ["a", "b", "c", "d", "e", "f", "g"].map(str::to_string);
+        let ours = ["b", "a", "c", "x", "d", "e", "f", "g"].map(str::to_string);
+        let theirs = ["a", "b", "c", "d", "y", "f", "e"].map(str::to_string);
+        let selected = ["a", "b", "c", "d", "e", "f", "x", "y"].map(str::to_string);
+        assert_eq!(
+            merge_source_owner_order_for_selected(&base, &ours, &theirs, &selected),
+            SourceOwnerOrderResolution::Ordered(
+                ["b", "a", "c", "x", "d", "y", "f", "e"].map(str::to_string).to_vec()
+            )
         );
     }
 

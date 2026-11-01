@@ -366,24 +366,77 @@ pub fn line_selection_postprocessor(
     let owner_orders: [Vec<String>; 3] = std::array::from_fn(|index| {
         analyses[index].owners.document.owners.iter().map(|owner| owner.id.clone()).collect()
     });
-    let shared_order = ast_merge::source_render::merge_source_owner_order(
-        &owner_orders[0],
-        &owner_orders[1],
-        &owner_orders[2],
-    );
-    let same_membership = owner_orders[0].iter().cloned().collect::<HashSet<_>>()
-        == owner_orders[1].iter().cloned().collect::<HashSet<_>>()
-        && owner_orders[0].iter().cloned().collect::<HashSet<_>>()
-            == owner_orders[2].iter().cloned().collect::<HashSet<_>>();
-    let both_tips_reordered =
-        owner_orders[1] != owner_orders[0] && owner_orders[2] != owner_orders[0];
+    let selected_owner_ids = evidence
+        .classification
+        .as_ref()
+        .map(|classification| {
+            if let Some(revision) = classification.whole_source_selection {
+                let index = match revision {
+                    ast_merge::SourceRevision::Base => 0,
+                    ast_merge::SourceRevision::Ours => 1,
+                    ast_merge::SourceRevision::Theirs => 2,
+                };
+                owner_orders[index].clone()
+            } else {
+                classification
+                    .decisions
+                    .iter()
+                    .filter(|decision| {
+                        matches!(
+                            decision.kind,
+                            ast_merge::OwnerDecisionKind::SelectOurs
+                                | ast_merge::OwnerDecisionKind::SelectTheirs
+                        )
+                    })
+                    .map(|decision| decision.owner_id.clone())
+                    .collect()
+            }
+        })
+        .ok_or_else(|| "Rust owner merge omitted owner classification".to_string())?;
+    let selected = selected_owner_ids.iter().cloned().collect::<HashSet<_>>();
+    let base_ids = owner_orders[0].iter().cloned().collect::<HashSet<_>>();
+    let ours_ids = owner_orders[1].iter().cloned().collect::<HashSet<_>>();
+    let theirs_ids = owner_orders[2].iter().cloned().collect::<HashSet<_>>();
+    let membership_changed = base_ids != ours_ids || base_ids != theirs_ids;
+    let stable_base_ids = base_ids
+        .iter()
+        .filter(|id| selected.contains(*id) && ours_ids.contains(*id) && theirs_ids.contains(*id))
+        .cloned()
+        .collect::<HashSet<_>>();
+    let stable_order = |order: &[String]| {
+        order.iter().filter(|id| stable_base_ids.contains(*id)).cloned().collect::<Vec<_>>()
+    };
+    let base_stable_order = stable_order(&owner_orders[0]);
+    let ours_stable_order = stable_order(&owner_orders[1]);
+    let theirs_stable_order = stable_order(&owner_orders[2]);
+    let ours_reordered = ours_stable_order != base_stable_order;
+    let theirs_reordered = theirs_stable_order != base_stable_order;
+    let both_tips_reordered = ours_reordered && theirs_reordered;
+    let use_membership_order = membership_changed && both_tips_reordered;
+    let shared_order = if membership_changed {
+        ast_merge::source_render::merge_source_owner_order_for_selected(
+            &owner_orders[0],
+            &owner_orders[1],
+            &owner_orders[2],
+            &selected_owner_ids,
+        )
+    } else {
+        ast_merge::source_render::merge_source_owner_order(
+            &owner_orders[0],
+            &owner_orders[1],
+            &owner_orders[2],
+        )
+    };
     let merged_order = match shared_order {
         ast_merge::source_render::SourceOwnerOrderResolution::Ordered(order)
-            if order_error || (same_membership && both_tips_reordered) =>
+            if use_membership_order
+                || (!membership_changed && (order_error || both_tips_reordered)) =>
         {
             Some(order)
         }
-        ast_merge::source_render::SourceOwnerOrderResolution::Cycle if order_error => {
+        ast_merge::source_render::SourceOwnerOrderResolution::Cycle
+            if membership_changed || order_error || both_tips_reordered =>
+        {
             record_divergent_owner_order_conflict(&analyses, evidence);
             return Ok(true);
         }
@@ -427,11 +480,13 @@ pub fn line_selection_postprocessor(
             .output
             .as_deref()
             .ok_or_else(|| "clean Rust owner merge omitted output".to_string())?;
-        if rendered.content != previous {
+        if rendered.content == previous {
+            evidence.result.output = Some(rendered.content);
+            return Ok(true);
+        }
+        if merged_order.is_none() {
             return Err("Rust source-line render differs from the verified owner merge".into());
         }
-        evidence.result.output = Some(rendered.content);
-        return Ok(true);
     }
 
     let source_texts = HashMap::from([
