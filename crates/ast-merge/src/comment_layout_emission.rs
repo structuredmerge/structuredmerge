@@ -139,3 +139,207 @@ fn validate_line_range(
     }
     Ok(())
 }
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct SourceLineOwner {
+    pub id: String,
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct SourceLineCommentRegion {
+    pub id: String,
+    pub owner_id: Option<String>,
+    pub kind: String,
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct SourceLineLayoutGap {
+    pub id: String,
+    pub kind: String,
+    pub start_line: usize,
+    pub end_line: usize,
+    pub before_owner_id: Option<String>,
+    pub after_owner_id: Option<String>,
+    pub controller_side: String,
+    pub controller_owner_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
+pub struct SourceLineDisposition {
+    pub line_number: usize,
+    pub line: String,
+    pub kind: String,
+    pub owner_id: Option<String>,
+    pub comment_region_ids: Vec<String>,
+    pub comment_kind: Option<String>,
+    pub gap_id: Option<String>,
+    pub controller_owner_id: Option<String>,
+    pub root_region_kind: Option<String>,
+}
+
+/// Assign each physical line exactly one disposition from owner, comment,
+/// layout-gap, and root-region facts. Unclaimed lines remain explicitly unmanaged.
+pub fn source_line_dispositions(
+    source: &str,
+    owners: &[SourceLineOwner],
+    comment_regions: &[SourceLineCommentRegion],
+    layout_gaps: &[SourceLineLayoutGap],
+) -> Result<Vec<SourceLineDisposition>, String> {
+    let lines = source.split_inclusive('\n').map(str::to_string).collect::<Vec<_>>();
+    let line_count = lines.len();
+    let mut owner_ids = std::collections::HashSet::new();
+    let mut assigned = vec![None::<SourceLineDisposition>; line_count];
+    let empty_record = |line_number: usize, line: &str| SourceLineDisposition {
+        line_number,
+        line: line.to_string(),
+        kind: "unmanaged".to_string(),
+        owner_id: None,
+        comment_region_ids: Vec::new(),
+        comment_kind: None,
+        gap_id: None,
+        controller_owner_id: None,
+        root_region_kind: None,
+    };
+    for owner in owners {
+        if owner.id.is_empty() || !owner_ids.insert(owner.id.as_str()) {
+            return Err("source line owners have an empty or duplicate identity".to_string());
+        }
+        validate_line_range(
+            OwnerLineRange { start_line: owner.start_line, end_line: owner.end_line },
+            line_count,
+            "source line owner",
+        )?;
+        for line_number in owner.start_line..=owner.end_line {
+            let slot = &mut assigned[line_number - 1];
+            if slot.is_some() {
+                return Err(format!(
+                    "source line {line_number} belongs to multiple structural owners"
+                ));
+            }
+            let mut disposition = empty_record(line_number, &lines[line_number - 1]);
+            disposition.kind = "structural_owner".to_string();
+            disposition.owner_id = Some(owner.id.clone());
+            *slot = Some(disposition);
+        }
+    }
+    let mut region_ids = std::collections::HashSet::new();
+    for region in comment_regions {
+        if region.id.is_empty() || !region_ids.insert(region.id.as_str()) {
+            return Err("source comment regions have an empty or duplicate identity".to_string());
+        }
+        validate_line_range(
+            OwnerLineRange { start_line: region.start_line, end_line: region.end_line },
+            line_count,
+            "source comment region",
+        )?;
+        let root_region = region.owner_id.is_none();
+        if let Some(owner_id) = &region.owner_id {
+            if !owner_ids.contains(owner_id.as_str()) {
+                return Err(format!(
+                    "source comment region {} refers to an unknown owner",
+                    region.id
+                ));
+            }
+            if !matches!(region.kind.as_str(), "leading" | "inline" | "trailing") {
+                return Err(format!(
+                    "source comment region {} has an invalid attached kind",
+                    region.id
+                ));
+            }
+        } else if !matches!(region.kind.as_str(), "preamble" | "postlude" | "orphan") {
+            return Err(format!("source comment region {} has an invalid root kind", region.id));
+        }
+        for line_number in region.start_line..=region.end_line {
+            let slot = &mut assigned[line_number - 1];
+            if let Some(disposition) = slot {
+                if disposition.kind != "structural_owner"
+                    || disposition.owner_id.as_ref() != region.owner_id.as_ref()
+                    || root_region
+                {
+                    return Err(format!(
+                        "source line {line_number} has conflicting owner and comment assignments"
+                    ));
+                }
+                if disposition.comment_kind.as_ref().is_some_and(|kind| kind != &region.kind) {
+                    return Err(format!("source line {line_number} has conflicting comment kinds"));
+                }
+                disposition.comment_region_ids.push(region.id.clone());
+                disposition.comment_kind = Some(region.kind.clone());
+            } else {
+                let mut disposition = empty_record(line_number, &lines[line_number - 1]);
+                disposition.kind =
+                    if root_region { "root_region" } else { "comment_owner" }.to_string();
+                disposition.owner_id = region.owner_id.clone();
+                disposition.comment_region_ids.push(region.id.clone());
+                if root_region {
+                    disposition.root_region_kind = Some(region.kind.clone());
+                } else {
+                    disposition.comment_kind = Some(region.kind.clone());
+                }
+                *slot = Some(disposition);
+            }
+        }
+    }
+    let mut gap_ids = std::collections::HashSet::new();
+    for gap in layout_gaps {
+        if gap.id.is_empty() || !gap_ids.insert(gap.id.as_str()) {
+            return Err("source layout gaps have an empty or duplicate identity".to_string());
+        }
+        validate_line_range(
+            OwnerLineRange { start_line: gap.start_line, end_line: gap.end_line },
+            line_count,
+            "source layout gap",
+        )?;
+        if !matches!(gap.kind.as_str(), "preamble" | "interstitial" | "postlude")
+            || (gap.before_owner_id.is_none() && gap.after_owner_id.is_none())
+        {
+            return Err(format!("source layout gap {} has invalid ownership edges", gap.id));
+        }
+        for owner_id in gap.before_owner_id.iter().chain(gap.after_owner_id.iter()) {
+            if !owner_ids.contains(owner_id.as_str()) {
+                return Err(format!("source layout gap {} refers to an unknown owner", gap.id));
+            }
+        }
+        let expected_controller = match gap.controller_side.as_str() {
+            "before" => gap.before_owner_id.as_ref(),
+            "after" => gap.after_owner_id.as_ref(),
+            _ => {
+                return Err(format!("source layout gap {} has an invalid controller side", gap.id));
+            }
+        };
+        if expected_controller.is_none() || expected_controller != gap.controller_owner_id.as_ref()
+        {
+            return Err(format!("source layout gap {} has an inconsistent controller", gap.id));
+        }
+        for line_number in gap.start_line..=gap.end_line {
+            if !lines[line_number - 1].trim().is_empty() {
+                return Err(format!(
+                    "source layout gap {} contains nonblank line {line_number}",
+                    gap.id
+                ));
+            }
+            let slot = &mut assigned[line_number - 1];
+            if slot.is_some() {
+                return Err(format!(
+                    "source line {line_number} has conflicting layout-gap assignment"
+                ));
+            }
+            let mut disposition = empty_record(line_number, &lines[line_number - 1]);
+            disposition.kind = "layout_gap".to_string();
+            disposition.gap_id = Some(gap.id.clone());
+            disposition.controller_owner_id = gap.controller_owner_id.clone();
+            *slot = Some(disposition);
+        }
+    }
+    Ok(lines
+        .iter()
+        .enumerate()
+        .map(|(index, line)| {
+            assigned[index].take().unwrap_or_else(|| empty_record(index + 1, line))
+        })
+        .collect())
+}

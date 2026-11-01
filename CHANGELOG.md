@@ -399,6 +399,8 @@
 
 - Expose root preamble and postlude line selection with shared Ruby/Rust fixture coverage.
 
+- Classify every physical source line by structural, comment, gap, root, or unmanaged ownership.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
