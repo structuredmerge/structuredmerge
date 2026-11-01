@@ -403,6 +403,8 @@
 
 - Build byte-preserving render plans from ordered source-line ownership selections.
 
+- Compose Rust comment and layout augmentation into explicit per-line source ownership.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

@@ -1,8 +1,10 @@
 use ast_merge::{
-    SourceLineCommentRegion, SourceLineDisposition, SourceLineLayoutGap, SourceLineOwner,
-    source_line_dispositions,
+    LayoutOwner, SourceLineCommentRegion, SourceLineDisposition, SourceLineLayoutGap,
+    SourceLineOwner, TrackedComment, augment_comments_with_owner_indents, augment_layout,
+    source_line_dispositions, source_line_dispositions_from_augmentations,
 };
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Deserialize)]
 struct Fixture {
@@ -13,10 +15,29 @@ struct Fixture {
 struct Case {
     name: String,
     source: String,
-    owners: Vec<SourceLineOwner>,
-    comment_regions: Vec<SourceLineCommentRegion>,
-    layout_gaps: Vec<SourceLineLayoutGap>,
+    style: String,
+    owners: Vec<FixtureOwner>,
+    comments: Vec<TrackedComment>,
     expected: Vec<SourceLineDisposition>,
+}
+
+#[derive(Deserialize)]
+struct FixtureOwner {
+    id: String,
+    start_line: usize,
+    end_line: usize,
+    indent: usize,
+}
+
+fn source_lines(source: &str) -> Vec<String> {
+    let mut lines = source.split('\n').map(str::to_string).collect::<Vec<_>>();
+    if source.ends_with('\n') && lines.last().is_some_and(String::is_empty) {
+        lines.pop();
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
 }
 
 #[test]
@@ -26,12 +47,37 @@ fn shared_source_line_disposition_fixture_matches_ruby_ownership_facts() {
     ))
     .expect("shared source line disposition fixture is valid");
     for case in fixture.cases {
+        let layout_owners = case
+            .owners
+            .iter()
+            .map(|owner| LayoutOwner {
+                owner_id: owner.id.clone(),
+                start_line: owner.start_line,
+                end_line: owner.end_line,
+            })
+            .collect::<Vec<_>>();
+        let owner_indents = case
+            .owners
+            .iter()
+            .map(|owner| (owner.id.clone(), owner.indent))
+            .collect::<HashMap<_, _>>();
+        let lines = source_lines(&case.source);
+        let comments = augment_comments_with_owner_indents(
+            &lines,
+            &layout_owners,
+            &case.comments,
+            &case.style,
+            &owner_indents,
+        )
+        .expect("Rust comment augmenter classifies comments");
+        let layout = augment_layout(&lines, &layout_owners)
+            .expect("Rust layout augmenter classifies blank runs");
         assert_eq!(
-            source_line_dispositions(
+            source_line_dispositions_from_augmentations(
                 &case.source,
-                &case.owners,
-                &case.comment_regions,
-                &case.layout_gaps
+                &layout_owners,
+                &comments,
+                &layout
             )
             .expect("line disposition is unambiguous"),
             case.expected,
@@ -48,7 +94,7 @@ fn conflicting_line_dispositions_fail_closed() {
         SourceLineOwner { id: "beta".to_string(), start_line: 2, end_line: 2 },
     ];
     let mismatched_comment = SourceLineCommentRegion {
-        id: "comment:beta:leading:1-1".to_string(),
+        id: "comment-region:leading:1-1".to_string(),
         selection_key: "comment:beta:leading".to_string(),
         owner_id: Some("beta".to_string()),
         kind: "leading".to_string(),

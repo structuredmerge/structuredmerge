@@ -184,6 +184,129 @@ pub struct SourceLineDisposition {
     pub root_region_kind: Option<String>,
 }
 
+/// Compose native comment and layout augmenter output into the shared per-line
+/// ownership rubric. Selection keys are semantic: owner/comment kind, root
+/// boundary kind, or the gap's adjacent owners and controller.
+pub fn source_line_dispositions_from_augmentations(
+    source: &str,
+    owners: &[crate::LayoutOwner],
+    comments: &crate::CommentAugmentation,
+    layout: &crate::LayoutAugmentation,
+) -> Result<Vec<SourceLineDisposition>, String> {
+    let mut attached = std::collections::HashMap::<String, (String, String)>::new();
+    for attachment in &comments.attachments {
+        for (kind, region_id) in [
+            ("leading", attachment.leading_region_id.as_ref()),
+            ("inline", attachment.inline_region_id.as_ref()),
+            ("trailing", attachment.trailing_region_id.as_ref()),
+        ] {
+            if let Some(region_id) = region_id
+                && attached
+                    .insert(region_id.clone(), (attachment.owner_id.clone(), kind.to_string()))
+                    .is_some()
+            {
+                return Err(format!("comment region {region_id} has multiple owner attachments"));
+            }
+        }
+    }
+
+    let mut roots = std::collections::HashMap::<String, (String, String)>::new();
+    for (kind, region_id) in [
+        ("preamble", comments.preamble_region_id.as_ref()),
+        ("postlude", comments.postlude_region_id.as_ref()),
+    ] {
+        if let Some(region_id) = region_id
+            && roots.insert(region_id.clone(), (kind.to_string(), format!("root:{kind}"))).is_some()
+        {
+            return Err(format!("comment region {region_id} has multiple root assignments"));
+        }
+    }
+    for (index, region_id) in comments.orphan_region_ids.iter().enumerate() {
+        if roots
+            .insert(region_id.clone(), ("orphan".to_string(), format!("root:orphan:{index}")))
+            .is_some()
+        {
+            return Err(format!("comment region {region_id} has multiple root assignments"));
+        }
+    }
+
+    let region_ids = comments
+        .regions
+        .iter()
+        .map(|region| region.id.as_str())
+        .collect::<std::collections::HashSet<_>>();
+    if region_ids.len() != comments.regions.len() {
+        return Err("comment augmentation contains duplicate region identities".to_string());
+    }
+    for region_id in attached.keys().chain(roots.keys()) {
+        if !region_ids.contains(region_id.as_str()) {
+            return Err(format!("comment assignment refers to unknown region {region_id}"));
+        }
+    }
+    if attached.len() + roots.len() != region_ids.len() {
+        return Err("comment augmentation has missing or duplicate region assignments".to_string());
+    }
+    let mut comment_regions = Vec::with_capacity(comments.regions.len());
+    for region in &comments.regions {
+        if attached.contains_key(&region.id) == roots.contains_key(&region.id) {
+            return Err(format!("comment region {} has ambiguous ownership", region.id));
+        }
+        let (owner_id, kind, selection_key) =
+            if let Some((owner_id, kind)) = attached.get(&region.id) {
+                (Some(owner_id.clone()), kind.clone(), format!("comment:{owner_id}:{kind}"))
+            } else if let Some((kind, selection_key)) = roots.get(&region.id) {
+                (None, kind.clone(), selection_key.clone())
+            } else {
+                return Err(format!(
+                    "comment region {} has no attachment or root disposition",
+                    region.id
+                ));
+            };
+        let start_line = region
+            .start_line()
+            .ok_or_else(|| format!("comment region {} has no physical source lines", region.id))?;
+        let end_line = region
+            .end_line()
+            .ok_or_else(|| format!("comment region {} has no physical source lines", region.id))?;
+        comment_regions.push(SourceLineCommentRegion {
+            id: region.id.clone(),
+            selection_key,
+            owner_id,
+            kind,
+            start_line,
+            end_line,
+        });
+    }
+    let layout_gaps = layout
+        .gaps
+        .iter()
+        .map(|gap| {
+            let before = gap.before_owner_id.as_deref().unwrap_or("root");
+            let after = gap.after_owner_id.as_deref().unwrap_or("root");
+            SourceLineLayoutGap {
+                id: gap.id.clone(),
+                selection_key: format!("gap:{}:{before}:{after}", gap.kind),
+                kind: gap.kind.clone(),
+                start_line: gap.start_line,
+                end_line: gap.end_line,
+                before_owner_id: gap.before_owner_id.clone(),
+                after_owner_id: gap.after_owner_id.clone(),
+                controller_side: gap.controller_side.clone(),
+                controller_owner_id: gap.controller_owner_id().map(str::to_string),
+            }
+        })
+        .collect::<Vec<_>>();
+    let line_owners = owners
+        .iter()
+        .map(|owner| SourceLineOwner {
+            id: owner.owner_id.clone(),
+            start_line: owner.start_line,
+            end_line: owner.end_line,
+        })
+        .collect::<Vec<_>>();
+    source_line_dispositions(source, &line_owners, &comment_regions, &layout_gaps)
+}
+
 /// Assign each physical line exactly one disposition from owner, comment,
 /// layout-gap, and root-region facts. Unclaimed lines remain explicitly unmanaged.
 pub fn source_line_dispositions(
