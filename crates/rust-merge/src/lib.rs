@@ -218,6 +218,14 @@ fn unsupported_feature_result<T>(message: impl Into<String>) -> ParseResult<T> {
     result
 }
 
+fn ambiguity_result<T>(message: impl Into<String>) -> ParseResult<T> {
+    let mut result = parse_error_result(message);
+    if let Some(diagnostic) = result.diagnostics.first_mut() {
+        diagnostic.category = DiagnosticCategory::Ambiguity;
+    }
+    result
+}
+
 pub fn parse_rust_with_backend(
     source: &str,
     _dialect: RustDialect,
@@ -982,6 +990,27 @@ fn parse_rust_native(source: &str) -> ParseResult<RustAnalysis> {
                 item.sig.ident.to_string(),
                 "function",
             )),
+            Item::Macro(item) if item.ident.is_none() => {
+                let name = item
+                    .mac
+                    .path
+                    .segments
+                    .iter()
+                    .map(|segment| segment.ident.to_string())
+                    .collect::<Vec<_>>()
+                    .join("::");
+                let path = format!("/macro_invocation:{name}");
+                if declarations.iter().any(|declaration| declaration.path == path) {
+                    return ambiguity_result(format!(
+                        "ambiguous Rust macro invocation owner {path}"
+                    ));
+                }
+                let mut declaration =
+                    native_declaration(source, item.span(), name.clone(), "macro_invocation");
+                declaration.path = path;
+                declaration.match_key = name;
+                declarations.push(declaration);
+            }
             Item::Impl(item) => match RustSynParserProvider::impl_owner_identity(&item, source) {
                 Some(identity) => {
                     declarations.push(native_declaration(source, item.span(), identity, "impl"))

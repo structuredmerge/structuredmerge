@@ -473,6 +473,25 @@ fn rust_backends_merge_extern_crate_alias_edits_with_independent_function_edits(
 fn rust_native_backend_merges_unique_macro_invocations_as_owners() {
     let fixture = read_fixture(&["polyglot", "typed-core", "rust_macro_invocation_merge3.json"]);
     let input = &fixture["input"];
+    let native_parse = parse_rust(input["base"].as_str().unwrap(), RustDialect::Rust);
+    assert!(
+        native_parse.ok,
+        "native syn analysis should support macro invocation owners: {:?}",
+        native_parse.diagnostics
+    );
+    let native_analysis = native_parse.analysis.unwrap();
+    assert!(
+        native_analysis
+            .owners
+            .iter()
+            .any(|owner| owner.path == fixture["expected"]["left_owner_path"])
+    );
+    assert!(
+        native_analysis
+            .owners
+            .iter()
+            .any(|owner| owner.path == fixture["expected"]["right_owner_path"])
+    );
     let tree_sitter_parse = parse_rust_with_backend(
         input["base"].as_str().unwrap(),
         RustDialect::Rust,
@@ -485,6 +504,14 @@ fn rust_native_backend_merges_unique_macro_invocations_as_owners() {
     assert_eq!(
         tree_sitter_parse.diagnostics.first().map(|diagnostic| diagnostic.category),
         Some(ast_merge::DiagnosticCategory::UnsupportedFeature)
+    );
+
+    let duplicate_source = fixture["duplicate_identity"]["source"].as_str().unwrap();
+    let duplicate_parse = parse_rust(duplicate_source, RustDialect::Rust);
+    assert!(!duplicate_parse.ok);
+    assert_eq!(
+        duplicate_parse.diagnostics.first().map(|diagnostic| diagnostic.category),
+        Some(ast_merge::DiagnosticCategory::Ambiguity)
     );
 
     let result = merge_rust_three_way(
