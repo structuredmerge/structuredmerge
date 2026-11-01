@@ -467,7 +467,10 @@ fn rust_native_backend_merges_unique_macro_invocations_as_owners() {
         RustDialect::Rust,
         RustBackend::TreeSitter,
     );
-    assert!(!tree_sitter_parse.ok, "Tree-sitter source profile should retain its explicit boundary");
+    assert!(
+        !tree_sitter_parse.ok,
+        "Tree-sitter source profile should retain its explicit boundary"
+    );
     assert_eq!(
         tree_sitter_parse.diagnostics.first().map(|diagnostic| diagnostic.category),
         Some(ast_merge::DiagnosticCategory::UnsupportedFeature)

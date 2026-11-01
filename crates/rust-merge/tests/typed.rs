@@ -1,5 +1,6 @@
 use ast_merge::ThreeWayMergeOutcome;
 use rust_merge::{RustDialect, typed};
+use serde_json::Value;
 use std::sync::{Arc, atomic::AtomicBool};
 use tree_haver::{language_pack_provider::LanguagePackProvider, service::*, source::*};
 
@@ -487,4 +488,34 @@ fn output_identity_bytes_backend_and_parse_service_failure_cannot_claim_success(
     assert!(failed.evidence.result.output.is_none());
     assert!(failed.evidence.source_segments.is_empty());
     assert!(failed.output_parse.is_none());
+}
+
+#[test]
+fn two_tip_owner_removals_use_shared_line_selection() {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_owner_removals.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let parser = Parser::new("rust");
+    let [base, ours, theirs] = parser.inputs([
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ]);
+    let execution =
+        typed::merge3(&base, &ours, &theirs, |source| Ok(parser.parse(source, SourceRole::Output)))
+            .unwrap();
+
+    assert_eq!(
+        execution.evidence.result.outcome,
+        ThreeWayMergeOutcome::Clean,
+        "{:#?}",
+        execution.evidence
+    );
+    assert_eq!(
+        execution.evidence.result.output.as_deref(),
+        Some(fixture["expected"]["output"].as_str().unwrap())
+    );
+    assert!(execution.ordered_line_render_applied);
 }

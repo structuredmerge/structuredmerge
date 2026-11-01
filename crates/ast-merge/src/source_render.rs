@@ -1,4 +1,8 @@
-use std::{collections::HashMap, error::Error, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
+    fmt,
+};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -371,6 +375,20 @@ pub fn source_line_selections_for_owner_revisions(
     dispositions: &HashMap<SourceRevision, Vec<crate::SourceLineDisposition>>,
     owner_revisions: &HashMap<String, SourceRevision>,
 ) -> Result<Vec<SourceLineSelection>, SourceRenderError> {
+    source_line_selections_for_owner_revisions_with_deletions(
+        baseline_revision,
+        dispositions,
+        owner_revisions,
+        &HashSet::new(),
+    )
+}
+
+pub fn source_line_selections_for_owner_revisions_with_deletions(
+    baseline_revision: SourceRevision,
+    dispositions: &HashMap<SourceRevision, Vec<crate::SourceLineDisposition>>,
+    owner_revisions: &HashMap<String, SourceRevision>,
+    deleted_owner_ids: &HashSet<String>,
+) -> Result<Vec<SourceLineSelection>, SourceRenderError> {
     let baseline = dispositions.get(&baseline_revision).ok_or_else(|| {
         SourceRenderError::new(format!("baseline dispositions omit {baseline_revision:?}"))
     })?;
@@ -393,45 +411,41 @@ pub fn source_line_selections_for_owner_revisions(
             continue;
         }
         let revision = match record.kind.as_str() {
-            "structural_owner" => {
+            "structural_owner" | "comment_owner" => {
                 let owner_id = record.owner_id.as_deref().ok_or_else(|| {
                     SourceRenderError::new(format!(
-                        "structural line {} has no owner",
-                        record.line_number
+                        "{} line {} has no owner",
+                        record.kind, record.line_number
                     ))
                 })?;
-                *owner_revisions.get(owner_id).ok_or_else(|| {
-                    SourceRenderError::new(format!(
-                        "owner {owner_id} has no selected source revision"
-                    ))
-                })?
+                if deleted_owner_ids.contains(owner_id) {
+                    None
+                } else {
+                    Some(*owner_revisions.get(owner_id).ok_or_else(|| {
+                        SourceRenderError::new(format!(
+                            "owner {owner_id} has no selected source revision"
+                        ))
+                    })?)
+                }
             }
-            "comment_owner" => {
-                let owner_id = record.owner_id.as_deref().ok_or_else(|| {
-                    SourceRenderError::new(format!(
-                        "attached comment line {} has no owner",
-                        record.line_number
-                    ))
-                })?;
-                *owner_revisions.get(owner_id).ok_or_else(|| {
-                    SourceRenderError::new(format!(
-                        "comment owner {owner_id} has no selected source revision"
-                    ))
-                })?
-            }
-            "layout_gap" => record
-                .controller_owner_id
-                .as_ref()
-                .and_then(|owner_id| owner_revisions.get(owner_id))
-                .copied()
-                .unwrap_or(baseline_revision),
-            "root_region" | "unmanaged" => baseline_revision,
+            "layout_gap" => Some(
+                record
+                    .controller_owner_id
+                    .as_ref()
+                    .and_then(|owner_id| owner_revisions.get(owner_id))
+                    .copied()
+                    .unwrap_or(baseline_revision),
+            ),
+            "root_region" | "unmanaged" => Some(baseline_revision),
             kind => {
                 return Err(SourceRenderError::new(format!(
                     "line {} has unsupported disposition kind {kind}",
                     record.line_number
                 )));
             }
+        };
+        let Some(revision) = revision else {
+            continue;
         };
         if available.get(&revision).is_some_and(|keys| keys.contains(record.selection_key.as_str()))
         {

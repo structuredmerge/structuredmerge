@@ -458,6 +458,7 @@ fn render_line_selected_output(
         .as_ref()
         .ok_or_else(|| "Rust owner merge omitted classification evidence".to_string())?;
     let mut owner_revisions = HashMap::new();
+    let mut deleted_owner_ids = HashSet::new();
     if classification.whole_source_selection.is_some() {
         let revision = classification.whole_source_selection.unwrap();
         let revision_index = match revision {
@@ -473,7 +474,10 @@ fn render_line_selected_output(
             let revision = match decision.kind {
                 ast_merge::OwnerDecisionKind::SelectOurs => ast_merge::SourceRevision::Ours,
                 ast_merge::OwnerDecisionKind::SelectTheirs => ast_merge::SourceRevision::Theirs,
-                ast_merge::OwnerDecisionKind::Delete => return Ok(None),
+                ast_merge::OwnerDecisionKind::Delete => {
+                    deleted_owner_ids.insert(decision.owner_id.clone());
+                    continue;
+                }
                 _ => return Ok(None),
             };
             owner_revisions.insert(decision.owner_id.clone(), revision);
@@ -492,6 +496,20 @@ fn render_line_selected_output(
         ast_merge::SourceRevision::Theirs
     } else if owner_ids[0].is_subset(&selected_owner_ids) {
         ast_merge::SourceRevision::Base
+    } else if !deleted_owner_ids.is_empty() {
+        let accounted_owner_ids = selected_owner_ids
+            .union(&deleted_owner_ids.iter().map(String::as_str).collect())
+            .copied()
+            .collect::<HashSet<_>>();
+        if owner_ids[1].is_subset(&accounted_owner_ids) {
+            ast_merge::SourceRevision::Ours
+        } else if owner_ids[2].is_subset(&accounted_owner_ids) {
+            ast_merge::SourceRevision::Theirs
+        } else if owner_ids[0] == accounted_owner_ids {
+            ast_merge::SourceRevision::Base
+        } else {
+            return Ok(None);
+        }
     } else {
         return Ok(None);
     };
@@ -515,10 +533,11 @@ fn render_line_selected_output(
         .zip(analyses)
         .map(|(revision, analysis)| (*revision, analysis.comments.augmentation.regions.clone()))
         .collect::<HashMap<_, _>>();
-    let selections = ast_merge::source_line_selections_for_owner_revisions(
+    let selections = ast_merge::source_line_selections_for_owner_revisions_with_deletions(
         baseline_revision,
         &dispositions,
         &owner_revisions,
+        &deleted_owner_ids,
     )
     .map_err(|error| error.to_string())?;
     let plan = ast_merge::source_render_plan_from_ordered_selections_with_rehomes(
