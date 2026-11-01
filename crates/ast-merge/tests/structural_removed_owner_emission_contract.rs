@@ -2,8 +2,10 @@ use ast_merge::{
     BoundaryEdge, CommentLine, CommentRegion, LayoutGap, RehomeFragmentKind, RehomePlan,
     SourceLineCommentRegion, SourceLineLayoutGap, SourceLineOwner, SourceRevision,
     StructuralBoundary, preserve_removed_owner_lines, render_source_plan, source_line_dispositions,
-    source_line_fragments_for_rehome_plan, source_line_selections_for_preserved_lines,
-    source_render_plan_from_line_selections, source_render_plan_from_rehome_selections,
+    source_line_fragments_for_rehome_plan,
+    source_line_selections_for_owner_revisions_with_deletions,
+    source_line_selections_for_preserved_lines, source_render_plan_from_line_selections,
+    source_render_plan_from_rehome_selections,
 };
 use serde_json::{Value, json};
 use std::{
@@ -184,6 +186,30 @@ fn shared_removed_owner_emission_fixture_matches_ruby() {
         let dispositions =
             source_line_dispositions(&source, &owners, &comment_regions, &layout_gaps)
                 .expect("removed-owner fixture assigns each preserved line a semantic region");
+        let merge_dispositions = HashMap::from([
+            (SourceRevision::Ours, dispositions.clone()),
+            (SourceRevision::Theirs, dispositions.clone()),
+        ]);
+        let merge_selections = source_line_selections_for_owner_revisions_with_deletions(
+            SourceRevision::Ours,
+            &merge_dispositions,
+            &HashMap::from([("later".to_string(), SourceRevision::Theirs)]),
+            &HashSet::from(["removed".to_string()]),
+        )
+        .expect("deleted owner gaps follow their effective surviving controller");
+        let trailing_gap_key = format!(
+            "gap:{}:{}:{}",
+            gap_data["kind"].as_str().unwrap(),
+            gap_data["before_owner_id"].as_str().unwrap_or("root"),
+            gap_data["after_owner_id"].as_str().unwrap_or("root")
+        );
+        let trailing_gap_line = gap_data["start_line"].as_u64().unwrap() as usize;
+        assert_eq!(
+            merge_selections.iter().any(|selection| selection.selection_key == trailing_gap_key),
+            actual.line_numbers.contains(&trailing_gap_line),
+            "deleted owner gap selection follows the shared fixture: {}",
+            case["name"].as_str().unwrap()
+        );
         let selections = source_line_selections_for_preserved_lines(
             SourceRevision::Ours,
             &dispositions,

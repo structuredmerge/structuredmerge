@@ -597,6 +597,23 @@ pub fn source_line_selections_for_owner_order(
     Ok(Some(rendered))
 }
 
+/// Select the recorded controller for a layout gap after owner deletion.
+/// A deleted before-side controller transfers the gap to a surviving after
+/// owner. A deleted after-side controller does not transfer its gap backward.
+fn effective_gap_controller_after_removal<'a>(
+    record: &'a crate::SourceLineDisposition,
+    deleted_owner_ids: &HashSet<String>,
+) -> Option<&'a str> {
+    let controller = record.controller_owner_id.as_deref()?;
+    if !deleted_owner_ids.contains(controller) {
+        return Some(controller);
+    }
+
+    record.after_owner_id.as_deref().filter(|after_owner_id| {
+        *after_owner_id != controller && !deleted_owner_ids.contains(*after_owner_id)
+    })
+}
+
 /// Select source regions in baseline line order, taking structural and attached
 /// comment regions from their selected owner revision and each layout gap from
 /// its controller owner revision. Root and unmanaged regions stay with baseline.
@@ -710,14 +727,19 @@ pub fn source_line_selections_for_owner_revisions_with_deletions(
                     })?)
                 }
             }
-            "layout_gap" => Some(
-                record
-                    .controller_owner_id
-                    .as_ref()
-                    .and_then(|owner_id| owner_revisions.get(owner_id))
-                    .copied()
-                    .unwrap_or(baseline_revision),
-            ),
+            "layout_gap" => {
+                let controller = effective_gap_controller_after_removal(record, deleted_owner_ids);
+                if record.controller_owner_id.is_some() && controller.is_none() {
+                    None
+                } else {
+                    Some(
+                        controller
+                            .and_then(|owner_id| owner_revisions.get(owner_id))
+                            .copied()
+                            .unwrap_or(baseline_revision),
+                    )
+                }
+            }
             "root_region" | "unmanaged" => Some(baseline_revision),
             kind => {
                 return Err(SourceRenderError::new(format!(
@@ -2468,6 +2490,90 @@ mod tests {
             (SourceRevision::Ours, "alpha ours\nshared\nomega\n".to_string()),
             (SourceRevision::Theirs, "alpha\nshared\nomega theirs\n".to_string()),
         ])
+    }
+
+    #[test]
+    fn deleted_gap_controller_only_transfers_to_a_surviving_after_owner() {
+        let gap_record = |key: &str, before: &str, after: Option<&str>, controller: &str| {
+            crate::SourceLineDisposition {
+                line_number: 3,
+                line: "\n".into(),
+                kind: "layout_gap".into(),
+                selection_key: key.into(),
+                owner_id: None,
+                comment_region_ids: vec![],
+                comment_kind: None,
+                gap_id: Some(key.into()),
+                controller_owner_id: Some(controller.into()),
+                before_owner_id: Some(before.into()),
+                after_owner_id: after.map(str::to_string),
+                root_region_kind: None,
+            }
+        };
+        let owner_record = |line_number, owner: &str| crate::SourceLineDisposition {
+            line_number,
+            line: format!("fn {owner}() {{}}\n"),
+            kind: "structural_owner".into(),
+            selection_key: format!("owner:{owner}"),
+            owner_id: Some(owner.into()),
+            comment_region_ids: vec![],
+            comment_kind: None,
+            gap_id: None,
+            controller_owner_id: None,
+            before_owner_id: None,
+            after_owner_id: None,
+            root_region_kind: None,
+        };
+
+        let removed_postlude = vec![
+            owner_record(1, "a"),
+            owner_record(2, "c"),
+            gap_record("gap:postlude:c:root", "c", None, "c"),
+        ];
+        let revisions = HashMap::from([
+            (SourceRevision::Ours, removed_postlude.clone()),
+            (SourceRevision::Theirs, removed_postlude.clone()),
+        ]);
+        let owners = HashMap::from([("a".into(), SourceRevision::Ours)]);
+        let deleted = HashSet::from(["c".to_string()]);
+        let selections = source_line_selections_for_owner_revisions_with_deletions(
+            SourceRevision::Ours,
+            &revisions,
+            &owners,
+            &deleted,
+        )
+        .unwrap();
+        assert_eq!(
+            selections.iter().map(|selection| selection.selection_key.as_str()).collect::<Vec<_>>(),
+            ["owner:a"]
+        );
+
+        let transferred_gap = gap_record("gap:interstitial:c:d", "c", Some("d"), "c");
+        let ours = vec![owner_record(1, "c"), owner_record(2, "d"), transferred_gap.clone()];
+        let theirs = vec![owner_record(1, "d"), transferred_gap];
+        let revisions =
+            HashMap::from([(SourceRevision::Ours, ours), (SourceRevision::Theirs, theirs)]);
+        let owners = HashMap::from([("d".into(), SourceRevision::Theirs)]);
+        let selections = source_line_selections_for_owner_revisions_with_deletions(
+            SourceRevision::Ours,
+            &revisions,
+            &owners,
+            &deleted,
+        )
+        .unwrap();
+        assert_eq!(
+            selections,
+            vec![
+                SourceLineSelection {
+                    selection_key: "owner:d".into(),
+                    revision: SourceRevision::Theirs,
+                },
+                SourceLineSelection {
+                    selection_key: "gap:interstitial:c:d".into(),
+                    revision: SourceRevision::Theirs,
+                },
+            ]
+        );
     }
 
     fn source_fragment(
