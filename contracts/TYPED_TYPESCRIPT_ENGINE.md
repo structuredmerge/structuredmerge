@@ -16,8 +16,10 @@ Multi-declarator lexical statements are projected as one complete source owner
 using the ordered declarator identities supplied by the native parser. Concurrent
 edits to distinct declarators therefore return one typed whole-statement
 `edit_edit` conflict instead of an unsupported-owner error. This does not split
-statement source ownership into independently renderable declarators. Remaining
-limitations include nested wrappers such as `export const`, duplicate
+statement source ownership into independently renderable declarators. This
+grouping is enabled for base-aware merge3 only; typed-core analyze, diff2, and
+directional merge2 retain their existing unsupported boundary. Export/ambient
+lexical wrappers also remain unsupported. Other limitations include duplicate
 identities/overload sets, unsupported top-level expressions and ownerless
 documents, which fail closed. `declare namespace`
 works through its ambient wrapper; plain `namespace` is an unsupported expression

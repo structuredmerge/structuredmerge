@@ -997,10 +997,17 @@ pub(crate) fn execute_native_operation_with_service(
                 analyze: merge_analyzer,
                 analyze_with_diagnostics,
                 merge,
-                postprocess: (family == "rust").then_some(
-                    rust_merge::typed::line_selection_postprocessor
-                        as ast_merge::typed_merge::NativeOwnerPostprocessor,
-                ),
+                postprocess: match family {
+                    "bash" => Some(
+                        bash_merge::typed::line_selection_postprocessor
+                            as ast_merge::typed_merge::NativeOwnerPostprocessor,
+                    ),
+                    "rust" => Some(
+                        rust_merge::typed::line_selection_postprocessor
+                            as ast_merge::typed_merge::NativeOwnerPostprocessor,
+                    ),
+                    _ => None,
+                },
             },
         )
     } else {

@@ -187,6 +187,41 @@ fn bash_merge3_accepts_parser_owned_inline_comments() {
 }
 
 #[test]
+fn bash_merge3_promotes_inline_comment_from_removed_owner_with_source_evidence() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/bash_merge3_inline_comment_owner_deletion.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let (result, request) = run(request(
+        "merge3",
+        &[
+            input["base"].as_str().unwrap(),
+            input["ours"].as_str().unwrap(),
+            input["theirs"].as_str().unwrap(),
+        ],
+    ));
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+    assert_eq!(result.render_report["strategy"], "source-plan");
+    let source_segments = result.render_report["source_segments"].as_array().unwrap();
+    assert!(source_segments.iter().any(|segment| {
+        segment["source_range"]["start_byte"] == 4
+            && segment["source_range"]["end_byte"] == 12
+            && segment["output_range"]["start_byte"] == 0
+            && segment["output_range"]["end_byte"] == 8
+    }));
+    assert!(source_segments.iter().any(|segment| {
+        segment["source_range"]["start_byte"] == 12
+            && segment["source_range"]["end_byte"] == 13
+            && segment["output_range"]["start_byte"] == 8
+            && segment["output_range"]["end_byte"] == 9
+    }));
+    result.validate_against(&request).unwrap();
+}
+
+#[test]
 fn exported_bash_profile_honors_explicit_selection_and_cancellation() {
     register_language_pack_parser("bash.facade".into(), "bash".into()).unwrap();
     let limits = ParseLimits {

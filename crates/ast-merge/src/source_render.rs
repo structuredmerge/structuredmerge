@@ -6,6 +6,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use tree_haver::ByteRange;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -68,6 +69,14 @@ pub struct SynthesizedFragment {
     pub producer: String,
     #[serde(default)]
     pub metadata: HashMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_origins: Vec<SourceByteOrigin>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SourceByteOrigin {
+    pub revision: SourceRevision,
+    pub source_range: ByteRange,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -198,6 +207,8 @@ pub struct SourceRenderResult {
     pub synthesized_fragments: Vec<SynthesizedFragmentRecord>,
     pub conflicts: Vec<RenderedConflictRecord>,
     pub verification_input: SourceRenderVerification,
+    #[serde(skip)]
+    pub source_segments: Option<Vec<crate::byte_evidence::SourceByteSegment>>,
 }
 
 impl SourceRenderResult {
@@ -259,6 +270,7 @@ impl SourceRenderPlan {
                     }
                 }
                 RenderFragment::Synthesized(fragment) => {
+                    validate_synthesized_origins(&self.sources, fragment)?;
                     if index + 1 < self.fragments.len() && !fragment.content.ends_with('\n') {
                         return Err(SourceRenderError::new(
                             "every non-final fragment must end at a line boundary",
@@ -280,6 +292,7 @@ impl SourceRenderPlan {
                                     self.source_content(source)?
                                 }
                                 ConflictSideFragment::Synthesized(fragment) => {
+                                    validate_synthesized_origins(&self.sources, fragment)?;
                                     fragment.content.clone()
                                 }
                             };
@@ -306,7 +319,23 @@ pub fn render_source_plan(
     for fragment in &plan.fragments {
         renderer.render_fragment(fragment)?;
     }
-    Ok(renderer.finish())
+    let rendered = renderer.finish();
+    if let Some(segments) = &rendered.source_segments {
+        let sources = plan
+            .sources
+            .iter()
+            .map(|(revision, source)| (*revision, source.as_bytes()))
+            .collect::<HashMap<_, _>>();
+        crate::byte_evidence::verify_source_byte_segments(
+            rendered.content.as_bytes(),
+            &sources,
+            segments,
+        )
+        .map_err(|error| {
+            SourceRenderError::new(format!("invalid source-byte origins: {error:?}"))
+        })?;
+    }
+    Ok(rendered)
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1758,6 +1787,30 @@ pub fn source_line_fragments_for_rehome_plan(
     inline_promotion_owner_ids: &std::collections::HashSet<String>,
     rehome: &crate::RehomePlan,
 ) -> Result<RehomeSourceLineSelections, SourceRenderError> {
+    source_line_fragments_for_rehome_plan_with_origins(
+        revision,
+        "",
+        dispositions,
+        owners,
+        comment_regions,
+        &std::collections::BTreeMap::new(),
+        inline_promotion_owner_ids,
+        rehome,
+    )
+}
+
+/// Build rehome selections with parser byte ranges so exact-source-backed
+/// comment promotions can carry verifiable output origins.
+pub fn source_line_fragments_for_rehome_plan_with_origins(
+    revision: SourceRevision,
+    source: &str,
+    dispositions: &[crate::SourceLineDisposition],
+    owners: &[crate::SourceLineOwner],
+    comment_regions: &[crate::CommentRegion],
+    region_node_byte_ranges: &std::collections::BTreeMap<String, Vec<ByteRange>>,
+    inline_promotion_owner_ids: &std::collections::HashSet<String>,
+    rehome: &crate::RehomePlan,
+) -> Result<RehomeSourceLineSelections, SourceRenderError> {
     let mut regions = Vec::<(usize, SourceLineRehomeFragment)>::new();
     let mut keys = std::collections::HashSet::new();
     for region_id in &rehome.comment_region_ids {
@@ -1814,6 +1867,20 @@ pub fn source_line_fragments_for_rehome_plan(
             }
             // Ruby's emitter materializes promoted comments as logical lines and
             // joins the output with LF, even when the source used CRLF.
+            let source_origins = region_node_byte_ranges
+                .get(region_id)
+                .filter(|ranges| ranges.len() == 1)
+                .map(|ranges| {
+                    promoted_inline_comment_origins(
+                        source,
+                        revision,
+                        owner_line.line_number,
+                        ranges[0].clone(),
+                        &indent,
+                        raw_comment,
+                    )
+                })
+                .unwrap_or_default();
             let synthesized = SynthesizedFragment {
                 content: format!("{indent}{raw_comment}\n"),
                 reason: "removed_owner_inline_comment_promotion".into(),
@@ -1827,6 +1894,7 @@ pub fn source_line_fragments_for_rehome_plan(
                     ("source_line".into(), serde_json::json!(owner_line.line_number)),
                     ("comment_region_id".into(), serde_json::json!(region_id)),
                 ]),
+                source_origins,
             };
             regions
                 .push((owner_line.line_number, SourceLineRehomeFragment::Synthesized(synthesized)));
@@ -2393,6 +2461,7 @@ pub fn localized_conflict_render_plan(
                     reason: "conflict_line_boundary".into(),
                     producer: "ast-merge".into(),
                     metadata: HashMap::new(),
+                    source_origins: vec![],
                 }));
             }
         }
@@ -2506,6 +2575,7 @@ fn source_conflict_side(
             reason: "conflict_line_boundary".to_string(),
             producer: "ast-merge".to_string(),
             metadata: HashMap::new(),
+            source_origins: vec![],
         }));
     }
     Ok(fragments)
@@ -2519,6 +2589,7 @@ struct SourcePlanRenderer<'a> {
     synthesized_fragments: Vec<SynthesizedFragmentRecord>,
     conflicts: Vec<RenderedConflictRecord>,
     source_fragment_digests: Vec<SourceFragmentDigest>,
+    source_segments: Option<Vec<crate::byte_evidence::SourceByteSegment>>,
 }
 
 impl<'a> SourcePlanRenderer<'a> {
@@ -2531,6 +2602,7 @@ impl<'a> SourcePlanRenderer<'a> {
             synthesized_fragments: Vec::new(),
             conflicts: Vec::new(),
             source_fragment_digests: Vec::new(),
+            source_segments: Some(Vec::new()),
         }
     }
 
@@ -2552,8 +2624,23 @@ impl<'a> SourcePlanRenderer<'a> {
         conflict_side: Option<SourceRevision>,
     ) -> Result<(), SourceRenderError> {
         let content = self.plan.source_content(fragment)?;
+        let source = source_for_revision(&self.plan.sources, fragment.revision)?;
+        let source_range =
+            source_byte_range_for_lines(source, fragment.start_line, fragment.end_line)
+                .ok_or_else(|| SourceRenderError::new("source line range has no byte range"))?;
+        let output_start = self.content.len();
         let first_output_line = self.next_output_line();
         self.content.push_str(&content);
+        if let Some(segments) = self.source_segments.as_mut() {
+            push_exact_source_segment(
+                segments,
+                source,
+                fragment.revision,
+                source_range,
+                output_start,
+                None,
+            )?;
+        }
         self.next_line += content.bytes().filter(|byte| *byte == b'\n').count();
         for (index, _) in source_lines(&content).iter().enumerate() {
             self.line_records.push(RenderLineRecord {
@@ -2583,8 +2670,22 @@ impl<'a> SourcePlanRenderer<'a> {
         conflict_id: Option<&str>,
         conflict_side: Option<SourceRevision>,
     ) {
+        let output_start = self.content.len();
         let first_output_line = self.next_output_line();
         self.content.push_str(&fragment.content);
+        let origin_segments = exact_origin_segments(
+            &self.plan.sources,
+            &fragment.source_origins,
+            output_start,
+            self.source_segments.as_ref().map_or(0, Vec::len),
+        );
+        if fragment.source_origins.is_empty() || origin_segments.is_none() {
+            self.source_segments = None;
+        } else if let (Some(segments), Some(origins)) =
+            (self.source_segments.as_mut(), origin_segments)
+        {
+            segments.extend(origins);
+        }
         self.next_line += fragment.content.bytes().filter(|byte| *byte == b'\n').count();
         for (index, _) in source_lines(&fragment.content).iter().enumerate() {
             self.line_records.push(RenderLineRecord {
@@ -2669,6 +2770,7 @@ impl<'a> SourcePlanRenderer<'a> {
                 reason: "conflict_marker".to_string(),
                 producer: "ast-merge".to_string(),
                 metadata: HashMap::new(),
+                source_origins: vec![],
             },
             Some(&conflict.conflict_id),
             side,
@@ -2692,8 +2794,158 @@ impl<'a> SourcePlanRenderer<'a> {
             synthesized_fragments: self.synthesized_fragments,
             conflicts: self.conflicts,
             verification_input,
+            source_segments: self.source_segments,
         }
     }
+}
+
+fn validate_synthesized_origins(
+    sources: &HashMap<SourceRevision, String>,
+    fragment: &SynthesizedFragment,
+) -> Result<(), SourceRenderError> {
+    if fragment.source_origins.is_empty() {
+        return Ok(());
+    }
+    let mut bytes = Vec::new();
+    for origin in &fragment.source_origins {
+        let source = source_for_revision(sources, origin.revision)?;
+        let slice = source
+            .as_bytes()
+            .get(origin.source_range.start_byte..origin.source_range.end_byte)
+            .ok_or_else(|| SourceRenderError::new("synthesized source origin is out of range"))?;
+        bytes.extend_from_slice(slice);
+    }
+    if bytes != fragment.content.as_bytes() {
+        return Err(SourceRenderError::new(
+            "synthesized source origins do not reproduce fragment bytes",
+        ));
+    }
+    Ok(())
+}
+
+fn source_byte_range_for_lines(
+    source: &str,
+    start_line: usize,
+    end_line: usize,
+) -> Option<ByteRange> {
+    let lines = source_lines(source);
+    if start_line == 0 || end_line < start_line || end_line > lines.len() {
+        return None;
+    }
+    let start_byte = lines[..start_line - 1].iter().map(|line| line.len()).sum::<usize>();
+    let end_byte =
+        start_byte + lines[start_line - 1..end_line].iter().map(|line| line.len()).sum::<usize>();
+    Some(ByteRange { start_byte, end_byte })
+}
+
+fn exact_origin_segments(
+    sources: &HashMap<SourceRevision, String>,
+    origins: &[SourceByteOrigin],
+    output_start: usize,
+    segment_start_index: usize,
+) -> Option<Vec<crate::byte_evidence::SourceByteSegment>> {
+    let mut output_offset = output_start;
+    let mut segments = Vec::new();
+    for origin in origins {
+        let source = sources.get(&origin.revision)?;
+        let source_bytes =
+            source.as_bytes().get(origin.source_range.start_byte..origin.source_range.end_byte)?;
+        if !source_bytes.is_empty() {
+            segments.push(crate::byte_evidence::SourceByteSegment {
+                id: format!("source-fragment-{}", segment_start_index + segments.len()),
+                revision: origin.revision,
+                source_range: origin.source_range.clone(),
+                output_range: ByteRange {
+                    start_byte: output_offset,
+                    end_byte: output_offset + source_bytes.len(),
+                },
+                sha256: format!("{:x}", Sha256::digest(source_bytes)),
+                owner_id: None,
+            });
+            output_offset += source_bytes.len();
+        }
+    }
+    Some(segments)
+}
+
+fn push_exact_source_segment(
+    segments: &mut Vec<crate::byte_evidence::SourceByteSegment>,
+    source: &str,
+    revision: SourceRevision,
+    source_range: ByteRange,
+    output_start: usize,
+    owner_id: Option<String>,
+) -> Result<(), SourceRenderError> {
+    let source_bytes = source
+        .as_bytes()
+        .get(source_range.start_byte..source_range.end_byte)
+        .ok_or_else(|| SourceRenderError::new("rendered source origin is out of range"))?;
+    if source_bytes.is_empty() {
+        return Ok(());
+    }
+    segments.push(crate::byte_evidence::SourceByteSegment {
+        id: format!("source-fragment-{}", segments.len()),
+        revision,
+        source_range,
+        output_range: ByteRange {
+            start_byte: output_start,
+            end_byte: output_start + source_bytes.len(),
+        },
+        sha256: format!("{:x}", Sha256::digest(source_bytes)),
+        owner_id,
+    });
+    Ok(())
+}
+
+fn promoted_inline_comment_origins(
+    source: &str,
+    revision: SourceRevision,
+    line_number: usize,
+    comment_range: ByteRange,
+    indentation: &str,
+    raw_comment: &str,
+) -> Vec<SourceByteOrigin> {
+    let Some(line_range) = source_byte_range_for_lines(source, line_number, line_number) else {
+        return vec![];
+    };
+    let bytes = source.as_bytes();
+    if line_range.end_byte == line_range.start_byte
+        || bytes.get(line_range.end_byte - 1) != Some(&b'\n')
+        || (line_range.end_byte >= 2 && bytes.get(line_range.end_byte - 2) == Some(&b'\r'))
+    {
+        return vec![];
+    }
+    let newline_start = line_range.end_byte - 1;
+    if comment_range.start_byte < line_range.start_byte
+        || comment_range.end_byte != newline_start
+        || comment_range.end_byte > bytes.len()
+        || bytes.get(comment_range.start_byte..comment_range.end_byte)
+            != Some(raw_comment.as_bytes())
+    {
+        return vec![];
+    }
+    let indentation_end = line_range.start_byte + indentation.len();
+    if indentation_end > comment_range.start_byte
+        || bytes.get(line_range.start_byte..indentation_end) != Some(indentation.as_bytes())
+    {
+        return vec![];
+    }
+    let mut origins = Vec::new();
+    if indentation_end > line_range.start_byte {
+        origins.push(SourceByteOrigin {
+            revision,
+            source_range: ByteRange {
+                start_byte: line_range.start_byte,
+                end_byte: indentation_end,
+            },
+        });
+    }
+    origins.push(SourceByteOrigin { revision, source_range: comment_range });
+    origins.push(SourceByteOrigin {
+        revision,
+        source_range: ByteRange { start_byte: newline_start, end_byte: line_range.end_byte },
+    });
+    origins
 }
 
 fn source_lines(source: &str) -> Vec<&str> {
@@ -3311,6 +3563,36 @@ mod tests {
     }
 
     #[test]
+    fn source_render_certifies_synthesized_bytes_from_exact_source_origins() {
+        let source = "x=1 # docs\n";
+        let start_byte = source.find("# docs").unwrap();
+        let fragment = SynthesizedFragment {
+            content: "# docs\n".into(),
+            reason: "comment_promotion".into(),
+            producer: "ast_merge.source_render".into(),
+            metadata: HashMap::new(),
+            source_origins: vec![SourceByteOrigin {
+                revision: SourceRevision::Ours,
+                source_range: ByteRange { start_byte, end_byte: source.len() },
+            }],
+        };
+        let plan = SourceRenderPlan::new(
+            HashMap::from([(SourceRevision::Ours, source.to_string())]),
+            vec![RenderFragment::Synthesized(fragment)],
+        )
+        .unwrap();
+        let rendered = render_source_plan(&plan).unwrap();
+
+        assert_eq!(rendered.content, "# docs\n");
+        let segments = rendered.source_segments.as_ref().unwrap();
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].source_range.start_byte, start_byte);
+        assert_eq!(segments[0].source_range.end_byte, source.len());
+        assert_eq!(segments[0].output_range.start_byte, 0);
+        assert_eq!(segments[0].output_range.end_byte, rendered.content.len());
+    }
+
+    #[test]
     fn renders_localized_conflicts_and_records_synthesis() {
         let conflict = ConflictFragment {
             conflict_id: "owner-shared".to_string(),
@@ -3320,12 +3602,14 @@ mod tests {
                 reason: "family_emission".to_string(),
                 producer: "example-provider".to_string(),
                 metadata: HashMap::new(),
+                source_origins: vec![],
             })],
             theirs: vec![ConflictSideFragment::Synthesized(SynthesizedFragment {
                 content: "shared theirs\n".to_string(),
                 reason: "family_emission".to_string(),
                 producer: "example-provider".to_string(),
                 metadata: HashMap::new(),
+                source_origins: vec![],
             })],
             labels: ConflictLabels::default(),
             marker_size: 7,

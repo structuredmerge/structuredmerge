@@ -5,8 +5,8 @@ use ast_merge::{
     RemovedOwnerAttachments, SourceLineDisposition, SourceLineOwner, SourcePreservingMergeEvidence,
     SourcePreservingOwnerDocument, SourceRevision, StructuralBoundary, ThreeWayMergeOutcome,
     augment_layout, augment_normalized_comments_with_evidence_filter, render_source_plan,
-    source_line_dispositions_from_augmentations, source_line_fragments_for_rehome_plan,
-    source_line_selections_for_owner_revisions,
+    source_line_dispositions_from_augmentations,
+    source_line_fragments_for_rehome_plan_with_origins, source_line_selections_for_owner_revisions,
     source_render_plan_from_ordered_selections_with_rehomes,
 };
 use std::collections::{HashMap, HashSet};
@@ -533,15 +533,79 @@ fn apply_line_selected_output(
         .as_deref()
         .ok_or_else(|| "clean Bash owner merge omitted output".to_string())?;
     if rendered.content != previous {
-        if membership_changed {
-            return Err(format!(
-                "composite output mismatch: expected {previous:?}, got {:?}",
-                rendered.content
-            ));
+        // Only promoted comments from removed owners may legitimately differ from
+        // the owner merge; any other divergence stays a hard failure.
+        if rehomes.is_empty() {
+            return Err(if membership_changed {
+                format!(
+                    "composite output mismatch: expected {previous:?}, got {:?}",
+                    rendered.content
+                )
+            } else {
+                "Bash source-line render differs from the verified owner merge".into()
+            });
         }
-        return Err("Bash source-line render differs from the verified owner merge".into());
+        let Some(source_segments) = rendered.source_segments else {
+            return Err("Bash line-rendered output has no exact source-origin proof".into());
+        };
+        let byte_sources = revisions
+            .iter()
+            .zip(analyses)
+            .map(|(revision, analysis)| (*revision, analysis.owners.document.source.as_bytes()))
+            .collect::<HashMap<_, _>>();
+        ast_merge::byte_evidence::verify_source_byte_segments(
+            rendered.content.as_bytes(),
+            &byte_sources,
+            &source_segments,
+        )
+        .map_err(|error| format!("Bash line-rendered source evidence is invalid: {error:?}"))?;
+        evidence.source_segments = source_segments;
+        evidence.result.output = Some(rendered.content);
+        return Ok(true);
     }
     evidence.result.output = Some(rendered.content);
+    Ok(true)
+}
+
+pub fn line_selection_postprocessor(
+    inputs: &[ParsedResult],
+    evidence: &mut SourcePreservingMergeEvidence,
+    parse_output: &mut dyn FnMut(&str) -> Result<ParsedResult, String>,
+) -> Result<bool, String> {
+    if inputs.len() != 3 || evidence.result.outcome != ThreeWayMergeOutcome::Clean {
+        return Ok(false);
+    }
+    let input_for = |role| {
+        inputs
+            .iter()
+            .find(|parsed| parsed.source.descriptor().role == role)
+            .ok_or_else(|| format!("Bash line selection omitted {role:?} parse"))
+    };
+    let [base, ours, theirs] = [
+        source_line_analysis(input_for(SourceRole::Base)?)?,
+        source_line_analysis(input_for(SourceRole::Ours)?)?,
+        source_line_analysis(input_for(SourceRole::Theirs)?)?,
+    ];
+    let before = evidence.result.output.clone();
+    let applied = apply_line_selected_output(&[base, ours, theirs], evidence)?;
+    if !applied || evidence.result.output == before {
+        return Ok(applied);
+    }
+    let output =
+        evidence.result.output.as_deref().ok_or("clean Bash line render omitted output")?;
+    let parsed = parse_output(output)?;
+    let backend_matches = inputs
+        .iter()
+        .find(|input| input.source.descriptor().role == SourceRole::Ours)
+        .is_some_and(|ours| parsed.backend == ours.backend);
+    if parsed.source.descriptor().role != SourceRole::Output
+        || parsed.source.bytes() != output.as_bytes()
+        || !backend_matches
+        || !parsed.document.output().ok
+    {
+        return Err("Bash line-rendered output failed fresh parser verification".into());
+    }
+    analysis_with_mode(&parsed, false).map_err(|error| error.message)?;
     Ok(true)
 }
 
@@ -636,11 +700,13 @@ fn removed_owner_rehome_selections(
             .collect::<Vec<_>>();
         for rehome in &remove_plan.rehome_plans {
             rehomes.push(
-                source_line_fragments_for_rehome_plan(
+                source_line_fragments_for_rehome_plan_with_origins(
                     *source_revision,
+                    &source.owners.document.source,
                     &source.dispositions,
                     &source_owners,
                     &source.comments.augmentation.regions,
+                    &source.comments.region_node_byte_ranges,
                     &source.inline_promotion_owner_ids,
                     rehome,
                 )

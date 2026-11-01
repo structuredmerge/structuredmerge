@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
-use tree_haver::{NodeRole, NormalizedTreeIndex, NormalizedTreeNode};
+use tree_haver::{ByteRange, NodeRole, NormalizedTreeIndex, NormalizedTreeNode};
 
 use crate::{
     CommentAttachment, CommentLine, CommentRegion, LayoutGap, LayoutOwner, augment_layout,
@@ -57,6 +57,7 @@ pub struct CommentAugmentation {
 pub struct NormalizedCommentEvidence {
     pub augmentation: CommentAugmentation,
     pub region_node_ids: std::collections::BTreeMap<String, Vec<String>>,
+    pub region_node_byte_ranges: std::collections::BTreeMap<String, Vec<ByteRange>>,
     /// Native comments the existing attachment policy did not claim. Callers
     /// must account for these before claiming complete comment ownership.
     pub unclaimed_node_ids: Vec<String>,
@@ -183,7 +184,31 @@ pub fn augment_normalized_comments_with_evidence_scope(
             unclaimed_node_ids.push(id.clone());
         }
     }
-    Ok(NormalizedCommentEvidence { augmentation, region_node_ids, unclaimed_node_ids })
+    let ranges_by_node_id = nodes
+        .iter()
+        .filter(|node| node.role == NodeRole::Comment)
+        .map(|node| (node.id.as_str(), node.span.range.clone()))
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut region_node_byte_ranges = std::collections::BTreeMap::new();
+    for (region_id, node_ids) in &region_node_ids {
+        let ranges = node_ids
+            .iter()
+            .map(|node_id| {
+                ranges_by_node_id.get(node_id.as_str()).cloned().ok_or_else(|| {
+                    format!(
+                        "comment region {region_id} has no native byte range for node {node_id}"
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        region_node_byte_ranges.insert(region_id.clone(), ranges);
+    }
+    Ok(NormalizedCommentEvidence {
+        augmentation,
+        region_node_ids,
+        region_node_byte_ranges,
+        unclaimed_node_ids,
+    })
 }
 
 pub fn augment_normalized_tree_comments(
