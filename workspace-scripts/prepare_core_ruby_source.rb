@@ -76,7 +76,16 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-source-",
   audit = <<~PYTHON
     import json, pathlib, sys, tomllib
     path = pathlib.Path(sys.argv[1])
-    manifest = tomllib.loads(path.read_text())
+    source = path.read_text()
+    manifest = tomllib.loads(source)
+    # The installed gem may sit below an unrelated Cargo checkout. Give its
+    # native extension an explicit root so Cargo never adopts an ancestor workspace.
+    if 'workspace' not in manifest:
+        source = source.rstrip() + '\\n\\n[workspace]\\n'
+        path.write_text(source)
+        manifest = tomllib.loads(source)
+    if manifest['workspace'] != {}:
+        raise SystemExit('prepared native extension must own an empty workspace root')
     def dependencies(table):
         for section in ('dependencies', 'build-dependencies', 'dev-dependencies'):
             for name, value in table.get(section, {}).items():

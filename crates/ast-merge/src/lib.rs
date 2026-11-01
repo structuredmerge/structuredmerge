@@ -76,7 +76,6 @@ pub enum DiagnosticCategory {
     ParseError,
     DestinationParseError,
     UnsupportedFeature,
-    UnsafeSourceRange,
     FallbackApplied,
     Ambiguity,
     MergeConflict,
@@ -85,6 +84,7 @@ pub enum DiagnosticCategory {
     AssumedDefault,
     ConfigurationError,
     ReplayRejected,
+    UnsafeSourceRange,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

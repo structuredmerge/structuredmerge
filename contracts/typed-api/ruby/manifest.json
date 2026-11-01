@@ -1,11 +1,11 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "ruby",
-  "review_reason": "Additive PortableCategory::UnsafeSourceRange and opt-in register_rust_syn_parser API; existing provider defaults are unchanged.",
+  "review_reason": "Additive UnsafeSourceRange and opt-in register_rust_syn_parser API; provider defaults remain unchanged.",
   "files": {
     "lib/structuredmerge_core/native.rb": "582b6ae400a204e38c80ee5aa480e41abed68bf47ef2bf1d7c62e669849f1c14",
     "lib/structuredmerge_core/version.rb": "99c8b3f93ad0d98825c986c3d405eb50b97bc4e5c14d61fa087ea228966c424a",
     "lib/structuredmerge_core.rb": "defe67340887e4fcfecefc0a68d255fab86768e5c81260916819b636303f5cdf",
-    "sig/types.rbs": "8a8e33293a26bc0019bbf652b60ed81e33dfa89254abf901c1785dd056316344"
+    "sig/types.rbs": "c3e0bbaa07b3d0b6b63cc17706779cea3b3318a0fbcae74ddfbbaba9dc42308f"
   }
 }

@@ -29,6 +29,12 @@ class CoreRubyRegistryInstallTest(unittest.TestCase):
         self.assertIn('--version "${{ needs.prepare.outputs.version }}"', run)
         self.assertNotIn("continue-on-error", json.dumps(job))
 
+    def test_prepared_gem_owns_a_cargo_workspace_root(self):
+        script = (self.root / "workspace-scripts/prepare_core_ruby_source.rb").read_text()
+        self.assertIn("if 'workspace' not in manifest", script)
+        self.assertIn("path.write_text(source)", script)
+        self.assertIn("prepared native extension must own an empty workspace root", script)
+
     def test_verifier_enforces_isolation_and_propagates_subprocess_failures(self):
         script = (self.root / "workspace-scripts/check_core_ruby_registry_install.rb").read_text()
         for required in (
