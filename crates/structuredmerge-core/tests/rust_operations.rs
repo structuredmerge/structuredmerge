@@ -100,10 +100,15 @@ fn analysis_revalidates_native_ownership_and_preserves_passive_metadata() {
     let (result, input) = run(request("analyze", &[BASE]));
     assert!(result.ok, "{:?}", result.diagnostics);
     let facts = &result.analysis.as_ref().unwrap().extra;
-    assert_eq!(facts["owners"][0]["id"], "/function:f");
-    assert!(!facts["owners"][0]["node_ids"].as_array().unwrap().is_empty());
+    let function = facts["owners"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|owner| owner["id"] == "/function:f")
+        .unwrap();
+    assert!(!function["node_ids"].as_array().unwrap().is_empty());
     let mut wrong = result.clone();
-    wrong.analysis.as_mut().unwrap().extra.get_mut("owners").unwrap()[0]["node_id"] =
+    wrong.analysis.as_mut().unwrap().extra.get_mut("owners").unwrap()[0]["node_ids"][0] =
         json!("invented");
     assert!(wrong.validate_against(&input).is_err());
     let mut future = result;
@@ -117,12 +122,32 @@ fn diff_includes_complete_source_summary_for_use_and_comment_changes() {
     assert!(result.ok);
     assert_eq!(result.changes.len(), 2);
     assert!(result.changes.iter().any(|change| change.path.as_deref() == Some("/function:f")));
-    for changed in [BASE.replace("// é", "// documentation"), BASE.replace("std::fmt", "std::io")]
+    for (changed, expected_owner_changes) in
+        [(BASE.replace("// é", "// documentation"), 1), (BASE.replace("std::fmt", "std::io"), 2)]
     {
         let (result, _) = run(request("diff2", &[BASE, &changed]));
         assert!(result.ok);
-        assert_eq!(result.changes.len(), 1);
-        assert_eq!(result.changes[0].subject_ref.as_deref(), Some("document"));
+        let document_changes = result
+            .changes
+            .iter()
+            .filter(|change| change.subject_ref.as_deref() == Some("document"))
+            .collect::<Vec<_>>();
+        let owner_changes = result
+            .changes
+            .iter()
+            .filter(|change| change.subject_ref.as_deref() != Some("document"))
+            .collect::<Vec<_>>();
+        assert_eq!(document_changes.len(), 1);
+        assert_eq!(owner_changes.len(), expected_owner_changes);
+        if expected_owner_changes == 1 {
+            assert_eq!(owner_changes[0].path.as_deref(), Some("/function:f"));
+        } else {
+            assert!(owner_changes.iter().any(|change| change.classification == "added"));
+            assert!(owner_changes.iter().any(|change| change.classification == "deleted"));
+            assert!(owner_changes.iter().all(|change| {
+                change.path.as_deref().is_some_and(|path| path.starts_with("/use:"))
+            }));
+        }
     }
     assert!(run(request("diff2", &[BASE, BASE])).0.changes.is_empty());
 }
@@ -183,7 +208,6 @@ fn family_guard_precedes_shortcuts_and_does_not_fabricate_owner_decisions() {
 #[test]
 fn unsupported_shapes_and_policies_fail_closed() {
     for source in [
-        "use std::fmt;\n",
         "impl X {}\nfn f() {}\n",
         "#[test]\nfn f() {}\n",
         "fn f( {",

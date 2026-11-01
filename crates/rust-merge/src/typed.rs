@@ -6,7 +6,7 @@ use ast_merge::{
     augment_layout, augment_normalized_comments_with_evidence_scope,
     native_analysis::NativeOwnerAnalysis, source_line_dispositions_from_augmentations,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tree_haver::service::ParsedResult;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -219,7 +219,13 @@ pub fn merge_documents(
     ast_merge::merge_source_preserving_owners_with_evidence(base, ours, theirs, verify)
 }
 
-pub type RustMergeExecution = ast_merge::typed_merge::ParsedOwnerMergeExecution;
+#[derive(Clone, Debug)]
+pub struct RustMergeExecution {
+    pub evidence: SourcePreservingMergeEvidence,
+    /// True when shared ordered source-line selection reproduced the verified output.
+    pub ordered_line_render_applied: bool,
+    pub output_parse: Option<ParsedResult>,
+}
 
 pub fn merge3(
     base: &ParsedResult,
@@ -227,7 +233,7 @@ pub fn merge3(
     theirs: &ParsedResult,
     parse_output: impl FnMut(&str) -> Result<ParsedResult, String>,
 ) -> Result<RustMergeExecution, String> {
-    ast_merge::typed_merge::merge_parsed_sources(
+    let mut execution = ast_merge::typed_merge::merge_parsed_sources(
         base,
         ours,
         theirs,
@@ -237,5 +243,120 @@ pub fn merge3(
             merge: merge_documents,
         },
         parse_output,
+    )?;
+    let ordered_line_render_applied =
+        if execution.evidence.result.outcome == ast_merge::ThreeWayMergeOutcome::Clean {
+            let analyses = [
+                source_line_analysis(base)?,
+                source_line_analysis(ours)?,
+                source_line_analysis(theirs)?,
+            ];
+            apply_line_selected_output(&analyses, &mut execution.evidence)?
+        } else {
+            false
+        };
+    Ok(RustMergeExecution {
+        evidence: execution.evidence,
+        ordered_line_render_applied,
+        output_parse: execution.output_parse,
+    })
+}
+
+/// Verify Rust's clean owner result through the common physical-line selector.
+/// Membership-changing cases remain on the existing owner renderer until their
+/// shared ordering and removal plans are representable.
+fn apply_line_selected_output(
+    analyses: &[RustSourceLineAnalysis; 3],
+    evidence: &mut SourcePreservingMergeEvidence,
+) -> Result<bool, String> {
+    if evidence.result.outcome != ast_merge::ThreeWayMergeOutcome::Clean {
+        return Ok(false);
+    }
+    let owner_ids = analyses
+        .iter()
+        .map(|analysis| {
+            analysis
+                .owners
+                .document
+                .owners
+                .iter()
+                .map(|owner| owner.id.as_str())
+                .collect::<HashSet<_>>()
+        })
+        .collect::<Vec<_>>();
+    if owner_ids[0] != owner_ids[1] || owner_ids[0] != owner_ids[2] {
+        return Ok(false);
+    }
+    let classification = evidence
+        .classification
+        .as_ref()
+        .ok_or_else(|| "clean Rust owner merge omitted classification evidence".to_string())?;
+    let baseline_revision =
+        classification.whole_source_selection.unwrap_or(ast_merge::SourceRevision::Ours);
+    let mut owner_revisions = HashMap::new();
+    if classification.whole_source_selection.is_some() {
+        let revision_index = match baseline_revision {
+            ast_merge::SourceRevision::Base => 0,
+            ast_merge::SourceRevision::Ours => 1,
+            ast_merge::SourceRevision::Theirs => 2,
+        };
+        for owner_id in &owner_ids[revision_index] {
+            owner_revisions.insert((*owner_id).to_string(), baseline_revision);
+        }
+    } else {
+        for decision in &classification.decisions {
+            let revision = match decision.kind {
+                ast_merge::OwnerDecisionKind::SelectOurs => ast_merge::SourceRevision::Ours,
+                ast_merge::OwnerDecisionKind::SelectTheirs => ast_merge::SourceRevision::Theirs,
+                ast_merge::OwnerDecisionKind::Delete => continue,
+                _ => return Err("clean Rust owner merge contains a conflict decision".into()),
+            };
+            owner_revisions.insert(decision.owner_id.clone(), revision);
+        }
+    }
+    let revisions = [
+        ast_merge::SourceRevision::Base,
+        ast_merge::SourceRevision::Ours,
+        ast_merge::SourceRevision::Theirs,
+    ];
+    let sources = revisions
+        .iter()
+        .zip(analyses)
+        .map(|(revision, analysis)| (*revision, analysis.owners.document.source.clone()))
+        .collect::<HashMap<_, _>>();
+    let dispositions = revisions
+        .iter()
+        .zip(analyses)
+        .map(|(revision, analysis)| (*revision, analysis.dispositions.clone()))
+        .collect::<HashMap<_, _>>();
+    let comment_regions = revisions
+        .iter()
+        .zip(analyses)
+        .map(|(revision, analysis)| (*revision, analysis.comments.augmentation.regions.clone()))
+        .collect::<HashMap<_, _>>();
+    let selections = ast_merge::source_line_selections_for_owner_revisions(
+        baseline_revision,
+        &dispositions,
+        &owner_revisions,
     )
+    .map_err(|error| error.to_string())?;
+    let plan = ast_merge::source_render_plan_from_ordered_selections_with_rehomes(
+        sources,
+        dispositions,
+        comment_regions,
+        &selections,
+        &[],
+    )
+    .map_err(|error| error.to_string())?;
+    let rendered = ast_merge::render_source_plan(&plan).map_err(|error| error.to_string())?;
+    let previous = evidence
+        .result
+        .output
+        .as_deref()
+        .ok_or_else(|| "clean Rust owner merge omitted output".to_string())?;
+    if rendered.content != previous {
+        return Err("Rust source-line render differs from the verified owner merge".into());
+    }
+    evidence.result.output = Some(rendered.content);
+    Ok(true)
 }
