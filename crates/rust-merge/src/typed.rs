@@ -371,8 +371,37 @@ pub fn line_selection_postprocessor(
     }
     let analyses =
         [source_line_analysis(base)?, source_line_analysis(ours)?, source_line_analysis(theirs)?];
-    let Some(rendered) = render_line_selected_output(&analyses, evidence)? else {
-        return Ok(false);
+    let rendered = match render_line_selected_output(&analyses, evidence) {
+        Ok(Some(rendered)) => rendered,
+        Ok(None) => return Ok(false),
+        Err(message) if message == "both tips changed the same document preamble differently" => {
+            let path = "<crate-preamble>".to_string();
+            let conflict = ast_merge::MergeConflict {
+                conflict_id: "rust-crate-preamble-divergence".to_string(),
+                category: "unmanaged_source_change".to_string(),
+                path: path.clone(),
+                fallback_scope: "full_file".to_string(),
+                message: "both tips changed the same document preamble differently".to_string(),
+                alternatives: vec![],
+            };
+            evidence.source_segments.clear();
+            evidence.classification = None;
+            evidence.result = ast_merge::ThreeWayMergeResult {
+                outcome: ast_merge::ThreeWayMergeOutcome::Conflict,
+                diagnostics: vec![ast_merge::Diagnostic {
+                    severity: ast_merge::DiagnosticSeverity::Error,
+                    category: ast_merge::DiagnosticCategory::MergeConflict,
+                    message: conflict.message.clone(),
+                    path: Some(path),
+                    review: None,
+                }],
+                conflicts: vec![conflict],
+                output: None,
+                policies: vec![],
+            };
+            return Ok(true);
+        }
+        Err(message) => return Err(message),
     };
     if evidence.result.outcome == ast_merge::ThreeWayMergeOutcome::Clean {
         let previous = evidence

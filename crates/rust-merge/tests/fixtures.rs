@@ -928,3 +928,22 @@ fn native_syn_merge3_composes_empty_base_additions_and_preserves_root_docs() {
         );
     }
 }
+
+#[test]
+fn native_syn_rejects_divergent_edits_to_existing_crate_docs() {
+    let fixture =
+        read_fixture(&["polyglot", "typed-core", "rust_syn_divergent_crate_doc_edits.json"]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Conflict);
+    assert_eq!(result.output, None);
+    assert_eq!(result.diagnostics[0].category, ast_merge::DiagnosticCategory::MergeConflict);
+    assert_eq!(result.conflicts[0].category, fixture["expected"]["conflict_category"]);
+}

@@ -86,6 +86,16 @@ pub fn project_native_merge_conflicts(
     if matches!(provider_id, "kernel.bash" | "kernel.go" | "kernel.rust")
         && execution.rendered.classification.is_none()
     {
+        if provider_id == "kernel.rust"
+            && execution
+                .rendered
+                .result
+                .conflicts
+                .iter()
+                .any(|conflict| conflict.conflict_id == "rust-crate-preamble-divergence")
+        {
+            return project_rust_crate_preamble_conflict(execution, request, provider_id);
+        }
         return project_membership_guard(execution, request, provider_id);
     }
     let classification = execution.rendered.classification.as_ref().ok_or(E::Classification)?;
@@ -263,6 +273,188 @@ pub fn project_native_merge_conflicts(
         return Err(E::Classification);
     }
     Ok(projected)
+}
+
+/// Project a Rust root-preamble conflict from source-bound Rust line facts.
+/// It remains whole-document because the portable conflict envelope does not yet
+/// support a document-region owner identity.
+fn project_rust_crate_preamble_conflict(
+    execution: &NativeMergeExecution,
+    request: &ValidatedOperationRequest,
+    provider: &str,
+) -> Result<NativeConflictProjection, ConflictProjectionError> {
+    use ConflictProjectionError as E;
+    let roles = [SourceRole::Base, SourceRole::Ours, SourceRole::Theirs];
+    if provider != "kernel.rust"
+        || request.request().provider_selection.profile_id.as_deref()
+            != Some(crate::profiles::RUST_OWNERS)
+        || execution.input_parses.len() != 3
+        || execution.output_parse.is_some()
+        || execution.output_source.is_some()
+        || !execution.rendered.source_segments.is_empty()
+        || execution.verification_error.is_some()
+    {
+        return Err(E::Classification);
+    }
+    let mut preambles = Vec::new();
+    let mut alternatives = Vec::new();
+    let mut source_refs = Vec::new();
+    for (parsed, role) in execution.input_parses.iter().zip(roles) {
+        let input = request.request().sources.get(&role).ok_or(E::Source)?;
+        let source = request.sources().get(&input.source_id).map_err(|_| E::Source)?;
+        if parsed.source.descriptor() != source.descriptor()
+            || parsed.source.descriptor().role != role
+        {
+            return Err(E::Source);
+        }
+        let analysis =
+            rust_merge::typed::source_line_analysis(parsed).map_err(|_| E::Classification)?;
+        let lines = analysis
+            .dispositions
+            .iter()
+            .filter(|record| {
+                record.kind == "root_region"
+                    && record.root_region_kind.as_deref() == Some("preamble")
+            })
+            .map(|record| record.line.clone())
+            .collect::<Vec<_>>();
+        preambles.push((!lines.is_empty()).then_some(lines));
+        alternatives.push(ConflictSourceAlternative {
+            role,
+            state: AlternativeState::Present,
+            source_id: Some(input.source_id.clone()),
+            regions: vec![ExactConflictRegion {
+                range: ResultRange {
+                    start_byte: 0,
+                    end_byte: source.bytes().len(),
+                    extra: Metadata::new(),
+                },
+                byte_length: source.descriptor().byte_length,
+                sha256: source.descriptor().sha256.clone(),
+                extra: Metadata::new(),
+            }],
+            change_ids: vec![],
+            extra: Metadata::new(),
+        });
+        source_refs.push(DiagnosticSourceRef {
+            source_id: input.source_id.clone(),
+            role,
+            span: None,
+            extra: Metadata::new(),
+        });
+    }
+    if preambles[0].is_none()
+        || preambles[1] == preambles[0]
+        || preambles[2] == preambles[0]
+        || preambles[1] == preambles[2]
+    {
+        return Err(E::Classification);
+    }
+    let actual = execution.rendered.result.conflicts.first().ok_or(E::Classification)?;
+    let message = "both tips changed the same document preamble differently";
+    if execution.rendered.result.outcome != ThreeWayMergeOutcome::Conflict
+        || execution.rendered.result.conflicts.len() != 1
+        || actual.conflict_id != "rust-crate-preamble-divergence"
+        || actual.category != "unmanaged_source_change"
+        || actual.path != "<crate-preamble>"
+        || actual.fallback_scope != "full_file"
+        || actual.message != message
+        || execution.rendered.result.output.is_some()
+        || execution.rendered.result.diagnostics.len() != 1
+        || execution.rendered.result.diagnostics[0].category
+            != ast_merge::DiagnosticCategory::MergeConflict
+    {
+        return Err(E::Classification);
+    }
+    let id = actual.conflict_id.clone();
+    let code = "rust.crate_preamble_edit_edit";
+    let diagnostic_id = format!("diagnostic.{id}");
+    let diagnostic = PortableDiagnostic {
+        schema: DIAGNOSTIC_SCHEMA.into(),
+        id: diagnostic_id.clone(),
+        sequence: 0,
+        severity: DiagnosticSeverity::Error,
+        category: PortableCategory::MergeConflict,
+        code: code.into(),
+        message: message.into(),
+        blocking: true,
+        operation: Some(OperationKind::Merge3),
+        request_id: Some(request.request().request_id.clone()),
+        source_refs,
+        subject_refs: Some(vec![DiagnosticSubjectRef {
+            kind: "conflict".into(),
+            id: id.clone(),
+            extra: Metadata::new(),
+        }]),
+        cause_ids: vec![],
+        related_ids: vec![],
+        origin: DiagnosticOrigin {
+            layer: DiagnosticLayer::Provider,
+            provider_id: Some(provider.into()),
+            backend_id: None,
+            package: None,
+            package_version: None,
+            native_code: None,
+            extra: Metadata::new(),
+        },
+        data: Metadata::new(),
+        extensions: vec![],
+        metadata: Metadata::new(),
+        extra: Metadata::new(),
+    };
+    let conflict = PortableConflict {
+        schema: CONFLICT_SCHEMA.into(),
+        id,
+        operation: OperationKind::Merge3,
+        category: ConflictCategory::Content,
+        code: code.into(),
+        message: Some(message.into()),
+        subject: ConflictSubject {
+            structural_path: Some("<crate-preamble>".into()),
+            owner_ref: None,
+            node_ref: None,
+            archive_entry: None,
+            binary_region: None,
+            whole_document: Some(true),
+            extra: Metadata::new(),
+        },
+        roles: roles.to_vec(),
+        alternatives,
+        classification: ConflictClassification {
+            base_participated: Some(true),
+            change_ids: vec![],
+            decision_ids: vec![],
+            extra: [("root_region_guard".into(), serde_json::json!("crate_preamble_edit_edit"))]
+                .into(),
+        },
+        localization: ConflictLocalization {
+            status: LocalizationStatus::WholeDocument,
+            verified: true,
+            output_regions: vec![],
+            extra: Metadata::new(),
+        },
+        resolution: ConflictResolution {
+            status: ResolutionStatus::Unresolved,
+            strategy: ResolutionStrategy::None,
+            selected_roles: vec![],
+            decision_id: None,
+            resolver: None,
+            reason: None,
+            extra: Metadata::new(),
+        },
+        diagnostic_ids: vec![diagnostic_id],
+        change_ids: vec![],
+        decision_ids: vec![],
+        render_fragment_ids: vec![],
+        extensions: vec![],
+        metadata: Metadata::new(),
+        extra: Metadata::new(),
+    };
+    Ok(NativeConflictProjection {
+        conflicts: vec![conflict],
+        diagnostics: vec![diagnostic],
+        evidence: ConflictEvidence::default(),
+    })
 }
 
 /// Family ownership guards precede generic classification. Recompute the actual

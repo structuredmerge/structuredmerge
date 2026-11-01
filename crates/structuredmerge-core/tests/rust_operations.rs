@@ -313,6 +313,27 @@ fn common_rust_operation_composes_native_crate_doc_changes() {
 }
 
 #[test]
+fn common_rust_operation_reports_divergent_crate_doc_conflict() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_syn_divergent_crate_doc_edits.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let texts = [
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ];
+    let (result, request) = run(request("merge3", &texts));
+
+    assert!(!result.ok);
+    assert!(result.output.is_none());
+    assert!(!result.conflicts.is_empty());
+    assert!(result.verification.output_reparsed.is_none());
+    result.validate_against(&request).unwrap();
+}
+
+#[test]
 fn family_guard_precedes_shortcuts_and_does_not_fabricate_owner_decisions() {
     for texts in [
         [BASE.to_string(), OURS.to_string(), format!("{BASE}fn added() {{}}\n")],
