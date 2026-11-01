@@ -349,6 +349,53 @@ fn rust_backends_conform_to_shared_owner_profile_failure_boundary() {
                     diagnostics
                 );
             }
+            let merge_ok_key = match backend {
+                RustBackend::Native => "native_rust_merge_ok",
+                RustBackend::TreeSitter => "tree_sitter_rust_merge_ok",
+            };
+            if let Some(expected_merge_ok) = case["expected"][merge_ok_key].as_bool() {
+                let input = &case["merge3"];
+                let merged = merge_rust_three_way_with_backend(
+                    input["base"].as_str().unwrap(),
+                    input["ours"].as_str().unwrap(),
+                    input["theirs"].as_str().unwrap(),
+                    RustDialect::Rust,
+                    backend,
+                );
+                assert_eq!(
+                    merged.outcome == ast_merge::ThreeWayMergeOutcome::Clean,
+                    expected_merge_ok,
+                    "{backend:?} merge outcome for {}: {:?}",
+                    case["name"],
+                    merged.diagnostics
+                );
+                let expected_output_key = match backend {
+                    RustBackend::Native => "native_rust_merge_output",
+                    RustBackend::TreeSitter => "tree_sitter_rust_merge_output",
+                };
+                if let Some(expected_output) = case["expected"][expected_output_key].as_str() {
+                    assert_eq!(merged.output.as_deref(), Some(expected_output), "{backend:?}");
+                }
+                let expected_merge_category_key = match backend {
+                    RustBackend::Native => "native_rust_merge_category",
+                    RustBackend::TreeSitter => "tree_sitter_rust_merge_category",
+                };
+                if let Some(expected_category) =
+                    case["expected"][expected_merge_category_key].as_str()
+                {
+                    let diagnostics = diagnostic_shape(&merged.diagnostics);
+                    assert!(
+                        diagnostics
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .any(|diagnostic| { diagnostic["category"] == expected_category }),
+                        "{backend:?} lacked merge failure category for {}: {:?}",
+                        case["name"],
+                        diagnostics
+                    );
+                }
+            }
         }
     }
 }
