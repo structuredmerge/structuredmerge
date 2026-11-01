@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::RangeInclusive;
 
 /// Source-preserving replacement of a one-based inclusive line range.
@@ -282,6 +282,49 @@ impl RehomePlan {
     fn attachment_metadata(&self) -> HashMap<String, serde_json::Value> {
         self.metadata.clone()
     }
+}
+
+/// The ordered source lines and physical line numbers retained from a removed owner.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct RemovedOwnerPreservedLines {
+    pub lines: Vec<String>,
+    pub line_numbers: Vec<usize>,
+}
+
+/// Materialize Ruby ast-merge's removed-owner preservation rule from classified
+/// line segments. A trailing layout gap is retained only when its effective
+/// controller, after removing this owner, is the gap's after owner.
+pub fn preserve_removed_owner_lines(
+    leading_segment_lines: &[String],
+    leading_segment_line_numbers: &[usize],
+    inline_lines: &[String],
+    inline_line_numbers: &[usize],
+    trailing_region: Option<&crate::CommentRegion>,
+    trailing_gap: Option<&crate::LayoutGap>,
+    removed_owner_id: &str,
+) -> RemovedOwnerPreservedLines {
+    let mut preserved = RemovedOwnerPreservedLines {
+        lines: leading_segment_lines.to_vec(),
+        line_numbers: leading_segment_line_numbers.to_vec(),
+    };
+    preserved.lines.extend(inline_lines.iter().cloned());
+    preserved.line_numbers.extend(inline_line_numbers.iter().copied());
+    if let Some(region) = trailing_region {
+        preserved.lines.extend(region.text().split_terminator('\n').map(str::to_owned));
+        if let (Some(start), Some(end)) = (region.start_line(), region.end_line()) {
+            preserved.line_numbers.extend(start..=end);
+        }
+    }
+    if let Some(gap) = trailing_gap {
+        let removed = HashSet::from([removed_owner_id]);
+        if gap.after_owner_id.as_deref().is_some_and(|after_owner_id| {
+            gap.effective_controller_owner_id(&removed) == Some(after_owner_id)
+        }) {
+            preserved.lines.extend(gap.lines.iter().cloned());
+            preserved.line_numbers.extend(gap.start_line..=gap.end_line);
+        }
+    }
+    preserved
 }
 
 /// A contiguous source removal plus passive fragment-promotion decisions.
