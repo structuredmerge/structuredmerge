@@ -2715,6 +2715,123 @@ mod tests {
         );
     }
 
+    #[test]
+    fn resolves_multiline_gap_by_surviving_boundary_after_owner_deletion() {
+        let disposition = |line_number: usize,
+                           line: &str,
+                           kind: &str,
+                           selection_key: &str,
+                           owner_id: Option<&str>,
+                           before_owner_id: Option<&str>,
+                           after_owner_id: Option<&str>,
+                           controller_owner_id: Option<&str>| {
+            crate::SourceLineDisposition {
+                line_number,
+                line: line.to_string(),
+                kind: kind.to_string(),
+                selection_key: selection_key.to_string(),
+                owner_id: owner_id.map(str::to_string),
+                comment_region_ids: vec![],
+                comment_kind: None,
+                gap_id: (kind == "layout_gap").then(|| selection_key.to_string()),
+                controller_owner_id: controller_owner_id.map(str::to_string),
+                before_owner_id: before_owner_id.map(str::to_string),
+                after_owner_id: after_owner_id.map(str::to_string),
+                root_region_kind: (kind == "root_region").then(|| "preamble".to_string()),
+            }
+        };
+        let root =
+            disposition(1, "// Retiring\n", "root_region", "root:preamble", None, None, None, None);
+        let leading_gap = |line_number, key, before, controller| {
+            disposition(
+                line_number,
+                "\n",
+                "layout_gap",
+                key,
+                None,
+                before,
+                Some("following"),
+                Some(controller),
+            )
+        };
+        let leading_comment = disposition(
+            4,
+            "/// Following\n",
+            "comment_owner",
+            "comment:following:leading",
+            Some("following"),
+            None,
+            None,
+            None,
+        );
+        let following = disposition(
+            5,
+            "fn following() {}\n",
+            "structural_owner",
+            "owner:following",
+            Some("following"),
+            None,
+            None,
+            None,
+        );
+        let baseline = vec![
+            root.clone(),
+            leading_gap(2, "gap:preamble:root:following", None, "following"),
+            leading_gap(3, "gap:preamble:root:following", None, "following"),
+            leading_comment.clone(),
+            following.clone(),
+        ];
+        let ours = vec![
+            disposition(
+                1,
+                "fn retiring() {}\n",
+                "structural_owner",
+                "owner:retiring",
+                Some("retiring"),
+                None,
+                None,
+                None,
+            ),
+            leading_gap(2, "gap:interstitial:retiring:following", Some("retiring"), "retiring"),
+            leading_gap(3, "gap:interstitial:retiring:following", Some("retiring"), "retiring"),
+            leading_comment,
+            following,
+        ];
+        let revisions =
+            HashMap::from([(SourceRevision::Ours, ours), (SourceRevision::Theirs, baseline)]);
+        let owner_revisions = HashMap::from([("following".to_string(), SourceRevision::Ours)]);
+        let deleted = HashSet::from(["retiring".to_string()]);
+
+        let selections = source_line_selections_for_owner_revisions_with_deletions(
+            SourceRevision::Theirs,
+            &revisions,
+            &owner_revisions,
+            &deleted,
+        )
+        .unwrap();
+        assert_eq!(
+            selections,
+            vec![
+                SourceLineSelection {
+                    selection_key: "root:preamble".into(),
+                    revision: SourceRevision::Theirs,
+                },
+                SourceLineSelection {
+                    selection_key: "gap:interstitial:retiring:following".into(),
+                    revision: SourceRevision::Ours,
+                },
+                SourceLineSelection {
+                    selection_key: "comment:following:leading".into(),
+                    revision: SourceRevision::Ours,
+                },
+                SourceLineSelection {
+                    selection_key: "owner:following".into(),
+                    revision: SourceRevision::Ours,
+                },
+            ]
+        );
+    }
+
     fn source_fragment(
         revision: SourceRevision,
         start_line: usize,
