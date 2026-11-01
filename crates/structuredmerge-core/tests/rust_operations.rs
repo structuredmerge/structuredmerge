@@ -676,7 +676,7 @@ fn common_rust_operation_merges_foreign_module_with_independent_function_edit() 
 }
 
 #[test]
-fn common_rust_syn_operation_fails_closed_on_two_sided_owner_reorders() {
+fn common_rust_syn_operation_reports_two_sided_owner_order_conflict() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
         "../../../../fixtures/polyglot/typed-core/rust_merge3_two_sided_owner_reorder_boundary.json"
     ))
@@ -689,14 +689,14 @@ fn common_rust_syn_operation_fails_closed_on_two_sided_owner_reorders() {
     ];
     let mut operation = request("merge3", &texts);
     operation.parser_selection.backend = Some("rust.syn.core-test".into());
-    let (result, request) = run(operation);
+    let (result, _request) = run(operation);
 
     assert!(!result.ok, "{:?}", result.diagnostics);
     assert!(result.output.is_none());
     assert!(result.diagnostics.iter().any(|diagnostic| {
-        matches!(diagnostic, DiagnosticRecord::Canonical(record) if record.category == PortableCategory::VerificationError)
+        matches!(diagnostic, DiagnosticRecord::Canonical(record) if record.category == PortableCategory::MergeConflict)
     }), "{:#?}", result.diagnostics);
-    result.validate_against(&request).unwrap();
+    assert_eq!(result.conflicts.len(), 1);
 }
 
 #[test]
