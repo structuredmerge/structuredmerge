@@ -363,10 +363,12 @@ pub fn line_selection_postprocessor(
         diagnostic.message
             == "source-preserving declaration merge cannot prove an agreed owner order"
     });
-    if order_error && one_sided_owner_order_revision(&analyses).is_none() {
+    let merged_order = compatible_stable_owner_order(&analyses);
+    if order_error && merged_order.is_none() && one_sided_owner_order_revision(&analyses).is_none()
+    {
         return Ok(false);
     }
-    let rendered = match render_line_selected_output(&analyses, evidence) {
+    let rendered = match render_line_selected_output(&analyses, evidence, merged_order.as_deref()) {
         Ok(Some(rendered)) => rendered,
         Ok(None) => return Ok(false),
         Err(message) if message == "both tips changed the same document preamble differently" => {
@@ -464,6 +466,69 @@ fn is_recoverable_owner_layout_error(evidence: &SourcePreservingMergeEvidence) -
         })
 }
 
+fn compatible_stable_owner_order(analyses: &[RustSourceLineAnalysis; 3]) -> Option<Vec<String>> {
+    let orders: [Vec<String>; 3] = std::array::from_fn(|index| {
+        analyses[index].owners.document.owners.iter().map(|owner| owner.id.clone()).collect()
+    });
+    if orders[0].is_empty()
+        || orders[0].len() != orders[1].len()
+        || orders[0].len() != orders[2].len()
+    {
+        return None;
+    }
+    let base_set = orders[0].iter().cloned().collect::<HashSet<_>>();
+    if orders[1].iter().cloned().collect::<HashSet<_>>() != base_set
+        || orders[2].iter().cloned().collect::<HashSet<_>>() != base_set
+    {
+        return None;
+    }
+    if orders[1] == orders[0] || orders[2] == orders[0] {
+        return None;
+    }
+    let positions: [HashMap<String, usize>; 3] = std::array::from_fn(|index| {
+        orders[index].iter().enumerate().map(|(position, id)| (id.clone(), position)).collect()
+    });
+    let mut outgoing = orders[0]
+        .iter()
+        .cloned()
+        .map(|id| (id, HashSet::<String>::new()))
+        .collect::<HashMap<_, _>>();
+    let mut indegree = orders[0].iter().cloned().map(|id| (id, 0usize)).collect::<HashMap<_, _>>();
+    for left_index in 0..orders[0].len() {
+        for right_index in left_index + 1..orders[0].len() {
+            let left = &orders[0][left_index];
+            let right = &orders[0][right_index];
+            let ours_before = positions[1][left] < positions[1][right];
+            let theirs_before = positions[2][left] < positions[2][right];
+            // Base order is `left` before `right`; any tip reversal wins this
+            // pairwise relation. A cycle across pairs fails closed below.
+            let merged_before = ours_before && theirs_before;
+            let (before, after) = if merged_before { (left, right) } else { (right, left) };
+            if outgoing.get_mut(before)?.insert(after.clone()) {
+                *indegree.get_mut(after)? += 1;
+            }
+        }
+    }
+    let mut remaining = indegree;
+    let mut merged = Vec::with_capacity(orders[0].len());
+    while !remaining.is_empty() {
+        let next = remaining
+            .iter()
+            .filter(|(_, degree)| **degree == 0)
+            .map(|(id, _)| id.clone())
+            .min_by_key(|id| positions[0][id]);
+        let id = next?;
+        remaining.remove(&id);
+        merged.push(id.clone());
+        for successor in outgoing.get(&id)? {
+            if let Some(degree) = remaining.get_mut(successor) {
+                *degree = degree.checked_sub(1)?;
+            }
+        }
+    }
+    Some(merged)
+}
+
 fn one_sided_owner_order_revision(
     analyses: &[RustSourceLineAnalysis; 3],
 ) -> Option<ast_merge::SourceRevision> {
@@ -523,6 +588,7 @@ fn one_sided_owner_order_revision(
 fn render_line_selected_output(
     analyses: &[RustSourceLineAnalysis; 3],
     evidence: &SourcePreservingMergeEvidence,
+    merged_owner_order: Option<&[String]>,
 ) -> Result<Option<ast_merge::SourceRenderResult>, String> {
     if evidence.result.outcome != ast_merge::ThreeWayMergeOutcome::Clean
         && !is_recoverable_owner_layout_error(evidence)
@@ -622,7 +688,7 @@ fn render_line_selected_output(
         .zip(analyses)
         .map(|(revision, analysis)| (*revision, analysis.comments.augmentation.regions.clone()))
         .collect::<HashMap<_, _>>();
-    let selections =
+    let mut selections =
         ast_merge::source_line_selections_for_owner_revisions_preserving_addition_gaps(
             baseline_revision,
             &dispositions,
@@ -630,6 +696,65 @@ fn render_line_selected_output(
             &deleted_owner_ids,
         )
         .map_err(|error| error.to_string())?;
+    if let Some(owner_order) = merged_owner_order {
+        let records = dispositions.get(&baseline_revision).ok_or_else(|| {
+            "baseline dispositions are required to order selected Rust owners".to_string()
+        })?;
+        if dispositions
+            .values()
+            .flatten()
+            .any(|record| !matches!(record.kind.as_str(), "structural_owner" | "comment_owner"))
+        {
+            return Ok(None);
+        }
+        let owner_positions = owner_order
+            .iter()
+            .enumerate()
+            .map(|(index, id)| (id.as_str(), index))
+            .collect::<HashMap<_, _>>();
+        let selection_owners = records
+            .iter()
+            .map(|record| (record.selection_key.as_str(), record.owner_id.as_deref()))
+            .collect::<HashMap<_, _>>();
+        if selections.iter().any(|selection| {
+            selection_owners
+                .get(selection.selection_key.as_str())
+                .and_then(|owner| *owner)
+                .and_then(|owner| owner_positions.get(owner))
+                .is_none()
+        }) {
+            return Ok(None);
+        }
+        for (owner_id, revision) in &owner_revisions {
+            let expected_keys = dispositions
+                .get(revision)
+                .into_iter()
+                .flatten()
+                .filter(|record| record.owner_id.as_deref() == Some(owner_id.as_str()))
+                .map(|record| record.selection_key.as_str())
+                .collect::<HashSet<_>>();
+            let selected_keys = selections
+                .iter()
+                .filter(|selection| selection.revision == *revision)
+                .filter(|selection| {
+                    selection_owners.get(selection.selection_key.as_str()).and_then(|owner| *owner)
+                        == Some(owner_id.as_str())
+                })
+                .map(|selection| selection.selection_key.as_str())
+                .collect::<HashSet<_>>();
+            if expected_keys.is_empty() || expected_keys != selected_keys {
+                return Ok(None);
+            }
+        }
+        selections.sort_by_key(|selection| {
+            selection_owners
+                .get(selection.selection_key.as_str())
+                .and_then(|owner| *owner)
+                .and_then(|owner| owner_positions.get(owner))
+                .copied()
+                .unwrap_or(usize::MAX)
+        });
+    }
     let plan = ast_merge::source_render_plan_from_ordered_selections_with_rehomes(
         sources,
         dispositions,

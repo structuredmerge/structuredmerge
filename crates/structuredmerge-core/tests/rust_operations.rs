@@ -416,6 +416,27 @@ fn family_guard_precedes_shortcuts_and_does_not_fabricate_owner_decisions() {
 }
 
 #[test]
+fn common_rust_syn_operation_merges_compatible_two_sided_owner_reorders() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_merge3_compatible_two_sided_reorders.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let texts = [
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ];
+    let mut operation = request("merge3", &texts);
+    operation.parser_selection.backend = Some("rust.syn.core-test".into());
+    let (result, request) = run(operation);
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+    result.validate_against(&request).unwrap();
+}
+
+#[test]
 fn rust_test_attribute_is_supported_with_its_item_and_doc_comment() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
         "../../../../fixtures/polyglot/typed-core/rust_parser_owner_profile_failure_boundary.json"
