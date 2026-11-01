@@ -1039,3 +1039,36 @@ fn native_syn_fails_closed_on_two_sided_owner_reorders() {
         diagnostic.category == ast_merge::DiagnosticCategory::UnsupportedFeature
     }));
 }
+
+#[test]
+fn native_syn_keeps_same_spelling_rust_namespaces_as_distinct_owners() {
+    let fixture =
+        read_fixture(&["polyglot", "typed-core", "rust_same_spelling_type_and_value_owners.json"]);
+    let input = &fixture["input"];
+    let parsed = rust_merge::parse_rust_with_backend(
+        input["base"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+    assert!(parsed.ok, "{:?}", parsed.diagnostics);
+    let paths = parsed
+        .analysis
+        .unwrap()
+        .declarations
+        .into_iter()
+        .map(|owner| owner.path)
+        .collect::<std::collections::HashSet<_>>();
+    for path in fixture["expected"]["owner_paths"].as_array().unwrap() {
+        assert!(paths.contains(path.as_str().unwrap()), "{paths:?}");
+    }
+
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(fixture["expected"]["output"].as_str().unwrap()));
+}

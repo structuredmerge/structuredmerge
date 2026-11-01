@@ -268,7 +268,7 @@ pub fn parse_rust_with_backend(
                     ));
                 };
                 declarations.push(ModuleDeclaration {
-                    path: format!("/declarations/{name}"),
+                    path: format!("/{path_kind}:{name}", path_kind = rust_owner_path_kind(kind)),
                     match_key: name,
                     declaration_kind: rust_declaration_kind(kind).to_string(),
                     text: format!(
@@ -669,6 +669,27 @@ fn supported_analysis_declaration(kind: &str) -> bool {
             | "type_item"
             | "union_item"
     )
+}
+
+fn rust_owner_path_kind(node_kind: &str) -> &'static str {
+    match node_kind {
+        "const_item" | "const" => "const",
+        "enum_item" | "enum" => "enum",
+        "extern_crate_declaration" | "extern_crate" => "extern_crate",
+        "function_item" | "function" => "function",
+        "foreign_mod_item" | "foreign_mod" => "foreign_mod",
+        "impl_item" | "impl" => "impl",
+        "macro_definition" | "macro" => "macro",
+        "macro_invocation" => "macro_invocation",
+        "mod_item" | "module" => "mod",
+        "static_item" | "static" => "static",
+        "struct_item" | "struct" => "struct",
+        "trait_item" | "trait" => "trait",
+        "trait_alias_item" | "trait_alias" => "trait_alias",
+        "type_item" | "type" => "type",
+        "union_item" | "union" => "union",
+        _ => "declaration",
+    }
 }
 
 fn rust_declaration_kind(node_kind: &str) -> &'static str {
@@ -1163,7 +1184,7 @@ fn native_declaration(
     let text = span.byte_range();
     let content = source.get(text).unwrap_or_default().trim();
     ModuleDeclaration {
-        path: format!("/declarations/{name}"),
+        path: format!("/{path_kind}:{name}", path_kind = rust_owner_path_kind(kind)),
         match_key: name,
         declaration_kind: kind.to_string(),
         text: format!("{content}\n"),
