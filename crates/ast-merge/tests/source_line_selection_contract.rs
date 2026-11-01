@@ -5,7 +5,7 @@ use ast_merge::{
     source_render_plan_from_line_selections,
 };
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Deserialize)]
 struct Fixture {
@@ -118,6 +118,67 @@ fn shared_source_line_selection_fixture_renders_exact_bytes_and_provenance() {
         })
         .collect::<Vec<_>>();
     assert_eq!(actual_records, expected_records);
+}
+
+#[derive(Deserialize)]
+struct GapArbitrationFixture {
+    baseline_revision: String,
+    documents: Vec<Document>,
+    owner_revisions: Vec<OwnerRevision>,
+    deleted_owner_ids: Vec<String>,
+    expected: GapArbitrationExpected,
+}
+
+#[derive(Deserialize)]
+struct GapArbitrationExpected {
+    selections: Vec<SourceLineSelection>,
+    content: String,
+    retained_gap_key: String,
+}
+
+#[test]
+fn shared_gap_removal_arbitration_prefers_surviving_before_owner_controller() {
+    let fixture: GapArbitrationFixture = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/ast-merge/source_line_gap_removal_arbitration.json"
+    ))
+    .expect("shared gap removal arbitration fixture is valid");
+    let mut sources = HashMap::new();
+    let mut dispositions = HashMap::new();
+    for document in fixture.documents {
+        let source_revision = revision(&document.revision);
+        let records = source_line_dispositions(
+            &document.source,
+            &document.owners,
+            &document.comment_regions,
+            &document.layout_gaps,
+        )
+        .expect("fixture source assigns each line to one owner or gap");
+        sources.insert(source_revision, document.source);
+        dispositions.insert(source_revision, records);
+    }
+    let owner_revisions = fixture
+        .owner_revisions
+        .iter()
+        .map(|entry| (entry.owner_id.clone(), revision(&entry.revision)))
+        .collect::<HashMap<_, _>>();
+    let deleted_owner_ids = fixture.deleted_owner_ids.into_iter().collect::<HashSet<_>>();
+    let selections = ast_merge::source_line_selections_for_owner_revisions_with_deletions(
+        revision(&fixture.baseline_revision),
+        &dispositions,
+        &owner_revisions,
+        &deleted_owner_ids,
+    )
+    .expect("deleted-owner selection resolves the collapsed gap boundary");
+    assert_eq!(selections, fixture.expected.selections);
+    assert!(
+        selections
+            .iter()
+            .any(|selection| { selection.selection_key == fixture.expected.retained_gap_key })
+    );
+    let plan = source_render_plan_from_line_selections(sources, dispositions, &selections)
+        .expect("gap-arbitration selections form a render plan");
+    let rendered = render_source_plan(&plan).expect("selected owner and gap lines render");
+    assert_eq!(rendered.content, fixture.expected.content);
 }
 
 #[derive(Deserialize)]
