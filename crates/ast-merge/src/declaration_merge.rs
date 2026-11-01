@@ -282,6 +282,15 @@ fn merge_owners(
     let layout_matches = if membership_changed && stable_ids.is_empty() {
         false
     } else if membership_changed {
+        let base_order = owner_order_for_ids(base, &stable_ids);
+        let ours_order = owner_order_for_ids(ours, &stable_ids);
+        let theirs_order = owner_order_for_ids(theirs, &stable_ids);
+        if base_order != ours_order || base_order != theirs_order {
+            return error_result(
+                DiagnosticCategory::UnsupportedFeature,
+                "source-preserving declaration merge cannot prove stable owner order",
+            );
+        }
         let base_layout = layout_segments_for_ids(base, &stable_ids);
         let ours_layout = layout_segments_for_ids(ours, &stable_ids);
         let theirs_layout = layout_segments_for_ids(theirs, &stable_ids);
@@ -422,19 +431,44 @@ fn layout_segments_for_ids(
     ids: &HashSet<String>,
 ) -> Result<Vec<String>, String> {
     let mut cursor = 0;
+    let mut segment = String::new();
     let mut segments = Vec::new();
+    let mut stable_owner_seen = false;
+    let mut nonstable_owner_after_last_stable = false;
     for owner in &document.owners {
         let owned_lines = physical_line_range(document, owner)?;
         if owned_lines.start < cursor {
             return Err(format!("owner {} shares a physical line with a prior owner", owner.path));
         }
+        segment.push_str(&document.source[cursor..owned_lines.start]);
         if ids.contains(&owner.id) {
-            segments.push(document.source[cursor..owned_lines.start].to_string());
+            segments.push(std::mem::take(&mut segment));
+            stable_owner_seen = true;
+            nonstable_owner_after_last_stable = false;
+        } else if stable_owner_seen {
+            nonstable_owner_after_last_stable = true;
         }
         cursor = owned_lines.end;
     }
-    segments.push(document.source[cursor..].to_string());
+    if nonstable_owner_after_last_stable {
+        segment = document.source[cursor..].to_string();
+    } else {
+        segment.push_str(&document.source[cursor..]);
+    }
+    segments.push(segment);
     Ok(segments)
+}
+
+fn owner_order_for_ids<'a>(
+    document: &'a SourcePreservingOwnerDocument,
+    ids: &HashSet<String>,
+) -> Vec<&'a str> {
+    document
+        .owners
+        .iter()
+        .filter(|owner| ids.contains(&owner.id))
+        .map(|owner| owner.id.as_str())
+        .collect()
 }
 
 /// Ruby's layout contract treats an owner's start/end line as complete physical
@@ -659,40 +693,41 @@ mod tests {
             .join("../../../fixtures/polyglot/ast-merge/layout_line_ownership.json");
         let fixture: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(fixture_path).unwrap()).unwrap();
-        let case = &fixture["physical_line_case"];
-        let stable = case["stable_owner_ids"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|id| id.as_str().unwrap().to_string())
-            .collect::<HashSet<_>>();
-        for entry in case["documents"].as_array().unwrap() {
-            let document = SourcePreservingOwnerDocument {
-                source: entry["source"].as_str().unwrap().to_string(),
-                owners: entry["owners"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|item| SourcePreservingOwner {
-                        id: item["id"].as_str().unwrap().to_string(),
-                        path: item["id"].as_str().unwrap().to_string(),
-                        fingerprint: item["fingerprint"].as_str().unwrap().to_string(),
-                        start_byte: item["start_byte"].as_u64().unwrap() as usize,
-                        end_byte: item["end_byte"].as_u64().unwrap() as usize,
-                        start_line: item["start_line"].as_u64().unwrap() as usize,
-                        end_line: item["end_line"].as_u64().unwrap() as usize,
-                    })
-                    .collect(),
-            };
-            assert_eq!(
-                layout_segments_for_ids(&document, &stable).unwrap(),
-                case["expected_stable_layout_segments"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|segment| segment.as_str().unwrap())
-                    .collect::<Vec<_>>()
-            );
+        for case in [&fixture["physical_line_case"], &fixture["membership_removal_case"]] {
+            let stable = case["stable_owner_ids"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|id| id.as_str().unwrap().to_string())
+                .collect::<HashSet<_>>();
+            for entry in case["documents"].as_array().unwrap() {
+                let document = SourcePreservingOwnerDocument {
+                    source: entry["source"].as_str().unwrap().to_string(),
+                    owners: entry["owners"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|item| SourcePreservingOwner {
+                            id: item["id"].as_str().unwrap().to_string(),
+                            path: item["id"].as_str().unwrap().to_string(),
+                            fingerprint: item["fingerprint"].as_str().unwrap().to_string(),
+                            start_byte: item["start_byte"].as_u64().unwrap() as usize,
+                            end_byte: item["end_byte"].as_u64().unwrap() as usize,
+                            start_line: item["start_line"].as_u64().unwrap() as usize,
+                            end_line: item["end_line"].as_u64().unwrap() as usize,
+                        })
+                        .collect(),
+                };
+                assert_eq!(
+                    layout_segments_for_ids(&document, &stable).unwrap(),
+                    case["expected_stable_layout_segments"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|segment| segment.as_str().unwrap())
+                        .collect::<Vec<_>>()
+                );
+            }
         }
     }
 

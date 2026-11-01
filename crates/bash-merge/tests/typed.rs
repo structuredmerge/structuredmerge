@@ -203,6 +203,30 @@ fn unsupported_or_ambiguous_bash_remains_rejected() {
 }
 
 #[test]
+fn removed_owner_layout_fixture_matches_ruby_output() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/bash_merge3_removed_owner_layout.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let sources = [
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ];
+    let parser = Parser::new("bash");
+    let [base, ours, theirs] = parser.inputs(sources);
+    let expected = fixture["expected"]["output"].as_str().unwrap();
+    let execution =
+        typed::merge3(&base, &ours, &theirs, |text| Ok(parser.parse(text, SourceRole::Output)))
+            .unwrap();
+
+    assert_eq!(execution.evidence.result.outcome, ThreeWayMergeOutcome::Clean);
+    assert_eq!(execution.evidence.result.output.as_deref(), Some(expected));
+    assert!(execution.output_parse.is_some());
+}
+
+#[test]
 fn output_verification_cannot_reuse_inputs_change_bytes_or_switch_backend() {
     let parser = Parser::new("bash");
     let [base, ours, theirs] = parser.inputs(["x=1\n"; 3]);
