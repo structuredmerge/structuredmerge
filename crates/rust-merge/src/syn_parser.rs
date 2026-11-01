@@ -962,6 +962,14 @@ mod tests {
                     && comment_text(node).contains(expected["module_doc_text"].as_str().unwrap())
             })
             .unwrap();
+        let nested_module_doc = nodes
+            .iter()
+            .find(|node| {
+                node.role == NodeRole::Comment
+                    && comment_text(node)
+                        .contains(expected["nested_module_doc_text"].as_str().unwrap())
+            })
+            .unwrap();
         let module = nodes
             .iter()
             .find(|node| node.parent_id.as_deref() == Some(root) && node.kind == "syn::ItemMod")
@@ -971,12 +979,17 @@ mod tests {
         assert_eq!(root_doc.parent_id.as_deref(), Some(root));
         assert!(module_doc.semantic_roles.iter().any(|role| role == "inner_doc_comment"));
         assert_eq!(module_doc.parent_id.as_deref(), Some(module.id.as_str()));
+        assert!(nested_module_doc.semantic_roles.iter().any(|role| role == "inner_doc_comment"));
+        assert_eq!(nested_module_doc.parent_id.as_deref(), Some(module.id.as_str()));
 
         let analysis = crate::typed::analysis(&parsed).unwrap();
         let owner_path = expected["module_owner_path"].as_str().unwrap();
         let module_owner =
             analysis.document.owners.iter().find(|owner| owner.id == owner_path).unwrap();
         assert!(module_owner.fingerprint.contains(expected["module_doc_text"].as_str().unwrap()));
+        assert!(
+            module_owner.fingerprint.contains(expected["nested_module_doc_text"].as_str().unwrap())
+        );
         assert!(!module_owner.fingerprint.contains(expected["root_doc_text"].as_str().unwrap()));
         let line_analysis = crate::typed::source_line_analysis(&parsed).unwrap();
         let module_doc_line = line_analysis
@@ -985,6 +998,21 @@ mod tests {
             .find(|line| line.line_number == module_doc.span.start_point.row + 1)
             .unwrap();
         assert_eq!(module_doc_line.owner_id.as_deref(), Some(owner_path));
+        assert_eq!(expected["module_doc_scope"].as_str(), Some("owner"));
+        let root_doc_line = line_analysis
+            .dispositions
+            .iter()
+            .find(|line| line.line_number == root_doc.span.start_point.row + 1)
+            .unwrap();
+        assert_eq!(expected["root_doc_scope"].as_str(), Some("root"));
+        assert_eq!(root_doc_line.owner_id, None);
+        let nested_module_doc_line = line_analysis
+            .dispositions
+            .iter()
+            .find(|line| line.line_number == nested_module_doc.span.start_point.row + 1)
+            .unwrap();
+        assert_eq!(nested_module_doc_line.owner_id.as_deref(), Some(owner_path));
+        assert_eq!(expected["nested_module_doc_scope"].as_str(), Some("owner"));
     }
 
     #[test]
