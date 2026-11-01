@@ -1074,28 +1074,50 @@ fn append_after_trailing_inline_comment(
     else {
         return Ok(None);
     };
-    let Some(close_line_start) =
-        source[..additions.closing_byte].rfind('\n').map(|index| index + 1)
-    else {
-        return Ok(None);
-    };
-    if close_line_start <= comment.end || !source[comment.end..close_line_start].trim().is_empty() {
-        return Ok(None);
-    }
 
+    let before_comment = source[last_member_end..comment.start].trim_start();
+    let after_comment = source[comment.end..additions.closing_byte].trim_start();
+    let has_comma_before = before_comment.starts_with(',');
+    let comma_after = after_comment.starts_with(',');
     let member_indent = format!("{}  ", line_indent(source, additions.closing_byte));
     let pair_sources = additions
         .additions
         .iter()
         .map(|addition| addition.pair_source.as_str())
         .collect::<Vec<_>>();
-    let joined = pair_sources.join(&format!(",{newline}{member_indent}"));
-    let mut edits = Vec::with_capacity(2);
-    let before_comment = source[last_member_end..comment.start].trim_start();
-    let after_comment = source[comment.end..additions.closing_byte].trim_start();
-    if !before_comment.starts_with(',') && !after_comment.starts_with(',') {
+    let mut edits = Vec::with_capacity(3);
+
+    if comma_after {
+        let after_comment_start = comment.end
+            + (source[comment.end..additions.closing_byte].len()
+                - source[comment.end..additions.closing_byte].trim_start().len());
+        edits.push(SourceEdit::replace(after_comment_start, after_comment_start + 1, ""));
+    }
+    if !has_comma_before {
         edits.push(SourceEdit::insert(last_member_end, ","));
     }
+
+    let close_line_start = source[..additions.closing_byte].rfind('\n').map(|index| index + 1);
+    if close_line_start.is_none_or(|line_start| line_start <= comment.end) {
+        if !source[comment.end..additions.closing_byte].trim().is_empty() && !comma_after {
+            return Ok(None);
+        }
+        let joined = pair_sources.join(", ");
+        edits.push(SourceEdit::insert(additions.closing_byte, format!(" {joined}")));
+        return Ok(Some(edits));
+    }
+    let close_line_start = close_line_start.unwrap();
+    let after_comment_before_close_line = source[comment.end..close_line_start].trim_start();
+    let layout_before_close_line = if comma_after {
+        after_comment_before_close_line.get(1..).unwrap_or_default()
+    } else {
+        after_comment_before_close_line
+    };
+    if !layout_before_close_line.trim().is_empty() {
+        return Ok(None);
+    }
+
+    let joined = pair_sources.join(&format!(",{newline}{member_indent}"));
     edits.push(SourceEdit::insert(close_line_start, format!("{member_indent}{joined}{newline}")));
     Ok(Some(edits))
 }
@@ -1410,6 +1432,56 @@ mod tests {
         let current = input.get("current").unwrap().as_str().unwrap();
         let expected = fixture.get("expected").unwrap().get("output").unwrap().as_str().unwrap();
         let result = merge_json_source_preserving(incoming, current, JsonDialect::Jsonc);
+
+        assert!(result.ok);
+        assert_eq!(result.output.as_deref(), Some(expected));
+    }
+
+    #[test]
+    fn keeps_inline_block_comment_with_existing_member_when_appending_jsonc_member() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/polyglot/typed-core/jsonc_block_comment_member_append.json"
+        ))
+        .unwrap();
+        let input = fixture.get("input").unwrap();
+        let incoming = input.get("incoming").unwrap().as_str().unwrap();
+        let current = input.get("current").unwrap().as_str().unwrap();
+        let expected = fixture.get("expected").unwrap().get("output").unwrap().as_str().unwrap();
+        let result = merge_json_source_preserving(incoming, current, JsonDialect::Jsonc);
+
+        assert!(result.ok);
+        assert_eq!(result.output.as_deref(), Some(expected));
+    }
+
+    #[test]
+    fn keeps_inline_block_comment_in_compact_jsonc_object_when_appending_member() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/polyglot/typed-core/jsonc_compact_block_comment_member_append.json"
+        ))
+        .unwrap();
+        let input = fixture.get("input").unwrap();
+        let incoming = input.get("incoming").unwrap().as_str().unwrap();
+        let current = input.get("current").unwrap().as_str().unwrap();
+        let expected = fixture.get("expected").unwrap().get("output").unwrap().as_str().unwrap();
+        let result = merge_json_source_preserving(incoming, current, JsonDialect::Jsonc);
+
+        assert!(result.ok);
+        assert_eq!(result.output.as_deref(), Some(expected));
+    }
+
+    #[test]
+    fn normalizes_comma_after_jsonc_comment_before_appending_member() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/polyglot/typed-core/jsonc_block_comment_after_comma_member_append.json"
+        ))
+        .unwrap();
+        let input = fixture.get("input").unwrap();
+        let result = merge_json_source_preserving(
+            input.get("incoming").unwrap().as_str().unwrap(),
+            input.get("current").unwrap().as_str().unwrap(),
+            JsonDialect::Jsonc,
+        );
+        let expected = fixture.get("expected").unwrap().get("output").unwrap().as_str().unwrap();
 
         assert!(result.ok);
         assert_eq!(result.output.as_deref(), Some(expected));
