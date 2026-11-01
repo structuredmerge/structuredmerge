@@ -519,3 +519,33 @@ fn two_tip_owner_removals_use_shared_line_selection() {
     );
     assert!(execution.ordered_line_render_applied);
 }
+
+#[test]
+fn two_tip_additions_at_distinct_source_gaps_follow_native_owner_order() {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions_distinct_source_gaps.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let parser = Parser::new("rust");
+    let [base, ours, theirs] = parser.inputs([
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ]);
+    let execution =
+        typed::merge3(&base, &ours, &theirs, |source| Ok(parser.parse(source, SourceRole::Output)))
+            .unwrap();
+
+    assert_eq!(
+        execution.evidence.result.outcome,
+        ThreeWayMergeOutcome::Clean,
+        "{:#?}",
+        execution.evidence
+    );
+    assert_eq!(
+        execution.evidence.result.output.as_deref(),
+        Some(fixture["expected"]["output"].as_str().unwrap())
+    );
+    assert!(execution.ordered_line_render_applied);
+}
