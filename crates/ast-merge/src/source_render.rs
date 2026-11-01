@@ -2020,15 +2020,31 @@ pub fn source_render_plan_from_ordered_selections_with_rehomes(
             if let RenderFragment::Source(source) = &fragment
                 && let Some(key) =
                     source.metadata.get("selection_key").and_then(|value| value.as_str())
+                && owner_selected_keys.contains(key)
             {
-                if owner_selected_keys.contains(key) {
-                    continue;
-                }
-                if !selected_keys.insert(key.to_string()) {
-                    return Err(SourceRenderError::new(format!(
-                        "rehome duplicates selected source region {key}"
-                    )));
-                }
+                continue;
+            }
+            if source_fragment_is_layout_gap(&fragment)
+                && insertions
+                    .get(&insertion_index)
+                    .and_then(|fragments| fragments.last())
+                    .or_else(|| {
+                        insertion_index
+                            .checked_sub(1)
+                            .and_then(|index| owner_plan.fragments.get(index))
+                    })
+                    .is_some_and(|previous| source_fragment_is_blank(previous, &sources))
+            {
+                continue;
+            }
+            if let RenderFragment::Source(source) = &fragment
+                && let Some(key) =
+                    source.metadata.get("selection_key").and_then(|value| value.as_str())
+                && !selected_keys.insert(key.to_string())
+            {
+                return Err(SourceRenderError::new(format!(
+                    "rehome duplicates selected source region {key}"
+                )));
             }
             insertions.entry(insertion_index).or_default().push(fragment);
         }
@@ -2176,6 +2192,33 @@ fn rehome_fragment_already_selected(
         )));
     }
     Ok(!equivalent.is_empty())
+}
+
+fn source_fragment_is_layout_gap(fragment: &RenderFragment) -> bool {
+    matches!(fragment, RenderFragment::Source(source)
+        if source.metadata.get("disposition_kind").and_then(|value| value.as_str()) == Some("layout_gap"))
+}
+
+fn source_fragment_is_blank(
+    fragment: &RenderFragment,
+    sources: &HashMap<SourceRevision, String>,
+) -> bool {
+    let content = match fragment {
+        RenderFragment::Source(source) => {
+            let Some(source_text) = sources.get(&source.revision) else { return false };
+            let lines = source_lines(source_text);
+            if source.start_line == 0
+                || source.end_line < source.start_line
+                || source.end_line > lines.len()
+            {
+                return false;
+            }
+            lines[source.start_line - 1..source.end_line].concat()
+        }
+        RenderFragment::Synthesized(fragment) => fragment.content.clone(),
+        RenderFragment::Conflict(_) => return false,
+    };
+    !content.is_empty() && content.lines().all(|line| line.trim().is_empty())
 }
 
 fn selected_region_attaches_to_boundary(

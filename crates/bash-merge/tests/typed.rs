@@ -254,28 +254,36 @@ fn unsupported_or_ambiguous_bash_remains_rejected() {
 }
 
 #[test]
-fn removed_owner_layout_fixture_matches_ruby_output() {
-    let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/bash_merge3_removed_owner_layout.json"
-    ))
-    .unwrap();
-    let input = &fixture["input"];
-    let sources = [
-        input["base"].as_str().unwrap(),
-        input["ours"].as_str().unwrap(),
-        input["theirs"].as_str().unwrap(),
+fn removed_owner_layout_fixtures_match_ruby_output() {
+    let fixtures = [
+        serde_json::from_str::<serde_json::Value>(include_str!(
+            "../../../../fixtures/polyglot/typed-core/bash_merge3_removed_owner_layout.json"
+        ))
+        .unwrap(),
+        serde_json::from_str::<serde_json::Value>(include_str!(
+            "../../../../fixtures/polyglot/typed-core/bash_merge3_multiple_removed_owner_rehome.json"
+        ))
+        .unwrap(),
     ];
     let parser = Parser::new("bash");
-    let [base, ours, theirs] = parser.inputs(sources);
-    let expected = fixture["expected"]["output"].as_str().unwrap();
-    let execution =
-        typed::merge3(&base, &ours, &theirs, |text| Ok(parser.parse(text, SourceRole::Output)))
-            .unwrap();
+    for fixture in fixtures {
+        let input = &fixture["input"];
+        let sources = [
+            input["base"].as_str().unwrap(),
+            input["ours"].as_str().unwrap(),
+            input["theirs"].as_str().unwrap(),
+        ];
+        let [base, ours, theirs] = parser.inputs(sources);
+        let expected = fixture["expected"]["output"].as_str().unwrap();
+        let execution =
+            typed::merge3(&base, &ours, &theirs, |text| Ok(parser.parse(text, SourceRole::Output)))
+                .unwrap();
 
-    assert_eq!(execution.evidence.result.outcome, ThreeWayMergeOutcome::Clean);
-    assert_eq!(execution.evidence.result.output.as_deref(), Some(expected));
-    assert!(execution.ordered_line_render_applied);
-    assert!(execution.output_parse.is_some());
+        assert_eq!(execution.evidence.result.outcome, ThreeWayMergeOutcome::Clean);
+        assert_eq!(execution.evidence.result.output.as_deref(), Some(expected));
+        assert!(execution.ordered_line_render_applied);
+        assert!(execution.output_parse.is_some());
+    }
 }
 
 #[test]
