@@ -453,19 +453,27 @@ pub struct RehomeSourceLineSelections {
     pub target_owner_id: Option<String>,
     pub edge: crate::BoundaryEdge,
     pub kind: crate::RehomeFragmentKind,
-    pub selections: Vec<SourceLineSelection>,
+    pub fragments: Vec<SourceLineRehomeFragment>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SourceLineRehomeFragment {
+    Source(SourceLineSelection),
+    Synthesized(SynthesizedFragment),
 }
 
 /// Resolve a structural rehome decision to complete source regions, ordered by
-/// their source position. The caller inserts these regions at the planned edge.
-/// Inline comments sharing an owner line fail closed because selecting that
-/// physical line would also select the removed structural owner.
-pub fn source_line_selections_for_rehome_plan(
+/// source position. Safe same-line inline comments are promoted using Ruby's
+/// indentation and raw-comment rule; the caller inserts these at the target edge.
+pub fn source_line_fragments_for_rehome_plan(
     revision: SourceRevision,
     dispositions: &[crate::SourceLineDisposition],
+    owners: &[crate::SourceLineOwner],
+    comment_regions: &[crate::CommentRegion],
+    inline_promotion_owner_ids: &std::collections::HashSet<String>,
     rehome: &crate::RehomePlan,
 ) -> Result<RehomeSourceLineSelections, SourceRenderError> {
-    let mut regions = Vec::<(usize, SourceLineSelection)>::new();
+    let mut regions = Vec::<(usize, SourceLineRehomeFragment)>::new();
     let mut keys = std::collections::HashSet::new();
     for region_id in &rehome.comment_region_ids {
         let records = dispositions
@@ -477,10 +485,67 @@ pub fn source_line_selections_for_rehome_plan(
                 "rehome comment region {region_id} has no source line disposition"
             )));
         }
-        if records.iter().any(|record| record.kind == "structural_owner") {
-            return Err(SourceRenderError::new(format!(
-                "rehome comment region {region_id} shares a structural owner line"
-            )));
+        if let Some(owner_line) = records.iter().find(|record| record.kind == "structural_owner") {
+            let comment = comment_regions
+                .iter()
+                .find(|comment| comment.id == *region_id)
+                .ok_or_else(|| {
+                    SourceRenderError::new(format!(
+                        "rehome comment region {region_id} has no comment facts"
+                    ))
+                })?;
+            let owner_id = rehome.source_owner_id.as_deref().ok_or_else(|| {
+                SourceRenderError::new(format!(
+                    "rehome inline comment region {region_id} has no source owner"
+                ))
+            })?;
+            let owner = owners.iter().find(|owner| owner.id == owner_id).ok_or_else(|| {
+                SourceRenderError::new(format!(
+                    "rehome inline comment region {region_id} has no owner facts"
+                ))
+            })?;
+            if comment.kind != "inline"
+                || comment.owner_id.as_str() != owner_id
+                || owner.start_line != owner.end_line
+                || owner.start_line != owner_line.line_number
+                || !inline_promotion_owner_ids.contains(owner_id)
+                || comment.nodes.len() != 1
+                || comment.nodes[0].line_number != owner_line.line_number
+            {
+                return Err(SourceRenderError::new(format!(
+                    "rehome comment region {region_id} cannot be promoted from its owner line"
+                )));
+            }
+            let indent = owner_line
+                .line
+                .chars()
+                .take_while(|character| character.is_whitespace())
+                .collect::<String>();
+            let raw_comment = comment.nodes[0].text.trim_start();
+            if raw_comment.is_empty() {
+                return Err(SourceRenderError::new(format!(
+                    "rehome inline comment region {region_id} has empty source text"
+                )));
+            }
+            // Ruby's emitter materializes promoted comments as logical lines and
+            // joins the output with LF, even when the source used CRLF.
+            let synthesized = SynthesizedFragment {
+                content: format!("{indent}{raw_comment}\n"),
+                reason: "removed_owner_inline_comment_promotion".into(),
+                producer: "ast_merge.source_render".into(),
+                metadata: HashMap::from([
+                    (
+                        "source_revision".into(),
+                        serde_json::json!(format!("{revision:?}").to_lowercase()),
+                    ),
+                    ("source_owner_id".into(), serde_json::json!(owner_id)),
+                    ("source_line".into(), serde_json::json!(owner_line.line_number)),
+                    ("comment_region_id".into(), serde_json::json!(region_id)),
+                ]),
+            };
+            regions
+                .push((owner_line.line_number, SourceLineRehomeFragment::Synthesized(synthesized)));
+            continue;
         }
         push_rehome_region_selection(revision, region_id, &records, &mut regions, &mut keys)?;
     }
@@ -502,7 +567,7 @@ pub fn source_line_selections_for_rehome_plan(
         target_owner_id: rehome.target_owner_id().map(str::to_owned),
         edge: rehome.edge(),
         kind: rehome.kind,
-        selections: regions.into_iter().map(|(_, selection)| selection).collect(),
+        fragments: regions.into_iter().map(|(_, fragment)| fragment).collect(),
     })
 }
 
@@ -510,7 +575,7 @@ fn push_rehome_region_selection(
     revision: SourceRevision,
     region_id: &str,
     records: &[&crate::SourceLineDisposition],
-    regions: &mut Vec<(usize, SourceLineSelection)>,
+    regions: &mut Vec<(usize, SourceLineRehomeFragment)>,
     keys: &mut std::collections::HashSet<String>,
 ) -> Result<(), SourceRenderError> {
     let mut line_numbers = records.iter().map(|record| record.line_number).collect::<Vec<_>>();
@@ -542,8 +607,45 @@ fn push_rehome_region_selection(
             "rehome region {region_id} does not cover its complete source selection"
         )));
     }
-    regions.push((line_numbers[0], SourceLineSelection { selection_key, revision }));
+    regions.push((
+        line_numbers[0],
+        SourceLineRehomeFragment::Source(SourceLineSelection { selection_key, revision }),
+    ));
     Ok(())
+}
+
+pub fn source_render_plan_from_rehome_selections(
+    sources: HashMap<SourceRevision, String>,
+    dispositions: HashMap<SourceRevision, Vec<crate::SourceLineDisposition>>,
+    rehome: &RehomeSourceLineSelections,
+) -> Result<SourceRenderPlan, SourceRenderError> {
+    let source_selections = rehome
+        .fragments
+        .iter()
+        .filter_map(|fragment| match fragment {
+            SourceLineRehomeFragment::Source(selection) => Some(selection.clone()),
+            SourceLineRehomeFragment::Synthesized(_) => None,
+        })
+        .collect::<Vec<_>>();
+    let source_plan =
+        source_render_plan_from_line_selections(sources.clone(), dispositions, &source_selections)?;
+    let mut source_fragments = source_plan.fragments.into_iter();
+    let fragments = rehome
+        .fragments
+        .iter()
+        .map(|fragment| match fragment {
+            SourceLineRehomeFragment::Source(_) => source_fragments
+                .next()
+                .ok_or_else(|| SourceRenderError::new("rehome source fragment plan is incomplete")),
+            SourceLineRehomeFragment::Synthesized(fragment) => {
+                Ok(RenderFragment::Synthesized(fragment.clone()))
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if source_fragments.next().is_some() {
+        return Err(SourceRenderError::new("rehome source fragment plan has unused regions"));
+    }
+    SourceRenderPlan::new(sources, fragments)
 }
 
 /// Build an exact-byte render plan from ordered semantic line selections.

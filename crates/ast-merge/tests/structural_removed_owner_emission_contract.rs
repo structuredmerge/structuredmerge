@@ -1,12 +1,16 @@
 use ast_merge::{
     BoundaryEdge, CommentLine, CommentRegion, LayoutGap, RehomeFragmentKind, RehomePlan,
-    SourceLineCommentRegion, SourceLineDisposition, SourceLineLayoutGap, SourceLineOwner,
-    SourceRevision, StructuralBoundary, preserve_removed_owner_lines, render_source_plan,
-    source_line_dispositions, source_line_selections_for_preserved_lines,
-    source_line_selections_for_rehome_plan, source_render_plan_from_line_selections,
+    SourceLineCommentRegion, SourceLineLayoutGap, SourceLineOwner, SourceRevision,
+    StructuralBoundary, preserve_removed_owner_lines, render_source_plan, source_line_dispositions,
+    source_line_fragments_for_rehome_plan, source_line_selections_for_preserved_lines,
+    source_render_plan_from_line_selections, source_render_plan_from_rehome_selections,
 };
 use serde_json::{Value, json};
-use std::{collections::HashMap, fs, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    path::PathBuf,
+};
 
 #[test]
 fn shared_removed_owner_emission_fixture_matches_ruby() {
@@ -219,15 +223,21 @@ fn shared_removed_owner_emission_fixture_matches_ruby() {
             layout_gap_ids: trailing_gap_id,
             metadata: HashMap::new(),
         };
-        let rehomed =
-            source_line_selections_for_rehome_plan(SourceRevision::Ours, &dispositions, &rehome)
-                .expect("rehome boundaries select their complete source regions");
+        let rehomed = source_line_fragments_for_rehome_plan(
+            SourceRevision::Ours,
+            &dispositions,
+            &owners,
+            &[],
+            &HashSet::new(),
+            &rehome,
+        )
+        .expect("rehome boundaries select their complete source regions");
         assert_eq!(rehomed.target_owner_id.as_deref(), Some("later"));
         assert_eq!(rehomed.edge, BoundaryEdge::Trailing);
-        let trailing_source = source_render_plan_from_line_selections(
+        let trailing_source = source_render_plan_from_rehome_selections(
             HashMap::from([(SourceRevision::Ours, source_lines.join("\n") + "\n")]),
             HashMap::from([(SourceRevision::Ours, dispositions.clone())]),
-            &rehomed.selections,
+            &rehomed,
         )
         .expect("rehome selections form a source plan");
         let trailing_render = render_source_plan(&trailing_source).unwrap();
@@ -256,19 +266,33 @@ fn shared_removed_owner_emission_fixture_matches_ruby() {
 }
 
 #[test]
-fn rehome_rejects_inline_comments_that_share_a_structural_line() {
-    let dispositions = vec![SourceLineDisposition {
-        line_number: 1,
-        line: "x=1 # inline\n".into(),
-        kind: "structural_owner".into(),
-        selection_key: "owner:removed".into(),
+fn rehome_promotes_safe_inline_comments_as_owned_synthesized_lines() {
+    let source = "  x=1 # inline\r\nretained=2\r\n";
+    let owners = vec![
+        SourceLineOwner { id: "removed".into(), start_line: 1, end_line: 1 },
+        SourceLineOwner { id: "retained".into(), start_line: 2, end_line: 2 },
+    ];
+    let line_comment = SourceLineCommentRegion {
+        id: "inline".into(),
+        selection_key: "comment:removed:inline".into(),
         owner_id: Some("removed".into()),
-        comment_region_ids: vec!["inline".into()],
-        comment_kind: Some("inline".into()),
-        gap_id: None,
-        controller_owner_id: None,
-        root_region_kind: None,
-    }];
+        kind: "inline".into(),
+        start_line: 1,
+        end_line: 1,
+    };
+    let comment_region = CommentRegion {
+        id: "inline".into(),
+        kind: "inline".into(),
+        style: "hash_comment".into(),
+        owner_id: "removed".into(),
+        floating: false,
+        nodes: vec![CommentLine {
+            text: "# inline".into(),
+            line_number: 1,
+            normalized_content: "inline".into(),
+        }],
+    };
+    let dispositions = source_line_dispositions(source, &owners, &[line_comment], &[]).unwrap();
     let rehome = RehomePlan {
         source_owner_id: Some("removed".into()),
         target_boundary: StructuralBoundary {
@@ -280,8 +304,134 @@ fn rehome_rejects_inline_comments_that_share_a_structural_line() {
         layout_gap_ids: vec![],
         metadata: HashMap::new(),
     };
-    let error =
-        source_line_selections_for_rehome_plan(SourceRevision::Ours, &dispositions, &rehome)
-            .unwrap_err();
-    assert!(error.to_string().contains("shares a structural owner line"));
+    let rehomed = source_line_fragments_for_rehome_plan(
+        SourceRevision::Ours,
+        &dispositions,
+        &owners,
+        &[comment_region.clone()],
+        &HashSet::from(["removed".to_string()]),
+        &rehome,
+    )
+    .expect("safe single-line owner comments can be promoted");
+    assert_eq!(rehomed.fragments.len(), 1);
+    let source_plan = source_render_plan_from_rehome_selections(
+        HashMap::from([(SourceRevision::Ours, source.to_string())]),
+        HashMap::from([(SourceRevision::Ours, dispositions.clone())]),
+        &rehomed,
+    )
+    .unwrap();
+    let rendered = render_source_plan(&source_plan).unwrap();
+    assert_eq!(rendered.content, "  # inline\n");
+    assert_eq!(rendered.line_records[0].fragment_kind, ast_merge::RenderFragmentKind::Synthesized);
+    assert_eq!(rendered.line_records[0].metadata["source_owner_id"].as_str(), Some("removed"));
+
+    let unsafe_owner = source_line_fragments_for_rehome_plan(
+        SourceRevision::Ours,
+        &dispositions,
+        &owners,
+        &[comment_region],
+        &HashSet::new(),
+        &rehome,
+    )
+    .unwrap_err();
+    assert!(unsafe_owner.to_string().contains("cannot be promoted"));
+}
+
+#[test]
+fn shared_inline_promotion_fixture_matches_ruby_emission_rule() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../fixtures/polyglot/ast-merge/removed_owner_inline_promotion.json");
+    let fixture: Value = serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+    let rules = &fixture["rules"];
+    assert_eq!(rules["required_owner_shape"], "single_line");
+    assert_eq!(
+        rules["eligible_owner_kinds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|kind| kind.as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["command", "variable_assignment"]
+    );
+
+    for case in fixture["cases"].as_array().unwrap() {
+        let source = case["source"].as_str().unwrap();
+        let removed = &case["removed_owner"];
+        let comment = &case["inline_comment"];
+        let retained = &case["retained_owner"];
+        let owner_id = removed["id"].as_str().unwrap();
+        let comment_id = comment["id"].as_str().unwrap();
+        let owners = vec![
+            SourceLineOwner {
+                id: owner_id.to_string(),
+                start_line: removed["start_line"].as_u64().unwrap() as usize,
+                end_line: removed["end_line"].as_u64().unwrap() as usize,
+            },
+            SourceLineOwner {
+                id: retained["id"].as_str().unwrap().to_string(),
+                start_line: retained["line"].as_u64().unwrap() as usize,
+                end_line: retained["line"].as_u64().unwrap() as usize,
+            },
+        ];
+        let comment_regions = vec![SourceLineCommentRegion {
+            id: comment_id.to_string(),
+            selection_key: format!("comment:{owner_id}:{comment_id}"),
+            owner_id: Some(owner_id.to_string()),
+            kind: comment["kind"].as_str().unwrap().to_string(),
+            start_line: comment["line"].as_u64().unwrap() as usize,
+            end_line: comment["line"].as_u64().unwrap() as usize,
+        }];
+        let comment_facts = vec![CommentRegion {
+            id: comment_id.to_string(),
+            kind: comment["kind"].as_str().unwrap().to_string(),
+            style: "hash_comment".into(),
+            owner_id: owner_id.to_string(),
+            floating: false,
+            nodes: vec![CommentLine {
+                text: comment["raw"].as_str().unwrap().to_string(),
+                line_number: comment["line"].as_u64().unwrap() as usize,
+                normalized_content: comment["raw"]
+                    .as_str()
+                    .unwrap()
+                    .trim_start_matches('#')
+                    .trim()
+                    .to_string(),
+            }],
+        }];
+        let dispositions =
+            source_line_dispositions(source, &owners, &comment_regions, &[]).unwrap();
+        let plan = RehomePlan {
+            source_owner_id: Some(owner_id.to_string()),
+            target_boundary: StructuralBoundary {
+                edge: BoundaryEdge::Trailing,
+                owner_id: Some(retained["id"].as_str().unwrap().to_string()),
+            },
+            kind: RehomeFragmentKind::Trailing,
+            comment_region_ids: vec![comment_id.to_string()],
+            layout_gap_ids: vec![],
+            metadata: HashMap::new(),
+        };
+        let selections = source_line_fragments_for_rehome_plan(
+            SourceRevision::Ours,
+            &dispositions,
+            &owners,
+            &comment_facts,
+            &HashSet::from([owner_id.to_string()]),
+            &plan,
+        )
+        .expect("eligible single-line owner comment should promote");
+        let render_plan = source_render_plan_from_rehome_selections(
+            HashMap::from([(SourceRevision::Ours, source.to_string())]),
+            HashMap::from([(SourceRevision::Ours, dispositions)]),
+            &selections,
+        )
+        .unwrap();
+        let rendered = render_source_plan(&render_plan).unwrap();
+        assert_eq!(
+            rendered.content,
+            case["expected"]["promoted_comment_fragment"].as_str().unwrap(),
+            "{}",
+            case["name"].as_str().unwrap()
+        );
+    }
 }
