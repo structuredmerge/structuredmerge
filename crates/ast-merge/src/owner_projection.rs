@@ -183,7 +183,8 @@ fn select_owner_prefix_nodes<'a>(
         let inner_doc = node.role == NodeRole::Comment && is_inner_doc_comment(node, index);
         let structural = !inner_doc
             && (policy.prefix_node_kinds.contains(&node.kind.as_str())
-                || (node.role == NodeRole::Comment && structural_doc_comment(node, index)));
+                || (node.role == NodeRole::Comment
+                    && structural_doc_comment(node, index, policy.family)));
         if blank_boundary && !structural {
             break;
         }
@@ -210,16 +211,24 @@ fn is_inner_doc_comment(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'
         || index.descendants(node).iter().any(|child| child.kind == "inner_doc_comment_marker")
 }
 
-fn structural_doc_comment(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> bool {
-    !is_inner_doc_comment(node, index)
+fn structural_doc_comment(
+    node: &NormalizedTreeNode,
+    index: &NormalizedTreeIndex<'_>,
+    family: &str,
+) -> bool {
+    let fragment = node.source_fragment.trim_start();
+    let rust_non_doc_prefix = family.eq_ignore_ascii_case("rust")
+        && (fragment.starts_with("////") || fragment.starts_with("/***"));
+    !rust_non_doc_prefix
+        && !is_inner_doc_comment(node, index)
         && (node.semantic_roles.iter().any(|role| role == "doc_comment")
-            || node.source_fragment.trim_start().starts_with("///")
-            || node.source_fragment.trim_start().starts_with("/**")
+            || (fragment.starts_with("///") && !fragment.starts_with("////"))
+            || (fragment.starts_with("/**") && !fragment.starts_with("/***"))
             || index.descendants(node).iter().any(|child| child.kind == "outer_doc_comment_marker"))
 }
 
 /// Extend structural owner source ranges with the comments assigned by the
-/// shared Ruby-compatible comment augmenter. Family projections still decide
+/// shared source-preservation comment augmenter. Family projections still decide
 /// which syntax nodes are owners; line ownership is resolved here once for all
 /// source-preserving providers.
 fn attach_normalized_comment_ranges(
