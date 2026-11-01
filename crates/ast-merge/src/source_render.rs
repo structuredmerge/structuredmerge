@@ -620,6 +620,26 @@ fn position_additions_in_their_source_gaps(
         });
         Some((start, end))
     };
+    let boundary_lines = |records: &[crate::SourceLineDisposition], selection_key: &str| {
+        records
+            .iter()
+            .filter(|record| record.kind == "root_region" && record.selection_key == selection_key)
+            .map(|record| record.line.clone())
+            .collect::<Vec<_>>()
+    };
+    let baseline_records = dispositions.get(&baseline_revision).ok_or_else(|| {
+        SourceRenderError::new("baseline dispositions are required to preserve root regions")
+    })?;
+    let baseline_root_keys = selections
+        .iter()
+        .filter(|selection| selection.revision == baseline_revision)
+        .filter(|selection| {
+            baseline_records.iter().any(|record| {
+                record.kind == "root_region" && record.selection_key == selection.selection_key
+            })
+        })
+        .map(|selection| selection.selection_key.clone())
+        .collect::<HashSet<_>>();
     let mut positioned = Vec::<(String, SourceRevision, bool, Vec<SourceLineSelection>)>::new();
     let mut replaced_keys = HashSet::<(SourceRevision, String)>::new();
 
@@ -691,6 +711,12 @@ fn position_additions_in_their_source_gaps(
                 .filter(|record| (range.0..=range.1).contains(&record.line_number))
                 .any(|record| match record.kind.as_str() {
                     "layout_gap" => false,
+                    "root_region" => {
+                        let baseline_lines =
+                            boundary_lines(baseline_records, &record.selection_key);
+                        let revision_lines = boundary_lines(records, &record.selection_key);
+                        !baseline_lines.is_empty() && baseline_lines != revision_lines
+                    }
                     "structural_owner" | "comment_owner" => record
                         .owner_id
                         .as_deref()
@@ -713,6 +739,7 @@ fn position_additions_in_their_source_gaps(
                           chunk_keys: &mut HashSet<String>,
                           records: &[crate::SourceLineDisposition],
                           revision: SourceRevision,
+                          leading: bool,
                           start: usize,
                           end: usize| {
             if start > end {
@@ -722,10 +749,34 @@ fn position_additions_in_their_source_gaps(
                 .iter()
                 .filter(|record| (start..=end).contains(&record.line_number))
                 .collect::<Vec<_>>();
-            if gap_records.iter().any(|record| record.kind != "layout_gap") {
+            if gap_records
+                .iter()
+                .any(|record| !matches!(record.kind.as_str(), "layout_gap" | "root_region"))
+            {
                 return false;
             }
             for record in gap_records {
+                if record.kind == "root_region"
+                    && baseline_root_keys.contains(&record.selection_key)
+                {
+                    continue;
+                }
+                if leading && record.kind == "layout_gap" {
+                    let base_gap_exists = baseline_records.iter().any(|candidate| {
+                        candidate.kind == "layout_gap"
+                            && candidate.before_owner_id.as_deref() == previous.as_deref()
+                            && candidate.after_owner_id.as_deref() == following.as_deref()
+                    });
+                    let controller_revision = record
+                        .controller_owner_id
+                        .as_deref()
+                        .and_then(|owner_id| owner_revisions.get(owner_id))
+                        .copied()
+                        .unwrap_or(baseline_revision);
+                    if !base_gap_exists && controller_revision != revision {
+                        continue;
+                    }
+                }
                 if chunk_keys.insert(record.selection_key.clone()) {
                     chunk.push(SourceLineSelection {
                         selection_key: record.selection_key.clone(),
@@ -744,6 +795,7 @@ fn position_additions_in_their_source_gaps(
             &mut chunk_keys,
             first_records,
             *first_revision,
+            true,
             first_range.0,
             first_start.saturating_sub(1),
         ) {
@@ -806,6 +858,7 @@ fn position_additions_in_their_source_gaps(
                 &mut chunk_keys,
                 dispositions.get(&gap_revision).unwrap(),
                 gap_revision,
+                false,
                 gap_start,
                 gap_end,
             ) {
@@ -1969,7 +2022,9 @@ pub fn apply_source_edits(source: &str, edits: &[SourceEdit]) -> Result<String, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SourceLineCommentRegion, SourceLineOwner, source_line_dispositions};
+    use crate::{
+        SourceLineCommentRegion, SourceLineLayoutGap, SourceLineOwner, source_line_dispositions,
+    };
 
     fn sources() -> HashMap<SourceRevision, String> {
         HashMap::from([
@@ -2085,6 +2140,176 @@ mod tests {
         assert_eq!(
             rendered.content,
             "// lead\nfn start() {}\nfn alpha() {}\n// tail\nfn finish() {}\n"
+        );
+    }
+
+    #[test]
+    fn preserves_crate_level_doc_region_when_inserting_a_preamble_owner() {
+        let base_source = "//! crate docs\n\nfn alpha() {}\n".to_string();
+        let ours_source =
+            "//! crate docs\n\n// start docs\nfn start() {}\n\nfn alpha() {}\n".to_string();
+        let theirs_source =
+            "//! crate docs\n\nfn alpha() {}\n\n// finish docs\nfn finish() {}\n".to_string();
+        let owner = |id: &str, start_line, end_line| SourceLineOwner {
+            id: id.into(),
+            start_line,
+            end_line,
+        };
+        let root_doc = || SourceLineCommentRegion {
+            id: "crate-docs".into(),
+            selection_key: "comment:preamble".into(),
+            owner_id: None,
+            kind: "preamble".into(),
+            start_line: 1,
+            end_line: 1,
+        };
+        let gap = |id: &str,
+                   key: &str,
+                   kind: &str,
+                   line,
+                   before: Option<&str>,
+                   after: Option<&str>,
+                   side: &str,
+                   controller: &str| SourceLineLayoutGap {
+            id: id.into(),
+            selection_key: key.into(),
+            kind: kind.into(),
+            start_line: line,
+            end_line: line,
+            before_owner_id: before.map(str::to_string),
+            after_owner_id: after.map(str::to_string),
+            controller_side: side.into(),
+            controller_owner_id: Some(controller.into()),
+        };
+        let disposition = |source: &str,
+                           owners: &[SourceLineOwner],
+                           comments: &[SourceLineCommentRegion],
+                           gaps: &[SourceLineLayoutGap]| {
+            source_line_dispositions(source, owners, comments, gaps).unwrap()
+        };
+        let dispositions = HashMap::from([
+            (
+                SourceRevision::Base,
+                disposition(
+                    &base_source,
+                    &[owner("alpha", 3, 3)],
+                    &[root_doc()],
+                    &[gap(
+                        "base-preamble-gap",
+                        "gap:preamble:root:alpha",
+                        "preamble",
+                        2,
+                        None,
+                        Some("alpha"),
+                        "after",
+                        "alpha",
+                    )],
+                ),
+            ),
+            (
+                SourceRevision::Ours,
+                disposition(
+                    &ours_source,
+                    &[owner("start", 4, 4), owner("alpha", 6, 6)],
+                    &[
+                        root_doc(),
+                        SourceLineCommentRegion {
+                            id: "start-docs".into(),
+                            selection_key: "comment:leading:start".into(),
+                            owner_id: Some("start".into()),
+                            kind: "leading".into(),
+                            start_line: 3,
+                            end_line: 3,
+                        },
+                    ],
+                    &[
+                        gap(
+                            "ours-preamble-gap",
+                            "gap:preamble:root:start",
+                            "preamble",
+                            2,
+                            None,
+                            Some("start"),
+                            "after",
+                            "start",
+                        ),
+                        gap(
+                            "ours-interstitial-gap",
+                            "gap:interstitial:start:alpha",
+                            "interstitial",
+                            5,
+                            Some("start"),
+                            Some("alpha"),
+                            "before",
+                            "start",
+                        ),
+                    ],
+                ),
+            ),
+            (
+                SourceRevision::Theirs,
+                disposition(
+                    &theirs_source,
+                    &[owner("alpha", 3, 3), owner("finish", 6, 6)],
+                    &[
+                        root_doc(),
+                        SourceLineCommentRegion {
+                            id: "finish-docs".into(),
+                            selection_key: "comment:leading:finish".into(),
+                            owner_id: Some("finish".into()),
+                            kind: "leading".into(),
+                            start_line: 5,
+                            end_line: 5,
+                        },
+                    ],
+                    &[
+                        gap(
+                            "theirs-preamble-gap",
+                            "gap:preamble:root:alpha",
+                            "preamble",
+                            2,
+                            None,
+                            Some("alpha"),
+                            "after",
+                            "alpha",
+                        ),
+                        gap(
+                            "theirs-interstitial-gap",
+                            "gap:interstitial:alpha:finish",
+                            "interstitial",
+                            4,
+                            Some("alpha"),
+                            Some("finish"),
+                            "before",
+                            "alpha",
+                        ),
+                    ],
+                ),
+            ),
+        ]);
+        let owner_revisions = HashMap::from([
+            ("alpha".to_string(), SourceRevision::Base),
+            ("start".to_string(), SourceRevision::Ours),
+            ("finish".to_string(), SourceRevision::Theirs),
+        ]);
+        let selections = source_line_selections_for_owner_revisions_preserving_addition_gaps(
+            SourceRevision::Base,
+            &dispositions,
+            &owner_revisions,
+            &HashSet::new(),
+        )
+        .unwrap();
+        let sources = HashMap::from([
+            (SourceRevision::Base, base_source),
+            (SourceRevision::Ours, ours_source),
+            (SourceRevision::Theirs, theirs_source),
+        ]);
+        let plan =
+            source_render_plan_from_line_selections(sources, dispositions, &selections).unwrap();
+        let rendered = render_source_plan(&plan).unwrap();
+        assert_eq!(
+            rendered.content,
+            "//! crate docs\n\n// start docs\nfn start() {}\n\nfn alpha() {}\n// finish docs\nfn finish() {}\n"
         );
     }
 
