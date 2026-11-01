@@ -1008,6 +1008,41 @@ mod tests {
     }
 
     #[test]
+    fn syn_directional_additions_preserve_attached_comment_and_blank_gap_lines() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/polyglot/typed-core/rust_trait_alias_merge3.json"
+        ))
+        .unwrap();
+        let incoming_source = fixture["input"]["base"].as_str().unwrap();
+        let registry = ParserRegistry::default();
+        registry.register(Arc::new(RustSynParserProvider::new("rust.syn.test"))).unwrap();
+        let snapshot = registry.snapshot().unwrap();
+        let service = TreeHaverParseService::default();
+        let incoming_parse = service
+            .parse_batch(vec![request(incoming_source)], &snapshot, &context())
+            .unwrap()
+            .remove(0);
+        let current_parse =
+            service.parse_batch(vec![request("")], &snapshot, &context()).unwrap().remove(0);
+        let incoming = crate::directional::owners(&incoming_parse).unwrap();
+        let current = crate::directional::owners(&current_parse).unwrap();
+        let insertions = crate::directional::plan_insertions(
+            &incoming_parse,
+            &incoming,
+            &current_parse,
+            &current,
+        )
+        .unwrap();
+        let selected = insertions
+            .iter()
+            .map(|insertion| {
+                &incoming_source[insertion.source_range.start_byte..insertion.source_range.end_byte]
+            })
+            .collect::<String>();
+        assert_eq!(selected, incoming_source);
+    }
+
+    #[test]
     fn syn_macro_rules_item_projects_as_named_source_owner() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
             "../../../../fixtures/polyglot/typed-core/rust_macro_definition_merge3.json"

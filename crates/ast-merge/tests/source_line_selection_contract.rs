@@ -169,7 +169,7 @@ fn added_owner_selection_carries_its_leading_gap_from_the_selected_source() {
         if source_revision == SourceRevision::Theirs {
             let range = source_line_owner_addition_range(&document.source, &records, "added")
                 .expect("directly adjacent leading gap belongs to added owner");
-            assert_eq!(&document.source[range], "\nfn added() {}\n");
+            assert_eq!(&document.source[range], "\nfn added() {}\n\n");
         }
         sources.insert(source_revision, document.source);
         dispositions.insert(source_revision, records);

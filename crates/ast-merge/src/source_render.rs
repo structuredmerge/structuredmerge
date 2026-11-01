@@ -345,7 +345,7 @@ pub fn source_line_owner_addition_range(
                 has_structural_owner |= selected && disposition.kind == "structural_owner";
                 selected
             }
-            "layout_gap" => disposition.after_owner_id.as_deref() == Some(owner_id),
+            "layout_gap" => disposition.controller_owner_id.as_deref() == Some(owner_id),
             _ => false,
         };
         if selected {
@@ -462,9 +462,9 @@ pub fn source_line_selections_for_owner_revisions_with_deletions(
         }
     }
     // Owners absent from the baseline are additions. Append their complete
-    // comment and structural regions in the selected source order. Include the
-    // leading gap from that source when the destination has no matching gap;
-    // this keeps a gap attached to the newly added following owner.
+    // comment and structural regions in the selected source order. Include each
+    // gap controlled by an added owner, whether it precedes that owner or follows
+    // it under the shared attachment policy.
     let baseline_owner_ids = baseline
         .iter()
         .filter(|record| record.kind == "structural_owner")
@@ -492,7 +492,7 @@ pub fn source_line_selections_for_owner_revisions_with_deletions(
                         additions.get(owner_id).map(|revision| (owner_id, *revision))
                     })
                 }
-                "layout_gap" => record.after_owner_id.as_deref().and_then(|owner_id| {
+                "layout_gap" => record.controller_owner_id.as_deref().and_then(|owner_id| {
                     additions.get(owner_id).map(|revision| (owner_id, *revision))
                 }),
                 _ => None,
