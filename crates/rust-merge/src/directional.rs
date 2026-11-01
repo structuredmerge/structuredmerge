@@ -35,6 +35,14 @@ pub fn owners(parsed: &ParsedResult) -> Result<SourcePreservingOwnerDocument, St
 }
 
 fn directional_analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
+    let document = owners(parsed)?;
+    if document.owners.is_empty() {
+        return Ok(NativeOwnerAnalysis {
+            document,
+            owner_node_ids: BTreeMap::new(),
+            attached_comment_node_ids: BTreeMap::new(),
+        });
+    }
     let mut analysis = crate::typed::analysis(parsed)?;
     analysis.document.owners.retain(|owner| !owner.id.starts_with("/use:"));
     analysis.owner_node_ids.retain(|owner_id, _| !owner_id.starts_with("/use:"));

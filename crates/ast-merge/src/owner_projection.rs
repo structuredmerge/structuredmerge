@@ -147,6 +147,9 @@ fn select_owner_prefix_nodes<'a>(
     let mut selected = Vec::new();
     let mut cursor = owner.span.range.start_byte;
     for node in pending.iter().rev() {
+        if node.role == NodeRole::Comment && is_inner_doc_comment(node, index) {
+            break;
+        }
         let start = node.span.range.start_byte;
         let end = node.span.range.end_byte;
         if start > end || end > cursor || cursor > source.len() {
@@ -157,8 +160,10 @@ fn select_owner_prefix_nodes<'a>(
             break;
         }
         let blank_boundary = gap.bytes().filter(|byte| *byte == b'\n').count() > 1;
-        let structural = policy.prefix_node_kinds.contains(&node.kind.as_str())
-            || (node.role == NodeRole::Comment && structural_doc_comment(node, index));
+        let inner_doc = node.role == NodeRole::Comment && is_inner_doc_comment(node, index);
+        let structural = !inner_doc
+            && (policy.prefix_node_kinds.contains(&node.kind.as_str())
+                || (node.role == NodeRole::Comment && structural_doc_comment(node, index)));
         if blank_boundary && !structural {
             break;
         }
@@ -169,11 +174,19 @@ fn select_owner_prefix_nodes<'a>(
     Ok(selected)
 }
 
+fn is_inner_doc_comment(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> bool {
+    let fragment = node.source_fragment.trim_start();
+    fragment.starts_with("//!")
+        || fragment.starts_with("/*!")
+        || index.descendants(node).iter().any(|child| child.kind == "inner_doc_comment_marker")
+}
+
 fn structural_doc_comment(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> bool {
-    node.semantic_roles.iter().any(|role| role == "doc_comment")
-        || node.source_fragment.trim_start().starts_with("///")
-        || node.source_fragment.trim_start().starts_with("/**")
-        || index.descendants(node).iter().any(|child| child.kind == "outer_doc_comment_marker")
+    !is_inner_doc_comment(node, index)
+        && (node.semantic_roles.iter().any(|role| role == "doc_comment")
+            || node.source_fragment.trim_start().starts_with("///")
+            || node.source_fragment.trim_start().starts_with("/**")
+            || index.descendants(node).iter().any(|child| child.kind == "outer_doc_comment_marker"))
 }
 
 /// Extend structural owner source ranges with the comments assigned by the
@@ -234,6 +247,7 @@ fn attach_normalized_comment_ranges(
         .filter_map(|id| nodes_by_id.get(id.as_str()))
         .map(|node| node.span.range.clone())
         .collect::<Vec<_>>();
+    let tree_index = NormalizedTreeIndex::new(nodes)?;
     let evidence = augment_normalized_comments_with_evidence_filter(
         source,
         &layout_owners,
@@ -241,10 +255,11 @@ fn attach_normalized_comment_ranges(
         "source",
         policy,
         |node| {
-            !prefix_comment_ranges.iter().any(|range| {
-                range.start_byte <= node.span.range.start_byte
-                    && node.span.range.end_byte <= range.end_byte
-            })
+            !is_inner_doc_comment(node, &tree_index)
+                && !prefix_comment_ranges.iter().any(|range| {
+                    range.start_byte <= node.span.range.start_byte
+                        && node.span.range.end_byte <= range.end_byte
+                })
         },
         str::to_string,
     )?;

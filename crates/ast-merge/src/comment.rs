@@ -324,10 +324,13 @@ fn is_structural_prefix_comment(
     node: &NormalizedTreeNode,
     index: &NormalizedTreeIndex<'_>,
 ) -> bool {
-    node.semantic_roles.iter().any(|role| role == "doc_comment")
-        || node.source_fragment.trim_start().starts_with("///")
-        || node.source_fragment.trim_start().starts_with("/**")
-        || index.descendants(node).iter().any(|child| child.kind == "outer_doc_comment_marker")
+    !node.source_fragment.trim_start().starts_with("//!")
+        && !node.source_fragment.trim_start().starts_with("/*!")
+        && !index.descendants(node).iter().any(|child| child.kind == "inner_doc_comment_marker")
+        && (node.semantic_roles.iter().any(|role| role == "doc_comment")
+            || node.source_fragment.trim_start().starts_with("///")
+            || node.source_fragment.trim_start().starts_with("/**")
+            || index.descendants(node).iter().any(|child| child.kind == "outer_doc_comment_marker"))
 }
 
 pub fn augment_comments(

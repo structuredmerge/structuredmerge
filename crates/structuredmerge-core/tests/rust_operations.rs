@@ -204,6 +204,16 @@ fn unsupported_shapes_and_policies_fail_closed() {
 }
 
 #[test]
+fn directional_rust_keeps_inner_module_docs_out_of_declaration_ownership() {
+    let incoming = "/// \u{e9} added\nfn added() {}\nfn f() {}\n";
+    let current = "//! module\n/// current f\nfn f() {} // inline\n// footer\n";
+    let expected = "//! module\n/// \u{e9} added\nfn added() {}\n/// current f\nfn f() {} // inline\n// footer\n";
+    let (result, _) = run(request("merge2", &[incoming, current]));
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), Some(expected));
+}
+
+#[test]
 fn directional_rust_preserves_current_bytes_comments_and_module_scope() {
     for (incoming, current, expected) in [
         (

@@ -130,6 +130,24 @@ fn directional_planning_revalidates_documents_before_noop_selection() {
 }
 
 #[test]
+fn directional_insertion_supports_a_named_owner_into_empty_current() {
+    let parser = Parser::new("rust");
+    let incoming = parser.parse("struct T;\n", SourceRole::Incoming);
+    let current = parser.parse("", SourceRole::Current);
+    let incoming_owners = rust_merge::directional::owners(&incoming).unwrap();
+    let current_owners = rust_merge::directional::owners(&current).unwrap();
+    let insertions = rust_merge::directional::plan_insertions(
+        &incoming,
+        &incoming_owners,
+        &current,
+        &current_owners,
+    )
+    .unwrap();
+    assert_eq!(insertions.len(), 1);
+    assert_eq!(insertions[0].owner_id, "/struct:T");
+}
+
+#[test]
 fn directional_insertion_keeps_use_items_as_shared_module_facts() {
     let parser = Parser::new("rust");
     let incoming =
