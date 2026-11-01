@@ -346,7 +346,7 @@ fn is_changed_inter_owner_layout_error(evidence: &SourcePreservingMergeEvidence)
 }
 
 /// Build a shared ordered source-line render from executed Rust owner decisions.
-/// Membership-changing cases remain on the existing path pending shared rehome planning.
+/// Additions are appended in selected tip order; deletions await shared rehome planning.
 fn render_line_selected_output(
     analyses: &[RustSourceLineAnalysis; 3],
     evidence: &SourcePreservingMergeEvidence,
@@ -368,36 +368,48 @@ fn render_line_selected_output(
                 .collect::<HashSet<_>>()
         })
         .collect::<Vec<_>>();
-    if owner_ids[0] != owner_ids[1] || owner_ids[0] != owner_ids[2] {
-        return Ok(None);
-    }
     let classification = evidence
         .classification
         .as_ref()
         .ok_or_else(|| "Rust owner merge omitted classification evidence".to_string())?;
-    let baseline_revision =
-        classification.whole_source_selection.unwrap_or(ast_merge::SourceRevision::Ours);
     let mut owner_revisions = HashMap::new();
     if classification.whole_source_selection.is_some() {
-        let revision_index = match baseline_revision {
+        let revision = classification.whole_source_selection.unwrap();
+        let revision_index = match revision {
             ast_merge::SourceRevision::Base => 0,
             ast_merge::SourceRevision::Ours => 1,
             ast_merge::SourceRevision::Theirs => 2,
         };
         for owner_id in &owner_ids[revision_index] {
-            owner_revisions.insert((*owner_id).to_string(), baseline_revision);
+            owner_revisions.insert((*owner_id).to_string(), revision);
         }
     } else {
         for decision in &classification.decisions {
             let revision = match decision.kind {
                 ast_merge::OwnerDecisionKind::SelectOurs => ast_merge::SourceRevision::Ours,
                 ast_merge::OwnerDecisionKind::SelectTheirs => ast_merge::SourceRevision::Theirs,
-                ast_merge::OwnerDecisionKind::Delete => continue,
+                ast_merge::OwnerDecisionKind::Delete => return Ok(None),
                 _ => return Ok(None),
             };
             owner_revisions.insert(decision.owner_id.clone(), revision);
         }
     }
+    let selected_owner_ids = owner_revisions.keys().map(String::as_str).collect::<HashSet<_>>();
+    let baseline_revision = if let Some(revision) = classification.whole_source_selection {
+        revision
+    } else if selected_owner_ids == owner_ids[1] {
+        ast_merge::SourceRevision::Ours
+    } else if selected_owner_ids == owner_ids[2] {
+        ast_merge::SourceRevision::Theirs
+    } else if owner_ids[1].is_subset(&selected_owner_ids) {
+        ast_merge::SourceRevision::Ours
+    } else if owner_ids[2].is_subset(&selected_owner_ids) {
+        ast_merge::SourceRevision::Theirs
+    } else if owner_ids[0].is_subset(&selected_owner_ids) {
+        ast_merge::SourceRevision::Base
+    } else {
+        return Ok(None);
+    };
     let revisions = [
         ast_merge::SourceRevision::Base,
         ast_merge::SourceRevision::Ours,
@@ -418,12 +430,40 @@ fn render_line_selected_output(
         .zip(analyses)
         .map(|(revision, analysis)| (*revision, analysis.comments.augmentation.regions.clone()))
         .collect::<HashMap<_, _>>();
-    let selections = ast_merge::source_line_selections_for_owner_revisions(
+    let mut selections = ast_merge::source_line_selections_for_owner_revisions(
         baseline_revision,
         &dispositions,
         &owner_revisions,
     )
     .map_err(|error| error.to_string())?;
+    let baseline_index = match baseline_revision {
+        ast_merge::SourceRevision::Base => 0,
+        ast_merge::SourceRevision::Ours => 1,
+        ast_merge::SourceRevision::Theirs => 2,
+    };
+    let baseline_owner_ids = &owner_ids[baseline_index];
+    let mut selected_line_keys =
+        selections.iter().map(|selection| selection.selection_key.clone()).collect::<HashSet<_>>();
+    for (revision, analysis) in revisions.iter().zip(analyses) {
+        for owner in &analysis.owners.document.owners {
+            if baseline_owner_ids.contains(owner.id.as_str())
+                || owner_revisions.get(&owner.id) != Some(revision)
+            {
+                continue;
+            }
+            for record in analysis.dispositions.iter().filter(|record| {
+                record.owner_id.as_deref() == Some(owner.id.as_str())
+                    && matches!(record.kind.as_str(), "comment_owner" | "structural_owner")
+            }) {
+                if selected_line_keys.insert(record.selection_key.clone()) {
+                    selections.push(ast_merge::SourceLineSelection {
+                        selection_key: record.selection_key.clone(),
+                        revision: *revision,
+                    });
+                }
+            }
+        }
+    }
     let plan = ast_merge::source_render_plan_from_ordered_selections_with_rehomes(
         sources,
         dispositions,

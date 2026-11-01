@@ -151,6 +151,27 @@ fn clean_merge_selects_root_module_docs_from_the_selected_revision() {
 }
 
 #[test]
+fn clean_merge_selects_independent_owner_additions_from_both_tips() {
+    let parser = Parser::new("rust");
+    let base = "fn base() { 0 }\n";
+    let ours = "fn base() { 0 }\n\n// ours docs\nfn ours() { 1 }\n";
+    let theirs = "fn base() { 0 }\n\n// theirs docs\nfn theirs() { 2 }\n";
+    let [base, ours, theirs] = parser.inputs([base, ours, theirs]);
+    let result =
+        typed::merge3(&base, &ours, &theirs, |source| Ok(parser.parse(source, SourceRole::Output)))
+            .unwrap();
+
+    assert_eq!(result.evidence.result.outcome, ThreeWayMergeOutcome::Clean);
+    assert!(result.ordered_line_render_applied);
+    assert_eq!(
+        result.evidence.result.output.as_deref(),
+        Some(
+            "fn base() { 0 }\n\n// ours docs\nfn ours() { 1 }\n// theirs docs\nfn theirs() { 2 }\n"
+        )
+    );
+}
+
+#[test]
 fn directional_planning_revalidates_documents_before_noop_selection() {
     let parser = Parser::new("rust");
     let incoming = parser.parse(BASE, SourceRole::Incoming);
