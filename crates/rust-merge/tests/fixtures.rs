@@ -1147,6 +1147,26 @@ fn native_syn_composes_compatible_reorders_with_two_interior_additions() {
 }
 
 #[test]
+fn native_syn_composes_two_sided_reorders_additions_removal_and_owned_gaps() {
+    let fixture = read_fixture(&[
+        "polyglot",
+        "typed-core",
+        "rust_merge3_two_sided_reorders_additions_removal_owned_gaps.json",
+    ]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{result:?}");
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+}
+
+#[test]
 fn native_syn_composes_compatible_two_sided_reorders_with_additions_and_removal() {
     let fixture = read_fixture(&[
         "polyglot",
