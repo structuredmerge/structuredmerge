@@ -897,3 +897,32 @@ fn native_syn_merge3_consumes_shared_two_tip_addition_fixtures() {
         );
     }
 }
+
+#[test]
+fn native_syn_merge3_composes_empty_base_additions_and_preserves_root_docs() {
+    let fixture =
+        read_fixture(&["polyglot", "typed-core", "rust_merge3_two_tip_additions_empty_base.json"]);
+    for case in fixture["cases"].as_array().unwrap() {
+        let input = &case["input"];
+        let result = merge_rust_three_way_with_backend(
+            input["base"].as_str().unwrap(),
+            input["ours"].as_str().unwrap(),
+            input["theirs"].as_str().unwrap(),
+            RustDialect::Rust,
+            RustBackend::Native,
+        );
+        assert_eq!(
+            result.outcome,
+            ast_merge::ThreeWayMergeOutcome::Clean,
+            "{}: {:?}",
+            case["name"],
+            result.diagnostics
+        );
+        assert_eq!(
+            result.output.as_deref(),
+            Some(case["expected"]["output"].as_str().unwrap()),
+            "{}",
+            case["name"]
+        );
+    }
+}

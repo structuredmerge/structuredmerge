@@ -875,7 +875,12 @@ fn position_additions_in_their_source_gaps(
                 replaced_keys.extend(
                     records
                         .iter()
-                        .filter(|record| (range.0..=range.1).contains(&record.line_number))
+                        .filter(|record| {
+                            (range.0..=range.1).contains(&record.line_number)
+                                && !(revision == baseline_revision
+                                    && record.kind == "root_region"
+                                    && baseline_root_keys.contains(&record.selection_key))
+                        })
                         .map(|record| (revision, record.selection_key.clone())),
                 );
             }
@@ -895,9 +900,10 @@ fn position_additions_in_their_source_gaps(
 
         let anchor_owner = following.as_deref().or(previous.as_deref());
         let Some(anchor_owner) = anchor_owner else {
-            // A base with no owners has no structural anchor. Keep its original
-            // source-selection behavior until an explicit empty-file contract
-            // defines how document-only lines compose with additions.
+            // With no base owners, additions share one document-wide gap. Their
+            // source-order chunk follows baseline root/unmanaged lines, with
+            // root regions already selected from the baseline de-duplicated.
+            positioned.push((String::new(), baseline_revision, true, chunk));
             continue;
         };
         let Some(anchor) = base
@@ -938,12 +944,17 @@ fn position_additions_in_their_source_gaps(
     let mut positioned = positioned
         .into_iter()
         .filter_map(|(anchor_key, anchor_revision, after_anchor, chunk)| {
-            selections
-                .iter()
-                .position(|selection| {
-                    selection.selection_key == anchor_key && selection.revision == anchor_revision
-                })
-                .map(|index| (index + usize::from(after_anchor), chunk))
+            if anchor_key.is_empty() {
+                Some((selections.len(), chunk))
+            } else {
+                selections
+                    .iter()
+                    .position(|selection| {
+                        selection.selection_key == anchor_key
+                            && selection.revision == anchor_revision
+                    })
+                    .map(|index| (index + usize::from(after_anchor), chunk))
+            }
         })
         .collect::<Vec<_>>();
     positioned.sort_by_key(|(index, _)| *index);

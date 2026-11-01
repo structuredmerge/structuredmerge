@@ -279,6 +279,42 @@ fn keeps_syn_crate_doc_region_when_composing_a_preamble_addition() {
 }
 
 #[test]
+fn composes_two_tip_additions_from_an_empty_or_comment_only_base() {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions_empty_base.json"
+    ))
+    .unwrap();
+    let parser = Parser::new("rust");
+    for case in fixture["cases"].as_array().unwrap() {
+        let input = &case["input"];
+        let [base, ours, theirs] = parser.inputs([
+            input["base"].as_str().unwrap(),
+            input["ours"].as_str().unwrap(),
+            input["theirs"].as_str().unwrap(),
+        ]);
+        let execution = typed::merge3(&base, &ours, &theirs, |source| {
+            Ok(parser.parse(source, SourceRole::Output))
+        })
+        .unwrap();
+
+        assert_eq!(
+            execution.evidence.result.outcome,
+            ThreeWayMergeOutcome::Clean,
+            "{}: {:#?}",
+            case["name"],
+            execution.evidence
+        );
+        assert_eq!(
+            execution.evidence.result.output.as_deref(),
+            Some(case["expected"]["output"].as_str().unwrap()),
+            "{}",
+            case["name"]
+        );
+        assert!(execution.ordered_line_render_applied, "{}", case["name"]);
+    }
+}
+
+#[test]
 fn directional_planning_revalidates_documents_before_noop_selection() {
     let parser = Parser::new("rust");
     let incoming = parser.parse(BASE, SourceRole::Incoming);

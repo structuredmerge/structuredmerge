@@ -46,6 +46,15 @@ pub fn analysis_with_diagnostics(
     }
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
     let parser_is_syn = parsed.backend.parser == "syn";
+    if index.children(root_node).iter().all(|node| node.role == tree_haver::NodeRole::Comment) {
+        let empty_analysis = NativeOwnerAnalysis {
+            document: SourcePreservingOwnerDocument { source: source.to_string(), owners: vec![] },
+            owner_node_ids: Default::default(),
+            attached_comment_node_ids: Default::default(),
+        };
+        empty_analysis.validate(parsed)?;
+        return Ok(empty_analysis);
+    }
     let mut analysis = ast_merge::project_named_top_level_analysis_with_classified_errors(
         source,
         root,
