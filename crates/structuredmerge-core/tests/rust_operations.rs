@@ -742,7 +742,7 @@ fn common_rust_syn_operation_composes_reorder_with_interior_addition_gap() {
 }
 
 #[test]
-fn common_rust_syn_operation_fails_closed_when_reorder_crosses_added_gap() {
+fn common_rust_syn_operation_reports_conflict_when_reorder_crosses_added_gap() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
         "../../../../fixtures/polyglot/typed-core/rust_merge3_reorder_crossed_gap_boundary.json"
     ))
@@ -755,9 +755,10 @@ fn common_rust_syn_operation_fails_closed_when_reorder_crosses_added_gap() {
     ];
     let mut operation = request("merge3", &texts);
     operation.parser_selection.backend = Some("rust.syn.core-test".into());
-    let (result, request) = run(operation);
+    let (result, _request) = run(operation);
 
     assert!(!result.ok, "{:?}", result.diagnostics);
     assert!(result.output.is_none());
-    result.validate_against(&request).unwrap();
+    assert_eq!(result.conflicts[0].id(), "rust-owner-order-divergence");
+    assert_eq!(result.conflicts[0].matches_path("<owner-order>"), true);
 }

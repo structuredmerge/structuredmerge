@@ -363,12 +363,32 @@ pub fn line_selection_postprocessor(
         diagnostic.message
             == "source-preserving declaration merge cannot prove an agreed owner order"
     });
-    let merged_order = compatible_stable_owner_order(&analyses);
-    if order_error && merged_order.is_none() && one_sided_owner_order_revision(&analyses).is_none()
-    {
-        record_divergent_owner_order_conflict(&analyses, evidence);
-        return Ok(true);
-    }
+    let owner_orders: [Vec<String>; 3] = std::array::from_fn(|index| {
+        analyses[index].owners.document.owners.iter().map(|owner| owner.id.clone()).collect()
+    });
+    let shared_order = ast_merge::source_render::merge_source_owner_order(
+        &owner_orders[0],
+        &owner_orders[1],
+        &owner_orders[2],
+    );
+    let same_membership = owner_orders[0].iter().cloned().collect::<HashSet<_>>()
+        == owner_orders[1].iter().cloned().collect::<HashSet<_>>()
+        && owner_orders[0].iter().cloned().collect::<HashSet<_>>()
+            == owner_orders[2].iter().cloned().collect::<HashSet<_>>();
+    let both_tips_reordered =
+        owner_orders[1] != owner_orders[0] && owner_orders[2] != owner_orders[0];
+    let merged_order = match shared_order {
+        ast_merge::source_render::SourceOwnerOrderResolution::Ordered(order)
+            if order_error || (same_membership && both_tips_reordered) =>
+        {
+            Some(order)
+        }
+        ast_merge::source_render::SourceOwnerOrderResolution::Cycle if order_error => {
+            record_divergent_owner_order_conflict(&analyses, evidence);
+            return Ok(true);
+        }
+        _ => None,
+    };
     let rendered = match render_line_selected_output(&analyses, evidence, merged_order.as_deref()) {
         Ok(Some(rendered)) => rendered,
         Ok(None) => return Ok(false),
@@ -540,69 +560,6 @@ fn is_recoverable_owner_layout_error(evidence: &SourcePreservingMergeEvidence) -
                 )
             })
         })
-}
-
-fn compatible_stable_owner_order(analyses: &[RustSourceLineAnalysis; 3]) -> Option<Vec<String>> {
-    let orders: [Vec<String>; 3] = std::array::from_fn(|index| {
-        analyses[index].owners.document.owners.iter().map(|owner| owner.id.clone()).collect()
-    });
-    if orders[0].is_empty()
-        || orders[0].len() != orders[1].len()
-        || orders[0].len() != orders[2].len()
-    {
-        return None;
-    }
-    let base_set = orders[0].iter().cloned().collect::<HashSet<_>>();
-    if orders[1].iter().cloned().collect::<HashSet<_>>() != base_set
-        || orders[2].iter().cloned().collect::<HashSet<_>>() != base_set
-    {
-        return None;
-    }
-    if orders[1] == orders[0] || orders[2] == orders[0] {
-        return None;
-    }
-    let positions: [HashMap<String, usize>; 3] = std::array::from_fn(|index| {
-        orders[index].iter().enumerate().map(|(position, id)| (id.clone(), position)).collect()
-    });
-    let mut outgoing = orders[0]
-        .iter()
-        .cloned()
-        .map(|id| (id, HashSet::<String>::new()))
-        .collect::<HashMap<_, _>>();
-    let mut indegree = orders[0].iter().cloned().map(|id| (id, 0usize)).collect::<HashMap<_, _>>();
-    for left_index in 0..orders[0].len() {
-        for right_index in left_index + 1..orders[0].len() {
-            let left = &orders[0][left_index];
-            let right = &orders[0][right_index];
-            let ours_before = positions[1][left] < positions[1][right];
-            let theirs_before = positions[2][left] < positions[2][right];
-            // Base order is `left` before `right`; any tip reversal wins this
-            // pairwise relation. A cycle across pairs fails closed below.
-            let merged_before = ours_before && theirs_before;
-            let (before, after) = if merged_before { (left, right) } else { (right, left) };
-            if outgoing.get_mut(before)?.insert(after.clone()) {
-                *indegree.get_mut(after)? += 1;
-            }
-        }
-    }
-    let mut remaining = indegree;
-    let mut merged = Vec::with_capacity(orders[0].len());
-    while !remaining.is_empty() {
-        let next = remaining
-            .iter()
-            .filter(|(_, degree)| **degree == 0)
-            .map(|(id, _)| id.clone())
-            .min_by_key(|id| positions[0][id]);
-        let id = next?;
-        remaining.remove(&id);
-        merged.push(id.clone());
-        for successor in outgoing.get(&id)? {
-            if let Some(degree) = remaining.get_mut(successor) {
-                *degree = degree.checked_sub(1)?;
-            }
-        }
-    }
-    Some(merged)
 }
 
 fn one_sided_owner_order_revision(

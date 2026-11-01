@@ -1107,7 +1107,7 @@ fn native_syn_composes_reorder_with_stable_interior_addition_gap() {
 }
 
 #[test]
-fn native_syn_fails_closed_when_reorder_crosses_an_added_owner_gap() {
+fn native_syn_reports_conflict_when_reorder_crosses_an_added_owner_gap() {
     let fixture =
         read_fixture(&["polyglot", "typed-core", "rust_merge3_reorder_crossed_gap_boundary.json"]);
     let input = &fixture["input"];
@@ -1119,8 +1119,10 @@ fn native_syn_fails_closed_when_reorder_crosses_an_added_owner_gap() {
         RustBackend::Native,
     );
 
-    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Error, "{result:?}");
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Conflict, "{result:?}");
     assert!(result.output.is_none());
+    assert_eq!(result.conflicts[0].conflict_id, "rust-owner-order-divergence");
+    assert_eq!(result.conflicts[0].path, "<owner-order>");
 }
 
 #[test]

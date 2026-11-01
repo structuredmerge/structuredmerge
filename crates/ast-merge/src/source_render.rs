@@ -315,6 +315,133 @@ pub struct SourceLineSelection {
     pub revision: SourceRevision,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SourceOwnerOrderResolution {
+    Ordered(Vec<String>),
+    Cycle,
+    Unsupported,
+}
+
+/// Combine revision owner orders as pairwise constraints.
+///
+/// Base owners must remain present in both tips. A tip's reordered relation
+/// wins for base-owner pairs; each added owner is constrained by its nearest
+/// base-owner gap anchors. A cycle means those source positions cannot coexist
+/// and must be surfaced as a merge conflict.
+pub fn merge_source_owner_order(
+    base: &[String],
+    ours: &[String],
+    theirs: &[String],
+) -> SourceOwnerOrderResolution {
+    let positions = |order: &[String]| {
+        let mut result = HashMap::with_capacity(order.len());
+        for (index, id) in order.iter().enumerate() {
+            if id.is_empty() || result.insert(id.clone(), index).is_some() {
+                return None;
+            }
+        }
+        Some(result)
+    };
+    let (Some(base_positions), Some(ours_positions), Some(theirs_positions)) =
+        (positions(base), positions(ours), positions(theirs))
+    else {
+        return SourceOwnerOrderResolution::Unsupported;
+    };
+    if base.is_empty() {
+        return SourceOwnerOrderResolution::Unsupported;
+    }
+    let base_ids = base_positions.keys().cloned().collect::<HashSet<_>>();
+    if !base_ids
+        .iter()
+        .all(|id| ours_positions.contains_key(id) && theirs_positions.contains_key(id))
+    {
+        return SourceOwnerOrderResolution::Unsupported;
+    }
+
+    let mut order = base.to_vec();
+    for id in ours.iter().chain(theirs) {
+        if !base_ids.contains(id) && !order.contains(id) {
+            order.push(id.clone());
+        }
+    }
+    let mut outgoing =
+        order.iter().cloned().map(|id| (id, HashSet::<String>::new())).collect::<HashMap<_, _>>();
+    let mut indegree = order.iter().cloned().map(|id| (id, 0usize)).collect::<HashMap<_, _>>();
+    let mut add_edge = |before: &str, after: &str| {
+        if outgoing.get_mut(before).is_some_and(|edges| edges.insert(after.to_string())) {
+            if let Some(degree) = indegree.get_mut(after) {
+                *degree += 1;
+            }
+        }
+    };
+    for left_index in 0..base.len() {
+        for right_index in left_index + 1..base.len() {
+            let left = &base[left_index];
+            let right = &base[right_index];
+            let merged_before = ours_positions[left] < ours_positions[right]
+                && theirs_positions[left] < theirs_positions[right];
+            let (before, after) = if merged_before { (left, right) } else { (right, left) };
+            add_edge(before, after);
+        }
+    }
+    for tip in [ours, theirs] {
+        // Preserve insertion gaps by their nearest base-owner anchors. A new
+        // owner at a file edge stays at that edge; an interior addition is
+        // constrained only against its adjacent base anchors, so a reorder
+        // elsewhere does not drag it across unrelated owners.
+        for (index, id) in tip.iter().enumerate().filter(|(_, id)| !base_ids.contains(*id)) {
+            let previous_base =
+                tip[..index].iter().rev().find(|candidate| base_ids.contains(*candidate));
+            let next_base = tip[index + 1..].iter().find(|candidate| base_ids.contains(*candidate));
+            match (previous_base, next_base) {
+                (Some(previous), Some(next)) => {
+                    add_edge(previous, id);
+                    add_edge(id, next);
+                }
+                (None, Some(next)) => add_edge(id, next),
+                (Some(previous), None) => add_edge(previous, id),
+                (None, None) => {}
+            }
+        }
+        for pair in tip.windows(2) {
+            if !base_ids.contains(&pair[0]) || !base_ids.contains(&pair[1]) {
+                add_edge(&pair[0], &pair[1]);
+            }
+        }
+    }
+    drop(add_edge);
+
+    let mut tie_break = HashMap::<String, (u8, usize)>::new();
+    for (index, id) in base.iter().enumerate() {
+        tie_break.insert(id.clone(), (0, index));
+    }
+    for (priority, tip) in [(1, ours), (2, theirs)] {
+        for (index, id) in tip.iter().enumerate().filter(|(_, id)| !base_ids.contains(*id)) {
+            tie_break.entry(id.clone()).or_insert((priority, index));
+        }
+    }
+    let mut remaining = indegree;
+    let mut merged = Vec::with_capacity(order.len());
+    while !remaining.is_empty() {
+        let next = remaining
+            .iter()
+            .filter(|(_, degree)| **degree == 0)
+            .map(|(id, _)| id.clone())
+            .min_by_key(|id| tie_break.get(id).copied().unwrap_or((3, usize::MAX)));
+        let Some(id) = next else {
+            return SourceOwnerOrderResolution::Cycle;
+        };
+        remaining.remove(&id);
+        merged.push(id.clone());
+        for successor in &outgoing[&id] {
+            if let Some(degree) = remaining.get_mut(successor) {
+                *degree = degree.saturating_sub(1);
+            }
+        }
+    }
+    SourceOwnerOrderResolution::Ordered(merged)
+}
+
 /// Reorder complete owner/comment source selections using an explicit owner
 /// order. Layout gaps travel with their controller owner, using a revision that
 /// places that owner after its merged predecessor where possible. Root and
@@ -2980,6 +3107,28 @@ mod tests {
         assert_eq!(
             reordered.iter().map(|selection| selection.selection_key.as_str()).collect::<Vec<_>>(),
             ["comment:b", "owner:b", "comment:a", "owner:a"]
+        );
+    }
+
+    #[test]
+    fn owner_order_constraints_detect_an_addition_gap_crossed_by_reorder() {
+        let base = ["a", "b", "c"].map(str::to_string);
+        let ours = ["b", "a", "c"].map(str::to_string);
+        let theirs = ["a", "x", "b", "c"].map(str::to_string);
+        assert_eq!(
+            merge_source_owner_order(&base, &ours, &theirs),
+            SourceOwnerOrderResolution::Cycle
+        );
+    }
+
+    #[test]
+    fn owner_order_constraints_compose_a_tip_reorder_and_edge_addition() {
+        let base = ["a", "b", "c"].map(str::to_string);
+        let ours = ["b", "a", "c"].map(str::to_string);
+        let theirs = ["x", "a", "b", "c"].map(str::to_string);
+        assert_eq!(
+            merge_source_owner_order(&base, &ours, &theirs),
+            SourceOwnerOrderResolution::Ordered(["b", "x", "a", "c"].map(str::to_string).to_vec())
         );
     }
 }
