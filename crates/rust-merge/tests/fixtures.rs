@@ -1107,6 +1107,26 @@ fn native_syn_composes_reorder_with_stable_interior_addition_gap() {
 }
 
 #[test]
+fn native_syn_composes_compatible_two_tip_reorders_with_interior_addition() {
+    let fixture = read_fixture(&[
+        "polyglot",
+        "typed-core",
+        "rust_merge3_compatible_reorders_with_interior_addition.json",
+    ]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{result:?}");
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+}
+
+#[test]
 fn native_syn_reports_conflict_when_reorder_crosses_an_added_owner_gap() {
     let fixture =
         read_fixture(&["polyglot", "typed-core", "rust_merge3_reorder_crossed_gap_boundary.json"]);
