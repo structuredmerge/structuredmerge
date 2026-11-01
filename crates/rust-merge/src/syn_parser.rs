@@ -601,6 +601,34 @@ mod tests {
     }
 
     #[test]
+    fn native_parser_reports_syntax_errors_as_blocking_diagnostics() {
+        let output = RustSynParserProvider::new("rust.syn.test")
+            .parse(request("fn broken("), &context())
+            .unwrap();
+        assert!(!output.ok);
+        assert_eq!(output.diagnostics.len(), 1);
+        assert!(output.diagnostics[0].blocking);
+        assert_eq!(output.diagnostics[0].category, "parse_error");
+    }
+
+    #[test]
+    fn native_syntax_outside_the_owner_profile_fails_closed() {
+        let source = "unsafe extern \"C\" { fn native_symbol(); }\n";
+        let registry = ParserRegistry::default();
+        registry.register(Arc::new(RustSynParserProvider::new("rust.syn.test"))).unwrap();
+        let parsed = TreeHaverParseService::default()
+            .parse_batch(vec![request(source)], &registry.snapshot().unwrap(), &context())
+            .unwrap()
+            .remove(0);
+        assert!(parsed.document.output().ok);
+        assert!(
+            crate::typed::analysis(&parsed)
+                .unwrap_err()
+                .contains("unsupported top-level Rust node")
+        );
+    }
+
+    #[test]
     fn comment_lexer_skips_raw_byte_strings_c_strings_and_lifetimes() {
         let source = concat!(
             "let raw = br###\"/* no */ // no\"###;\n",
