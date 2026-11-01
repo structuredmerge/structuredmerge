@@ -121,8 +121,11 @@ fn fails_closed_on_multi_declarator_lexical_merge_ownership() {
 
     let result = merge_typescript_three_way(base, &ours, &theirs, TypeScriptDialect::TypeScript);
 
-    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Error);
-    assert!(result.diagnostics[0].message.contains("ambiguous owners"));
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Conflict, "{result:?}");
+    assert_eq!(result.conflicts.len(), 1, "{result:?}");
+    assert_eq!(result.conflicts[0].category, "edit_edit");
+    assert_eq!(result.conflicts[0].path, "/variables:left,right");
+    assert!(result.output.is_none());
 }
 
 #[test]

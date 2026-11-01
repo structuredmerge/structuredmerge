@@ -24,6 +24,7 @@ const TYPESCRIPT_DECLARATION_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
     NamedOwnerKind { node_kind: "interface_declaration", path_kind: "interface" },
     NamedOwnerKind { node_kind: "internal_module", path_kind: "internal_module" },
     NamedOwnerKind { node_kind: "type_alias_declaration", path_kind: "type_alias" },
+    NamedOwnerKind { node_kind: "lexical_declaration", path_kind: "variables" },
     NamedOwnerKind { node_kind: "variable_declarator", path_kind: "variables" },
 ];
 
@@ -329,7 +330,48 @@ fn parse_source_preserving_typescript(
     if !parsed.source_fragments_available {
         return Err("TypeScript parser did not retain source fragments".to_string());
     }
-    project_named_top_level_owners(source, &parsed.root_id, &parsed.nodes, owner_policy())
+    let mut nodes = parsed.nodes;
+    annotate_lexical_declaration_owner_identities(&mut nodes)?;
+    project_named_top_level_owners(source, &parsed.root_id, &nodes, owner_policy())
+}
+
+pub(crate) fn annotate_lexical_declaration_owner_identities(
+    nodes: &mut [NormalizedTreeNode],
+) -> Result<(), String> {
+    let identities = {
+        let index = NormalizedTreeIndex::new(nodes)?;
+        nodes
+            .iter()
+            .filter(|node| node.kind == "lexical_declaration")
+            .map(|node| {
+                let declarators = index
+                    .children(node)
+                    .into_iter()
+                    .filter(|child| child.kind == "variable_declarator")
+                    .collect::<Vec<_>>();
+                if declarators.is_empty() {
+                    return Err(
+                        "TypeScript lexical declaration has no variable declarator".to_string()
+                    );
+                }
+                let names = declarators
+                    .iter()
+                    .map(|declarator| {
+                        declaration_name(declarator, &index).ok_or_else(|| {
+                            "TypeScript variable declarator has no stable name".to_string()
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok((node.id.clone(), names.join(",")))
+            })
+            .collect::<Result<Vec<_>, String>>()?
+    };
+    for node in nodes {
+        if let Some((_, identity)) = identities.iter().find(|(id, _)| id == &node.id) {
+            node.semantic_roles.push(format!("owner_identity:{identity}"));
+        }
+    }
+    Ok(())
 }
 
 fn owner_policy() -> NamedOwnerProjectionPolicy<'static> {

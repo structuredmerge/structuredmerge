@@ -14,7 +14,8 @@ pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
     {
         return Err("TypeScript analysis requires a TypeScript or TSX parser".into());
     }
-    let nodes = parsed.normalized_nodes()?;
+    let mut nodes = parsed.normalized_nodes()?;
+    super::annotate_lexical_declaration_owner_identities(&mut nodes)?;
     let root =
         parsed.document.output().root_id.as_deref().ok_or("TypeScript parse omitted its root")?;
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;

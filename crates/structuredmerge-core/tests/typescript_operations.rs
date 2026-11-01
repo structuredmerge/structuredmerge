@@ -155,6 +155,31 @@ fn merge3_retains_native_decisions_and_fresh_output_verification() {
 }
 
 #[test]
+fn multi_declarator_edits_return_a_typed_whole_statement_conflict() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/typescript_merge3_multi_declarator.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let texts = [
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ];
+    let (result, _) = run(request("typescript", "merge3", &texts));
+
+    assert!(!result.ok, "{result:?}");
+    assert!(result.output.is_none());
+    assert_eq!(result.conflicts.len(), 1, "{result:?}");
+    let ConflictRecord::Canonical(conflict) = &result.conflicts[0] else {
+        panic!("expected canonical conflict")
+    };
+    assert_eq!(conflict.code, "merge.edit_edit");
+    assert_eq!(conflict.localization.status, LocalizationStatus::Owner);
+    assert_eq!(conflict.subject.structural_path.as_deref(), Some("/variables:first,second"));
+}
+
+#[test]
 fn jsx_requires_tsx_and_selects_tsx_for_output_reparse() {
     let base = "function View() { return <div>one</div>; }\nfunction f() { return 1; }\n";
     let ours = base.replace(">one<", ">two<");
