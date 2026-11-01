@@ -1,11 +1,11 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "ruby",
-  "review_reason": "Additive PortableCategory::UnsafeSourceRange for Rust-host parity with Ruby provider failures; appended to preserve the existing Python enum discriminants.",
+  "review_reason": "Additive PortableCategory::UnsafeSourceRange and opt-in register_rust_syn_parser API; existing provider defaults are unchanged.",
   "files": {
     "lib/structuredmerge_core/native.rb": "582b6ae400a204e38c80ee5aa480e41abed68bf47ef2bf1d7c62e669849f1c14",
     "lib/structuredmerge_core/version.rb": "99c8b3f93ad0d98825c986c3d405eb50b97bc4e5c14d61fa087ea228966c424a",
     "lib/structuredmerge_core.rb": "defe67340887e4fcfecefc0a68d255fab86768e5c81260916819b636303f5cdf",
-    "sig/types.rbs": "764cab88aec54875d717b5f3f3f9e23c9a0ebd8ccb93db045f327f4920e8bf28"
+    "sig/types.rbs": "8a8e33293a26bc0019bbf652b60ed81e33dfa89254abf901c1785dd056316344"
   }
 }
