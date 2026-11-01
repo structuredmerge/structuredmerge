@@ -409,6 +409,8 @@
 
 - Convert removed-owner preservation lines into ordered semantic source selections for exact-byte rendering.
 
+- Resolve structural rehome plans to complete ordered source regions at their target boundary; reject inline comments that share a removed-owner line.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.

@@ -447,6 +447,105 @@ pub fn source_line_selections_for_preserved_lines(
     Ok(selections)
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RehomeSourceLineSelections {
+    pub source_owner_id: Option<String>,
+    pub target_owner_id: Option<String>,
+    pub edge: crate::BoundaryEdge,
+    pub kind: crate::RehomeFragmentKind,
+    pub selections: Vec<SourceLineSelection>,
+}
+
+/// Resolve a structural rehome decision to complete source regions, ordered by
+/// their source position. The caller inserts these regions at the planned edge.
+/// Inline comments sharing an owner line fail closed because selecting that
+/// physical line would also select the removed structural owner.
+pub fn source_line_selections_for_rehome_plan(
+    revision: SourceRevision,
+    dispositions: &[crate::SourceLineDisposition],
+    rehome: &crate::RehomePlan,
+) -> Result<RehomeSourceLineSelections, SourceRenderError> {
+    let mut regions = Vec::<(usize, SourceLineSelection)>::new();
+    let mut keys = std::collections::HashSet::new();
+    for region_id in &rehome.comment_region_ids {
+        let records = dispositions
+            .iter()
+            .filter(|record| record.comment_region_ids.contains(region_id))
+            .collect::<Vec<_>>();
+        if records.is_empty() {
+            return Err(SourceRenderError::new(format!(
+                "rehome comment region {region_id} has no source line disposition"
+            )));
+        }
+        if records.iter().any(|record| record.kind == "structural_owner") {
+            return Err(SourceRenderError::new(format!(
+                "rehome comment region {region_id} shares a structural owner line"
+            )));
+        }
+        push_rehome_region_selection(revision, region_id, &records, &mut regions, &mut keys)?;
+    }
+    for gap_id in &rehome.layout_gap_ids {
+        let records = dispositions
+            .iter()
+            .filter(|record| record.gap_id.as_deref() == Some(gap_id))
+            .collect::<Vec<_>>();
+        if records.is_empty() {
+            return Err(SourceRenderError::new(format!(
+                "rehome layout gap {gap_id} has no source line disposition"
+            )));
+        }
+        push_rehome_region_selection(revision, gap_id, &records, &mut regions, &mut keys)?;
+    }
+    regions.sort_by_key(|(line_number, _)| *line_number);
+    Ok(RehomeSourceLineSelections {
+        source_owner_id: rehome.source_owner_id.clone(),
+        target_owner_id: rehome.target_owner_id().map(str::to_owned),
+        edge: rehome.edge(),
+        kind: rehome.kind,
+        selections: regions.into_iter().map(|(_, selection)| selection).collect(),
+    })
+}
+
+fn push_rehome_region_selection(
+    revision: SourceRevision,
+    region_id: &str,
+    records: &[&crate::SourceLineDisposition],
+    regions: &mut Vec<(usize, SourceLineSelection)>,
+    keys: &mut std::collections::HashSet<String>,
+) -> Result<(), SourceRenderError> {
+    let mut line_numbers = records.iter().map(|record| record.line_number).collect::<Vec<_>>();
+    line_numbers.sort_unstable();
+    line_numbers.dedup();
+    for pair in line_numbers.windows(2) {
+        if pair[1] != pair[0] + 1 {
+            return Err(SourceRenderError::new(format!(
+                "rehome region {region_id} has noncontiguous source lines"
+            )));
+        }
+    }
+    let first = records[0].selection_key.as_str();
+    if records.iter().any(|record| record.selection_key != first) {
+        return Err(SourceRenderError::new(format!(
+            "rehome region {region_id} maps to multiple source selections"
+        )));
+    }
+    let selection_key = first.to_string();
+    if !keys.insert(selection_key.clone()) {
+        return Err(SourceRenderError::new(format!(
+            "multiple rehome regions map to source selection {selection_key}"
+        )));
+    }
+    let selected_lines =
+        records.iter().filter(|record| record.selection_key == selection_key).count();
+    if selected_lines != line_numbers.len() {
+        return Err(SourceRenderError::new(format!(
+            "rehome region {region_id} does not cover its complete source selection"
+        )));
+    }
+    regions.push((line_numbers[0], SourceLineSelection { selection_key, revision }));
+    Ok(())
+}
+
 /// Build an exact-byte render plan from ordered semantic line selections.
 /// Each selection names one contiguous ownership region in one source revision.
 pub fn source_render_plan_from_line_selections(

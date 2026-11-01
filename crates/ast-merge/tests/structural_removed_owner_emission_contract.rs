@@ -1,8 +1,9 @@
 use ast_merge::{
-    CommentLine, CommentRegion, LayoutGap, SourceLineCommentRegion, SourceLineLayoutGap,
-    SourceLineOwner, SourceRevision, preserve_removed_owner_lines, render_source_plan,
+    BoundaryEdge, CommentLine, CommentRegion, LayoutGap, RehomeFragmentKind, RehomePlan,
+    SourceLineCommentRegion, SourceLineDisposition, SourceLineLayoutGap, SourceLineOwner,
+    SourceRevision, StructuralBoundary, preserve_removed_owner_lines, render_source_plan,
     source_line_dispositions, source_line_selections_for_preserved_lines,
-    source_render_plan_from_line_selections,
+    source_line_selections_for_rehome_plan, source_render_plan_from_line_selections,
 };
 use serde_json::{Value, json};
 use std::{collections::HashMap, fs, path::PathBuf};
@@ -187,7 +188,7 @@ fn shared_removed_owner_emission_fixture_matches_ruby() {
         .expect("Ruby-compatible preservation lines select complete source regions");
         let plan = source_render_plan_from_line_selections(
             HashMap::from([(SourceRevision::Ours, source)]),
-            HashMap::from([(SourceRevision::Ours, dispositions)]),
+            HashMap::from([(SourceRevision::Ours, dispositions.clone())]),
             &selections,
         )
         .expect("removed-owner selections form a source render plan");
@@ -201,5 +202,86 @@ fn shared_removed_owner_emission_fixture_matches_ruby() {
             .join("\n")
             + "\n";
         assert_eq!(rendered.content, expected, "{}", case["name"].as_str().unwrap());
+
+        let trailing_gap_id = if actual.line_numbers.contains(&trailing_gap_line) {
+            vec!["trailing-gap".to_string()]
+        } else {
+            vec![]
+        };
+        let rehome = RehomePlan {
+            source_owner_id: Some("removed".into()),
+            target_boundary: StructuralBoundary {
+                edge: BoundaryEdge::Trailing,
+                owner_id: Some("later".into()),
+            },
+            kind: RehomeFragmentKind::Trailing,
+            comment_region_ids: vec!["trailing".into()],
+            layout_gap_ids: trailing_gap_id,
+            metadata: HashMap::new(),
+        };
+        let rehomed =
+            source_line_selections_for_rehome_plan(SourceRevision::Ours, &dispositions, &rehome)
+                .expect("rehome boundaries select their complete source regions");
+        assert_eq!(rehomed.target_owner_id.as_deref(), Some("later"));
+        assert_eq!(rehomed.edge, BoundaryEdge::Trailing);
+        let trailing_source = source_render_plan_from_line_selections(
+            HashMap::from([(SourceRevision::Ours, source_lines.join("\n") + "\n")]),
+            HashMap::from([(SourceRevision::Ours, dispositions.clone())]),
+            &rehomed.selections,
+        )
+        .expect("rehome selections form a source plan");
+        let trailing_render = render_source_plan(&trailing_source).unwrap();
+        let mut trailing_expected = region_data["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|line| line.as_str().unwrap().to_owned())
+            .collect::<Vec<_>>();
+        if actual.line_numbers.contains(&trailing_gap_line) {
+            trailing_expected.extend(
+                trailing_gap["lines"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|line| line.as_str().unwrap().to_owned()),
+            );
+        }
+        assert_eq!(
+            trailing_render.content,
+            trailing_expected.join("\n") + "\n",
+            "{}",
+            case["name"].as_str().unwrap()
+        );
     }
+}
+
+#[test]
+fn rehome_rejects_inline_comments_that_share_a_structural_line() {
+    let dispositions = vec![SourceLineDisposition {
+        line_number: 1,
+        line: "x=1 # inline\n".into(),
+        kind: "structural_owner".into(),
+        selection_key: "owner:removed".into(),
+        owner_id: Some("removed".into()),
+        comment_region_ids: vec!["inline".into()],
+        comment_kind: Some("inline".into()),
+        gap_id: None,
+        controller_owner_id: None,
+        root_region_kind: None,
+    }];
+    let rehome = RehomePlan {
+        source_owner_id: Some("removed".into()),
+        target_boundary: StructuralBoundary {
+            edge: BoundaryEdge::Trailing,
+            owner_id: Some("retained".into()),
+        },
+        kind: RehomeFragmentKind::Ambiguous,
+        comment_region_ids: vec!["inline".into()],
+        layout_gap_ids: vec![],
+        metadata: HashMap::new(),
+    };
+    let error =
+        source_line_selections_for_rehome_plan(SourceRevision::Ours, &dispositions, &rehome)
+            .unwrap_err();
+    assert!(error.to_string().contains("shares a structural owner line"));
 }
