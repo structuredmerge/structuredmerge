@@ -315,6 +315,7 @@ fn item_facts(
         Item::Const(item) => Some(&item.ident),
         Item::Enum(item) => Some(&item.ident),
         Item::Fn(item) => Some(&item.sig.ident),
+        Item::Macro(item) if item.mac.path.is_ident("macro_rules") => item.ident.as_ref(),
         Item::Mod(item) => Some(&item.ident),
         Item::Static(item) => Some(&item.ident),
         Item::Struct(item) => Some(&item.ident),
@@ -330,6 +331,9 @@ fn item_facts(
         Item::Fn(_) => ("function_item", "syn::ItemFn"),
         Item::ForeignMod(_) => ("native_item", "syn::ItemForeignMod"),
         Item::Impl(_) => ("native_item", "syn::ItemImpl"),
+        Item::Macro(item) if item.mac.path.is_ident("macro_rules") && item.ident.is_some() => {
+            ("macro_definition", "syn::ItemMacro")
+        }
         Item::Macro(_) => ("native_item", "syn::ItemMacro"),
         Item::Mod(_) => ("mod_item", "syn::ItemMod"),
         Item::Static(_) => ("static_item", "syn::ItemStatic"),
@@ -718,6 +722,36 @@ mod tests {
         let comments =
             scan_comments(source).into_iter().map(|range| &source[range]).collect::<Vec<_>>();
         assert_eq!(comments, vec!["// actual comment"]);
+    }
+
+    #[test]
+    fn syn_macro_rules_item_projects_as_named_source_owner() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/polyglot/typed-core/rust_macro_definition_merge3.json"
+        ))
+        .unwrap();
+        let source = fixture["input"]["base"].as_str().unwrap();
+        let registry = ParserRegistry::default();
+        registry.register(Arc::new(RustSynParserProvider::new("rust.syn.test"))).unwrap();
+        let parsed = TreeHaverParseService::default()
+            .parse_batch(vec![request(source)], &registry.snapshot().unwrap(), &context())
+            .unwrap()
+            .remove(0);
+        let analysis = crate::typed::analysis(&parsed).unwrap();
+        let macro_path = fixture["expected"]["macro_owner_path"].as_str().unwrap();
+        let macro_owner =
+            analysis.document.owners.iter().find(|owner| owner.id == macro_path).unwrap();
+        assert!(
+            source[macro_owner.start_byte..macro_owner.end_byte].contains("macro_rules! build")
+        );
+        let macro_node = analysis.owner_node_ids[macro_path]
+            .iter()
+            .map(|id| parsed.document.node(id).unwrap())
+            .find(|node| node.kind == "syn::ItemMacro")
+            .unwrap_or_else(|| {
+                panic!("macro owner node was not found: {:#?}", parsed.document.output().nodes)
+            });
+        assert_eq!(macro_node.native_type, "macro_definition");
     }
 
     #[test]

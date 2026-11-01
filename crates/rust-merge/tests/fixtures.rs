@@ -350,6 +350,28 @@ fn rust_backends_conform_to_shared_owner_profile_failure_boundary() {
 }
 
 #[test]
+fn rust_classic_backends_merge_named_macro_and_function_owners_independently() {
+    let fixture = read_fixture(&["polyglot", "typed-core", "rust_macro_definition_merge3.json"]);
+    let input = &fixture["input"];
+    for backend in [RustBackend::Native, RustBackend::TreeSitter] {
+        let result = merge_rust_three_way_with_backend(
+            input["base"].as_str().unwrap(),
+            input["ours"].as_str().unwrap(),
+            input["theirs"].as_str().unwrap(),
+            RustDialect::Rust,
+            backend,
+        );
+        assert_eq!(
+            result.outcome,
+            ast_merge::ThreeWayMergeOutcome::Clean,
+            "{backend:?}: {:?}",
+            result.diagnostics
+        );
+        assert_eq!(result.output.as_deref(), Some(fixture["expected"]["output"].as_str().unwrap()));
+    }
+}
+
+#[test]
 fn rust_classic_backends_merge_block_doc_two_tip_additions() {
     let fixture =
         read_fixture(&["polyglot", "typed-core", "rust_merge3_block_doc_two_tip_additions.json"]);

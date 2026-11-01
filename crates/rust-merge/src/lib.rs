@@ -24,6 +24,7 @@ const RUST_SOURCE_PRESERVING_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
     NamedOwnerKind { node_kind: "const_item", path_kind: "const" },
     NamedOwnerKind { node_kind: "enum_item", path_kind: "enum" },
     NamedOwnerKind { node_kind: "function_item", path_kind: "function" },
+    NamedOwnerKind { node_kind: "macro_definition", path_kind: "macro" },
     NamedOwnerKind { node_kind: "mod_item", path_kind: "mod" },
     NamedOwnerKind { node_kind: "static_item", path_kind: "static" },
     NamedOwnerKind { node_kind: "struct_item", path_kind: "struct" },
@@ -573,6 +574,7 @@ fn supported_analysis_declaration(kind: &str) -> bool {
         "const_item"
             | "enum_item"
             | "function_item"
+            | "macro_definition"
             | "mod_item"
             | "static_item"
             | "struct_item"
@@ -587,6 +589,7 @@ fn rust_declaration_kind(node_kind: &str) -> &'static str {
         "const_item" => "const",
         "enum_item" => "enum",
         "function_item" => "function",
+        "macro_definition" => "macro",
         "mod_item" => "module",
         "static_item" => "static",
         "struct_item" => "struct",
