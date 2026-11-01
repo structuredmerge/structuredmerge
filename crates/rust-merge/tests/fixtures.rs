@@ -1160,3 +1160,23 @@ fn native_syn_merges_compatible_two_sided_owner_reorders() {
     assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{result:?}");
     assert_eq!(result.output.as_deref(), Some(expected));
 }
+
+#[test]
+fn native_syn_merges_compatible_reorders_with_controller_owned_gaps() {
+    let fixture = read_fixture(&[
+        "polyglot",
+        "typed-core",
+        "rust_merge3_compatible_reorders_with_owned_gaps.json",
+    ]);
+    let input = &fixture["input"];
+    let expected = fixture["expected"]["output"].as_str().unwrap();
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{result:?}");
+    assert_eq!(result.output.as_deref(), Some(expected));
+}

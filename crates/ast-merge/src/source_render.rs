@@ -316,19 +316,18 @@ pub struct SourceLineSelection {
 }
 
 /// Reorder complete owner/comment source selections using an explicit owner
-/// order. Layout gaps, root regions, and unmanaged lines need a separate shared
-/// placement decision and therefore make this operation inapplicable.
+/// order. Layout gaps travel with their controller owner, using a revision that
+/// places that owner after its merged predecessor where possible. Root and
+/// unmanaged lines still require a separate shared placement decision.
 pub fn source_line_selections_for_owner_order(
     selections: Vec<SourceLineSelection>,
     dispositions: &HashMap<SourceRevision, Vec<crate::SourceLineDisposition>>,
     owner_revisions: &HashMap<String, SourceRevision>,
     owner_order: &[String],
 ) -> Result<Option<Vec<SourceLineSelection>>, SourceRenderError> {
-    if dispositions
-        .values()
-        .flatten()
-        .any(|record| !matches!(record.kind.as_str(), "structural_owner" | "comment_owner"))
-    {
+    if dispositions.values().flatten().any(|record| {
+        !matches!(record.kind.as_str(), "structural_owner" | "comment_owner" | "layout_gap")
+    }) {
         return Ok(None);
     }
     let ordered_owners = owner_order.iter().map(String::as_str).collect::<HashSet<_>>();
@@ -337,74 +336,138 @@ pub fn source_line_selections_for_owner_order(
     {
         return Ok(None);
     }
-    let mut selection_owners = HashMap::<&str, &str>::new();
-    for record in dispositions.values().flatten() {
-        let Some(owner_id) = record.owner_id.as_deref() else {
-            return Err(SourceRenderError::new(format!(
-                "{} line {} has no owner for explicit owner ordering",
-                record.kind, record.line_number
-            )));
-        };
-        if selection_owners
-            .insert(record.selection_key.as_str(), owner_id)
-            .is_some_and(|previous| previous != owner_id)
-        {
-            return Err(SourceRenderError::new(format!(
-                "selection {} belongs to multiple owners",
-                record.selection_key
-            )));
-        }
-    }
+
+    let revision_orders = dispositions
+        .iter()
+        .map(|(revision, records)| {
+            let mut order = Vec::new();
+            for record in records.iter().filter(|record| record.kind == "structural_owner") {
+                if let Some(owner) = record.owner_id.as_deref()
+                    && !order.contains(&owner)
+                {
+                    order.push(owner);
+                }
+            }
+            (*revision, order)
+        })
+        .collect::<HashMap<_, _>>();
     let owner_positions = owner_order
         .iter()
         .enumerate()
         .map(|(index, id)| (id.as_str(), index))
         .collect::<HashMap<_, _>>();
-    if selections.iter().any(|selection| {
-        selection_owners
-            .get(selection.selection_key.as_str())
-            .and_then(|owner| owner_positions.get(owner))
-            .is_none()
-    }) {
+    let mut expected_owner_selections = HashSet::new();
+    let mut owner_lines = HashMap::<String, Vec<(String, SourceRevision, usize, u8)>>::new();
+    for (owner_index, owner_id) in owner_order.iter().enumerate() {
+        let content_revision = owner_revisions[owner_id];
+        let Some(content_records) = dispositions.get(&content_revision) else {
+            return Ok(None);
+        };
+        let mut has_structural_owner = false;
+        for record in content_records.iter().filter(|record| {
+            matches!(record.kind.as_str(), "structural_owner" | "comment_owner")
+                && record.owner_id.as_deref() == Some(owner_id)
+        }) {
+            has_structural_owner |= record.kind == "structural_owner";
+            expected_owner_selections.insert((record.selection_key.clone(), content_revision));
+            owner_lines.entry(owner_id.clone()).or_default().push((
+                record.selection_key.clone(),
+                content_revision,
+                record.line_number,
+                1,
+            ));
+        }
+        if !has_structural_owner {
+            return Ok(None);
+        }
+
+        // A layout gap belongs to its controller owner. Choose layout facts
+        // from a revision that has the owner's merged predecessor when possible;
+        // syntax/comment selection and layout provenance are independent.
+        let predecessor = owner_index.checked_sub(1).map(|index| owner_order[index].as_str());
+        let at_merged_position = |revision: SourceRevision| {
+            revision_orders.get(&revision).is_some_and(|order| {
+                order.iter().position(|candidate| *candidate == owner_id).is_some_and(|position| {
+                    position.checked_sub(1).map(|index| order[index]) == predecessor
+                })
+            })
+        };
+        let layout_revision =
+            [content_revision, SourceRevision::Ours, SourceRevision::Theirs, SourceRevision::Base]
+                .into_iter()
+                .find(|revision| at_merged_position(*revision))
+                .unwrap_or(content_revision);
+        if let Some(layout_records) = dispositions.get(&layout_revision) {
+            for record in layout_records.iter().filter(|record| {
+                record.kind == "layout_gap"
+                    && record.controller_owner_id.as_deref() == Some(owner_id)
+            }) {
+                let order = if record.after_owner_id.as_deref() == Some(owner_id) {
+                    0
+                } else if record.before_owner_id.as_deref() == Some(owner_id) {
+                    2
+                } else {
+                    return Ok(None);
+                };
+                owner_lines.entry(owner_id.clone()).or_default().push((
+                    record.selection_key.clone(),
+                    layout_revision,
+                    record.line_number,
+                    order,
+                ));
+            }
+        }
+    }
+
+    let supplied_owner_selections = selections
+        .iter()
+        .filter(|selection| {
+            dispositions.get(&selection.revision).into_iter().flatten().any(|record| {
+                record.selection_key == selection.selection_key
+                    && matches!(record.kind.as_str(), "structural_owner" | "comment_owner")
+            })
+        })
+        .map(|selection| (selection.selection_key.clone(), selection.revision))
+        .collect::<HashSet<_>>();
+    if supplied_owner_selections != expected_owner_selections {
         return Ok(None);
     }
-    let selected_keys = selections
+    let selected = selections
         .iter()
         .map(|selection| (selection.selection_key.as_str(), selection.revision))
         .collect::<HashSet<_>>();
-    if selected_keys.len() != selections.len() {
+    if selected.len() != selections.len() {
         return Err(SourceRenderError::new("owner ordering received duplicate line selections"));
     }
-    for (owner_id, revision) in owner_revisions {
-        let expected_keys = dispositions
-            .get(revision)
-            .into_iter()
-            .flatten()
-            .filter(|record| record.owner_id.as_deref() == Some(owner_id.as_str()))
-            .map(|record| record.selection_key.as_str())
-            .collect::<HashSet<_>>();
-        let actual_keys = selections
-            .iter()
-            .filter(|selection| selection.revision == *revision)
-            .filter(|selection| {
-                selection_owners.get(selection.selection_key.as_str()).copied()
-                    == Some(owner_id.as_str())
-            })
-            .map(|selection| selection.selection_key.as_str())
-            .collect::<HashSet<_>>();
-        if expected_keys.is_empty() || expected_keys != actual_keys {
-            return Ok(None);
+
+    let mut ordered = Vec::new();
+    for owner_id in owner_order {
+        let Some(lines) = owner_lines.get(owner_id) else { return Ok(None) };
+        let mut unique = HashMap::<(String, SourceRevision), (usize, u8)>::new();
+        for (selection_key, revision, line_number, order) in lines {
+            let entry =
+                unique.entry((selection_key.clone(), *revision)).or_insert((*line_number, *order));
+            entry.0 = entry.0.min(*line_number);
+            entry.1 = entry.1.min(*order);
         }
+        let position = owner_positions[owner_id.as_str()];
+        ordered.extend(unique.into_iter().map(|((selection_key, revision), (line, order))| {
+            (position, order, line, selection_key, revision)
+        }));
     }
-    let mut reordered = selections;
-    reordered.sort_by_key(|selection| {
-        selection_owners
-            .get(selection.selection_key.as_str())
-            .and_then(|owner| owner_positions.get(owner))
-            .copied()
-            .unwrap_or(usize::MAX)
-    });
-    Ok(Some(reordered))
+    ordered.sort_by_key(|(position, order, line, _, _)| (*position, *order, *line));
+    let rendered = ordered
+        .into_iter()
+        .map(|(_, _, _, selection_key, revision)| SourceLineSelection { selection_key, revision })
+        .collect::<Vec<_>>();
+    let rendered_keys = rendered
+        .iter()
+        .map(|selection| (selection.selection_key.as_str(), selection.revision))
+        .collect::<HashSet<_>>();
+    if rendered_keys.len() != rendered.len() {
+        return Err(SourceRenderError::new("owner ordering selected duplicate source lines"));
+    }
+    Ok(Some(rendered))
 }
 
 /// Select source regions in baseline line order, taking structural and attached
