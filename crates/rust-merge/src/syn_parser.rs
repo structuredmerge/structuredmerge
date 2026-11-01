@@ -63,10 +63,10 @@ impl RustSynParserProvider {
             .collect::<std::collections::HashSet<_>>();
         let target = match impl_type_path(&item.self_ty) {
             Some(_) if type_has_concrete_arguments(&item.self_ty, &generic_parameters) => {
-                token_identity(source, &item.self_ty)?
+                token_identity(source, &item.self_ty, &item.generics)?
             }
             Some(target) => target,
-            None => token_identity(source, &item.self_ty)?,
+            None => token_identity(source, &item.self_ty, &item.generics)?,
         };
         let trait_path = match item.trait_.as_ref() {
             Some((_, path, _)) => {
@@ -77,7 +77,7 @@ impl RustSynParserProvider {
                     .collect::<Vec<_>>()
                     .join("::");
                 if path_has_concrete_arguments(path, &generic_parameters) {
-                    token_identity(source, path)?
+                    token_identity(source, path, &item.generics)?
                 } else {
                     simple
                 }
@@ -427,9 +427,64 @@ fn item_facts(
     (kind, native_type, name, semantic_identity)
 }
 
-fn token_identity<T: syn::spanned::Spanned>(source: &str, node: &T) -> Option<String> {
+fn token_identity<T: syn::spanned::Spanned>(
+    source: &str,
+    node: &T,
+    generics: &syn::Generics,
+) -> Option<String> {
     let range = node.span().byte_range();
-    source.get(range)?.parse::<proc_macro2::TokenStream>().ok().map(|tokens| tokens.to_string())
+    let mut generic_names = std::collections::HashMap::new();
+    let mut type_index = 0;
+    let mut const_index = 0;
+    let mut lifetime_index = 0;
+    for parameter in &generics.params {
+        let (name, canonical) = match parameter {
+            syn::GenericParam::Lifetime(parameter) => {
+                let canonical = format!("__sm_lifetime_{lifetime_index}");
+                lifetime_index += 1;
+                (parameter.lifetime.ident.to_string(), canonical)
+            }
+            syn::GenericParam::Type(parameter) => {
+                let canonical = format!("__sm_type_{type_index}");
+                type_index += 1;
+                (parameter.ident.to_string(), canonical)
+            }
+            syn::GenericParam::Const(parameter) => {
+                let canonical = format!("__sm_const_{const_index}");
+                const_index += 1;
+                (parameter.ident.to_string(), canonical)
+            }
+        };
+        generic_names.insert(name, canonical);
+    }
+    let tokens = source.get(range)?.parse::<proc_macro2::TokenStream>().ok()?;
+    Some(normalize_generic_tokens(tokens, &generic_names).to_string())
+}
+
+fn normalize_generic_tokens(
+    tokens: proc_macro2::TokenStream,
+    generic_names: &std::collections::HashMap<String, String>,
+) -> proc_macro2::TokenStream {
+    tokens
+        .into_iter()
+        .map(|token| match token {
+            proc_macro2::TokenTree::Ident(ident) => generic_names
+                .get(&ident.to_string())
+                .map(|canonical| {
+                    proc_macro2::TokenTree::Ident(proc_macro2::Ident::new(canonical, ident.span()))
+                })
+                .unwrap_or(proc_macro2::TokenTree::Ident(ident)),
+            proc_macro2::TokenTree::Group(group) => {
+                let mut normalized = proc_macro2::Group::new(
+                    group.delimiter(),
+                    normalize_generic_tokens(group.stream(), generic_names),
+                );
+                normalized.set_span(group.span());
+                proc_macro2::TokenTree::Group(normalized)
+            }
+            token => token,
+        })
+        .collect()
 }
 
 fn type_has_concrete_arguments(
@@ -852,6 +907,7 @@ mod tests {
             "struct Value<T>(T);\n",
             "impl Convert<u8> for Value<u8> {}\n",
             "impl Convert<String> for Value<String> {}\n",
+            "impl<X> Convert<Vec<X>> for Value<Vec<X>> {}\n",
             "impl Marker for (u8, u16) {}\n",
         );
         let registry = ParserRegistry::default();
@@ -873,6 +929,7 @@ mod tests {
             [
                 "/impl:Convert < u8 >|Value < u8 >|positive|0",
                 "/impl:Convert < String >|Value < String >|positive|0",
+                "/impl:Convert < Vec < __sm_type_0 >>|Value < Vec < __sm_type_0 >>|positive|1",
                 "/impl:Marker|(u8 , u16)|positive|0"
             ]
         );
