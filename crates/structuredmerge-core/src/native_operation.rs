@@ -204,6 +204,14 @@ fn analysis_failure_diagnostic(
             DiagnosticLayer::Analysis,
             vec![source_ref],
         ),
+        ast_merge::typed_merge::NativeAnalysisFailureKind::AmbiguousOwner => diagnostic(
+            result,
+            PortableCategory::Ambiguity,
+            "analysis.ambiguous_owner",
+            error.message,
+            DiagnosticLayer::Analysis,
+            vec![source_ref],
+        ),
         ast_merge::typed_merge::NativeAnalysisFailureKind::UnsafeSourceRange => diagnostic(
             result,
             PortableCategory::UnsafeSourceRange,
@@ -535,8 +543,7 @@ pub(crate) fn execute_native_operation_with_service(
             "bash" => bash_merge::typed::analysis_with_diagnostics(&parsed[0]),
             "go" => go_merge::typed::analysis(&parsed[0])
                 .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported),
-            "rust" => rust_merge::typed::analysis(&parsed[0])
-                .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported),
+            "rust" => rust_merge::typed::analysis_with_diagnostics(&parsed[0]),
             "typescript" => typescript_merge::typed::analysis(&parsed[0])
                 .map_err(ast_merge::typed_merge::NativeAnalysisError::unsupported),
             _ => unreachable!("profile already selected"),

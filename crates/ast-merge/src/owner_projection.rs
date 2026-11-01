@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt};
 
 use tree_haver::{NodeRole, NormalizedTreeIndex, NormalizedTreeNode};
 
@@ -25,6 +25,34 @@ pub struct NamedOwnerProjectionPolicy<'a> {
     pub fallback_name_kinds: &'a [&'a str],
     pub accept_any_named_kind: bool,
     pub comment_attachment_policy: CommentAttachmentPolicy,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum NamedOwnerProjectionError {
+    Unsupported(String),
+    AmbiguousOwner(String),
+}
+
+impl fmt::Display for NamedOwnerProjectionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unsupported(message) | Self::AmbiguousOwner(message) => {
+                formatter.write_str(message)
+            }
+        }
+    }
+}
+
+impl From<String> for NamedOwnerProjectionError {
+    fn from(message: String) -> Self {
+        Self::Unsupported(message)
+    }
+}
+
+impl From<&str> for NamedOwnerProjectionError {
+    fn from(message: &str) -> Self {
+        Self::Unsupported(message.to_string())
+    }
 }
 
 pub fn project_named_top_level_owners(
@@ -59,6 +87,23 @@ pub fn project_named_top_level_analysis_with_comment_scope(
     policy: NamedOwnerProjectionPolicy<'_>,
     comment_scope: impl Fn(&NormalizedTreeNode) -> CommentScope,
 ) -> Result<crate::native_analysis::NativeOwnerAnalysis, String> {
+    project_named_top_level_analysis_with_classified_errors(
+        source,
+        root_id,
+        nodes,
+        policy,
+        comment_scope,
+    )
+    .map_err(|error| error.to_string())
+}
+
+pub fn project_named_top_level_analysis_with_classified_errors(
+    source: &str,
+    root_id: &str,
+    nodes: &[NormalizedTreeNode],
+    policy: NamedOwnerProjectionPolicy<'_>,
+    comment_scope: impl Fn(&NormalizedTreeNode) -> CommentScope,
+) -> Result<crate::native_analysis::NativeOwnerAnalysis, NamedOwnerProjectionError> {
     let index = NormalizedTreeIndex::new(nodes)?;
     let root = index.root(root_id)?;
     let mut owners = Vec::new();
@@ -92,13 +137,13 @@ pub fn project_named_top_level_analysis_with_comment_scope(
         let name = owner_name(owner_node, &index, policy)?;
         let path = format!("/{path_kind}:{name}");
         if !owner_ids.insert(path.clone()) {
-            return Err(format!(
+            return Err(NamedOwnerProjectionError::AmbiguousOwner(format!(
                 "{} document has duplicate top-level owner identity {path:?}",
                 policy.family
-            ));
+            )));
         }
         if top_level.source_fragment.is_empty() {
-            return Err(format!("{} owner {path:?} has no source fragment", policy.family));
+            return Err(format!("{} owner {path:?} has no source fragment", policy.family).into());
         }
 
         let prefix_nodes =
@@ -134,7 +179,9 @@ pub fn project_named_top_level_analysis_with_comment_scope(
     }
 
     if owners.is_empty() {
-        return Err(format!("{} document has no supported top-level named owners", policy.family));
+        return Err(
+            format!("{} document has no supported top-level named owners", policy.family).into()
+        );
     }
 
     attached_comment_node_ids = attach_normalized_comment_ranges(

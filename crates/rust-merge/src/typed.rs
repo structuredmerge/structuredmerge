@@ -19,6 +19,12 @@ pub struct RustSourceLineAnalysis {
 }
 
 pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
+    analysis_with_diagnostics(parsed).map_err(|error| error.message)
+}
+
+pub fn analysis_with_diagnostics(
+    parsed: &ParsedResult,
+) -> Result<NativeOwnerAnalysis, ast_merge::typed_merge::NativeAnalysisError> {
     if !parsed.backend.languages.iter().any(|language| language == "rust") {
         return Err("Rust analysis requires a Rust parser".into());
     }
@@ -40,7 +46,7 @@ pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
     }
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
     let parser_is_syn = parsed.backend.parser == "syn";
-    let mut analysis = ast_merge::project_named_top_level_analysis_with_comment_scope(
+    let mut analysis = ast_merge::project_named_top_level_analysis_with_classified_errors(
         source,
         root,
         &nodes,
@@ -52,7 +58,15 @@ pub fn analysis(parsed: &ParsedResult) -> Result<NativeOwnerAnalysis, String> {
                 CommentScope::Owner
             }
         },
-    )?;
+    )
+    .map_err(|error| match error {
+        ast_merge::NamedOwnerProjectionError::Unsupported(message) => {
+            ast_merge::typed_merge::NativeAnalysisError::unsupported(message)
+        }
+        ast_merge::NamedOwnerProjectionError::AmbiguousOwner(message) => {
+            ast_merge::typed_merge::NativeAnalysisError::ambiguous_owner(message)
+        }
+    })?;
     // A native `syn` provider already supplies authoritative Rust item spans.
     // Keep its projected owners and comment nodes as the source of truth instead
     // of reparsing through Tree-sitter as an acceptance gate. The legacy

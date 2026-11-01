@@ -36,6 +36,7 @@ pub enum NativeMergeError {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeAnalysisFailureKind {
     UnsupportedFeature,
+    AmbiguousOwner,
     UnsafeSourceRange,
 }
 
@@ -48,6 +49,22 @@ pub struct NativeAnalysisError {
 impl NativeAnalysisError {
     pub fn unsupported(message: impl Into<String>) -> Self {
         Self { kind: NativeAnalysisFailureKind::UnsupportedFeature, message: message.into() }
+    }
+
+    pub fn ambiguous_owner(message: impl Into<String>) -> Self {
+        Self { kind: NativeAnalysisFailureKind::AmbiguousOwner, message: message.into() }
+    }
+}
+
+impl From<String> for NativeAnalysisError {
+    fn from(message: String) -> Self {
+        Self::unsupported(message)
+    }
+}
+
+impl From<&str> for NativeAnalysisError {
+    fn from(message: &str) -> Self {
+        Self::unsupported(message)
     }
 }
 

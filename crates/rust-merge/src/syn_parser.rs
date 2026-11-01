@@ -784,10 +784,11 @@ mod tests {
             .parse_batch(vec![request(source)], &registry.snapshot().unwrap(), &context())
             .unwrap()
             .remove(0);
-        let error = crate::typed::analysis(&parsed).unwrap_err();
-        assert!(error.contains("duplicate top-level owner identity"));
+        let error = crate::typed::analysis_with_diagnostics(&parsed).unwrap_err();
+        assert_eq!(error.kind, ast_merge::typed_merge::NativeAnalysisFailureKind::AmbiguousOwner);
+        assert!(error.message.contains("duplicate top-level owner identity"));
         assert!(
-            error.contains(
+            error.message.contains(
                 fixture["duplicate_identity"]["expected"]["owner_path"].as_str().unwrap()
             )
         );
