@@ -366,7 +366,8 @@ pub fn line_selection_postprocessor(
     let merged_order = compatible_stable_owner_order(&analyses);
     if order_error && merged_order.is_none() && one_sided_owner_order_revision(&analyses).is_none()
     {
-        return Ok(false);
+        record_divergent_owner_order_conflict(&analyses, evidence);
+        return Ok(true);
     }
     let rendered = match render_line_selected_output(&analyses, evidence, merged_order.as_deref()) {
         Ok(Some(rendered)) => rendered,
@@ -389,7 +390,7 @@ pub fn line_selection_postprocessor(
                     severity: ast_merge::DiagnosticSeverity::Error,
                     category: ast_merge::DiagnosticCategory::MergeConflict,
                     message: conflict.message.clone(),
-                    path: Some(path),
+                    path: Some(path.clone()),
                     review: None,
                 }],
                 conflicts: vec![conflict],
@@ -442,6 +443,81 @@ pub fn line_selection_postprocessor(
     evidence.result.conflicts.clear();
     evidence.result.output = Some(rendered.content);
     Ok(true)
+}
+
+fn record_divergent_owner_order_conflict(
+    analyses: &[RustSourceLineAnalysis; 3],
+    evidence: &mut SourcePreservingMergeEvidence,
+) {
+    let conflict_id = "rust-owner-order-divergence".to_string();
+    let path = "<owner-order>".to_string();
+    let message = "Rust tips impose incompatible pairwise owner orders.".to_string();
+    let revisions = [
+        ast_merge::SourceRevision::Base,
+        ast_merge::SourceRevision::Ours,
+        ast_merge::SourceRevision::Theirs,
+    ];
+    let alternatives = revisions
+        .iter()
+        .zip(analyses)
+        .map(|(revision, analysis)| ast_merge::ConflictAlternative {
+            revision: *revision,
+            state: ast_merge::ConflictAlternativeState::Present,
+            regions: analysis
+                .owners
+                .document
+                .owners
+                .iter()
+                .map(|owner| ast_merge::OwnedSourceRegion {
+                    node_id: owner.id.clone(),
+                    region_kind: "structural_owner".to_string(),
+                    start_byte: owner.start_byte,
+                    end_byte: owner.end_byte,
+                    start_line: owner.start_line,
+                    end_line: owner.end_line,
+                })
+                .collect(),
+        })
+        .collect();
+    let conflict = ast_merge::MergeConflict {
+        conflict_id: conflict_id.clone(),
+        category: "owner_order_conflict".to_string(),
+        path: path.clone(),
+        fallback_scope: "full_file".to_string(),
+        message: message.clone(),
+        alternatives,
+    };
+    evidence.result = ast_merge::ThreeWayMergeResult {
+        outcome: ast_merge::ThreeWayMergeOutcome::Conflict,
+        diagnostics: vec![ast_merge::Diagnostic {
+            severity: ast_merge::DiagnosticSeverity::Error,
+            category: ast_merge::DiagnosticCategory::MergeConflict,
+            message,
+            path: Some(path.clone()),
+            review: None,
+        }],
+        conflicts: vec![conflict],
+        output: None,
+        policies: vec![],
+    };
+    let base_source = &analyses[0].owners.document.source;
+    let ours_source = &analyses[1].owners.document.source;
+    let theirs_source = &analyses[2].owners.document.source;
+    evidence.source_segments.clear();
+    evidence.classification = Some(ast_merge::OwnerMergeClassification {
+        base_equals_ours: base_source == ours_source,
+        base_equals_theirs: base_source == theirs_source,
+        ours_equals_theirs: ours_source == theirs_source,
+        whole_source_selection: None,
+        decisions: vec![ast_merge::OwnerDecisionEvidence {
+            id: "decision.rust-owner-order-divergence".to_string(),
+            owner_id: "<owner-order>".to_string(),
+            path: path.clone(),
+            kind: ast_merge::OwnerDecisionKind::ConflictEditEdit,
+            alternatives: evidence.result.conflicts[0].alternatives.clone(),
+            conflict_id: Some(conflict_id),
+        }],
+    });
 }
 
 fn is_recoverable_owner_layout_error(evidence: &SourcePreservingMergeEvidence) -> bool {

@@ -1033,10 +1033,23 @@ fn native_syn_fails_closed_on_two_sided_owner_reorders() {
         RustBackend::Native,
     );
 
-    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Error, "{:?}", result.diagnostics);
+    assert_eq!(
+        result.outcome,
+        ast_merge::ThreeWayMergeOutcome::Conflict,
+        "{:?}",
+        result.diagnostics
+    );
     assert!(result.output.is_none());
-    assert!(result.diagnostics.iter().any(|diagnostic| {
-        diagnostic.category == ast_merge::DiagnosticCategory::UnsupportedFeature
+    assert_eq!(result.diagnostics[0].category, ast_merge::DiagnosticCategory::MergeConflict);
+    assert_eq!(result.diagnostics[0].path.as_deref(), Some("<owner-order>"));
+    assert_eq!(result.conflicts.len(), 1);
+    assert_eq!(result.conflicts[0].conflict_id, "rust-owner-order-divergence");
+    assert_eq!(result.conflicts[0].category, "owner_order_conflict");
+    assert_eq!(result.conflicts[0].fallback_scope, "full_file");
+    assert_eq!(result.conflicts[0].alternatives.len(), 3);
+    assert!(result.conflicts[0].alternatives.iter().all(|alternative| {
+        alternative.state == ast_merge::ConflictAlternativeState::Present
+            && !alternative.regions.is_empty()
     }));
 }
 
