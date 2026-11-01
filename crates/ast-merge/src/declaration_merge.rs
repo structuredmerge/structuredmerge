@@ -267,7 +267,14 @@ fn merge_owners(
         let base_layout = layout_segments_for_ids(base, &stable_ids);
         let ours_layout = layout_segments_for_ids(ours, &stable_ids);
         let theirs_layout = layout_segments_for_ids(theirs, &stable_ids);
-        base_layout == ours_layout && base_layout == theirs_layout
+        match (base_layout, ours_layout, theirs_layout) {
+            (Ok(base_layout), Ok(ours_layout), Ok(theirs_layout)) => {
+                base_layout == ours_layout && base_layout == theirs_layout
+            }
+            (Err(message), _, _) | (_, Err(message), _) | (_, _, Err(message)) => {
+                return error_result(DiagnosticCategory::ConfigurationError, message);
+            }
+        }
     } else {
         base.layout_segments() == ours.layout_segments()
             && base.layout_segments() == theirs.layout_segments()
@@ -395,19 +402,55 @@ fn owner_for_revision<'a>(
 fn layout_segments_for_ids(
     document: &SourcePreservingOwnerDocument,
     ids: &HashSet<String>,
-) -> Vec<String> {
+) -> Result<Vec<String>, String> {
     let mut cursor = 0;
     let mut segments = Vec::new();
     for owner in &document.owners {
-        if ids.contains(&owner.id) {
-            segments.push(document.source[cursor..owner.start_byte].to_string());
-            cursor = owner.end_byte;
-        } else {
-            cursor = owner.end_byte;
+        let owned_lines = physical_line_range(document, owner)?;
+        if owned_lines.start < cursor {
+            return Err(format!("owner {} shares a physical line with a prior owner", owner.path));
         }
+        if ids.contains(&owner.id) {
+            segments.push(document.source[cursor..owned_lines.start].to_string());
+        }
+        cursor = owned_lines.end;
     }
     segments.push(document.source[cursor..].to_string());
-    segments
+    Ok(segments)
+}
+
+/// Ruby's layout contract treats an owner's start/end line as complete physical
+/// lines. For source comparison, that includes indentation and the terminating
+/// LF (or CRLF), even though parser byte spans stop at the last syntax token.
+fn physical_line_range(
+    document: &SourcePreservingOwnerDocument,
+    owner: &SourcePreservingOwner,
+) -> Result<std::ops::Range<usize>, String> {
+    let mut starts = vec![0];
+    starts.extend(
+        document
+            .source
+            .bytes()
+            .enumerate()
+            .filter_map(|(index, byte)| (byte == b'\n').then_some(index + 1)),
+    );
+    let start = *starts
+        .get(owner.start_line.saturating_sub(1))
+        .ok_or_else(|| format!("owner {} starts beyond the source line count", owner.path))?;
+    let end_line_start = *starts
+        .get(owner.end_line.saturating_sub(1))
+        .ok_or_else(|| format!("owner {} ends beyond the source line count", owner.path))?;
+    let end = document.source[end_line_start..]
+        .find('\n')
+        .map(|offset| end_line_start + offset + 1)
+        .unwrap_or(document.source.len());
+    if owner.start_byte < start || owner.end_byte > end {
+        return Err(format!(
+            "owner {} byte span does not fit its declared physical lines",
+            owner.path
+        ));
+    }
+    Ok(start..end)
 }
 
 fn classify_owner(
@@ -590,6 +633,49 @@ mod tests {
 
         assert_eq!(result.outcome, ThreeWayMergeOutcome::Clean);
         assert_eq!(result.output.as_deref(), Some("ONE\n\nTWO\n"));
+    }
+
+    #[test]
+    fn membership_layout_comparison_uses_shared_physical_line_fixture() {
+        let fixture_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../fixtures/polyglot/ast-merge/layout_line_ownership.json");
+        let fixture: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(fixture_path).unwrap()).unwrap();
+        let case = &fixture["physical_line_case"];
+        let stable = case["stable_owner_ids"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|id| id.as_str().unwrap().to_string())
+            .collect::<HashSet<_>>();
+        for entry in case["documents"].as_array().unwrap() {
+            let document = SourcePreservingOwnerDocument {
+                source: entry["source"].as_str().unwrap().to_string(),
+                owners: entry["owners"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|item| SourcePreservingOwner {
+                        id: item["id"].as_str().unwrap().to_string(),
+                        path: item["id"].as_str().unwrap().to_string(),
+                        fingerprint: item["fingerprint"].as_str().unwrap().to_string(),
+                        start_byte: item["start_byte"].as_u64().unwrap() as usize,
+                        end_byte: item["end_byte"].as_u64().unwrap() as usize,
+                        start_line: item["start_line"].as_u64().unwrap() as usize,
+                        end_line: item["end_line"].as_u64().unwrap() as usize,
+                    })
+                    .collect(),
+            };
+            assert_eq!(
+                layout_segments_for_ids(&document, &stable).unwrap(),
+                case["expected_stable_layout_segments"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|segment| segment.as_str().unwrap())
+                    .collect::<Vec<_>>()
+            );
+        }
     }
 
     #[test]
