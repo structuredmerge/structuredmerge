@@ -163,7 +163,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: structuredmerge/structuredmerge-fixtures
-          ref: e726091fb0e464dd426d45cf93a38529dc3780c1
+          ref: f0376d46b9ba91f508a2670aabd0c6c7e3eeb83e
           path: shared-fixtures
       - name: Place fixtures beside kernel
         shell: bash

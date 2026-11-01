@@ -1227,6 +1227,26 @@ fn native_syn_composes_crate_doc_edit_with_reorder_and_removal() {
 }
 
 #[test]
+fn native_syn_preserves_unicode_crlf_comments_and_missing_final_newline() {
+    let fixture = read_fixture(&[
+        "polyglot",
+        "typed-core",
+        "rust_merge3_crlf_unicode_comments_no_final_newline.json",
+    ]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{result:?}");
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+}
+
+#[test]
 fn native_syn_reports_conflict_when_reorder_crosses_an_added_owner_gap() {
     let fixture =
         read_fixture(&["polyglot", "typed-core", "rust_merge3_reorder_crossed_gap_boundary.json"]);
