@@ -92,9 +92,9 @@ successful installation, exact parser byte preservation, and the expected
 clean merge result. Timings are evidence, not pass/fail thresholds, because
 runner, filesystem, network, and package caches are not controlled.
 
-Hosted Alef generation remains opt-in for cost control. Released Alef 0.94.0
-supports the current `send_sync_types` configuration, so local and hosted
-verification use the released tool. Do not add an unrecorded branch or
+Hosted Alef generation remains opt-in for cost control. The released Alef pinned in
+`workspace-scripts/alef-version` is used for local and hosted verification;
+bump it to the latest release often. Do not add an unrecorded branch or
 floating Git reference to the hosted build chain.
 
 ## Capability Discovery

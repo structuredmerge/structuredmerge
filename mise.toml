@@ -1,6 +1,6 @@
 [tools]
 rust = "stable"
-"github:xberg-io/alef" = "0.89.0"
+"github:xberg-io/alef" = "latest"
 ruby = "4.0.9"
 
 [tasks.format]

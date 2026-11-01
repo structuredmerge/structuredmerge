@@ -69,7 +69,7 @@ jobs:
         uses: xberg-io/actions/prepare-release-metadata@v1
         with:
           available-targets: "crates,python,ruby"
-          alef-version: "0.94.0"
+          alef-version: "0.115.14"
           targets: ${{ inputs.targets || github.event.client_payload.targets || '' }}
           tag: ${{ inputs.release_tag || github.event.release.tag_name || github.event.client_payload.tag || '' }}
           dry-run: ${{ inputs.dry_run || 'false' }}
@@ -267,7 +267,7 @@ jobs:
         with:
           package-dir: packages/python
           output-dir: dist
-          alef-version: "0.94.0"
+          alef-version: "0.115.14"
           dry-run: ${{ needs.prepare.outputs.dry_run }}
       - name: Upload source distribution
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -407,7 +407,7 @@ jobs:
       - name: Install Alef
         uses: xberg-io/actions/install-alef@v1
         with:
-          version: "0.94.0"
+          version: "0.115.14"
       - name: Setup Ruby
         uses: appraisal-rb/setup-ruby-flash@4ee08a66f0a60f7bb129d5d0e997042f935d1904 # v2.5
         with:

@@ -19,20 +19,9 @@ TreeHaver owns the registry, source validation, selection, dispatch, and result
 validation. Callback batches contain generated records, not whole-operation
 JSON strings. Native syntax failures retain their parse diagnostics.
 
-Ruby and Python bindings are generated from the active `alef.toml`. Initial
-Ruby/Psych and installed Python-wheel/LibCST callback smoke tests pass with
-targeted local Alef fixes. Upstream Alef 0.89.0 cannot yet reproduce compiling
-bindings for this surface: callback-only return DTO conversions and PyO3
-trait-parameter construction/error conversion require upstream fixes. This is
-development evidence, not an upstream-generation or publication gate pass.
-
-The development generator is upstream v0.89.0 plus local commit `acd0469`
-in the separate `tmp/alef-typed-bridge` checkout at workspace level. Its
-`target/debug/alef generate --skip-compile --clean` produced this checkpoint;
-generated sources were not hand-edited. `alef.toml` still names the official
-release, not a fork dependency. Reproducible generation with the declared
-upstream pin is therefore an **open gate**, not a passing check. Replace this
-development checkpoint with output from a released upstream fix before release.
+Ruby and Python bindings are generated from the active `alef.toml` with the upstream
+release pinned in `workspace-scripts/alef-version` (bumped to the latest release often;
+no local Alef fork is used). `alef verify --exit-code` must stay clean.
 
 The facade also exposes `merge_yaml_mapping`, a concrete projection of the
 existing YAML block-mapping operation. Generated Ruby/Psych tests exercise real

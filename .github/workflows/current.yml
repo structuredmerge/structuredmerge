@@ -355,8 +355,8 @@ jobs:
 
   alef:
     name: Alef generation
-    # Hosted generation is opt-in for cost control. Released Alef 0.94.0
-    # supports the current send_sync_types configuration.
+    # Hosted generation is opt-in for cost control. The released Alef
+    # pinned in workspace-scripts/alef-version generates the committed bindings.
     if: ${{ vars.STRUCTUREDMERGE_ALEF_CI == 'true' }}
     runs-on: ubuntu-latest
     steps:
