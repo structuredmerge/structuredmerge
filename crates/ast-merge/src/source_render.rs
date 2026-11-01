@@ -305,6 +305,97 @@ pub fn render_source_plan(
     Ok(renderer.finish())
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SourceLineSelection {
+    pub selection_key: String,
+    pub revision: SourceRevision,
+}
+
+/// Build an exact-byte render plan from ordered semantic line selections.
+/// Each selection names one contiguous ownership region in one source revision.
+pub fn source_render_plan_from_line_selections(
+    sources: HashMap<SourceRevision, String>,
+    dispositions: HashMap<SourceRevision, Vec<crate::SourceLineDisposition>>,
+    selections: &[SourceLineSelection],
+) -> Result<SourceRenderPlan, SourceRenderError> {
+    let mut ranges = HashMap::<SourceRevision, HashMap<String, (usize, usize, String)>>::new();
+    for (revision, records) in &dispositions {
+        let source = sources.get(revision).ok_or_else(|| {
+            SourceRenderError::new(format!("source revision {revision:?} has no source text"))
+        })?;
+        let lines = source_lines(source);
+        if lines.len() != records.len() {
+            return Err(SourceRenderError::new(format!(
+                "{revision:?} has {} line dispositions for {} source lines",
+                records.len(),
+                lines.len()
+            )));
+        }
+        let mut revision_ranges = HashMap::new();
+        for (index, (line, record)) in lines.iter().zip(records).enumerate() {
+            let line_number = index + 1;
+            if record.line_number != line_number || record.line != *line {
+                return Err(SourceRenderError::new(format!(
+                    "{revision:?} line disposition {line_number} does not match its source bytes"
+                )));
+            }
+            if record.selection_key.is_empty() {
+                return Err(SourceRenderError::new(format!(
+                    "{revision:?} line {line_number} has no source selection key"
+                )));
+            }
+            match revision_ranges.entry(record.selection_key.clone()) {
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert((line_number, line_number, record.kind.clone()));
+                }
+                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                    let range = entry.get_mut();
+                    if range.1 + 1 != line_number {
+                        return Err(SourceRenderError::new(format!(
+                            "{revision:?} source selection key {} is not contiguous",
+                            record.selection_key
+                        )));
+                    }
+                    range.1 = line_number;
+                }
+            }
+        }
+        ranges.insert(*revision, revision_ranges);
+    }
+
+    let mut selected_keys = std::collections::HashSet::new();
+    let mut fragments = Vec::with_capacity(selections.len());
+    for selection in selections {
+        if selection.selection_key.is_empty()
+            || !selected_keys.insert(selection.selection_key.as_str())
+        {
+            return Err(SourceRenderError::new(
+                "source line selections have an empty or duplicate key",
+            ));
+        }
+        let (start_line, end_line, disposition_kind) = ranges
+            .get(&selection.revision)
+            .and_then(|by_key| by_key.get(&selection.selection_key))
+            .cloned()
+            .ok_or_else(|| {
+                SourceRenderError::new(format!(
+                    "selection key {} is absent from {:?}",
+                    selection.selection_key, selection.revision
+                ))
+            })?;
+        fragments.push(RenderFragment::Source(SourceFragment {
+            revision: selection.revision,
+            start_line,
+            end_line,
+            metadata: HashMap::from([
+                ("selection_key".to_string(), serde_json::json!(selection.selection_key)),
+                ("disposition_kind".to_string(), serde_json::json!(disposition_kind)),
+            ]),
+        }));
+    }
+    SourceRenderPlan::new(sources, fragments)
+}
+
 pub fn localized_conflict_render_plan(
     sources: HashMap<SourceRevision, String>,
     conflicts: &[crate::MergeConflict],

@@ -150,6 +150,7 @@ pub struct SourceLineOwner {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct SourceLineCommentRegion {
     pub id: String,
+    pub selection_key: String,
     pub owner_id: Option<String>,
     pub kind: String,
     pub start_line: usize,
@@ -159,6 +160,7 @@ pub struct SourceLineCommentRegion {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct SourceLineLayoutGap {
     pub id: String,
+    pub selection_key: String,
     pub kind: String,
     pub start_line: usize,
     pub end_line: usize,
@@ -173,6 +175,7 @@ pub struct SourceLineDisposition {
     pub line_number: usize,
     pub line: String,
     pub kind: String,
+    pub selection_key: String,
     pub owner_id: Option<String>,
     pub comment_region_ids: Vec<String>,
     pub comment_kind: Option<String>,
@@ -197,6 +200,7 @@ pub fn source_line_dispositions(
         line_number,
         line: line.to_string(),
         kind: "unmanaged".to_string(),
+        selection_key: format!("unmanaged:{line_number}"),
         owner_id: None,
         comment_region_ids: Vec::new(),
         comment_kind: None,
@@ -222,13 +226,17 @@ pub fn source_line_dispositions(
             }
             let mut disposition = empty_record(line_number, &lines[line_number - 1]);
             disposition.kind = "structural_owner".to_string();
+            disposition.selection_key = format!("owner:{}", owner.id);
             disposition.owner_id = Some(owner.id.clone());
             *slot = Some(disposition);
         }
     }
     let mut region_ids = std::collections::HashSet::new();
     for region in comment_regions {
-        if region.id.is_empty() || !region_ids.insert(region.id.as_str()) {
+        if region.id.is_empty()
+            || region.selection_key.is_empty()
+            || !region_ids.insert(region.id.as_str())
+        {
             return Err("source comment regions have an empty or duplicate identity".to_string());
         }
         validate_line_range(
@@ -274,6 +282,7 @@ pub fn source_line_dispositions(
                 disposition.kind =
                     if root_region { "root_region" } else { "comment_owner" }.to_string();
                 disposition.owner_id = region.owner_id.clone();
+                disposition.selection_key = region.selection_key.clone();
                 disposition.comment_region_ids.push(region.id.clone());
                 if root_region {
                     disposition.root_region_kind = Some(region.kind.clone());
@@ -286,7 +295,7 @@ pub fn source_line_dispositions(
     }
     let mut gap_ids = std::collections::HashSet::new();
     for gap in layout_gaps {
-        if gap.id.is_empty() || !gap_ids.insert(gap.id.as_str()) {
+        if gap.id.is_empty() || gap.selection_key.is_empty() || !gap_ids.insert(gap.id.as_str()) {
             return Err("source layout gaps have an empty or duplicate identity".to_string());
         }
         validate_line_range(
@@ -330,6 +339,7 @@ pub fn source_line_dispositions(
             }
             let mut disposition = empty_record(line_number, &lines[line_number - 1]);
             disposition.kind = "layout_gap".to_string();
+            disposition.selection_key = gap.selection_key.clone();
             disposition.gap_id = Some(gap.id.clone());
             disposition.controller_owner_id = gap.controller_owner_id.clone();
             *slot = Some(disposition);

@@ -49,6 +49,7 @@ fn conflicting_line_dispositions_fail_closed() {
     ];
     let mismatched_comment = SourceLineCommentRegion {
         id: "comment:beta:leading:1-1".to_string(),
+        selection_key: "comment:beta:leading".to_string(),
         owner_id: Some("beta".to_string()),
         kind: "leading".to_string(),
         start_line: 1,
@@ -63,6 +64,7 @@ fn conflicting_line_dispositions_fail_closed() {
     let blank_owner = SourceLineOwner { id: "alpha".to_string(), start_line: 1, end_line: 1 };
     let overlapping_gap = SourceLineLayoutGap {
         id: "gap:1-1".to_string(),
+        selection_key: "gap:preamble:root:alpha".to_string(),
         kind: "preamble".to_string(),
         start_line: 1,
         end_line: 1,
