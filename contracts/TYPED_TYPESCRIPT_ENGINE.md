@@ -12,9 +12,14 @@ comments remain unowned layout; declaration bodies, including JSX in TSX, are
 opaque. Native name-field fragments provide identities; a destructuring pattern
 such as `{ a }` is one opaque variable identity, not separate binding ownership.
 
-This preserves existing limitations: nested wrappers such as `export const`,
-multi-declarator lexical statements, duplicate identities/overload sets, unsupported
-top-level expressions and ownerless documents fail closed. `declare namespace`
+Multi-declarator lexical statements are projected as one complete source owner
+using the ordered declarator identities supplied by the native parser. Concurrent
+edits to distinct declarators therefore return one typed whole-statement
+`edit_edit` conflict instead of an unsupported-owner error. This does not split
+statement source ownership into independently renderable declarators. Remaining
+limitations include nested wrappers such as `export const`, duplicate
+identities/overload sets, unsupported top-level expressions and ownerless
+documents, which fail closed. `declare namespace`
 works through its ambient wrapper; plain `namespace` is an unsupported expression
 wrapper with the current grammar/projector. This is not full TypeScript semantic
 analysis, import resolution, overload merging or compiler-provider promotion.
