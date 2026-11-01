@@ -425,8 +425,12 @@ fn rust_native_backend_distinguishes_concrete_generic_impl_arguments() {
 fn rust_native_backend_merges_trait_aliases_with_independent_function_edits() {
     let fixture = read_fixture(&["polyglot", "typed-core", "rust_trait_alias_merge3.json"]);
     let input = &fixture["input"];
-    let native_parse = parse_rust(input["base"].as_str().unwrap(), RustDialect::Rust);
-    assert!(native_parse.ok, "default parser should use syn: {:?}", native_parse.diagnostics);
+    let native_parse = parse_rust_with_backend(
+        input["base"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+    assert!(native_parse.ok, "explicit syn parser should accept: {:?}", native_parse.diagnostics);
     let tree_sitter_parse = parse_rust_with_backend(
         input["base"].as_str().unwrap(),
         RustDialect::Rust,
@@ -437,11 +441,12 @@ fn rust_native_backend_merges_trait_aliases_with_independent_function_edits() {
         tree_sitter_parse.diagnostics.first().map(|diagnostic| diagnostic.category),
         Some(ast_merge::DiagnosticCategory::ParseError)
     );
-    let result = merge_rust_three_way(
+    let result = merge_rust_three_way_with_backend(
         input["base"].as_str().unwrap(),
         input["ours"].as_str().unwrap(),
         input["theirs"].as_str().unwrap(),
         RustDialect::Rust,
+        RustBackend::Native,
     );
     assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{:?}", result.diagnostics);
     assert_eq!(result.output.as_deref(), Some(fixture["expected"]["output"].as_str().unwrap()));
@@ -473,7 +478,11 @@ fn rust_backends_merge_extern_crate_alias_edits_with_independent_function_edits(
 fn rust_native_backend_merges_unique_macro_invocations_as_owners() {
     let fixture = read_fixture(&["polyglot", "typed-core", "rust_macro_invocation_merge3.json"]);
     let input = &fixture["input"];
-    let native_parse = parse_rust(input["base"].as_str().unwrap(), RustDialect::Rust);
+    let native_parse = parse_rust_with_backend(
+        input["base"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
     assert!(
         native_parse.ok,
         "native syn analysis should support macro invocation owners: {:?}",
@@ -507,18 +516,20 @@ fn rust_native_backend_merges_unique_macro_invocations_as_owners() {
     );
 
     let duplicate_source = fixture["duplicate_identity"]["source"].as_str().unwrap();
-    let duplicate_parse = parse_rust(duplicate_source, RustDialect::Rust);
+    let duplicate_parse =
+        parse_rust_with_backend(duplicate_source, RustDialect::Rust, RustBackend::Native);
     assert!(!duplicate_parse.ok);
     assert_eq!(
         duplicate_parse.diagnostics.first().map(|diagnostic| diagnostic.category),
         Some(ast_merge::DiagnosticCategory::Ambiguity)
     );
 
-    let result = merge_rust_three_way(
+    let result = merge_rust_three_way_with_backend(
         input["base"].as_str().unwrap(),
         input["ours"].as_str().unwrap(),
         input["theirs"].as_str().unwrap(),
         RustDialect::Rust,
+        RustBackend::Native,
     );
     assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{:?}", result.diagnostics);
     assert_eq!(result.output.as_deref(), Some(fixture["expected"]["output"].as_str().unwrap()));

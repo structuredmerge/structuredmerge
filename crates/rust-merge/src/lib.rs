@@ -203,11 +203,11 @@ pub fn rust_plan_context(backend: RustBackend) -> ConformanceFamilyPlanContext {
 }
 
 pub fn rust_backends() -> Vec<RustBackend> {
-    vec![RustBackend::Native, RustBackend::TreeSitter]
+    vec![RustBackend::TreeSitter, RustBackend::Native]
 }
 
 pub fn parse_rust(source: &str, _dialect: RustDialect) -> ParseResult<RustAnalysis> {
-    parse_rust_with_backend(source, RustDialect::Rust, RustBackend::Native)
+    parse_rust_with_backend(source, RustDialect::Rust, RustBackend::TreeSitter)
 }
 
 fn unsupported_feature_result<T>(message: impl Into<String>) -> ParseResult<T> {
@@ -332,7 +332,7 @@ pub fn merge_rust_three_way(
         ours_source,
         theirs_source,
         dialect,
-        RustBackend::Native,
+        RustBackend::TreeSitter,
     )
 }
 
@@ -725,7 +725,7 @@ pub fn merge_rust(
     destination_source: &str,
     dialect: RustDialect,
 ) -> MergeResult<String> {
-    merge_rust_with_backend(template_source, destination_source, dialect, RustBackend::Native)
+    merge_rust_with_backend(template_source, destination_source, dialect, RustBackend::TreeSitter)
 }
 
 pub fn merge_rust_with_backend(
