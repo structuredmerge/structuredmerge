@@ -187,6 +187,31 @@ fn typed_bash_preserves_existing_family_semantics_and_verifies_noops() {
 }
 
 #[test]
+fn typed_bash_line_plan_orders_added_owners_from_selected_membership_layout() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/bash_merge3_added_owner_layout.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let texts = [
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ];
+    let parser = Parser::new("bash");
+    let legacy = bash_merge::merge_bash_three_way(texts[0], texts[1], texts[2], BashDialect::Bash);
+    let [base, ours, theirs] = parser.inputs(texts);
+    let execution =
+        typed::merge3(&base, &ours, &theirs, |text| Ok(parser.parse(text, SourceRole::Output)))
+            .unwrap();
+
+    assert_eq!(legacy.outcome, ThreeWayMergeOutcome::Clean);
+    assert_eq!(execution.evidence.result, legacy);
+    assert_eq!(legacy.output.as_deref(), fixture["expected"]["output"].as_str());
+    assert!(execution.output_parse.is_some());
+}
+
+#[test]
 fn unsupported_or_ambiguous_bash_remains_rejected() {
     let parser = Parser::new("bash");
     for source in [

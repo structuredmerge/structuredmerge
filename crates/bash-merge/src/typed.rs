@@ -380,9 +380,9 @@ pub fn merge3(
     Ok(BashMergeExecution { evidence, output_parse })
 }
 
-/// Use the shared ordered source-line renderer for owner-local merges whose
-/// ownership set is present in all three revisions. Membership edits continue
-/// through the existing remove/rehome planner until that planner emits line selections.
+/// Use the shared ordered source-line renderer for clean merges with stable
+/// selected layout. Additive membership uses the selected layout's owner order;
+/// deletion remains on the existing path until rehome selections are composed.
 fn apply_line_selected_output(
     analyses: &[BashSourceLineAnalysis; 3],
     evidence: &mut SourcePreservingMergeEvidence,
@@ -402,13 +402,20 @@ fn apply_line_selected_output(
                 .collect::<std::collections::HashSet<_>>()
         })
         .collect::<Vec<_>>();
-    if owner_ids[0] != owner_ids[1] || owner_ids[0] != owner_ids[2] {
-        return Ok(());
-    }
     let classification = evidence
         .classification
         .as_ref()
         .ok_or_else(|| "clean Bash owner merge omitted classification evidence".to_string())?;
+    let membership_changed = owner_ids[0] != owner_ids[1] || owner_ids[0] != owner_ids[2];
+    if membership_changed
+        && classification
+            .decisions
+            .iter()
+            .any(|decision| decision.kind == ast_merge::OwnerDecisionKind::Delete)
+    {
+        // Removed-owner comments and gaps need the shared boundary rehome plan.
+        return Ok(());
+    }
     let baseline_revision = if let Some(revision) = classification.whole_source_selection {
         revision
     } else {
@@ -426,12 +433,17 @@ fn apply_line_selected_output(
         }
         let selected_ids =
             owner_revisions.keys().map(String::as_str).collect::<std::collections::HashSet<_>>();
-        if selected_ids != owner_ids[1] {
-            return Err("Bash owner selections do not match the shared membership set".into());
+        if selected_ids == owner_ids[1] {
+            // The source-preserving kernel uses ours as the layout baseline
+            // when the selected owner set matches ours.
+            SourceRevision::Ours
+        } else if selected_ids == owner_ids[2] {
+            SourceRevision::Theirs
+        } else {
+            return Err(
+                "Bash owner selections do not match either selected layout membership".into()
+            );
         }
-        // The source-preserving kernel uses ours as the layout baseline when
-        // both tips have the same owner membership.
-        SourceRevision::Ours
     };
     let mut owner_revisions = HashMap::new();
     if classification.whole_source_selection.is_some() {
