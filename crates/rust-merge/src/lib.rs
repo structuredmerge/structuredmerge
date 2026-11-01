@@ -461,7 +461,7 @@ fn parse_source_preserving_rust_native_with_treesitter_comments(
             Item::Fn(item) => format!("/function:{}", item.sig.ident),
             Item::Impl(item) => format!(
                 "/impl:{}",
-                RustSynParserProvider::impl_owner_identity(item)
+                RustSynParserProvider::impl_owner_identity(item, source)
                     .ok_or_else(|| "unsupported native Rust impl target type".to_string())?
             ),
             Item::Mod(item) => format!("/mod:{}", item.ident),
@@ -960,7 +960,7 @@ fn parse_rust_native(source: &str) -> ParseResult<RustAnalysis> {
                 item.sig.ident.to_string(),
                 "function",
             )),
-            Item::Impl(item) => match RustSynParserProvider::impl_owner_identity(&item) {
+            Item::Impl(item) => match RustSynParserProvider::impl_owner_identity(&item, source) {
                 Some(identity) => {
                     declarations.push(native_declaration(source, item.span(), identity, "impl"))
                 }

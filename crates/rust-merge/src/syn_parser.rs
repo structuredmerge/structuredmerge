@@ -50,19 +50,40 @@ impl RustSynParserProvider {
         }
     }
 
-    pub(crate) fn impl_owner_identity(item: &syn::ItemImpl) -> Option<String> {
-        let target = impl_type_path(&item.self_ty)?;
-        let trait_path = item
-            .trait_
-            .as_ref()
-            .map(|(_, path, _)| {
-                path.segments
+    pub(crate) fn impl_owner_identity(item: &syn::ItemImpl, source: &str) -> Option<String> {
+        let generic_parameters = item
+            .generics
+            .params
+            .iter()
+            .map(|parameter| match parameter {
+                syn::GenericParam::Lifetime(parameter) => parameter.lifetime.ident.to_string(),
+                syn::GenericParam::Type(parameter) => parameter.ident.to_string(),
+                syn::GenericParam::Const(parameter) => parameter.ident.to_string(),
+            })
+            .collect::<std::collections::HashSet<_>>();
+        let target = match impl_type_path(&item.self_ty) {
+            Some(_) if type_has_concrete_arguments(&item.self_ty, &generic_parameters) => {
+                token_identity(source, &item.self_ty)?
+            }
+            Some(target) => target,
+            None => token_identity(source, &item.self_ty)?,
+        };
+        let trait_path = match item.trait_.as_ref() {
+            Some((_, path, _)) => {
+                let simple = path
+                    .segments
                     .iter()
                     .map(|segment| segment.ident.to_string())
                     .collect::<Vec<_>>()
-                    .join("::")
-            })
-            .unwrap_or_else(|| "<inherent>".to_string());
+                    .join("::");
+                if path_has_concrete_arguments(path, &generic_parameters) {
+                    token_identity(source, path)?
+                } else {
+                    simple
+                }
+            }
+            None => "<inherent>".to_string(),
+        };
         let polarity = if item.trait_.as_ref().is_some_and(|(negative, _, _)| negative.is_some()) {
             "negative"
         } else {
@@ -357,7 +378,7 @@ fn item_facts(
         Item::ExternCrate(_) => ("extern_crate_declaration", "syn::ItemExternCrate"),
         Item::Fn(_) => ("function_item", "syn::ItemFn"),
         Item::ForeignMod(_) => ("native_item", "syn::ItemForeignMod"),
-        Item::Impl(item) if RustSynParserProvider::impl_owner_identity(item).is_some() => {
+        Item::Impl(item) if RustSynParserProvider::impl_owner_identity(item, source).is_some() => {
             ("impl_item", "syn::ItemImpl")
         }
         Item::Impl(_) => ("native_item", "syn::ItemImpl"),
@@ -400,10 +421,78 @@ fn item_facts(
         ident.map(|ident| (ident.to_string(), ident.span().byte_range(), "identifier"))
     };
     let semantic_identity = match item {
-        Item::Impl(item) => RustSynParserProvider::impl_owner_identity(item),
+        Item::Impl(item) => RustSynParserProvider::impl_owner_identity(item, source),
         _ => None,
     };
     (kind, native_type, name, semantic_identity)
+}
+
+fn token_identity<T: syn::spanned::Spanned>(source: &str, node: &T) -> Option<String> {
+    let range = node.span().byte_range();
+    source.get(range)?.parse::<proc_macro2::TokenStream>().ok().map(|tokens| tokens.to_string())
+}
+
+fn type_has_concrete_arguments(
+    ty: &syn::Type,
+    generic_parameters: &std::collections::HashSet<String>,
+) -> bool {
+    match ty {
+        syn::Type::Path(path) => path_has_concrete_arguments(&path.path, generic_parameters),
+        syn::Type::Reference(reference) => {
+            type_has_concrete_arguments(&reference.elem, generic_parameters)
+        }
+        syn::Type::Ptr(pointer) => type_has_concrete_arguments(&pointer.elem, generic_parameters),
+        syn::Type::Paren(paren) => type_has_concrete_arguments(&paren.elem, generic_parameters),
+        syn::Type::Group(group) => type_has_concrete_arguments(&group.elem, generic_parameters),
+        syn::Type::Slice(slice) => type_has_concrete_arguments(&slice.elem, generic_parameters),
+        _ => false,
+    }
+}
+
+fn path_has_concrete_arguments(
+    path: &syn::Path,
+    generic_parameters: &std::collections::HashSet<String>,
+) -> bool {
+    path.segments.iter().any(|segment| match &segment.arguments {
+        syn::PathArguments::None => false,
+        syn::PathArguments::Parenthesized(_) => true,
+        syn::PathArguments::AngleBracketed(arguments) => arguments.args.iter().any(|argument| {
+            match argument {
+                syn::GenericArgument::Type(syn::Type::Path(path))
+                    if path.qself.is_none()
+                        && path.path.segments.len() == 1
+                        && matches!(path.path.segments[0].arguments, syn::PathArguments::None) =>
+                {
+                    !generic_parameters.contains(&path.path.segments[0].ident.to_string())
+                }
+                syn::GenericArgument::Lifetime(lifetime) => {
+                    !generic_parameters.contains(&lifetime.ident.to_string())
+                }
+                syn::GenericArgument::Const(syn::Expr::Path(path))
+                    if path.qself.is_none() && path.path.segments.len() == 1 =>
+                {
+                    !generic_parameters.contains(&path.path.segments[0].ident.to_string())
+                }
+                syn::GenericArgument::Type(ty) => {
+                    type_has_concrete_arguments(ty, generic_parameters)
+                        || !matches!(
+                            ty,
+                            syn::Type::Path(path)
+                                if path.qself.is_none()
+                                    && path.path.segments.len() == 1
+                                    && matches!(path.path.segments[0].arguments, syn::PathArguments::None)
+                                    && generic_parameters.contains(&path.path.segments[0].ident.to_string())
+                        )
+                }
+                syn::GenericArgument::Const(_) => true,
+                syn::GenericArgument::AssocType(_)
+                | syn::GenericArgument::AssocConst(_)
+                | syn::GenericArgument::Constraint(_)
+                => true,
+                _ => true,
+            }
+        }),
+    })
 }
 
 fn impl_type_path(ty: &syn::Type) -> Option<String> {
@@ -753,6 +842,40 @@ mod tests {
         assert!(comment.semantic_roles.iter().any(|role| role == "inner_doc_comment"));
         let analysis = crate::typed::analysis(&parsed).unwrap();
         assert!(!analysis.attached_comment_node_ids.contains_key("/function:stable"));
+    }
+
+    #[test]
+    fn native_impl_identity_distinguishes_concrete_generic_arguments() {
+        let source = concat!(
+            "trait Convert<T> {}\n",
+            "trait Marker {}\n",
+            "struct Value<T>(T);\n",
+            "impl Convert<u8> for Value<u8> {}\n",
+            "impl Convert<String> for Value<String> {}\n",
+            "impl Marker for (u8, u16) {}\n",
+        );
+        let registry = ParserRegistry::default();
+        registry.register(Arc::new(RustSynParserProvider::new("rust.syn.test"))).unwrap();
+        let parsed = TreeHaverParseService::default()
+            .parse_batch(vec![request(source)], &registry.snapshot().unwrap(), &context())
+            .unwrap()
+            .remove(0);
+        let analysis = crate::typed::analysis(&parsed).unwrap();
+        let impl_paths = analysis
+            .document
+            .owners
+            .iter()
+            .filter(|owner| owner.id.starts_with("/impl:"))
+            .map(|owner| owner.id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            impl_paths,
+            [
+                "/impl:Convert < u8 >|Value < u8 >|positive|0",
+                "/impl:Convert < String >|Value < String >|positive|0",
+                "/impl:Marker|(u8 , u16)|positive|0"
+            ]
+        );
     }
 
     #[test]
