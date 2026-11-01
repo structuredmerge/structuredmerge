@@ -772,6 +772,28 @@ mod tests {
     }
 
     #[test]
+    fn repeated_macro_invocation_paths_fail_closed_as_ambiguous_owners() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/polyglot/typed-core/rust_macro_invocation_merge3.json"
+        ))
+        .unwrap();
+        let source = fixture["duplicate_identity"]["source"].as_str().unwrap();
+        let registry = ParserRegistry::default();
+        registry.register(Arc::new(RustSynParserProvider::new("rust.syn.test"))).unwrap();
+        let parsed = TreeHaverParseService::default()
+            .parse_batch(vec![request(source)], &registry.snapshot().unwrap(), &context())
+            .unwrap()
+            .remove(0);
+        let error = crate::typed::analysis(&parsed).unwrap_err();
+        assert!(error.contains("duplicate top-level owner identity"));
+        assert!(
+            error.contains(
+                fixture["duplicate_identity"]["expected"]["owner_path"].as_str().unwrap()
+            )
+        );
+    }
+
+    #[test]
     fn native_parser_conforms_to_shared_owner_prefix_fixture() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
             "../../../../fixtures/polyglot/ast-merge/native_owner_prefix_ownership.json"
