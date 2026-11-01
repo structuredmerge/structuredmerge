@@ -131,21 +131,22 @@ fn clean_merge_selects_root_module_docs_from_the_selected_revision() {
     let parser = Parser::new("rust");
     let base = "//! base module\n/// f docs\nfn f() { 1 }\n";
     let ours = base.replace("base module", "current module");
-    let [base, ours, theirs] = parser.inputs([base, &ours, base]);
+    let theirs = base.replace("{ 1 }", "{ 2 }");
+    let [base, ours, theirs] = parser.inputs([base, &ours, &theirs]);
     let result =
         typed::merge3(&base, &ours, &theirs, |source| Ok(parser.parse(source, SourceRole::Output)))
             .unwrap();
 
-    assert_eq!(
-        result.evidence.result.outcome,
-        ThreeWayMergeOutcome::Clean,
-        "{:#?}",
-        result.evidence
-    );
+    assert_eq!(result.evidence.result.outcome, ThreeWayMergeOutcome::Clean);
     assert!(result.ordered_line_render_applied);
     assert_eq!(
         result.evidence.result.output.as_deref(),
-        Some("//! current module\n/// f docs\nfn f() { 1 }\n")
+        Some("//! current module\n/// f docs\nfn f() { 2 }\n")
+    );
+    assert!(!result.evidence.source_segments.is_empty());
+    assert_eq!(
+        result.output_parse.as_ref().unwrap().source.bytes(),
+        result.evidence.result.output.as_ref().unwrap().as_bytes()
     );
 }
 

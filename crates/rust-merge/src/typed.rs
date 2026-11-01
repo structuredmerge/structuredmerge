@@ -233,6 +233,7 @@ pub fn merge3(
     theirs: &ParsedResult,
     parse_output: impl FnMut(&str) -> Result<ParsedResult, String>,
 ) -> Result<RustMergeExecution, String> {
+    let mut parse_output = parse_output;
     let mut execution = ast_merge::typed_merge::merge_parsed_sources(
         base,
         ours,
@@ -242,19 +243,83 @@ pub fn merge3(
             analyze: owners,
             merge: merge_documents,
         },
-        parse_output,
+        |text| parse_output(text),
     )?;
-    let ordered_line_render_applied =
-        if execution.evidence.result.outcome == ast_merge::ThreeWayMergeOutcome::Clean {
-            let analyses = [
-                source_line_analysis(base)?,
-                source_line_analysis(ours)?,
-                source_line_analysis(theirs)?,
-            ];
-            apply_line_selected_output(&analyses, &mut execution.evidence)?
-        } else {
-            false
+    let can_select_lines = execution.evidence.result.outcome
+        == ast_merge::ThreeWayMergeOutcome::Clean
+        || is_changed_inter_owner_layout_error(&execution.evidence);
+    let ordered_line_render_applied = if can_select_lines {
+        let analyses = [
+            source_line_analysis(base)?,
+            source_line_analysis(ours)?,
+            source_line_analysis(theirs)?,
+        ];
+        let Some(rendered) = render_line_selected_output(&analyses, &execution.evidence)? else {
+            return Ok(RustMergeExecution {
+                evidence: execution.evidence,
+                ordered_line_render_applied: false,
+                output_parse: execution.output_parse,
+            });
         };
+        if execution.evidence.result.outcome == ast_merge::ThreeWayMergeOutcome::Clean {
+            let previous = execution
+                .evidence
+                .result
+                .output
+                .as_deref()
+                .ok_or_else(|| "clean Rust owner merge omitted output".to_string())?;
+            if rendered.content != previous {
+                return Err("Rust source-line render differs from the verified owner merge".into());
+            }
+            execution.evidence.result.output = Some(rendered.content);
+            true
+        } else {
+            let source_texts = HashMap::from([
+                (ast_merge::SourceRevision::Base, analyses[0].owners.document.source.clone()),
+                (ast_merge::SourceRevision::Ours, analyses[1].owners.document.source.clone()),
+                (ast_merge::SourceRevision::Theirs, analyses[2].owners.document.source.clone()),
+            ]);
+            let Some(segments) = source_segments_from_line_render(&rendered, &source_texts)? else {
+                return Ok(RustMergeExecution {
+                    evidence: execution.evidence,
+                    ordered_line_render_applied: false,
+                    output_parse: execution.output_parse,
+                });
+            };
+            let Ok(parsed) = parse_output(&rendered.content) else {
+                return Ok(RustMergeExecution {
+                    evidence: execution.evidence,
+                    ordered_line_render_applied: false,
+                    output_parse: execution.output_parse,
+                });
+            };
+            let input_ids = [base, ours, theirs]
+                .into_iter()
+                .map(|input| input.source.descriptor().source_id.clone())
+                .collect::<HashSet<_>>();
+            if parsed.source.descriptor().role != tree_haver::source::SourceRole::Output
+                || input_ids.contains(&parsed.source.descriptor().source_id)
+                || parsed.source.bytes() != rendered.content.as_bytes()
+                || parsed.backend != ours.backend
+                || analysis(&parsed).is_err()
+            {
+                return Ok(RustMergeExecution {
+                    evidence: execution.evidence,
+                    ordered_line_render_applied: false,
+                    output_parse: execution.output_parse,
+                });
+            }
+            execution.evidence.source_segments = segments;
+            execution.evidence.result.outcome = ast_merge::ThreeWayMergeOutcome::Clean;
+            execution.evidence.result.diagnostics.clear();
+            execution.evidence.result.conflicts.clear();
+            execution.evidence.result.output = Some(rendered.content);
+            execution.output_parse = Some(parsed);
+            true
+        }
+    } else {
+        false
+    };
     Ok(RustMergeExecution {
         evidence: execution.evidence,
         ordered_line_render_applied,
@@ -262,15 +327,34 @@ pub fn merge3(
     })
 }
 
-/// Verify Rust's clean owner result through the common physical-line selector.
-/// Membership-changing cases remain on the existing owner renderer until their
-/// shared ordering and removal plans are representable.
-fn apply_line_selected_output(
+fn is_changed_inter_owner_layout_error(evidence: &SourcePreservingMergeEvidence) -> bool {
+    evidence.result.outcome == ast_merge::ThreeWayMergeOutcome::Error
+        && evidence.result.diagnostics.iter().any(|diagnostic| {
+            diagnostic.message
+                == "source-preserving declaration merge cannot prove ownership of changed inter-owner layout"
+        })
+        && evidence.classification.as_ref().is_some_and(|classification| {
+            classification.decisions.iter().all(|decision| {
+                matches!(
+                    decision.kind,
+                    ast_merge::OwnerDecisionKind::SelectOurs
+                        | ast_merge::OwnerDecisionKind::SelectTheirs
+                        | ast_merge::OwnerDecisionKind::Delete
+                )
+            })
+        })
+}
+
+/// Build a shared ordered source-line render from executed Rust owner decisions.
+/// Membership-changing cases remain on the existing path pending shared rehome planning.
+fn render_line_selected_output(
     analyses: &[RustSourceLineAnalysis; 3],
-    evidence: &mut SourcePreservingMergeEvidence,
-) -> Result<bool, String> {
-    if evidence.result.outcome != ast_merge::ThreeWayMergeOutcome::Clean {
-        return Ok(false);
+    evidence: &SourcePreservingMergeEvidence,
+) -> Result<Option<ast_merge::SourceRenderResult>, String> {
+    if evidence.result.outcome != ast_merge::ThreeWayMergeOutcome::Clean
+        && !is_changed_inter_owner_layout_error(evidence)
+    {
+        return Ok(None);
     }
     let owner_ids = analyses
         .iter()
@@ -285,12 +369,12 @@ fn apply_line_selected_output(
         })
         .collect::<Vec<_>>();
     if owner_ids[0] != owner_ids[1] || owner_ids[0] != owner_ids[2] {
-        return Ok(false);
+        return Ok(None);
     }
     let classification = evidence
         .classification
         .as_ref()
-        .ok_or_else(|| "clean Rust owner merge omitted classification evidence".to_string())?;
+        .ok_or_else(|| "Rust owner merge omitted classification evidence".to_string())?;
     let baseline_revision =
         classification.whole_source_selection.unwrap_or(ast_merge::SourceRevision::Ours);
     let mut owner_revisions = HashMap::new();
@@ -309,7 +393,7 @@ fn apply_line_selected_output(
                 ast_merge::OwnerDecisionKind::SelectOurs => ast_merge::SourceRevision::Ours,
                 ast_merge::OwnerDecisionKind::SelectTheirs => ast_merge::SourceRevision::Theirs,
                 ast_merge::OwnerDecisionKind::Delete => continue,
-                _ => return Err("clean Rust owner merge contains a conflict decision".into()),
+                _ => return Ok(None),
             };
             owner_revisions.insert(decision.owner_id.clone(), revision);
         }
@@ -348,15 +432,66 @@ fn apply_line_selected_output(
         &[],
     )
     .map_err(|error| error.to_string())?;
-    let rendered = ast_merge::render_source_plan(&plan).map_err(|error| error.to_string())?;
-    let previous = evidence
-        .result
-        .output
-        .as_deref()
-        .ok_or_else(|| "clean Rust owner merge omitted output".to_string())?;
-    if rendered.content != previous {
-        return Err("Rust source-line render differs from the verified owner merge".into());
+    Ok(Some(ast_merge::render_source_plan(&plan).map_err(|error| error.to_string())?))
+}
+
+fn source_segments_from_line_render(
+    rendered: &ast_merge::SourceRenderResult,
+    sources: &HashMap<ast_merge::SourceRevision, String>,
+) -> Result<Option<Vec<ast_merge::byte_evidence::SourceByteSegment>>, String> {
+    if rendered.verification_input.synthesized_fragment_count != 0 || !rendered.conflicts.is_empty()
+    {
+        return Ok(None);
     }
-    evidence.result.output = Some(rendered.content);
-    Ok(true)
+    let mut cursor = 0usize;
+    let mut segments = Vec::with_capacity(rendered.verification_input.source_fragments.len());
+    for (index, fragment) in rendered.verification_input.source_fragments.iter().enumerate() {
+        let Some(source) = sources.get(&fragment.revision) else {
+            return Ok(None);
+        };
+        if fragment.start_line == 0 || fragment.end_line < fragment.start_line {
+            return Ok(None);
+        }
+        let source_lines = source.split_inclusive('\n').collect::<Vec<_>>();
+        if fragment.end_line > source_lines.len() {
+            return Ok(None);
+        }
+        let source_start =
+            source_lines[..fragment.start_line - 1].iter().map(|line| line.len()).sum::<usize>();
+        let source_end =
+            source_lines[..fragment.end_line].iter().map(|line| line.len()).sum::<usize>();
+        let output_end = cursor + (source_end - source_start);
+        let Some(source_bytes) = source.as_bytes().get(source_start..source_end) else {
+            return Ok(None);
+        };
+        if rendered.content.as_bytes().get(cursor..output_end) != Some(source_bytes) {
+            return Ok(None);
+        }
+        segments.push(ast_merge::byte_evidence::SourceByteSegment {
+            id: format!("rust-line-fragment-{index}"),
+            revision: fragment.revision,
+            source_range: tree_haver::ByteRange { start_byte: source_start, end_byte: source_end },
+            output_range: tree_haver::ByteRange { start_byte: cursor, end_byte: output_end },
+            sha256: fragment.sha256.clone(),
+            owner_id: None,
+        });
+        cursor = output_end;
+    }
+    if cursor != rendered.content.len() {
+        return Ok(None);
+    }
+    let byte_sources = sources
+        .iter()
+        .map(|(revision, source)| (*revision, source.as_bytes()))
+        .collect::<HashMap<_, _>>();
+    if ast_merge::byte_evidence::verify_source_byte_segments(
+        rendered.content.as_bytes(),
+        &byte_sources,
+        &segments,
+    )
+    .is_err()
+    {
+        return Ok(None);
+    }
+    Ok(Some(segments))
 }
