@@ -23,6 +23,7 @@ pub use syn_parser::RustSynParserProvider;
 const RUST_SOURCE_PRESERVING_OWNER_KINDS: &[NamedOwnerKind<'static>] = &[
     NamedOwnerKind { node_kind: "const_item", path_kind: "const" },
     NamedOwnerKind { node_kind: "enum_item", path_kind: "enum" },
+    NamedOwnerKind { node_kind: "extern_crate_declaration", path_kind: "extern_crate" },
     NamedOwnerKind { node_kind: "function_item", path_kind: "function" },
     NamedOwnerKind { node_kind: "macro_definition", path_kind: "macro" },
     NamedOwnerKind { node_kind: "macro_invocation", path_kind: "macro_invocation" },
@@ -440,6 +441,7 @@ fn parse_source_preserving_rust_native_with_treesitter_comments(
             Item::Use(_) => format!("/use:{}", rust_use_key(text)),
             Item::Const(item) => format!("/const:{}", item.ident),
             Item::Enum(item) => format!("/enum:{}", item.ident),
+            Item::ExternCrate(item) => format!("/extern_crate:{}", item.ident),
             Item::Fn(item) => format!("/function:{}", item.sig.ident),
             Item::Mod(item) => format!("/mod:{}", item.ident),
             Item::Static(item) => format!("/static:{}", item.ident),
@@ -574,6 +576,7 @@ fn supported_analysis_declaration(kind: &str) -> bool {
         kind,
         "const_item"
             | "enum_item"
+            | "extern_crate_declaration"
             | "function_item"
             | "macro_definition"
             | "macro_invocation"
@@ -590,6 +593,7 @@ fn rust_declaration_kind(node_kind: &str) -> &'static str {
     match node_kind {
         "const_item" => "const",
         "enum_item" => "enum",
+        "extern_crate_declaration" => "extern_crate",
         "function_item" => "function",
         "macro_definition" => "macro",
         "macro_invocation" => "macro_invocation",
@@ -910,6 +914,12 @@ fn parse_rust_native(source: &str) -> ParseResult<RustAnalysis> {
                 item.span(),
                 item.ident.to_string(),
                 "enum",
+            )),
+            Item::ExternCrate(item) => declarations.push(native_declaration(
+                source,
+                item.span(),
+                item.ident.to_string(),
+                "extern_crate",
             )),
             Item::Fn(item) => declarations.push(native_declaration(
                 source,

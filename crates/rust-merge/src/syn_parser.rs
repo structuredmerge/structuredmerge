@@ -314,6 +314,7 @@ fn item_facts(
     let ident = match item {
         Item::Const(item) => Some(&item.ident),
         Item::Enum(item) => Some(&item.ident),
+        Item::ExternCrate(item) => Some(&item.ident),
         Item::Fn(item) => Some(&item.sig.ident),
         Item::Macro(item) if item.mac.path.is_ident("macro_rules") => item.ident.as_ref(),
         Item::Mod(item) => Some(&item.ident),
@@ -327,7 +328,7 @@ fn item_facts(
     let (kind, native_type) = match item {
         Item::Const(_) => ("const_item", "syn::ItemConst"),
         Item::Enum(_) => ("enum_item", "syn::ItemEnum"),
-        Item::ExternCrate(_) => ("native_item", "syn::ItemExternCrate"),
+        Item::ExternCrate(_) => ("extern_crate_declaration", "syn::ItemExternCrate"),
         Item::Fn(_) => ("function_item", "syn::ItemFn"),
         Item::ForeignMod(_) => ("native_item", "syn::ItemForeignMod"),
         Item::Impl(_) => ("native_item", "syn::ItemImpl"),

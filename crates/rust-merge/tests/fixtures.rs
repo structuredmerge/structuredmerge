@@ -372,6 +372,28 @@ fn rust_classic_backends_merge_named_macro_and_function_owners_independently() {
 }
 
 #[test]
+fn rust_backends_merge_extern_crate_alias_edits_with_independent_function_edits() {
+    let fixture = read_fixture(&["polyglot", "typed-core", "rust_extern_crate_owner_merge3.json"]);
+    let input = &fixture["input"];
+    for backend in [RustBackend::Native, RustBackend::TreeSitter] {
+        let result = merge_rust_three_way_with_backend(
+            input["base"].as_str().unwrap(),
+            input["ours"].as_str().unwrap(),
+            input["theirs"].as_str().unwrap(),
+            RustDialect::Rust,
+            backend,
+        );
+        assert_eq!(
+            result.outcome,
+            ast_merge::ThreeWayMergeOutcome::Clean,
+            "{backend:?}: {:?}",
+            result.diagnostics
+        );
+        assert_eq!(result.output.as_deref(), Some(fixture["expected"]["output"].as_str().unwrap()));
+    }
+}
+
+#[test]
 fn rust_native_backend_merges_unique_macro_invocations_as_owners() {
     let fixture = read_fixture(&["polyglot", "typed-core", "rust_macro_invocation_merge3.json"]);
     let input = &fixture["input"];
