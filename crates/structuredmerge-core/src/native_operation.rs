@@ -223,6 +223,29 @@ fn analysis_failure_diagnostic(
     }
 }
 
+fn parser_diagnostic_span(parsed: &ParsedResult) -> Option<ResultSpan> {
+    let span = parsed
+        .document
+        .output()
+        .diagnostics
+        .iter()
+        .find_map(|diagnostic| diagnostic.span.as_ref())?;
+    let range = span.range.clone();
+    parsed.source.slice(range.clone()).ok()?;
+    let start = parsed.source.point(range.start_byte).ok()?;
+    let end = parsed.source.point(range.end_byte).ok()?;
+    Some(ResultSpan {
+        range: ResultRange {
+            start_byte: range.start_byte,
+            end_byte: range.end_byte,
+            extra: Metadata::new(),
+        },
+        start_point: ResultPoint { row: start.row, column: start.column, extra: Metadata::new() },
+        end_point: ResultPoint { row: end.row, column: end.column, extra: Metadata::new() },
+        extra: Metadata::new(),
+    })
+}
+
 fn execution_failure(result: &mut OperationResult, error: NativeMergeError) {
     match error {
         NativeMergeError::Parse(error) | NativeMergeError::InputParseFailed { error, .. } => {
@@ -240,7 +263,7 @@ fn execution_failure(result: &mut OperationResult, error: NativeMergeError) {
                     vec![DiagnosticSourceRef {
                         source_id: parsed.source.descriptor().source_id.clone(),
                         role: parsed.source.descriptor().role,
-                        span: None,
+                        span: parser_diagnostic_span(parsed),
                         extra: Metadata::new(),
                     }],
                 );
@@ -1147,7 +1170,7 @@ fn execute_go_exact_source_selection(
             source_refs: vec![DiagnosticSourceRef {
                 source_id: source.source_id.clone(),
                 role: selected_role,
-                span: None,
+                span: parser_diagnostic_span(selected_parse),
                 extra: Metadata::new(),
             }],
             subject_refs: None,
@@ -1191,7 +1214,7 @@ fn execute_go_exact_source_selection(
             source_refs: vec![DiagnosticSourceRef {
                 source_id: source.source_id.clone(),
                 role,
-                span: None,
+                span: parser_diagnostic_span(rejected),
                 extra: Metadata::new(),
             }],
             subject_refs: None,

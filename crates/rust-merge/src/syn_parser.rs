@@ -109,6 +109,12 @@ impl RustSynParserProvider {
         let file = match syn::parse_file(source) {
             Ok(file) => file,
             Err(error) => {
+                let error_range = error.span().byte_range();
+                let error_span = (error_range.start <= error_range.end
+                    && error_range.end <= source.len()
+                    && source.is_char_boundary(error_range.start)
+                    && source.is_char_boundary(error_range.end))
+                .then(|| source_span(source, error_range));
                 return Ok(ParseOutput {
                     request_id: request.request_id,
                     source: request.source.descriptor.clone(),
@@ -123,7 +129,7 @@ impl RustSynParserProvider {
                         code: Some("syn.syntax-error".into()),
                         message: error.to_string(),
                         source_role: request.source.descriptor.role,
-                        span: None,
+                        span: error_span,
                         node_id: None,
                         blocking: true,
                         metadata: Metadata::new(),
@@ -946,13 +952,29 @@ mod tests {
 
     #[test]
     fn native_parser_reports_syntax_errors_as_blocking_diagnostics() {
-        let output = RustSynParserProvider::new("rust.syn.test")
-            .parse(request("fn broken("), &context())
-            .unwrap();
-        assert!(!output.ok);
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/polyglot/typed-core/rust_syn_parse_diagnostic_span.json"
+        ))
+        .unwrap();
+        let source = fixture["input"]["source"].as_str().unwrap();
+        let output =
+            RustSynParserProvider::new("rust.syn.test").parse(request(source), &context()).unwrap();
+        assert_eq!(output.ok, fixture["expected"]["ok"].as_bool().unwrap());
         assert_eq!(output.diagnostics.len(), 1);
-        assert!(output.diagnostics[0].blocking);
-        assert_eq!(output.diagnostics[0].category, "parse_error");
+        let diagnostic = &output.diagnostics[0];
+        assert_eq!(diagnostic.blocking, fixture["expected"]["blocking"].as_bool().unwrap());
+        assert_eq!(
+            diagnostic.category,
+            fixture["expected"]["diagnostic_category"].as_str().unwrap()
+        );
+        let span = diagnostic.span.as_ref().expect("syn error should include its offending span");
+        let range = &fixture["expected"]["diagnostic_byte_range"];
+        assert_eq!(span.range.start_byte, range[0].as_u64().unwrap() as usize);
+        assert_eq!(span.range.end_byte, range[1].as_u64().unwrap() as usize);
+        assert_eq!(
+            source.get(span.range.start_byte..span.range.end_byte).unwrap(),
+            fixture["expected"]["diagnostic_text"].as_str().unwrap()
+        );
     }
 
     #[test]
