@@ -692,6 +692,25 @@ fn two_tip_additions_at_distinct_source_gaps_follow_native_owner_order() {
 }
 
 #[test]
+fn deleted_rust_owner_takes_its_inline_trailing_comment_with_it() {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_merge3_delete_owner_trailing_comment_with_independent_edit.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let result = rust_merge::merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        rust_merge::RustBackend::Native,
+    );
+
+    assert_eq!(result.outcome, ThreeWayMergeOutcome::Clean, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+}
+
+#[test]
 fn edge_addition_composes_with_one_sided_reorder() {
     let result = rust_merge::merge_rust_three_way_with_backend(
         "fn a() {}\nfn b() {}\n",
