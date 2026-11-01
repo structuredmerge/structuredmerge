@@ -44,10 +44,30 @@ pub fn augment_normalized_comments_with_evidence(
     style: &str,
     normalize_comment: impl Fn(&str) -> String,
 ) -> Result<NormalizedCommentEvidence, String> {
+    augment_normalized_comments_with_evidence_filter(
+        source,
+        owners,
+        nodes,
+        style,
+        |_| true,
+        normalize_comment,
+    )
+}
+
+/// Like `augment_normalized_comments_with_evidence`, with a provider filter for
+/// parser comment nodes that the language contract excludes from comment ownership.
+pub fn augment_normalized_comments_with_evidence_filter(
+    source: &str,
+    owners: &[LayoutOwner],
+    nodes: &[NormalizedTreeNode],
+    style: &str,
+    include_comment: impl Fn(&NormalizedTreeNode) -> bool,
+    normalize_comment: impl Fn(&str) -> String,
+) -> Result<NormalizedCommentEvidence, String> {
     let lines = source_lines(source);
     let mut tracked = nodes
         .iter()
-        .filter(|node| node.role == NodeRole::Comment)
+        .filter(|node| node.role == NodeRole::Comment && include_comment(node))
         .flat_map(|node| {
             tracked_normalized_comment(&lines, node, &normalize_comment)
                 .into_iter()

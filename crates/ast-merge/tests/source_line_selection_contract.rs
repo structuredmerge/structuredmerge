@@ -1,13 +1,14 @@
 use ast_merge::{
     SourceLineCommentRegion, SourceLineDisposition, SourceLineLayoutGap, SourceLineOwner,
     SourceLineSelection, SourceRevision, render_source_plan, source_line_dispositions,
-    source_render_plan_from_line_selections,
+    source_line_selections_for_owner_revisions, source_render_plan_from_line_selections,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
 
 #[derive(Deserialize)]
 struct Fixture {
+    baseline_revision: String,
     documents: Vec<Document>,
     selections: Vec<SourceLineSelection>,
     expected: Expected,
@@ -66,8 +67,26 @@ fn shared_source_line_selection_fixture_renders_exact_bytes_and_provenance() {
         sources.insert(source_revision, document.source);
         dispositions.insert(source_revision, line_dispositions);
     }
-    let plan = source_render_plan_from_line_selections(sources, dispositions, &fixture.selections)
-        .expect("line selection plan is valid");
+    let owner_revisions = fixture
+        .selections
+        .iter()
+        .filter_map(|selection| {
+            selection
+                .selection_key
+                .strip_prefix("owner:")
+                .map(|owner_id| (owner_id.to_string(), selection.revision))
+        })
+        .collect::<HashMap<_, _>>();
+    let generated_selections = source_line_selections_for_owner_revisions(
+        revision(&fixture.baseline_revision),
+        &dispositions,
+        &owner_revisions,
+    )
+    .expect("owner choices produce a line selection plan");
+    assert_eq!(generated_selections, fixture.selections);
+    let plan =
+        source_render_plan_from_line_selections(sources, dispositions, &generated_selections)
+            .expect("line selection plan is valid");
     let rendered = render_source_plan(&plan).expect("selected source lines render");
     assert_eq!(rendered.content, fixture.expected.content);
     let actual_records = rendered

@@ -103,6 +103,25 @@ fn normalized_view_preserves_native_identity_topology_and_exact_bytes() {
 }
 
 #[test]
+fn source_line_analysis_composes_native_comments_layout_and_owner_identity() {
+    let parser = Parser::new("bash");
+    let source = "#!/usr/bin/env bash\n# docs\nx=1 # inline\nf() { :; }\n";
+    let parsed = parser.parse(source, SourceRole::Source);
+    let analysis = typed::source_line_analysis(&parsed).unwrap();
+    assert!(analysis.comments.unclaimed_node_ids.is_empty());
+    assert_eq!(analysis.dispositions.len(), 4);
+    assert_eq!(analysis.dispositions[0].kind, "unmanaged");
+    assert_eq!(analysis.dispositions[1].kind, "comment_owner");
+    assert_eq!(analysis.dispositions[1].owner_id.as_deref(), Some("/variable:x"));
+    assert_eq!(analysis.dispositions[1].selection_key, "comment:/variable:x:leading");
+    assert_eq!(analysis.dispositions[2].kind, "structural_owner");
+    assert_eq!(analysis.dispositions[2].owner_id.as_deref(), Some("/variable:x"));
+    assert_eq!(analysis.dispositions[2].comment_kind.as_deref(), Some("inline"));
+    assert_eq!(analysis.dispositions[2].line, "x=1 # inline\n");
+    assert_eq!(analysis.dispositions[3].owner_id.as_deref(), Some("/function:f"));
+}
+
+#[test]
 fn typed_bash_preserves_existing_family_semantics_and_verifies_noops() {
     let parser = Parser::new("bash");
     for texts in [

@@ -311,6 +311,93 @@ pub struct SourceLineSelection {
     pub revision: SourceRevision,
 }
 
+/// Select source regions in baseline line order, taking structural and attached
+/// comment regions from their selected owner revision and each layout gap from
+/// its controller owner revision. Root and unmanaged regions stay with baseline.
+pub fn source_line_selections_for_owner_revisions(
+    baseline_revision: SourceRevision,
+    dispositions: &HashMap<SourceRevision, Vec<crate::SourceLineDisposition>>,
+    owner_revisions: &HashMap<String, SourceRevision>,
+) -> Result<Vec<SourceLineSelection>, SourceRenderError> {
+    let baseline = dispositions.get(&baseline_revision).ok_or_else(|| {
+        SourceRenderError::new(format!("baseline dispositions omit {baseline_revision:?}"))
+    })?;
+    let available = dispositions
+        .iter()
+        .map(|(revision, records)| {
+            (
+                *revision,
+                records
+                    .iter()
+                    .map(|record| record.selection_key.as_str())
+                    .collect::<std::collections::HashSet<_>>(),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    let mut seen = std::collections::HashSet::new();
+    let mut selections = Vec::new();
+    for record in baseline {
+        if !seen.insert(record.selection_key.as_str()) {
+            continue;
+        }
+        let revision = match record.kind.as_str() {
+            "structural_owner" => {
+                let owner_id = record.owner_id.as_deref().ok_or_else(|| {
+                    SourceRenderError::new(format!(
+                        "structural line {} has no owner",
+                        record.line_number
+                    ))
+                })?;
+                *owner_revisions.get(owner_id).ok_or_else(|| {
+                    SourceRenderError::new(format!(
+                        "owner {owner_id} has no selected source revision"
+                    ))
+                })?
+            }
+            "comment_owner" => {
+                let owner_id = record.owner_id.as_deref().ok_or_else(|| {
+                    SourceRenderError::new(format!(
+                        "attached comment line {} has no owner",
+                        record.line_number
+                    ))
+                })?;
+                *owner_revisions.get(owner_id).ok_or_else(|| {
+                    SourceRenderError::new(format!(
+                        "comment owner {owner_id} has no selected source revision"
+                    ))
+                })?
+            }
+            "layout_gap" => record
+                .controller_owner_id
+                .as_ref()
+                .and_then(|owner_id| owner_revisions.get(owner_id))
+                .copied()
+                .unwrap_or(baseline_revision),
+            "root_region" | "unmanaged" => baseline_revision,
+            kind => {
+                return Err(SourceRenderError::new(format!(
+                    "line {} has unsupported disposition kind {kind}",
+                    record.line_number
+                )));
+            }
+        };
+        if available.get(&revision).is_some_and(|keys| keys.contains(record.selection_key.as_str()))
+        {
+            selections.push(SourceLineSelection {
+                selection_key: record.selection_key.clone(),
+                revision,
+            });
+        } else if matches!(record.kind.as_str(), "structural_owner" | "unmanaged") {
+            return Err(SourceRenderError::new(format!(
+                "selected {kind} region {} is absent from {revision:?}",
+                record.selection_key,
+                kind = record.kind
+            )));
+        }
+    }
+    Ok(selections)
+}
+
 /// Build an exact-byte render plan from ordered semantic line selections.
 /// Each selection names one contiguous ownership region in one source revision.
 pub fn source_render_plan_from_line_selections(

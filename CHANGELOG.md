@@ -405,6 +405,8 @@
 
 - Compose Rust comment and layout augmentation into explicit per-line source ownership.
 
+- Compose Bash parser ownership, comments, layout gaps, and ordered source-line selections through the shared ast-merge renderer; retain the existing verified output until provider membership-change selections are supported.
+
 ### Fixed
 
 - Preserve Go package clauses in source-preserving two-way merges.
