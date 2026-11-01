@@ -1,4 +1,5 @@
 pub mod comment_layout_emission;
+pub mod line_selection;
 pub use comment_layout_emission::*;
 use std::{
     collections::{HashMap, HashSet},

@@ -148,3 +148,93 @@ fn oxc_matches_tree_sitter_on_shared_typescript_fixtures() {
         differences.join("\n")
     );
 }
+
+#[test]
+fn documented_owner_deletion_with_independent_edit_merges_cleanly_on_both_backends() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+        "../../../fixtures/polyglot/typed-core/typescript_merge3_delete_documented_owner_with_independent_edit.json",
+    );
+    let fixture: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let expected = fixture["rust_host_expected"]["output"].as_str().unwrap();
+    let call = json!({"call": "typescript_common_merge3", "input": {
+        "dialect": "typescript",
+        "base": fixture["input"]["base"], "ours": fixture["input"]["ours"],
+        "theirs": fixture["input"]["theirs"]}});
+    for backend in ["{dialect}.common", "typescript.oxc"] {
+        let (snapshot, context) = setup();
+        let input = request(backend, &call).unwrap().validate(100000, |_, _| panic!()).unwrap();
+        let result =
+            native_operation::execute_native_operation(&input, &snapshot, &context).unwrap();
+        assert!(result.ok, "{backend}: {:?}", result.diagnostics);
+        assert_eq!(result.output.as_deref(), Some(expected), "{backend}");
+        assert_eq!(result.verification.output_reparsed, Some(true));
+        assert!(!result.verification.retained_source_regions.as_ref().unwrap().is_empty());
+        result.validate_against(&input).unwrap();
+    }
+}
+
+#[test]
+fn owner_deletion_recovery_selects_whole_lines_and_keeps_conflicts_closed() {
+    // (name, base, ours, theirs, expected output; None = must fail closed)
+    let cases: Vec<(&str, &str, &str, &str, Option<&str>)> = vec![
+        (
+            "undocumented",
+            "function a() {}\n\nfunction b() { return 1 }\n",
+            "function b() { return 1 }\n",
+            "function a() {}\n\nfunction b() { return 2 }\n",
+            Some("function b() { return 2 }\n"),
+        ),
+        (
+            "trailing comment leaves with its owner",
+            "function a() {} // note\n\nfunction b() { return 1 }\n",
+            "function b() { return 1 }\n",
+            "function a() {} // note\n\nfunction b() { return 2 }\n",
+            Some("function b() { return 2 }\n"),
+        ),
+        (
+            "delete with independent addition",
+            "/** a */\nfunction a() {}\n\nfunction b() { return 1 }\n",
+            "function b() { return 1 }\n",
+            "/** a */\nfunction a() {}\n\nfunction b() { return 1 }\n\nfunction c() {}\n",
+            Some("function b() { return 1 }\n\nfunction c() {}\n"),
+        ),
+        (
+            "delete the last owner",
+            "function b() { return 1 }\n\n/** a */\nfunction a() {}\n",
+            "function b() { return 1 }\n",
+            "function b() { return 2 }\n\n/** a */\nfunction a() {}\n",
+            Some("function b() { return 2 }\n"),
+        ),
+        (
+            "file header stays",
+            "// header\n\n/** a */\nfunction a() {}\n\nfunction b() { return 1 }\n",
+            "// header\n\nfunction b() { return 1 }\n",
+            "// header\n\n/** a */\nfunction a() {}\n\nfunction b() { return 2 }\n",
+            Some("// header\n\nfunction b() { return 2 }\n"),
+        ),
+        (
+            "delete versus edit of the same owner",
+            "/** a */\nfunction a() { 1 }\n\nfunction b() {}\n",
+            "function b() {}\n",
+            "/** a */\nfunction a() { 2 }\n\nfunction b() {}\n",
+            None,
+        ),
+    ];
+    for (name, base, ours, theirs, expected) in cases {
+        let call = json!({"call": "typescript_common_merge3", "input": {
+            "dialect": "typescript", "base": base, "ours": ours, "theirs": theirs}});
+        for backend in ["{dialect}.common", "typescript.oxc"] {
+            let (snapshot, context) = setup();
+            let input = request(backend, &call).unwrap().validate(100000, |_, _| panic!()).unwrap();
+            let result =
+                native_operation::execute_native_operation(&input, &snapshot, &context).unwrap();
+            assert_eq!(
+                result.ok,
+                expected.is_some(),
+                "{name} [{backend}]: {:?}",
+                result.diagnostics
+            );
+            assert_eq!(result.output.as_deref(), expected, "{name} [{backend}]");
+        }
+    }
+}

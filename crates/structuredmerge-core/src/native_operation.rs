@@ -972,11 +972,12 @@ pub(crate) fn execute_native_operation_with_service(
         }
         return finish(result, request, &evidence);
     }
-    let executed = if matches!(family, "bash" | "go" | "rust") {
+    let executed = if matches!(family, "bash" | "go" | "rust" | "typescript") {
         let merge = match family {
             "bash" => bash_merge::typed::merge_documents,
             "go" => go_merge::typed::merge_documents,
             "rust" => rust_merge::typed::merge_documents,
+            "typescript" => typescript_merge::typed::merge_documents,
             _ => unreachable!("family was checked above"),
         };
         let (merge_analyzer, analyze_with_diagnostics) = if family == "bash" {
@@ -1004,6 +1005,10 @@ pub(crate) fn execute_native_operation_with_service(
                     ),
                     "rust" => Some(
                         rust_merge::typed::line_selection_postprocessor
+                            as ast_merge::typed_merge::NativeOwnerPostprocessor,
+                    ),
+                    "typescript" => Some(
+                        typescript_merge::typed::line_selection_postprocessor
                             as ast_merge::typed_merge::NativeOwnerPostprocessor,
                     ),
                     _ => None,
