@@ -187,7 +187,7 @@ fn owner_conflict_preview(
                 revision,
                 state: ast_merge::ConflictAlternativeState::Present,
                 regions: vec![ast_merge::OwnedSourceRegion {
-                    node_id: format!("go:full-document:{role}"),
+                    node_id: format!("full-document:{role}"),
                     region_kind: "document".into(),
                     start_byte: 0,
                     end_byte: content.len(),
