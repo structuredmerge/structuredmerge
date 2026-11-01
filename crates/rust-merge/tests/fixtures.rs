@@ -1167,6 +1167,26 @@ fn native_syn_composes_owner_membership_change_with_independent_edit() {
 }
 
 #[test]
+fn native_syn_deletes_module_inner_docs_with_the_module_owner() {
+    let fixture = read_fixture(&[
+        "polyglot",
+        "typed-core",
+        "rust_merge3_delete_module_inner_doc_owner_with_independent_edit.json",
+    ]);
+    let input = &fixture["input"];
+    let result = merge_rust_three_way_with_backend(
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+        RustDialect::Rust,
+        RustBackend::Native,
+    );
+
+    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean, "{result:?}");
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+}
+
+#[test]
 fn native_syn_deletes_documentation_with_its_owner_and_keeps_independent_edit() {
     let fixture = read_fixture(&[
         "polyglot",
