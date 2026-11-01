@@ -45,6 +45,7 @@ pub fn merge3(
             merge: |base, ours, theirs, verify| {
                 ast_merge::merge_source_preserving_owners_with_evidence(base, ours, theirs, verify)
             },
+            postprocess: None,
         },
         parse_output,
     )

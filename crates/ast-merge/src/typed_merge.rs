@@ -86,6 +86,7 @@ pub struct NativeMergeExecution {
     pub input_parses: Vec<ParsedResult>,
     pub output_parse: Option<ParsedResult>,
     pub verification_error: Option<ServiceError>,
+    pub postprocess_applied: bool,
 }
 
 pub fn merge_native_sources_with_evidence(
@@ -108,6 +109,7 @@ pub fn merge_native_sources_with_evidence(
             merge: |base, ours, theirs, verify| {
                 merge_source_preserving_owners_with_evidence(base, ours, theirs, verify)
             },
+            postprocess: None,
         },
     )
 }
@@ -120,7 +122,16 @@ pub struct NativeOwnerEngine {
     pub analyze_with_diagnostics:
         Option<fn(&ParsedResult) -> Result<SourcePreservingOwnerDocument, NativeAnalysisError>>,
     pub merge: NativeOwnerMerger,
+    /// Optional provider-owned line selection after classification. The engine
+    /// supplies parsed inputs and its validated output parse callback.
+    pub postprocess: Option<NativeOwnerPostprocessor>,
 }
+
+pub type NativeOwnerPostprocessor = fn(
+    &[ParsedResult],
+    &mut SourcePreservingMergeEvidence,
+    &mut dyn FnMut(&str) -> Result<ParsedResult, String>,
+) -> Result<bool, String>;
 
 pub type NativeOwnerMerger = fn(
     SourcePreservingOwnerDocument,
@@ -138,6 +149,7 @@ pub fn merge_native_sources_with_engine(
     engine: NativeOwnerEngine,
 ) -> Result<NativeMergeExecution, NativeMergeError> {
     let analyze = engine.analyze;
+    let postprocess = engine.postprocess;
     let roles: BTreeSet<_> =
         requests.iter().map(|request| request.source.descriptor.role).collect();
     if requests.len() != 3
@@ -228,7 +240,7 @@ pub fn merge_native_sources_with_engine(
     }
     let mut output_parse = None;
     let mut verification_error = None;
-    let mut verify = |output: &str| -> Result<SourcePreservingOwnerDocument, String> {
+    let mut parse_output = |output: &str| -> Result<ParsedResult, String> {
         verification.request_id = "merge-verification".into();
         verification.source = source_input(
             output_id.clone(),
@@ -249,20 +261,29 @@ pub fn merge_native_sources_with_engine(
             return Err("expected one verification parse".into());
         }
         let parsed = parsed.remove(0);
-        let analysis = if parsed.document.output().ok {
-            analyze(&parsed)
-        } else {
-            Err("native parser rejected rendered output".into())
-        };
-        output_parse = Some(parsed);
-        analysis
+        output_parse = Some(parsed.clone());
+        Ok(parsed)
     };
-    let rendered = (engine.merge)(
+    let mut verify = |output: &str| -> Result<SourcePreservingOwnerDocument, String> {
+        let parsed = parse_output(output)?;
+        if !parsed.document.output().ok {
+            return Err("native parser rejected rendered output".into());
+        }
+        analyze(&parsed)
+    };
+    let mut rendered = (engine.merge)(
         documents.remove(&SourceRole::Base).ok_or(NativeMergeError::InvalidInputs)?,
         documents.remove(&SourceRole::Ours).ok_or(NativeMergeError::InvalidInputs)?,
         documents.remove(&SourceRole::Theirs).ok_or(NativeMergeError::InvalidInputs)?,
         &mut verify,
     );
+    drop(verify);
+    let postprocess_applied = if let Some(postprocess) = postprocess {
+        postprocess(&parsed, &mut rendered, &mut parse_output)
+            .map_err(NativeMergeError::Unsupported)?
+    } else {
+        false
+    };
     context.check().map_err(NativeMergeError::Parse)?;
     let output_source = rendered
         .result
@@ -286,6 +307,7 @@ pub fn merge_native_sources_with_engine(
         input_parses: parsed,
         output_parse,
         verification_error,
+        postprocess_applied,
     })
 }
 
@@ -294,6 +316,7 @@ pub struct ParsedOwnerMergeExecution {
     pub evidence: SourcePreservingMergeEvidence,
     /// Only a clean result has a fresh parse bound to the exact output bytes.
     pub output_parse: Option<ParsedResult>,
+    pub postprocess_applied: bool,
 }
 
 fn verified_document(
@@ -327,7 +350,7 @@ pub fn merge_parsed_sources(
     ours: &ParsedResult,
     theirs: &ParsedResult,
     engine: NativeOwnerEngine,
-    mut parse_output: impl FnMut(&str) -> Result<ParsedResult, String>,
+    parse_output: impl FnMut(&str) -> Result<ParsedResult, String>,
 ) -> Result<ParsedOwnerMergeExecution, String> {
     let mut ids = std::collections::HashSet::new();
     for (parsed, role) in [base, ours, theirs].into_iter().zip([
@@ -353,13 +376,28 @@ pub fn merge_parsed_sources(
         document.validate("input")?;
     }
     let mut output_parse = None;
-    let mut verify = |text: &str| {
+    let mut parse_output = parse_output;
+    let mut parse_and_capture = |text: &str| -> Result<ParsedResult, String> {
         let parsed = parse_output(text)?;
-        let document = verified_document(&parsed, text, ours, &ids, engine.analyze)?;
-        output_parse = Some(parsed);
-        Ok(document)
+        output_parse = Some(parsed.clone());
+        Ok(parsed)
     };
-    let evidence = (engine.merge)(base_document, ours_document, theirs_document, &mut verify);
+    let mut verify = |text: &str| {
+        let parsed = parse_and_capture(text)?;
+        verified_document(&parsed, text, ours, &ids, engine.analyze)
+    };
+    let mut evidence = (engine.merge)(base_document, ours_document, theirs_document, &mut verify);
+    drop(verify);
+    let postprocess_applied = if let Some(postprocess) = engine.postprocess {
+        postprocess(
+            &[base.clone(), ours.clone(), theirs.clone()],
+            &mut evidence,
+            &mut parse_and_capture,
+        )?
+    } else {
+        false
+    };
+    drop(parse_and_capture);
     if evidence.result.outcome == crate::ThreeWayMergeOutcome::Clean {
         let text = evidence.result.output.as_deref().ok_or("clean native merge omitted output")?;
         // Whole-source selections/no-ops bypass the legacy renderer callback.
@@ -371,5 +409,5 @@ pub fn merge_parsed_sources(
     } else {
         output_parse = None;
     }
-    Ok(ParsedOwnerMergeExecution { evidence, output_parse })
+    Ok(ParsedOwnerMergeExecution { evidence, output_parse, postprocess_applied })
 }

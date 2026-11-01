@@ -166,13 +166,34 @@ fn merge3_matches_native_decisions_and_reparses_even_unchanged_output() {
         assert_eq!(result.output, expected.output);
         assert_eq!(result.verification.output_reparsed, Some(true));
         assert_eq!(result.verification.base_participated, Some(true));
-        assert!(!result.verification.retained_source_regions.unwrap().is_empty());
+        assert!(!result.verification.retained_source_regions.as_ref().unwrap().is_empty());
     }
     let other = BASE.replace("{ 1 }", "{ 3 }");
     let (result, _) = run(request("merge3", &[BASE, OURS, &other]));
     assert!(!result.ok);
     assert!(!result.conflicts.is_empty());
     assert!(result.output.is_none());
+}
+
+#[test]
+fn common_rust_operation_matches_two_tip_addition_fixture() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let texts = [
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ];
+    let (result, request) = run(request("merge3", &texts));
+
+    assert_eq!(result.ok, fixture["expected"]["ok"]);
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+    assert_eq!(result.verification.output_reparsed, Some(true));
+    assert!(!result.verification.retained_source_regions.as_ref().unwrap().is_empty());
+    result.validate_against(&request).unwrap();
 }
 
 #[test]
@@ -380,6 +401,7 @@ fn guard_projection_recomputes_evidence_and_rejects_forged_results() {
             analyze_with_diagnostics: None,
             analyze: rust_merge::typed::owners,
             merge: rust_merge::typed::merge_documents,
+            postprocess: None,
         },
     )
     .unwrap();

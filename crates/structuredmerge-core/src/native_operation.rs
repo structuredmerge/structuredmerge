@@ -881,6 +881,10 @@ pub(crate) fn execute_native_operation_with_service(
                 analyze: analyzer,
                 analyze_with_diagnostics,
                 merge,
+                postprocess: (family == "rust").then_some(
+                    rust_merge::typed::line_selection_postprocessor
+                        as ast_merge::typed_merge::NativeOwnerPostprocessor,
+                ),
             },
         )
     } else {

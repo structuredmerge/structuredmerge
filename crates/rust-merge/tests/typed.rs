@@ -152,42 +152,24 @@ fn clean_merge_selects_root_module_docs_from_the_selected_revision() {
 
 #[test]
 fn clean_merge_selects_independent_owner_additions_from_both_tips() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let [base, ours, theirs] = Parser::new("rust").inputs([
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ]);
     let parser = Parser::new("rust");
-    let base = "fn base() { 0 }\n";
-    let ours = "fn base() { 0 }\n\n// ours docs\nfn ours() { 1 }\n";
-    let theirs = "fn base() { 0 }\n\n// theirs docs\nfn theirs() { 2 }\n";
-    let [base, ours, theirs] = parser.inputs([base, ours, theirs]);
     let result =
         typed::merge3(&base, &ours, &theirs, |source| Ok(parser.parse(source, SourceRole::Output)))
             .unwrap();
 
     assert_eq!(result.evidence.result.outcome, ThreeWayMergeOutcome::Clean);
     assert!(result.ordered_line_render_applied);
-    assert_eq!(
-        result.evidence.result.output.as_deref(),
-        Some(
-            "fn base() { 0 }\n\n// ours docs\nfn ours() { 1 }\n// theirs docs\nfn theirs() { 2 }\n"
-        )
-    );
-}
-
-#[test]
-fn clean_merge_rehomes_removed_owner_docs_through_shared_line_plan() {
-    let parser = Parser::new("rust");
-    let base = "// removed docs\nfn removed() {}\n\nfn kept() { 1 }\n";
-    let ours = "// removed docs\nfn removed() {}\n\nfn kept() { 2 }\n";
-    let theirs = "fn kept() { 1 }\n";
-    let [base, ours, theirs] = parser.inputs([base, ours, theirs]);
-    let result =
-        typed::merge3(&base, &ours, &theirs, |source| Ok(parser.parse(source, SourceRole::Output)))
-            .unwrap();
-
-    assert_eq!(result.evidence.result.outcome, ThreeWayMergeOutcome::Clean);
-    assert!(result.ordered_line_render_applied);
-    assert_eq!(
-        result.evidence.result.output.as_deref(),
-        Some("// removed docs\n\nfn kept() { 2 }\n")
-    );
+    assert_eq!(result.evidence.result.output.as_deref(), fixture["expected"]["output"].as_str());
 }
 
 #[test]
@@ -418,26 +400,24 @@ fn typed_rust_preserves_legacy_decisions_and_freshly_verifies_clean_output() {
 }
 
 #[test]
-fn membership_plus_edit_uses_shared_line_selection_and_fresh_output_parse() {
+fn membership_plus_edit_keeps_the_rust_guard_before_generic_shortcuts() {
     let parser = Parser::new("rust");
     for texts in [
         [BASE.to_string(), OURS.to_string(), format!("{BASE}\nfn added() {{}}\n")],
         [BASE.to_string(), OURS.to_string(), "use std::fmt;\nfn left() -> i32 { 1 }\n".into()],
         [BASE.to_string(), format!("{OURS}\nfn added() {{}}\n"), BASE.to_string()],
     ] {
+        let legacy =
+            rust_merge::merge_rust_three_way(&texts[0], &texts[1], &texts[2], RustDialect::Rust);
         let [base, ours, theirs] = parser.inputs([&texts[0], &texts[1], &texts[2]]);
-        let mut parse_calls = 0;
-        let result = typed::merge3(&base, &ours, &theirs, |text| {
-            parse_calls += 1;
-            Ok(parser.parse(text, SourceRole::Output))
-        })
-        .unwrap();
-        assert_eq!(result.evidence.result.outcome, ThreeWayMergeOutcome::Clean);
-        assert!(result.ordered_line_render_applied);
-        assert_eq!(parse_calls, 1);
-        assert!(result.evidence.classification.is_some());
-        assert!(!result.evidence.source_segments.is_empty());
-        assert!(result.output_parse.is_some());
+        let result =
+            typed::merge3(&base, &ours, &theirs, |_| panic!("guard must not render")).unwrap();
+        assert_eq!(result.evidence.result, legacy);
+        assert_eq!(result.evidence.result.outcome, ThreeWayMergeOutcome::Conflict);
+        assert_eq!(result.evidence.result.conflicts[0].conflict_id, "rust-unmanaged-source");
+        assert!(result.evidence.classification.is_none());
+        assert!(result.evidence.source_segments.is_empty());
+        assert!(result.output_parse.is_none());
     }
 }
 

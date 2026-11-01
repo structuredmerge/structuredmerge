@@ -79,6 +79,7 @@ pub fn merge3(
             analyze_with_diagnostics: None,
             analyze: owners,
             merge: merge_documents,
+            postprocess: None,
         },
         parse_output,
     )

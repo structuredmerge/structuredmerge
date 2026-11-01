@@ -68,6 +68,7 @@ fn execute(texts: [&str; 3]) -> (ValidatedOperationRequest, NativeMergeExecution
             input_parses: vec![],
             output_parse: None,
             verification_error: None,
+            postprocess_applied: false,
         },
     )
 }
