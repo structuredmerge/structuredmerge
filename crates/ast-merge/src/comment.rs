@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
-use tree_haver::{NodeRole, NormalizedTreeNode};
+use tree_haver::{NodeRole, NormalizedTreeIndex, NormalizedTreeNode};
 
 use crate::{
     CommentAttachment, CommentLine, CommentRegion, LayoutGap, LayoutOwner, augment_layout,
@@ -22,6 +22,8 @@ pub struct TrackedComment {
     pub normalized_content: String,
     pub full_line: bool,
     pub indent: Option<usize>,
+    #[serde(default)]
+    pub structural_prefix: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -93,13 +95,19 @@ pub fn augment_normalized_comments_with_evidence_filter(
     normalize_comment: impl Fn(&str) -> String,
 ) -> Result<NormalizedCommentEvidence, String> {
     let lines = source_lines(source);
+    let index = NormalizedTreeIndex::new(nodes)?;
     let mut tracked = nodes
         .iter()
         .filter(|node| node.role == NodeRole::Comment && include_comment(node))
         .flat_map(|node| {
-            tracked_normalized_comment(&lines, node, &normalize_comment)
-                .into_iter()
-                .map(move |comment| (comment, node.id.clone()))
+            tracked_normalized_comment(
+                &lines,
+                node,
+                &normalize_comment,
+                is_structural_prefix_comment(node, &index),
+            )
+            .into_iter()
+            .map(move |comment| (comment, node.id.clone()))
         })
         .collect::<Vec<_>>();
     // augment_comments uses this same stable ordering. Equal-line comments keep
@@ -155,10 +163,18 @@ pub fn augment_normalized_comments_with_owners(
     normalize_comment: impl Fn(&str) -> String,
 ) -> Result<CommentAugmentation, String> {
     let lines = source_lines(source);
+    let index = NormalizedTreeIndex::new(nodes)?;
     let comments = nodes
         .iter()
         .filter(|node| node.role == NodeRole::Comment)
-        .flat_map(|node| tracked_normalized_comment(&lines, node, &normalize_comment))
+        .flat_map(|node| {
+            tracked_normalized_comment(
+                &lines,
+                node,
+                &normalize_comment,
+                is_structural_prefix_comment(node, &index),
+            )
+        })
         .collect::<Vec<_>>();
     let owner_indents = normalized_owner_indents(owners, nodes);
     augment_comments_with_owner_indents(&lines, owners, &comments, style, &owner_indents)
@@ -273,6 +289,7 @@ fn tracked_normalized_comment(
     source_lines: &[String],
     node: &NormalizedTreeNode,
     normalize_comment: &impl Fn(&str) -> String,
+    structural_prefix: bool,
 ) -> Vec<TrackedComment> {
     let start_line = node.span.start_point.row + 1;
     let mut fragments = node.source_fragment.split('\n').collect::<Vec<_>>();
@@ -297,9 +314,20 @@ fn tracked_normalized_comment(
                 text,
                 full_line,
                 indent: Some(indent),
+                structural_prefix,
             }
         })
         .collect()
+}
+
+fn is_structural_prefix_comment(
+    node: &NormalizedTreeNode,
+    index: &NormalizedTreeIndex<'_>,
+) -> bool {
+    node.semantic_roles.iter().any(|role| role == "doc_comment")
+        || node.source_fragment.trim_start().starts_with("///")
+        || node.source_fragment.trim_start().starts_with("/**")
+        || index.descendants(node).iter().any(|child| child.kind == "outer_doc_comment_marker")
 }
 
 pub fn augment_comments(
@@ -574,7 +602,11 @@ fn leading_comment_indices(
         }) {
             selected.push(index);
             current -= 1;
-        } else if policy == CommentAttachmentPolicy::PrecedingOwner && blank_line(lines, current) {
+        } else if blank_line(lines, current)
+            && (policy == CommentAttachmentPolicy::PrecedingOwner
+                || selected.last().is_some_and(|index| comments[*index].structural_prefix)
+                || structural_prefix_comment_before_blank(lines, current, comments, claimed))
+        {
             current -= 1;
         } else {
             break;
@@ -589,6 +621,25 @@ fn leading_comment_indices(
         }
     }
     selected
+}
+
+fn structural_prefix_comment_before_blank(
+    lines: &[String],
+    current_line: usize,
+    comments: &[TrackedComment],
+    claimed: &HashSet<usize>,
+) -> bool {
+    comments
+        .iter()
+        .enumerate()
+        .filter(|(index, comment)| {
+            comment.full_line && comment.line < current_line && !claimed.contains(index)
+        })
+        .max_by_key(|(_, comment)| comment.line)
+        .is_some_and(|(_, comment)| {
+            comment.structural_prefix
+                && ((comment.line + 1)..current_line).all(|line| blank_line(lines, line))
+        })
 }
 
 fn trailing_comment_indices(
@@ -772,6 +823,7 @@ mod tests {
             normalized_content: text.trim_start_matches('#').trim().to_string(),
             full_line,
             indent: Some(0),
+            structural_prefix: false,
         }
     }
 

@@ -198,6 +198,73 @@ fn native_analysis_retains_all_supported_declaration_kinds_and_exact_references(
 }
 
 #[test]
+fn native_owner_prefix_projection_matches_shared_fixture() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/ast-merge/native_owner_prefix_ownership.json"
+    ))
+    .unwrap();
+    let parser = Parser::new("rust");
+    for case in fixture["cases"].as_array().unwrap() {
+        let source = case["source"].as_str().unwrap();
+        let parsed = parser.parse(source, SourceRole::Source);
+        let analysis = typed::analysis(&parsed).unwrap();
+        let owner_path = case["owner_path"].as_str().unwrap();
+        let owner = analysis.document.owners.iter().find(|owner| owner.id == owner_path).unwrap();
+        assert_eq!(
+            [owner.start_line, owner.end_line],
+            case["owner_line_range"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|line| line.as_u64().unwrap() as usize)
+                .collect::<Vec<_>>()
+                .as_slice(),
+            "{}",
+            case["name"].as_str().unwrap()
+        );
+        assert_eq!(
+            &source[owner.start_byte..owner.end_byte],
+            case["owner_source"].as_str().unwrap(),
+            "{}",
+            case["name"].as_str().unwrap()
+        );
+        let owner_node_kinds = analysis.owner_node_ids[owner_path]
+            .iter()
+            .map(|id| parsed.document.node(id).unwrap().kind.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            owner_node_kinds,
+            case["owner_node_kinds"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|kind| kind.as_str().unwrap())
+                .collect::<Vec<_>>()
+        );
+        let comment_texts = analysis.attached_comment_node_ids[owner_path]
+            .iter()
+            .map(|id| {
+                let node = parsed.document.node(id).unwrap();
+                std::str::from_utf8(parsed.source.slice(node.span.range.clone()).unwrap())
+                    .unwrap()
+                    .trim_end_matches('\n')
+                    .to_string()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            comment_texts,
+            case["attached_comment_texts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|text| text.as_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+        );
+        analysis.validate(&parsed).unwrap();
+    }
+}
+
+#[test]
 fn typed_rust_preserves_legacy_decisions_and_freshly_verifies_clean_output() {
     let parser = Parser::new("rust");
     for texts in [
@@ -285,13 +352,9 @@ fn use_declarations_merge_with_independent_function_edits() {
 #[test]
 fn unsupported_native_constructs_and_wrong_roles_fail_closed() {
     let parser = Parser::new("rust");
-    for source in [
-        "impl T {}\nfn f() {}\n",
-        "#[inline]\nfn f() {}\n",
-        "m!();\nfn f() {}\n",
-        "fn f() {}\nfn f() {}\n",
-        "fn f( {\n",
-    ] {
+    for source in
+        ["impl T {}\nfn f() {}\n", "m!();\nfn f() {}\n", "fn f() {}\nfn f() {}\n", "fn f( {\n"]
+    {
         assert!(typed::analysis(&parser.parse(source, SourceRole::Source)).is_err(), "{source}");
     }
     assert!(

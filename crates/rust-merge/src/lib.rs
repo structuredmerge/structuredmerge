@@ -401,8 +401,9 @@ fn owner_policy() -> NamedOwnerProjectionPolicy<'static> {
     NamedOwnerProjectionPolicy {
         family: "Rust",
         owner_kinds: RUST_SOURCE_PRESERVING_OWNER_KINDS,
-        ignored_kinds: &[],
+        ignored_kinds: &["inner_attribute_item", "shebang"],
         wrapper_kinds: &[],
+        prefix_node_kinds: &["attribute_item"],
         name_fields: &["name"],
         fallback_name_kinds: &[
             "identifier",

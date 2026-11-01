@@ -295,6 +295,7 @@ fn projected_comments(source: &str, root: &Pair<'_, PestTomlRule>) -> Vec<Tracke
                 normalized_content: text.trim_start_matches('#').trim().to_string(),
                 full_line: line_without_newline[..offset].trim().is_empty(),
                 indent: Some(offset),
+                structural_prefix: false,
             });
         }
         line_start += line.len();

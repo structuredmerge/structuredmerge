@@ -4,7 +4,7 @@ use tree_haver::{NodeRole, NormalizedTreeIndex, NormalizedTreeNode};
 
 use crate::{
     CommentAttachmentPolicy, LayoutOwner, SourcePreservingOwner, SourcePreservingOwnerDocument,
-    augment_normalized_comments_with_evidence_policy,
+    augment_normalized_comments_with_evidence_filter,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -19,6 +19,8 @@ pub struct NamedOwnerProjectionPolicy<'a> {
     pub owner_kinds: &'a [NamedOwnerKind<'a>],
     pub ignored_kinds: &'a [&'a str],
     pub wrapper_kinds: &'a [&'a str],
+    /// Top-level syntax nodes that Ruby TreeHaver treats as a declaration prefix.
+    pub prefix_node_kinds: &'a [&'a str],
     pub name_fields: &'a [&'a str],
     pub fallback_name_kinds: &'a [&'a str],
     pub accept_any_named_kind: bool,
@@ -48,11 +50,22 @@ pub fn project_named_top_level_analysis(
     let mut owners = Vec::new();
     let mut owner_ids = HashSet::new();
     let mut owner_node_ids = std::collections::BTreeMap::new();
+    let mut attached_comment_node_ids = std::collections::BTreeMap::new();
+    let mut pending_prefix_nodes = Vec::new();
 
     for top_level in index.children(root) {
-        if top_level.role == NodeRole::Comment
-            || policy.ignored_kinds.contains(&top_level.kind.as_str())
-        {
+        if top_level.role == NodeRole::Comment {
+            if !policy.prefix_node_kinds.is_empty() {
+                pending_prefix_nodes.push(top_level);
+            }
+            continue;
+        }
+        if policy.prefix_node_kinds.contains(&top_level.kind.as_str()) {
+            pending_prefix_nodes.push(top_level);
+            continue;
+        }
+        if policy.ignored_kinds.contains(&top_level.kind.as_str()) {
+            pending_prefix_nodes.clear();
             continue;
         }
 
@@ -72,14 +85,34 @@ pub fn project_named_top_level_analysis(
             return Err(format!("{} owner {path:?} has no source fragment", policy.family));
         }
 
-        owner_node_ids.insert(path.clone(), vec![top_level.id.clone()]);
+        let prefix_nodes =
+            select_owner_prefix_nodes(source, &pending_prefix_nodes, top_level, &index, policy)?;
+        pending_prefix_nodes.clear();
+        let start_node = prefix_nodes.first().copied().unwrap_or(top_level);
+        let mut owner_nodes = prefix_nodes
+            .iter()
+            .filter(|node| node.role != NodeRole::Comment)
+            .map(|node| node.id.clone())
+            .collect::<Vec<_>>();
+        owner_nodes.push(top_level.id.clone());
+        owner_node_ids.insert(path.clone(), owner_nodes);
+        let comment_ids = prefix_nodes
+            .iter()
+            .filter(|node| node.role == NodeRole::Comment)
+            .map(|node| node.id.clone())
+            .collect::<Vec<_>>();
+        if !comment_ids.is_empty() {
+            attached_comment_node_ids.insert(path.clone(), comment_ids);
+        }
+        let start_byte = start_node.span.range.start_byte;
+        let end_byte = top_level.span.range.end_byte;
         owners.push(SourcePreservingOwner {
             id: path.clone(),
             path,
-            fingerprint: top_level.source_fragment.clone(),
-            start_byte: top_level.span.range.start_byte,
-            end_byte: top_level.span.range.end_byte,
-            start_line: top_level.span.start_point.row + 1,
+            fingerprint: source[start_byte..end_byte].to_string(),
+            start_byte,
+            end_byte,
+            start_line: start_node.span.start_point.row + 1,
             end_line: top_level.span.end_point.row + 1,
         });
     }
@@ -88,12 +121,13 @@ pub fn project_named_top_level_analysis(
         return Err(format!("{} document has no supported top-level named owners", policy.family));
     }
 
-    let attached_comment_node_ids = attach_normalized_comment_ranges(
+    attached_comment_node_ids = attach_normalized_comment_ranges(
         source,
         &mut owners,
         &owner_node_ids,
         nodes,
         policy.comment_attachment_policy,
+        attached_comment_node_ids,
     )?;
 
     Ok(crate::native_analysis::NativeOwnerAnalysis {
@@ -101,6 +135,45 @@ pub fn project_named_top_level_analysis(
         owner_node_ids,
         attached_comment_node_ids,
     })
+}
+
+fn select_owner_prefix_nodes<'a>(
+    source: &str,
+    pending: &[&'a NormalizedTreeNode],
+    owner: &NormalizedTreeNode,
+    index: &NormalizedTreeIndex<'a>,
+    policy: NamedOwnerProjectionPolicy<'_>,
+) -> Result<Vec<&'a NormalizedTreeNode>, String> {
+    let mut selected = Vec::new();
+    let mut cursor = owner.span.range.start_byte;
+    for node in pending.iter().rev() {
+        let start = node.span.range.start_byte;
+        let end = node.span.range.end_byte;
+        if start > end || end > cursor || cursor > source.len() {
+            return Err("declaration prefix nodes have invalid source order".into());
+        }
+        let gap = &source[end..cursor];
+        if !gap.bytes().all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n')) {
+            break;
+        }
+        let blank_boundary = gap.bytes().filter(|byte| *byte == b'\n').count() > 1;
+        let structural = policy.prefix_node_kinds.contains(&node.kind.as_str())
+            || (node.role == NodeRole::Comment && structural_doc_comment(node, index));
+        if blank_boundary && !structural {
+            break;
+        }
+        selected.push(*node);
+        cursor = start;
+    }
+    selected.reverse();
+    Ok(selected)
+}
+
+fn structural_doc_comment(node: &NormalizedTreeNode, index: &NormalizedTreeIndex<'_>) -> bool {
+    node.semantic_roles.iter().any(|role| role == "doc_comment")
+        || node.source_fragment.trim_start().starts_with("///")
+        || node.source_fragment.trim_start().starts_with("/**")
+        || index.descendants(node).iter().any(|child| child.kind == "outer_doc_comment_marker")
 }
 
 /// Extend structural owner source ranges with the comments assigned by the
@@ -113,20 +186,38 @@ fn attach_normalized_comment_ranges(
     owner_node_ids: &std::collections::BTreeMap<String, Vec<String>>,
     nodes: &[NormalizedTreeNode],
     policy: CommentAttachmentPolicy,
+    mut attached_by_owner: std::collections::BTreeMap<String, Vec<String>>,
 ) -> Result<std::collections::BTreeMap<String, Vec<String>>, String> {
+    let nodes_by_id = nodes
+        .iter()
+        .map(|node| (node.id.as_str(), node))
+        .collect::<std::collections::HashMap<_, _>>();
+    for owner in owners.iter_mut() {
+        if let Some(comment_ids) = attached_by_owner.get(&owner.id) {
+            for id in comment_ids {
+                let comment = nodes_by_id.get(id.as_str()).ok_or("unresolved prefix comment")?;
+                if comment.role != NodeRole::Comment {
+                    return Err("prefix comment reference has a non-comment role".into());
+                }
+                owner.start_byte = owner.start_byte.min(comment.span.range.start_byte);
+                owner.start_line = owner.start_line.min(comment.span.start_point.row + 1);
+            }
+            owner.fingerprint = source[owner.start_byte..owner.end_byte].to_string();
+        }
+    }
     if !nodes.iter().any(|node| node.role == NodeRole::Comment) {
-        return Ok(std::collections::BTreeMap::new());
+        return Ok(attached_by_owner);
     }
     let node_owner_ids = owner_node_ids
         .iter()
-        .filter_map(|(owner_id, node_ids)| {
-            node_ids.first().map(|node_id| (node_id.as_str(), owner_id.as_str()))
+        .flat_map(|(owner_id, node_ids)| {
+            node_ids.iter().map(move |node_id| (node_id.as_str(), owner_id.as_str()))
         })
         .collect::<std::collections::HashMap<_, _>>();
     let layout_owners = owners
         .iter()
         .filter_map(|owner| {
-            owner_node_ids.get(&owner.id)?.first().map(|node_id| LayoutOwner {
+            owner_node_ids.get(&owner.id)?.last().map(|node_id| LayoutOwner {
                 owner_id: node_id.clone(),
                 start_line: owner.start_line,
                 end_line: owner.end_line,
@@ -137,19 +228,26 @@ fn attach_normalized_comment_ranges(
         return Ok(std::collections::BTreeMap::new());
     }
 
-    let evidence = augment_normalized_comments_with_evidence_policy(
+    let prefix_comment_ranges = attached_by_owner
+        .values()
+        .flatten()
+        .filter_map(|id| nodes_by_id.get(id.as_str()))
+        .map(|node| node.span.range.clone())
+        .collect::<Vec<_>>();
+    let evidence = augment_normalized_comments_with_evidence_filter(
         source,
         &layout_owners,
         nodes,
         "source",
         policy,
+        |node| {
+            !prefix_comment_ranges.iter().any(|range| {
+                range.start_byte <= node.span.range.start_byte
+                    && node.span.range.end_byte <= range.end_byte
+            })
+        },
         str::to_string,
     )?;
-    let nodes_by_id = nodes
-        .iter()
-        .map(|node| (node.id.as_str(), node))
-        .collect::<std::collections::HashMap<_, _>>();
-    let mut attached_by_owner = std::collections::BTreeMap::<String, Vec<String>>::new();
     for attachment in &evidence.augmentation.attachments {
         let Some(owner_id) = node_owner_ids.get(attachment.owner_id.as_str()).copied() else {
             continue;
@@ -335,6 +433,7 @@ mod tests {
             owner_kinds: OWNER_KINDS,
             ignored_kinds: &["import_statement"],
             wrapper_kinds: &["export_statement"],
+            prefix_node_kinds: &[],
             name_fields: &["name"],
             fallback_name_kinds: &[],
             accept_any_named_kind: false,
@@ -464,6 +563,7 @@ mod tests {
             owner_kinds: &[],
             ignored_kinds: &[],
             wrapper_kinds: &[],
+            prefix_node_kinds: &[],
             name_fields: &["name"],
             fallback_name_kinds: &[],
             accept_any_named_kind: true,

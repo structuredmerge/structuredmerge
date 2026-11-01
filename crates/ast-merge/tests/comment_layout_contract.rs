@@ -35,6 +35,7 @@ fn shared_comment_line_ownership_fixture_matches_regions_and_layout() {
             normalized_content: comment["normalized_content"].as_str().unwrap().to_string(),
             full_line: comment["full_line"].as_bool().unwrap(),
             indent: Some(comment["indent"].as_u64().unwrap() as usize),
+            structural_prefix: comment["structural_prefix"].as_bool().unwrap_or(false),
         })
         .collect::<Vec<_>>();
     let actual =
@@ -111,6 +112,7 @@ fn shared_comment_line_ownership_fixture_matches_regions_and_layout() {
                 normalized_content: comment["normalized_content"].as_str().unwrap().to_string(),
                 full_line: comment["full_line"].as_bool().unwrap(),
                 indent: Some(comment["indent"].as_u64().unwrap() as usize),
+                structural_prefix: comment["structural_prefix"].as_bool().unwrap_or(false),
             })
             .collect::<Vec<_>>();
         let augmentation = augment_comments(
@@ -161,6 +163,7 @@ fn shared_comment_line_ownership_fixture_matches_regions_and_layout() {
             normalized_content: entry["normalized_content"].as_str().unwrap().to_string(),
             full_line: entry["full_line"].as_bool().unwrap(),
             indent: Some(entry["indent"].as_u64().unwrap() as usize),
+            structural_prefix: entry["structural_prefix"].as_bool().unwrap_or(false),
         }];
         let owner_indents = case["owner_indent"]
             .as_u64()
@@ -220,6 +223,7 @@ fn shared_comment_line_ownership_fixture_matches_regions_and_layout() {
                 normalized_content: comment["normalized_content"].as_str().unwrap().to_string(),
                 full_line: comment["full_line"].as_bool().unwrap(),
                 indent: Some(comment["indent"].as_u64().unwrap() as usize),
+                structural_prefix: comment["structural_prefix"].as_bool().unwrap_or(false),
             })
             .collect::<Vec<_>>();
         let augmentation = augment_comments(
@@ -303,6 +307,7 @@ fn shared_comment_attachment_policy_cases_match_rubric() {
                 normalized_content: comment["normalized_content"].as_str().unwrap().to_string(),
                 full_line: comment["full_line"].as_bool().unwrap(),
                 indent: Some(comment["indent"].as_u64().unwrap() as usize),
+                structural_prefix: comment["structural_prefix"].as_bool().unwrap_or(false),
             })
             .collect::<Vec<_>>();
 

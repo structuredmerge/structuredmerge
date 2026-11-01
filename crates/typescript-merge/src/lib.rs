@@ -338,6 +338,7 @@ fn owner_policy() -> NamedOwnerProjectionPolicy<'static> {
         owner_kinds: TYPESCRIPT_DECLARATION_OWNER_KINDS,
         ignored_kinds: &["import_statement"],
         wrapper_kinds: &["export_statement", "ambient_declaration", "lexical_declaration"],
+        prefix_node_kinds: &[],
         name_fields: &["name"],
         fallback_name_kinds: &["identifier", "type_identifier"],
         accept_any_named_kind: false,
