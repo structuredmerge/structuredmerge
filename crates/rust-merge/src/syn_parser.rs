@@ -1008,6 +1008,14 @@ mod tests {
     }
 
     #[test]
+    fn comment_lexer_does_not_treat_a_lifetime_as_a_character_literal() {
+        let source = "fn borrow<'a>(text: &'a str) { /* keep me */ let marker = 'x'; }\n";
+        let comments =
+            scan_comments(source).into_iter().map(|range| &source[range]).collect::<Vec<_>>();
+        assert_eq!(comments, vec!["/* keep me */"]);
+    }
+
+    #[test]
     fn syn_directional_additions_preserve_attached_comment_and_blank_gap_lines() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
             "../../../../fixtures/polyglot/typed-core/rust_trait_alias_merge3.json"
