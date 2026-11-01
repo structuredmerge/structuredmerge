@@ -560,8 +560,12 @@ fn position_additions_in_their_source_gaps(
         })
         .cloned()
         .collect::<HashSet<_>>();
+    // `None` is a real document boundary: additions before the first retained
+    // base owner belong to the preamble gap, and additions after the last one
+    // belong to the postlude gap. Use an optional owner pair rather than
+    // sentinel owner IDs so the same ownership rule covers all source gaps.
     let mut additions_by_gap =
-        HashMap::<(String, String), HashMap<SourceRevision, Vec<String>>>::new();
+        HashMap::<(Option<String>, Option<String>), HashMap<SourceRevision, Vec<String>>>::new();
 
     for (owner_id, revision) in owner_revisions {
         if base_owner_ids.contains(owner_id) || deleted_owner_ids.contains(owner_id) {
@@ -596,9 +600,9 @@ fn position_additions_in_their_source_gaps(
                         .is_some_and(|id| selected_base_owner_ids.contains(id))
             })
             .and_then(|record| record.owner_id.clone());
-        let (Some(previous), Some(following)) = (previous, following) else {
+        if previous.is_none() && following.is_none() && !base_owner_ids.is_empty() {
             continue;
-        };
+        }
         additions_by_gap
             .entry((previous, following))
             .or_default()
@@ -616,7 +620,7 @@ fn position_additions_in_their_source_gaps(
         });
         Some((start, end))
     };
-    let mut positioned = Vec::<(String, SourceRevision, Vec<SourceLineSelection>)>::new();
+    let mut positioned = Vec::<(String, SourceRevision, bool, Vec<SourceLineSelection>)>::new();
     let mut replaced_keys = HashSet::<(SourceRevision, String)>::new();
 
     for ((previous, following), revisions) in additions_by_gap {
@@ -652,15 +656,26 @@ fn position_additions_in_their_source_gaps(
                 valid = false;
                 break;
             };
-            let Some((previous_start, previous_end)) = owner_bounds(records, &previous) else {
-                valid = false;
-                break;
+            let previous_end = match previous.as_deref() {
+                Some(owner_id) => match owner_bounds(records, owner_id) {
+                    Some((_, end)) => end,
+                    None => {
+                        valid = false;
+                        break;
+                    }
+                },
+                None => 0,
             };
-            let Some((following_start, _)) = owner_bounds(records, &following) else {
-                valid = false;
-                break;
+            let following_start = match following.as_deref() {
+                Some(owner_id) => match owner_bounds(records, owner_id) {
+                    Some((start, _)) => start,
+                    None => {
+                        valid = false;
+                        break;
+                    }
+                },
+                None => records.iter().map(|record| record.line_number).max().unwrap_or(0) + 1,
             };
-            let _ = previous_start;
             let range = (previous_end + 1, following_start.saturating_sub(1));
             if range.0 > range.1 {
                 valid = false;
@@ -763,11 +778,27 @@ fn position_additions_in_their_source_gaps(
                     if next_revision == revision {
                         (*revision, end + 1, next_start.saturating_sub(1))
                     } else {
-                        let next_base_start = owner_bounds(records, &following).unwrap().0;
+                        let next_base_start = following
+                            .as_deref()
+                            .and_then(|owner_id| owner_bounds(records, owner_id))
+                            .map(|(start, _)| start)
+                            .unwrap_or_else(|| {
+                                records
+                                    .iter()
+                                    .map(|record| record.line_number)
+                                    .max()
+                                    .unwrap_or(*end)
+                            });
                         (*revision, end + 1, next_base_start.saturating_sub(1))
                     }
                 } else {
-                    let next_base_start = owner_bounds(records, &following).unwrap().0;
+                    let next_base_start = following
+                        .as_deref()
+                        .and_then(|owner_id| owner_bounds(records, owner_id))
+                        .map(|(start, _)| start)
+                        .unwrap_or_else(|| {
+                            records.iter().map(|record| record.line_number).max().unwrap_or(*end)
+                        });
                     (*revision, end + 1, next_base_start.saturating_sub(1))
                 };
             if !append_gap(
@@ -802,22 +833,50 @@ fn position_additions_in_their_source_gaps(
                     .iter()
                     .filter(|record| {
                         record.kind == "layout_gap"
-                            && record.before_owner_id.as_deref() == Some(previous.as_str())
-                            && record.after_owner_id.as_deref() == Some(following.as_str())
+                            && record.before_owner_id.as_deref() == previous.as_deref()
+                            && record.after_owner_id.as_deref() == following.as_deref()
                     })
                     .map(|record| (baseline_revision, record.selection_key.clone())),
             );
         }
 
-        let Some(anchor) = base.iter().find(|record| {
-            record.kind == "structural_owner"
-                && record.owner_id.as_deref() == Some(following.as_str())
-        }) else {
+        let anchor_owner = following.as_deref().or(previous.as_deref());
+        let Some(anchor_owner) = anchor_owner else {
+            // A base with no owners has no structural anchor. Keep its original
+            // source-selection behavior until an explicit empty-file contract
+            // defines how document-only lines compose with additions.
+            continue;
+        };
+        let Some(anchor) = base
+            .iter()
+            .filter(|record| {
+                record.owner_id.as_deref() == Some(anchor_owner)
+                    && matches!(record.kind.as_str(), "structural_owner" | "comment_owner")
+            })
+            .min_by_key(|record| record.line_number)
+        else {
             continue;
         };
         let anchor_revision =
-            owner_revisions.get(&following).copied().unwrap_or(SourceRevision::Base);
-        positioned.push((anchor.selection_key.clone(), anchor_revision, chunk));
+            owner_revisions.get(anchor_owner).copied().unwrap_or(SourceRevision::Base);
+        let after_anchor = following.is_none();
+        let insertion_key = if after_anchor {
+            // Put a tail addition after the complete owner and before its
+            // postlude gap, which may itself be replaced by the incoming gap.
+            base.iter()
+                .filter(|record| {
+                    record.owner_id.as_deref() == Some(anchor_owner)
+                        && record.kind == "structural_owner"
+                })
+                .max_by_key(|record| record.line_number)
+                .map(|record| record.selection_key.clone())
+                .unwrap_or_else(|| anchor.selection_key.clone())
+        } else {
+            // Put a head or interior addition before every leading comment line
+            // attached to the following owner.
+            anchor.selection_key.clone()
+        };
+        positioned.push((insertion_key, anchor_revision, after_anchor, chunk));
     }
 
     selections.retain(|selection| {
@@ -825,13 +884,13 @@ fn position_additions_in_their_source_gaps(
     });
     let mut positioned = positioned
         .into_iter()
-        .filter_map(|(anchor_key, anchor_revision, chunk)| {
+        .filter_map(|(anchor_key, anchor_revision, after_anchor, chunk)| {
             selections
                 .iter()
                 .position(|selection| {
                     selection.selection_key == anchor_key && selection.revision == anchor_revision
                 })
-                .map(|index| (index, chunk))
+                .map(|index| (index + usize::from(after_anchor), chunk))
         })
         .collect::<Vec<_>>();
     positioned.sort_by_key(|(index, _)| *index);
@@ -1910,6 +1969,7 @@ pub fn apply_source_edits(source: &str, edits: &[SourceEdit]) -> Result<String, 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{SourceLineCommentRegion, SourceLineOwner, source_line_dispositions};
 
     fn sources() -> HashMap<SourceRevision, String> {
         HashMap::from([
@@ -1946,6 +2006,86 @@ mod tests {
                 end_line,
             }],
         }
+    }
+
+    #[test]
+    fn composes_added_owners_in_preamble_and_postlude_gaps() {
+        let document =
+            |source: &str, owners: Vec<SourceLineOwner>, comments: Vec<SourceLineCommentRegion>| {
+                source_line_dispositions(source, &owners, &comments, &[]).unwrap()
+            };
+        let base_source = "fn alpha() {}\n".to_string();
+        let ours_source = "// lead\nfn start() {}\nfn alpha() {}\n".to_string();
+        let theirs_source = "fn alpha() {}\n// tail\nfn finish() {}\n".to_string();
+        let mut sources = HashMap::new();
+        sources.insert(SourceRevision::Base, base_source.clone());
+        sources.insert(SourceRevision::Ours, ours_source.clone());
+        sources.insert(SourceRevision::Theirs, theirs_source.clone());
+        let dispositions = HashMap::from([
+            (
+                SourceRevision::Base,
+                document(
+                    &base_source,
+                    vec![SourceLineOwner { id: "alpha".into(), start_line: 1, end_line: 1 }],
+                    vec![],
+                ),
+            ),
+            (
+                SourceRevision::Ours,
+                document(
+                    &ours_source,
+                    vec![
+                        SourceLineOwner { id: "start".into(), start_line: 2, end_line: 2 },
+                        SourceLineOwner { id: "alpha".into(), start_line: 3, end_line: 3 },
+                    ],
+                    vec![SourceLineCommentRegion {
+                        id: "lead".into(),
+                        selection_key: "comment:leading:start".into(),
+                        owner_id: Some("start".into()),
+                        kind: "leading".into(),
+                        start_line: 1,
+                        end_line: 1,
+                    }],
+                ),
+            ),
+            (
+                SourceRevision::Theirs,
+                document(
+                    &theirs_source,
+                    vec![
+                        SourceLineOwner { id: "alpha".into(), start_line: 1, end_line: 1 },
+                        SourceLineOwner { id: "finish".into(), start_line: 3, end_line: 3 },
+                    ],
+                    vec![SourceLineCommentRegion {
+                        id: "tail".into(),
+                        selection_key: "comment:leading:finish".into(),
+                        owner_id: Some("finish".into()),
+                        kind: "leading".into(),
+                        start_line: 2,
+                        end_line: 2,
+                    }],
+                ),
+            ),
+        ]);
+        let owner_revisions = HashMap::from([
+            ("alpha".to_string(), SourceRevision::Base),
+            ("start".to_string(), SourceRevision::Ours),
+            ("finish".to_string(), SourceRevision::Theirs),
+        ]);
+        let selections = source_line_selections_for_owner_revisions_preserving_addition_gaps(
+            SourceRevision::Base,
+            &dispositions,
+            &owner_revisions,
+            &HashSet::new(),
+        )
+        .unwrap();
+        let plan =
+            source_render_plan_from_line_selections(sources, dispositions, &selections).unwrap();
+        let rendered = render_source_plan(&plan).unwrap();
+        assert_eq!(
+            rendered.content,
+            "// lead\nfn start() {}\nfn alpha() {}\n// tail\nfn finish() {}\n"
+        );
     }
 
     #[test]

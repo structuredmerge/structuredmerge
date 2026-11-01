@@ -197,6 +197,26 @@ fn common_rust_operation_matches_two_tip_addition_fixture() {
 }
 
 #[test]
+fn common_rust_operation_preserves_two_tip_preamble_and_postlude_additions() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions_file_edges.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let texts = [
+        input["base"].as_str().unwrap(),
+        input["ours"].as_str().unwrap(),
+        input["theirs"].as_str().unwrap(),
+    ];
+    let (result, request) = run(request("merge3", &texts));
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    assert_eq!(result.output.as_deref(), fixture["expected"]["output"].as_str());
+    assert_eq!(result.verification.output_reparsed, Some(true));
+    result.validate_against(&request).unwrap();
+}
+
+#[test]
 fn family_guard_precedes_shortcuts_and_does_not_fabricate_owner_decisions() {
     for texts in [
         [BASE.to_string(), OURS.to_string(), format!("{BASE}fn added() {{}}\n")],
