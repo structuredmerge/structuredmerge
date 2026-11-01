@@ -2911,19 +2911,27 @@ fn promoted_inline_comment_origins(
     let bytes = source.as_bytes();
     if line_range.end_byte == line_range.start_byte
         || bytes.get(line_range.end_byte - 1) != Some(&b'\n')
-        || (line_range.end_byte >= 2 && bytes.get(line_range.end_byte - 2) == Some(&b'\r'))
     {
         return vec![];
     }
+    // The emitted line ending is a lone LF. For CRLF sources only the source's LF byte
+    // is an origin of it; the CR is dropped, so the comment must end before the CR.
     let newline_start = line_range.end_byte - 1;
+    let comment_end = if line_range.end_byte >= 2 && bytes.get(newline_start - 1) == Some(&b'\r') {
+        newline_start - 1
+    } else {
+        newline_start
+    };
+    // Some parsers include the CR in the comment node while the emitted comment is trimmed.
+    let trimmed_end = comment_range.start_byte + raw_comment.len();
     if comment_range.start_byte < line_range.start_byte
-        || comment_range.end_byte != newline_start
-        || comment_range.end_byte > bytes.len()
-        || bytes.get(comment_range.start_byte..comment_range.end_byte)
-            != Some(raw_comment.as_bytes())
+        || (comment_range.end_byte != comment_end && comment_range.end_byte != newline_start)
+        || trimmed_end > comment_range.end_byte
+        || bytes.get(comment_range.start_byte..trimmed_end) != Some(raw_comment.as_bytes())
     {
         return vec![];
     }
+    let comment_range = ByteRange { start_byte: comment_range.start_byte, end_byte: trimmed_end };
     let indentation_end = line_range.start_byte + indentation.len();
     if indentation_end > comment_range.start_byte
         || bytes.get(line_range.start_byte..indentation_end) != Some(indentation.as_bytes())

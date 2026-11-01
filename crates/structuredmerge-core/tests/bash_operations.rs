@@ -222,6 +222,26 @@ fn bash_merge3_promotes_inline_comment_from_removed_owner_with_source_evidence()
 }
 
 #[test]
+fn bash_merge3_promotes_inline_comment_from_removed_owner_in_crlf_source() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../fixtures/polyglot/typed-core/bash_merge3_inline_comment_owner_deletion.json"
+    ))
+    .unwrap();
+    let input = &fixture["input"];
+    let crlf = |key: &str| input[key].as_str().unwrap().replace('\n', "\r\n");
+    let (base, ours, theirs) = (crlf("base"), crlf("ours"), crlf("theirs"));
+    let (result, request) = run(request("merge3", &[&base, &ours, &theirs]));
+
+    assert!(result.ok, "{:?}", result.diagnostics);
+    let output = result.output.as_deref().unwrap();
+    let expected = fixture["expected"]["output"].as_str().unwrap();
+    // Promoted comment lines are LF; every other line keeps its CRLF ending.
+    assert_eq!(output.replace("\r\n", "\n"), expected);
+    assert_eq!(result.render_report["strategy"], "source-plan");
+    result.validate_against(&request).unwrap();
+}
+
+#[test]
 fn exported_bash_profile_honors_explicit_selection_and_cancellation() {
     register_language_pack_parser("bash.facade".into(), "bash".into()).unwrap();
     let limits = ParseLimits {
