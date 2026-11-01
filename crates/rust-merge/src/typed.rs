@@ -93,6 +93,7 @@ pub fn source_line_analysis(parsed: &ParsedResult) -> Result<RustSourceLineAnaly
     let owners = analysis(parsed)?;
     let source = std::str::from_utf8(parsed.source.bytes()).map_err(|error| error.to_string())?;
     let nodes = parsed.normalized_nodes()?;
+    let parser_is_syn = parsed.backend.parser == "syn";
     let mut tree_to_semantic = HashMap::<String, String>::new();
     let mut native_owners = Vec::with_capacity(owners.document.owners.len());
     let mut semantic_owners = Vec::with_capacity(owners.document.owners.len());
@@ -145,8 +146,15 @@ pub fn source_line_analysis(parsed: &ParsedResult) -> Result<RustSourceLineAnaly
                         return None;
                     }
                     let text = node.source_fragment.trim_start();
-                    let outer_doc = (text.starts_with("///") && !text.starts_with("////"))
-                        || (text.starts_with("/**") && !text.starts_with("/***"));
+                    let outer_doc = if parser_is_syn {
+                        node.semantic_roles.iter().any(|role| role == "doc_comment")
+                    } else {
+                        // Tree-sitter does not expose Rust's doc-attribute semantics
+                        // consistently, so keep this parser path's lexical projection
+                        // separate from the native syn facts.
+                        (text.starts_with("///") && !text.starts_with("////"))
+                            || (text.starts_with("/**") && !text.starts_with("/***"))
+                    };
                     outer_doc.then_some(node.span.end_point.row + 1)
                 })
                 .max();
