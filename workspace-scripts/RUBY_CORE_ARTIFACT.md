@@ -204,3 +204,12 @@ verifier report confirms native extension origin, installed core tests, generate
 E2E, consumer-app tests, and RBS validation all passed. The report records
 `registry_install=local-candidate` and `publication_gate=false`; this is local
 candidate evidence, not registry-install or release evidence.
+
+Local candidate rerun against current Rust core commit `6fc1309` (2026-11-01):
+the x86_64 Linux / Ruby 4.0.9 platform gem `structuredmerge-core 0.2.1` has
+SHA-256 `c797dc5ce13fb6bf34740d83a1b41ce917891e4f32bf521f635df2aa7a705503`.
+The exact archive installed into a fresh `GEM_HOME` with checkout load paths
+cleared. Native-extension origin, RBS validation, 53 installed core examples,
+116 generated E2E examples, and 116 consumer-app examples passed. The report
+records `registry_install=local-candidate` and `publication_gate=false`; this is
+not evidence of a RubyGems registry installation, and no package was published.
