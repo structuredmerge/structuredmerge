@@ -203,11 +203,11 @@ pub fn rust_plan_context(backend: RustBackend) -> ConformanceFamilyPlanContext {
 }
 
 pub fn rust_backends() -> Vec<RustBackend> {
-    vec![RustBackend::TreeSitter, RustBackend::Native]
+    vec![RustBackend::Native, RustBackend::TreeSitter]
 }
 
 pub fn parse_rust(source: &str, _dialect: RustDialect) -> ParseResult<RustAnalysis> {
-    parse_rust_with_backend(source, RustDialect::Rust, RustBackend::TreeSitter)
+    parse_rust_with_backend(source, RustDialect::Rust, RustBackend::Native)
 }
 
 fn unsupported_feature_result<T>(message: impl Into<String>) -> ParseResult<T> {
@@ -324,7 +324,7 @@ pub fn merge_rust_three_way(
         ours_source,
         theirs_source,
         dialect,
-        RustBackend::TreeSitter,
+        RustBackend::Native,
     )
 }
 
@@ -717,7 +717,7 @@ pub fn merge_rust(
     destination_source: &str,
     dialect: RustDialect,
 ) -> MergeResult<String> {
-    merge_rust_with_backend(template_source, destination_source, dialect, RustBackend::TreeSitter)
+    merge_rust_with_backend(template_source, destination_source, dialect, RustBackend::Native)
 }
 
 pub fn merge_rust_with_backend(
@@ -727,6 +727,15 @@ pub fn merge_rust_with_backend(
     backend: RustBackend,
 ) -> MergeResult<String> {
     if backend == RustBackend::Native {
+        if let Err(error) = syn::parse_file(template_source) {
+            return native_merge_error_result(error.to_string());
+        }
+        if let Err(error) = syn::parse_file(destination_source) {
+            return native_merge_error_result_with_category(
+                error.to_string(),
+                DiagnosticCategory::DestinationParseError,
+            );
+        }
         return merge_rust_native_two_way(template_source, destination_source);
     }
     let template = parse_rust_with_backend(template_source, dialect, backend);
@@ -758,13 +767,21 @@ pub fn merge_rust_with_backend(
         };
     }
 
-    // Keep Tree-sitter as the selected backend acceptance gate. Rust-native syn
-    // item spans and shared source-line dispositions drive exact owner emission.
     merge_rust_native_two_way(template_source, destination_source)
 }
 
 fn native_merge_error_result(message: impl Into<String>) -> MergeResult<String> {
-    let parse = parse_error_result::<()>(message);
+    native_merge_error_result_with_category(message, DiagnosticCategory::ParseError)
+}
+
+fn native_merge_error_result_with_category(
+    message: impl Into<String>,
+    category: DiagnosticCategory,
+) -> MergeResult<String> {
+    let mut parse = parse_error_result::<()>(message);
+    if let Some(diagnostic) = parse.diagnostics.first_mut() {
+        diagnostic.category = category;
+    }
     MergeResult { ok: false, diagnostics: parse.diagnostics, output: None, policies: vec![] }
 }
 
