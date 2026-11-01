@@ -343,6 +343,9 @@ pub fn merge_rust_three_way_with_backend(
     _dialect: RustDialect,
     backend: RustBackend,
 ) -> ThreeWayMergeResult<String> {
+    if backend == RustBackend::Native {
+        return merge_rust_native_three_way_typed(base_source, ours_source, theirs_source);
+    }
     let parse = match backend {
         RustBackend::Native => parse_source_preserving_rust_native,
         RustBackend::TreeSitter => parse_source_preserving_rust,
@@ -365,6 +368,33 @@ pub fn merge_rust_three_way_with_backend(
     }
 
     merge_source_preserving_owners(base, ours, theirs, parse)
+}
+
+fn merge_rust_native_three_way_typed(
+    base_source: &str,
+    ours_source: &str,
+    theirs_source: &str,
+) -> ThreeWayMergeResult<String> {
+    use tree_haver::source::SourceRole;
+
+    let base = match parse_rust_with_syn_provider_role(base_source, SourceRole::Base) {
+        Ok(parsed) => parsed,
+        Err(message) => return three_way_parse_error("base", message),
+    };
+    let ours = match parse_rust_with_syn_provider_role(ours_source, SourceRole::Ours) {
+        Ok(parsed) => parsed,
+        Err(message) => return three_way_parse_error("ours", message),
+    };
+    let theirs = match parse_rust_with_syn_provider_role(theirs_source, SourceRole::Theirs) {
+        Ok(parsed) => parsed,
+        Err(message) => return three_way_parse_error("theirs", message),
+    };
+    match typed::merge3(&base, &ours, &theirs, |source| {
+        parse_rust_with_syn_provider_role(source, SourceRole::Output)
+    }) {
+        Ok(execution) => execution.evidence.result,
+        Err(message) => three_way_parse_error("source", message),
+    }
 }
 
 fn rust_membership_change_with_owner_edit(
@@ -523,13 +553,20 @@ fn parse_source_preserving_rust_native_with_treesitter_comments(
 }
 
 fn parse_rust_with_syn_provider(source: &str) -> Result<tree_haver::service::ParsedResult, String> {
+    parse_rust_with_syn_provider_role(source, tree_haver::source::SourceRole::Source)
+}
+
+fn parse_rust_with_syn_provider_role(
+    source: &str,
+    role: tree_haver::source::SourceRole,
+) -> Result<tree_haver::service::ParsedResult, String> {
     use std::sync::{Arc, atomic::AtomicBool};
     use tree_haver::{
         service::{
             ExecutionContext, PARSE_REQUEST_SCHEMA, ParseOptions, ParseRequest, ParseService,
             ParserRegistry, ParserSelection, TreeHaverParseService,
         },
-        source::{SourceEncoding, SourceRole, source_input},
+        source::{SourceEncoding, source_input},
     };
 
     let provider_id = "rust.syn.direct";
@@ -542,10 +579,10 @@ fn parse_rust_with_syn_provider(source: &str) -> Result<tree_haver::service::Par
         .map_err(|error| format!("could not snapshot native Rust parser: {error:?}"))?;
     let request = ParseRequest {
         schema: PARSE_REQUEST_SCHEMA.into(),
-        request_id: "rust-native-parse".into(),
+        request_id: format!("rust-native-parse-{role:?}"),
         source: source_input(
-            "source".into(),
-            SourceRole::Source,
+            format!("rust-native-{role:?}"),
+            role,
             SourceEncoding::Utf8,
             source.as_bytes().to_vec(),
         )

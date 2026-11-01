@@ -866,16 +866,31 @@ fn native_syn_merge3_uses_shared_source_line_selection() {
 }
 
 #[test]
-fn native_syn_merge3_consumes_shared_two_tip_additions_fixture() {
-    let fixture = read_fixture(&["polyglot", "typed-core", "rust_merge3_two_tip_additions.json"]);
-    let input = &fixture["input"];
-    let result = merge_rust_three_way_with_backend(
-        input["base"].as_str().unwrap(),
-        input["ours"].as_str().unwrap(),
-        input["theirs"].as_str().unwrap(),
-        RustDialect::Rust,
-        RustBackend::Native,
-    );
-    assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Clean);
-    assert_eq!(result.output.as_deref(), Some(fixture["expected"]["output"].as_str().unwrap()));
+fn native_syn_merge3_consumes_shared_two_tip_addition_fixtures() {
+    for fixture_name in [
+        "rust_merge3_two_tip_additions.json",
+        "rust_merge3_two_tip_additions_distinct_source_gaps.json",
+        "rust_merge3_two_tip_additions_same_internal_gap.json",
+    ] {
+        let fixture = read_fixture(&["polyglot", "typed-core", fixture_name]);
+        let input = &fixture["input"];
+        let result = merge_rust_three_way_with_backend(
+            input["base"].as_str().unwrap(),
+            input["ours"].as_str().unwrap(),
+            input["theirs"].as_str().unwrap(),
+            RustDialect::Rust,
+            RustBackend::Native,
+        );
+        assert_eq!(
+            result.outcome,
+            ast_merge::ThreeWayMergeOutcome::Clean,
+            "{fixture_name}: {:?}",
+            result.diagnostics
+        );
+        assert_eq!(
+            result.output.as_deref(),
+            Some(fixture["expected"]["output"].as_str().unwrap()),
+            "{fixture_name}"
+        );
+    }
 }
