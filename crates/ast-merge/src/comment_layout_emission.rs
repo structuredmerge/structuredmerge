@@ -409,8 +409,8 @@ pub fn source_line_dispositions(
         let containing_owner = owners.iter().find(|owner| {
             region.start_line >= owner.start_line && region.end_line <= owner.end_line
         });
-        if root_region && containing_owner.is_some() {
-            let owner_id = &containing_owner.unwrap().id;
+        if root_region && let Some(owner) = containing_owner {
+            let owner_id = &owner.id;
             for line_number in region.start_line..=region.end_line {
                 let disposition = assigned[line_number - 1].as_mut().ok_or_else(|| {
                     format!(

@@ -334,7 +334,7 @@ fn rehome_promotes_safe_inline_comments_as_owned_synthesized_lines() {
         SourceRevision::Ours,
         &dispositions,
         &owners,
-        &[comment_region.clone()],
+        std::slice::from_ref(&comment_region),
         &HashSet::from(["removed".to_string()]),
         &rehome,
     )

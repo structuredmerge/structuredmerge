@@ -600,8 +600,7 @@ fn augment_comments_observed(
         if is_preamble && comments[*group.first().unwrap()].line == 1 && group.len() > 1 {
             if let Some(gap_line) = (comments[*group.first().unwrap()].line
                 ..comments[*group.last().unwrap()].line)
-                .filter(|line| blank_line(lines, *line))
-                .last()
+                .rfind(|line| blank_line(lines, *line))
                 .filter(|line| first_owner_start.is_some_and(|owner_line| *line < owner_line))
             {
                 let (preamble, detached): (Vec<_>, Vec<_>) =

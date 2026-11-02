@@ -257,8 +257,7 @@ fn analysis_preserves_parser_recovery_nodes_as_unowned_layout() {
         .layout_gaps()
         .unwrap()
         .iter()
-        .map(|gap| parsed.source.slice(gap.range.clone()).unwrap())
-        .flatten()
+        .flat_map(|gap| parsed.source.slice(gap.range.clone()).unwrap())
         .copied()
         .collect::<Vec<_>>();
     assert!(String::from_utf8(unowned).unwrap().contains("func () {}"));

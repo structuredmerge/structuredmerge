@@ -385,7 +385,7 @@ fn merge_owners(
             !ours_by_id.contains_key(owner.id.as_str())
                 && selected.get(owner.id.as_str()) == Some(&SourceRevision::Theirs)
         }) {
-            let line_range = match physical_line_range(&theirs, added_owner) {
+            let line_range = match physical_line_range(theirs, added_owner) {
                 Ok(range) => range,
                 Err(message) => {
                     return error_result(DiagnosticCategory::ConfigurationError, message);

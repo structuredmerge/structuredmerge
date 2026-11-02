@@ -715,8 +715,8 @@ fn one_sided_owner_order_revision(
         .collect::<HashSet<_>>();
     let stable_ids = base_ids
         .intersection(&ours_ids)
+        .filter(|&id| theirs_ids.contains(id))
         .cloned()
-        .filter(|id| theirs_ids.contains(id))
         .collect::<HashSet<_>>();
     if stable_ids.len() < 2 {
         return None;
@@ -773,8 +773,7 @@ fn render_line_selected_output(
         .ok_or_else(|| "Rust owner merge omitted classification evidence".to_string())?;
     let mut owner_revisions = HashMap::new();
     let mut deleted_owner_ids = HashSet::new();
-    if classification.whole_source_selection.is_some() {
-        let revision = classification.whole_source_selection.unwrap();
+    if let Some(revision) = classification.whole_source_selection {
         let revision_index = match revision {
             ast_merge::SourceRevision::Base => 0,
             ast_merge::SourceRevision::Ours => 1,

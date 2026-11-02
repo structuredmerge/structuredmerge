@@ -40,12 +40,7 @@ pub fn diff_native_sources_with_engine(
     snapshot: &ParserRegistrySnapshot,
     context: &ExecutionContext,
     analyze: fn(&ParsedResult) -> Result<SourcePreservingOwnerDocument, String>,
-    analyze_with_diagnostics: Option<
-        fn(
-            &ParsedResult,
-        )
-            -> Result<SourcePreservingOwnerDocument, crate::typed_merge::NativeAnalysisError>,
-    >,
+    analyze_with_diagnostics: Option<crate::typed_merge::NativeAnalyzeWithDiagnosticsFn>,
 ) -> Result<NativeDiffExecution, NativeMergeError> {
     let roles: BTreeSet<_> =
         requests.iter().map(|request| request.source.descriptor.role).collect();

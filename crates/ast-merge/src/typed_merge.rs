@@ -131,13 +131,17 @@ pub fn merge_native_sources_with_evidence(
     )
 }
 
+/// Optional typed-error analysis callback shared by the native engine and the
+/// registry diff entry point.
+pub type NativeAnalyzeWithDiagnosticsFn =
+    fn(&ParsedResult) -> Result<SourcePreservingOwnerDocument, NativeAnalysisError>;
+
 /// A Rust family engine, never a host-provided matching or rendering callback.
 pub struct NativeOwnerEngine {
     pub analyze: fn(&ParsedResult) -> Result<SourcePreservingOwnerDocument, String>,
     /// Optional typed error path for providers whose unsupported boundary has
     /// a stable public diagnostic category beyond generic analysis rejection.
-    pub analyze_with_diagnostics:
-        Option<fn(&ParsedResult) -> Result<SourcePreservingOwnerDocument, NativeAnalysisError>>,
+    pub analyze_with_diagnostics: Option<NativeAnalyzeWithDiagnosticsFn>,
     pub merge: NativeOwnerMerger,
     /// Optional provider-owned line selection after classification. The engine
     /// supplies parsed inputs and its validated output parse callback.
@@ -294,7 +298,7 @@ pub fn merge_native_sources_with_engine(
         documents.remove(&SourceRole::Theirs).ok_or(NativeMergeError::InvalidInputs)?,
         &mut verify,
     );
-    drop(verify);
+    let _ = verify;
     let postprocess_applied = if let Some(postprocess) = postprocess {
         postprocess(&parsed, &mut rendered, &mut parse_output)
             .map_err(NativeMergeError::Unsupported)?
@@ -404,7 +408,7 @@ pub fn merge_parsed_sources(
         verified_document(&parsed, text, ours, &ids, engine.analyze)
     };
     let mut evidence = (engine.merge)(base_document, ours_document, theirs_document, &mut verify);
-    drop(verify);
+    let _ = verify;
     let postprocess_applied = if let Some(postprocess) = engine.postprocess {
         postprocess(
             &[base.clone(), ours.clone(), theirs.clone()],
@@ -414,7 +418,7 @@ pub fn merge_parsed_sources(
     } else {
         false
     };
-    drop(parse_and_capture);
+    let _ = parse_and_capture;
     if evidence.result.outcome == crate::ThreeWayMergeOutcome::Clean {
         let text = evidence.result.output.as_deref().ok_or("clean native merge omitted output")?;
         // Whole-source selections/no-ops bypass the legacy renderer callback.

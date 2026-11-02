@@ -1205,6 +1205,7 @@ pub(crate) fn execute_native_operation_with_service(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_go_exact_source_selection(
     request: &ValidatedOperationRequest,
     parses: Vec<ParseRequest>,

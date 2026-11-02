@@ -378,11 +378,10 @@ impl ParserProvider for RustSynParserProvider {
     }
 }
 
-fn item_facts(
-    item: &Item,
-    source: &str,
-    item_range: Range<usize>,
-) -> (&'static str, &'static str, Option<(String, Range<usize>, &'static str)>, Option<String>) {
+type ItemFacts =
+    (&'static str, &'static str, Option<(String, Range<usize>, &'static str)>, Option<String>);
+
+fn item_facts(item: &Item, source: &str, item_range: Range<usize>) -> ItemFacts {
     let ident = match item {
         Item::Const(item) => Some(&item.ident),
         Item::Enum(item) => Some(&item.ident),
@@ -601,6 +600,7 @@ fn impl_type_path(ty: &syn::Type) -> Option<String> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn parse_node(
     id: String,
     kind: &str,

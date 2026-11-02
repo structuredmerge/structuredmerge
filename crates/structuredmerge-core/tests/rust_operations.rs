@@ -1095,7 +1095,7 @@ fn common_rust_syn_operation_reports_conflict_when_reorder_crosses_added_gap() {
     assert!(!result.ok, "{:?}", result.diagnostics);
     assert!(result.output.is_none());
     assert_eq!(result.conflicts[0].id(), "rust-owner-order-divergence");
-    assert_eq!(result.conflicts[0].matches_path("<owner-order>"), true);
+    assert!(result.conflicts[0].matches_path("<owner-order>"));
 }
 
 #[test]

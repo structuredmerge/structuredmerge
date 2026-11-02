@@ -492,7 +492,7 @@ pub fn merge_source_owner_order_for_selected(
             }
         }
     }
-    drop(add_edge);
+    let _ = add_edge;
 
     let mut tie_break = HashMap::<String, (u8, usize)>::new();
     for (index, id) in base.iter().enumerate() {
@@ -1801,6 +1801,7 @@ pub fn source_line_fragments_for_rehome_plan(
 
 /// Build rehome selections with parser byte ranges so exact-source-backed
 /// comment promotions can carry verifiable output origins.
+#[allow(clippy::too_many_arguments)]
 pub fn source_line_fragments_for_rehome_plan_with_origins(
     revision: SourceRevision,
     source: &str,

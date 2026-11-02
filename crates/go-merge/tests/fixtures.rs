@@ -77,7 +77,7 @@ fn merge3_recovery_fixture_fails_closed_for_every_input_role() {
         let name = case["name"].as_str().unwrap();
         assert_eq!(result.outcome, ast_merge::ThreeWayMergeOutcome::Error, "{name}: {result:?}");
         assert_eq!(result.output, None, "{name}: {result:?}");
-        assert_eq!(result.conflicts.is_empty(), true, "{name}: {result:?}");
+        assert!(result.conflicts.is_empty(), "{name}: {result:?}");
         assert_eq!(
             result.diagnostics.first().map(|diagnostic| diagnostic.category),
             Some(ast_merge::DiagnosticCategory::ParseError),
