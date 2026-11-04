@@ -81,14 +81,24 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-registry-install-",
               [RbConfig.ruby, "-S", "gem", "install", "structuredmerge-core", "--version", version.to_s,
                "--no-document", "--clear-sources", "--source", "https://rubygems.org"]
             end
-  attempts = local_gem ? 1 : 5
+  # A fresh upload takes time to show up on the registry (and any caching mirror),
+  # so retry with exponential backoff instead of failing on the first miss. The
+  # schedule follows kettle-dev's release availability probe: 5s initial delay,
+  # up to 15 attempts, min(10 * 1.6**(n-1), 120)s between them.
+  positive = ->(name, default) { Integer(ENV.fetch(name, ""), 10).then { |v| v.positive? ? v : default } rescue default }
+  attempts = local_gem ? 1 : positive.call("STRUCTUREDMERGE_REGISTRY_PROBE_ATTEMPTS", 15)
+  interval = positive.call("STRUCTUREDMERGE_REGISTRY_PROBE_INTERVAL", 10)
+  max_interval = positive.call("STRUCTUREDMERGE_REGISTRY_PROBE_MAX_INTERVAL", 120)
+  sleep positive.call("STRUCTUREDMERGE_REGISTRY_PROBE_INITIAL_DELAY", 5) unless local_gem
+  attempt = 0
   begin
+    attempt += 1
+    puts "Installing structuredmerge-core #{version} from RubyGems (attempt #{attempt}/#{attempts})" unless local_gem
     run.call(*install)
   rescue RuntimeError
-    attempts -= 1
-    raise if attempts.zero? || local_gem
+    raise if attempt >= attempts || local_gem
 
-    sleep 10
+    sleep [(interval * 1.6**(attempt - 1)).round, max_interval].min
     retry
   end
   run.call(RbConfig.ruby, "-S", "bundle", "install", "--jobs", "4")

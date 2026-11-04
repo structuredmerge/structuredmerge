@@ -328,6 +328,48 @@ jobs:
           expected-version: ${{ needs.prepare.outputs.version }}
           dry-run: ${{ needs.prepare.outputs.dry_run }}
 
+  verify-pypi-install:
+    name: Verify PyPI-published core (${{ needs.prepare.outputs.version }})
+    needs: [prepare, build-python-wheels, build-python-sdist, publish-python]
+    if: >-
+      ${{
+        needs.prepare.outputs.publish_enabled == 'true' &&
+        needs.prepare.outputs.dry_run != 'true' &&
+        needs.prepare.outputs.release_python == 'true' &&
+        needs.publish-python.result == 'success'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+          persist-credentials: false
+      - name: Download published wheels
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: python-wheel-*
+          path: dist
+          merge-multiple: true
+      - name: Download published source distribution
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: python-sdist
+          path: dist
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: stable
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+      # PyPI and its CDN lag a fresh upload; the script waits with exponential
+      # backoff (the kettle-dev availability-probe schedule) before failing.
+      - name: Verify listing, digests, wheel install and sdist build from PyPI
+        run: python workspace-scripts/check_pypi_published.py --version "${{ needs.prepare.outputs.version }}" --dist-dir dist
+
   verify-ruby-platform-gems:
     name: Verify Ruby platform gem (${{ matrix.label }}, Ruby ${{ matrix.ruby }})
     needs: prepare
