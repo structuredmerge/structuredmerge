@@ -252,9 +252,13 @@ jobs:
     # The isolated sdist build resolves structuredmerge-core from crates.io, so it
     # must run after the Rust closure is published (as build-ruby-source does).
     needs: [prepare, publish-rust]
+    # The sdist depends on the published Rust crates (shared registry resources,
+    # not bundled). A dry run never publishes them, so the sdist is only built on
+    # a real publish, after publish-rust has released the closure.
     if: >-
       ${{
         needs.prepare.outputs.release_python == 'true' &&
+        needs.prepare.outputs.dry_run != 'true' &&
         needs.publish-rust.result == 'success'
       }}
     runs-on: ubuntu-latest
@@ -292,7 +296,8 @@ jobs:
           needs.prepare.outputs.dry_run == 'true') &&
         needs.prepare.outputs.release_python == 'true' &&
         needs.build-python-wheels.result == 'success' &&
-        needs.build-python-sdist.result == 'success' &&
+        (needs.prepare.outputs.dry_run == 'true' ||
+          needs.build-python-sdist.result == 'success') &&
         (needs.prepare.outputs.dry_run == 'true' ||
           fromJson(needs.check-registries.outputs.results).pypi != 'true' ||
           needs.prepare.outputs.force_republish == 'true')
@@ -311,6 +316,7 @@ jobs:
           path: dist
           merge-multiple: true
       - name: Download source distribution
+        if: needs.prepare.outputs.dry_run != 'true'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: python-sdist
