@@ -148,6 +148,10 @@ jobs:
     timeout-minutes: 30
     env:
       STRUCTUREDMERGE_NATIVE_PYTHON: python
+      CARGO_TARGET_DIR: ${{ github.workspace }}/tmp/core-wheels-target
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     strategy:
       fail-fast: false
       matrix:
@@ -204,6 +208,10 @@ jobs:
         working-directory: packages/python
       - name: Verify wheel contents and isolated installed native merges
         run: python workspace-scripts/check_core_python_artifact.py tmp/core-wheels
+      - name: Remove disposable native build directory
+        if: always()
+        shell: bash
+        run: if [ -d tmp/core-wheels-target ]; then rm -r -- tmp/core-wheels-target; fi
 
   typed-core-ruby-artifact:
     name: Typed core installed artifact (${{ matrix.platform }}, Ruby ${{ matrix.ruby }})
