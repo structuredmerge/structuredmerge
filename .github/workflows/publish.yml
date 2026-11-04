@@ -422,7 +422,7 @@ jobs:
           bundler-cache: false
       - name: Prepare source gem from released Rust dependencies
         run: |
-          mkdir -p tmp/core-ruby-source
+          mkdir -p tmp
           ruby workspace-scripts/prepare_core_ruby_source.rb \
             --alef "$(command -v alef)" \
             --output tmp/core-ruby-source
