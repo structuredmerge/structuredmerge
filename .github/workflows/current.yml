@@ -154,7 +154,7 @@ jobs:
         include:
           - platform: linux-x64
             runner: ubuntu-latest
-            python: "3.10"
+            python: "3.11"
           - platform: linux-x64
             runner: ubuntu-latest
             python: "3.14"

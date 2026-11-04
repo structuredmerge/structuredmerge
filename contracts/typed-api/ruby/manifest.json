@@ -1,11 +1,11 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "ruby",
-  "review_reason": "Additive UnsafeSourceRange and opt-in register_rust_syn_parser API; provider defaults remain unchanged.",
+  "review_reason": "Adds register_typescript_oxc_parser from merged oxc provider work; native.rb hash.key guard is the upstream Alef flattened-fields fix family; hash-comment refresh",
   "files": {
-    "lib/structuredmerge_core/native.rb": "582b6ae400a204e38c80ee5aa480e41abed68bf47ef2bf1d7c62e669849f1c14",
+    "lib/structuredmerge_core/native.rb": "88f183b7a14d14522bcf2c03134e91860c766fdb87efe21fab92412784dad602",
     "lib/structuredmerge_core/version.rb": "99c8b3f93ad0d98825c986c3d405eb50b97bc4e5c14d61fa087ea228966c424a",
     "lib/structuredmerge_core.rb": "defe67340887e4fcfecefc0a68d255fab86768e5c81260916819b636303f5cdf",
-    "sig/types.rbs": "c3e0bbaa07b3d0b6b63cc17706779cea3b3318a0fbcae74ddfbbaba9dc42308f"
+    "sig/types.rbs": "fd1c39b185f0ff7fb6f028b26af0b274c04460e5f87a77108a76628496c8bee4"
   }
 }
