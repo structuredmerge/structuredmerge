@@ -1,7 +1,7 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "ruby",
-  "review_reason": "Reviewed with Alef 0.121.0: additive Ruby::register_typescript_oxc_parser; policy wrapper from_hash now preserves false/nil policy values via key? lookup; no removals or signature changes",
+  "review_reason": "Adds register_typescript_oxc_parser from merged oxc provider work; native.rb hash.key guard is the upstream Alef flattened-fields fix family; hash-comment refresh",
   "files": {
     "lib/structuredmerge_core/native.rb": "88f183b7a14d14522bcf2c03134e91860c766fdb87efe21fab92412784dad602",
     "lib/structuredmerge_core/version.rb": "99c8b3f93ad0d98825c986c3d405eb50b97bc4e5c14d61fa087ea228966c424a",

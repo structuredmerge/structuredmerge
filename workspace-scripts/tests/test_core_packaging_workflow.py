@@ -188,7 +188,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
             "linux-x64", "linux-arm64", "macos-x64", "macos-arm64",
             "windows-x64", "windows-arm64",
         })
-        self.assertEqual({row["python"] for row in matrix}, {"3.10", "3.14"})
+        self.assertEqual({row["python"] for row in matrix}, {"3.11", "3.14"})
         self.assertEqual(job["runs-on"], "${{ matrix.runner }}")
         self.assertFalse(job["strategy"]["fail-fast"])
         self.assertEqual(job["env"]["STRUCTUREDMERGE_NATIVE_PYTHON"], "python")
