@@ -719,7 +719,11 @@ jobs:
         run: |
           version="${RELEASE_VERSION#v}"
           mkdir -p "$RUNNER_TEMP/smorg-install"
-          cargo install smorg --version "$version" --locked --root "$RUNNER_TEMP/smorg-install"
+          # crates.io and its sparse index lag a fresh publish; retry with backoff
+          # only while the crate is not yet visible, never on a real build failure.
+          python workspace-scripts/retry_with_backoff.py \
+            --retry-on 'could not find|no matching package|failed to select a version|candidate versions found' \
+            -- cargo install smorg --version "$version" --locked --root "$RUNNER_TEMP/smorg-install"
           "$RUNNER_TEMP/smorg-install/bin/smorg" --version
           "$RUNNER_TEMP/smorg-install/bin/smorg-rs" --version
       - name: Verify installed CLI discovery contract
