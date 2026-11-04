@@ -318,6 +318,14 @@ run!(%w[cargo test], chdir: RUST_REPO) unless options[:skip_tests]
 published_crates = []
 skipped_crates = []
 
+# Without --push nothing is published, so a dependent crate cannot resolve its
+# unreleased sibling from crates.io. Package the whole selection in one cargo
+# invocation so cargo verifies them against each other's packaged output.
+unless options[:push]
+  puts "\n=== local package validation (#{crates.length} crates, one cargo invocation) ==="
+  run!(["cargo", "package", *crates.flat_map { |crate| ["-p", crate[:name]] }], chdir: RUST_REPO)
+end
+
 crates.each do |crate|
   puts "\n=== #{crate[:name]} #{crate[:version]} ==="
 
@@ -327,9 +335,9 @@ crates.each do |crate|
     next
   end
 
-  run!(["cargo", "package", "-p", crate[:name]], chdir: RUST_REPO)
-
   next unless options[:push]
+
+  run!(["cargo", "package", "-p", crate[:name]], chdir: RUST_REPO)
 
   publish_crate!(crate)
   wait_for_crate_release!(crate)
