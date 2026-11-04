@@ -73,8 +73,12 @@ def artifact_workspace(root):
     scratch.mkdir(exist_ok=True)
     # This runner installs an existing wheel; it must never invoke a Rust build.
     # Allow 2 GiB for the environment in addition to the 20 GiB emergency reserve.
-    if shutil.disk_usage(scratch).free < 22 * 1024**3:
-        raise RuntimeError("artifact check requires 22 GiB free (20 GiB reserve + 2 GiB budget)")
+    free_bytes = shutil.disk_usage(scratch).free
+    if free_bytes < 22 * 1024**3:
+        raise RuntimeError(
+            "artifact check requires 22 GiB free "
+            f"(20 GiB reserve + 2 GiB budget); found {free_bytes / 1024**3:.1f} GiB"
+        )
     stage = Path(tempfile.mkdtemp(prefix="core-python-artifact-", dir=scratch))
     try:
         yield stage
