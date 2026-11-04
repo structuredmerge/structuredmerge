@@ -18,8 +18,29 @@ STRUCTUREDMERGE_PRE_SPLIT_REPOSITORY = "https://github.com/structuredmerge/struc
 STRUCTUREDMERGE_HOMEPAGE = "https://structuredmerge.org"
 STRUCTUREDMERGE_LICENSE = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 PUBLISH_RETRY_BUFFER_SECONDS = 10
-RELEASE_CONFIRM_TIMEOUT_SECONDS = 15 * 60
-RELEASE_CONFIRM_POLL_SECONDS = 15
+# A fresh crate takes time to show up on crates.io and in its sparse index, so
+# registry waits back off exponentially instead of polling at a fixed rate. The
+# schedule is kettle-dev's release availability probe: up to 15 attempts,
+# min(10 * 1.6**(n-1), 120)s between them, overridable through the same
+# STRUCTUREDMERGE_REGISTRY_PROBE_* variables the PyPI and RubyGems checks use.
+# Checks run immediately (the API is cheap and a crate is usually live at once),
+# so there is no initial delay here.
+def registry_probe_setting(name, default)
+  value = Integer(ENV.fetch(name, ""), 10)
+  value.positive? ? value : default
+rescue ArgumentError
+  default
+end
+
+REGISTRY_PROBE_ATTEMPTS = registry_probe_setting("STRUCTUREDMERGE_REGISTRY_PROBE_ATTEMPTS", 15)
+REGISTRY_PROBE_INTERVAL = registry_probe_setting("STRUCTUREDMERGE_REGISTRY_PROBE_INTERVAL", 10)
+REGISTRY_PROBE_MAX_INTERVAL = registry_probe_setting("STRUCTUREDMERGE_REGISTRY_PROBE_MAX_INTERVAL", 120)
+# cargo publish failures that mean "a dependency published moments ago is not in the index yet".
+INDEX_LAG_PATTERN = /no matching package named|failed to select a version for the requirement|candidate versions found which didn't match/
+
+def registry_probe_delay(attempt)
+  [(REGISTRY_PROBE_INTERVAL * 1.6**(attempt - 1)).round, REGISTRY_PROBE_MAX_INTERVAL].min
+end
 
 LEGACY_CRATES = [
   ["tree-haver", "tree-haver"],
@@ -216,6 +237,7 @@ def sleep_until_retry(retry_at)
 end
 
 def publish_crate!(crate)
+  index_attempt = 0
   loop do
     success, output = run_command(["cargo", "publish", "-p", crate[:name]], chdir: RUST_REPO)
     return if success
@@ -226,19 +248,33 @@ def publish_crate!(crate)
       next
     end
 
+    # A dependency published moments ago may not be in the crates.io index yet.
+    if output.match?(INDEX_LAG_PATTERN) && (index_attempt += 1) < REGISTRY_PROBE_ATTEMPTS
+      wait = registry_probe_delay(index_attempt)
+      puts "\n#{crate[:name]} waits on a dependency not yet in the crates.io index; retrying in #{wait}s " \
+        "(attempt #{index_attempt}/#{REGISTRY_PROBE_ATTEMPTS})."
+      sleep(wait)
+      next
+    end
+
     raise "Command failed: #{sh(["cargo", "publish", "-p", crate[:name]])}"
   end
 end
 
 def wait_for_crate_release!(crate)
-  deadline = Time.now + RELEASE_CONFIRM_TIMEOUT_SECONDS
-  loop do
+  REGISTRY_PROBE_ATTEMPTS.times do |index|
+    attempt = index + 1
     return if crate_released?(crate[:name], crate[:version])
 
-    raise "Release confirmation failed: #{crate[:name]} #{crate[:version]} is not live on crates.io." if Time.now >= deadline
+    if attempt == REGISTRY_PROBE_ATTEMPTS
+      raise "Release confirmation failed: #{crate[:name]} #{crate[:version]} is not live on crates.io " \
+        "after #{REGISTRY_PROBE_ATTEMPTS} attempt(s)."
+    end
 
-    puts "Waiting #{RELEASE_CONFIRM_POLL_SECONDS}s for #{crate[:name]} #{crate[:version]} to become visible on crates.io..."
-    sleep(RELEASE_CONFIRM_POLL_SECONDS)
+    wait = registry_probe_delay(attempt)
+    puts "Waiting #{wait}s for #{crate[:name]} #{crate[:version]} to become visible on crates.io " \
+      "(attempt #{attempt}/#{REGISTRY_PROBE_ATTEMPTS})..."
+    sleep(wait)
   end
 end
 
