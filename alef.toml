@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.116.0"
+alef_version = "0.121.0"
 languages = ["ruby", "python", "ffi", "go"]
 
 [workspace.ownership]
