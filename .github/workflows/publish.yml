@@ -177,7 +177,7 @@ jobs:
         with:
           python-version: "3.14"
       - name: Setup Ruby
-        uses: appraisal-rb/setup-ruby-flash@4ee08a66f0a60f7bb129d5d0e997042f935d1904 # v2.5
+        uses: ruby/setup-ruby@v1
         with:
           ruby-version: "4.0"
       - name: Install Alef
@@ -249,8 +249,14 @@ jobs:
 
   build-python-sdist:
     name: Build Python source distribution
-    needs: prepare
-    if: needs.prepare.outputs.release_python == 'true'
+    # The isolated sdist build resolves structuredmerge-core from crates.io, so it
+    # must run after the Rust closure is published (as build-ruby-source does).
+    needs: [prepare, publish-rust]
+    if: >-
+      ${{
+        needs.prepare.outputs.release_python == 'true' &&
+        needs.publish-rust.result == 'success'
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -362,7 +368,7 @@ jobs:
           echo 'RUST_TARGET=x86_64-pc-windows-gnu' >> "$GITHUB_ENV"
           echo 'CARGO_BUILD_TARGET=x86_64-pc-windows-gnu' >> "$GITHUB_ENV"
       - name: Setup Ruby
-        uses: appraisal-rb/setup-ruby-flash@4ee08a66f0a60f7bb129d5d0e997042f935d1904 # v2.5
+        uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
@@ -409,7 +415,7 @@ jobs:
         with:
           version: "0.121.0"
       - name: Setup Ruby
-        uses: appraisal-rb/setup-ruby-flash@4ee08a66f0a60f7bb129d5d0e997042f935d1904 # v2.5
+        uses: ruby/setup-ruby@v1
         with:
           ruby-version: "4.0"
           bundler: none
@@ -421,7 +427,7 @@ jobs:
             --alef "$(command -v alef)" \
             --output tmp/core-ruby-source
       - name: Upload Ruby source gem and report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0 # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rubygems-source
           path: |
@@ -617,7 +623,7 @@ jobs:
         with:
           python-version: "3.14"
       - name: Setup Ruby
-        uses: appraisal-rb/setup-ruby-flash@4ee08a66f0a60f7bb129d5d0e997042f935d1904 # v2.5
+        uses: ruby/setup-ruby@v1
         with:
           ruby-version: "4.0"
       - name: Publish dependency-first Rust closure and tag
