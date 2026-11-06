@@ -744,7 +744,7 @@ jobs:
         run: |
           version="${{ needs.prepare.outputs.version }}"
           version="${version#v}"
-          source_date_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
+          source_date_epoch="$(git show -s --format=%ct HEAD)"
           export SOURCE_DATE_EPOCH="$source_date_epoch"
           python workspace-scripts/package_release_archive.py \
             --version "$version" \
