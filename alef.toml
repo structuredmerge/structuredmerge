@@ -16,6 +16,11 @@ user_owned = [
   "packages/python/structuredmerge_core/_native.pyi",
   # Retained legacy regression inputs, not active generation/publication targets.
   # Keep exact paths so new typed-core outputs cannot inherit an exclusion.
+  # These registry manifests need fields Alef 0.121.0 cannot emit correctly:
+  # PEP 621 requires homepage under project.urls, and RubyGems rejects identical
+  # summary/description values. Their release metadata is checked by local tests.
+  "packages/python/pyproject.toml",
+  "packages/ruby/structuredmerge_core.gemspec",
 ]
 
 [workspace.scaffold]

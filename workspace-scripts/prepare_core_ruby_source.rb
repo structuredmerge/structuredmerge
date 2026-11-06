@@ -109,6 +109,9 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-source-",
   PYTHON
   spec = Dir.chdir(original) { Gem::Specification.load("structuredmerge_core.gemspec") }
   raise "unexpected generated gemspec" unless spec&.name == "structuredmerge-core"
+  # Alef currently seeds summary and description from the same package field;
+  # Rubygems warns (and strict validation rejects) identical values.
+  spec.summary = "Native StructuredMerge kernel"
   run.call("python", "-c", audit, File.join(package, "ext/structuredmerge_core_rb/native/Cargo.toml"), spec.version.to_s)
   baseline = JSON.parse(File.read(File.join(workspace, "contracts/typed-api/ruby/manifest.json")))
   baseline.fetch("files").each do |name, digest|
