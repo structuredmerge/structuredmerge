@@ -10,7 +10,7 @@ require "shellwords"
 require "time"
 require "uri"
 
-RUST_REPO = File.expand_path("..", __dir__)
+RUST_REPO = File.expand_path(ENV.fetch("STRUCTUREDMERGE_RUST_REPO", File.expand_path("..", __dir__)))
 CRATES_IO_USER_AGENT = "structuredmerge-release-script (https://github.com/structuredmerge/structuredmerge)"
 STRUCTUREDMERGE_REPOSITORY = "https://github.com/structuredmerge/structuredmerge"
 # Already-published versions retain their original repository metadata.
@@ -37,6 +37,7 @@ REGISTRY_PROBE_INTERVAL = registry_probe_setting("STRUCTUREDMERGE_REGISTRY_PROBE
 REGISTRY_PROBE_MAX_INTERVAL = registry_probe_setting("STRUCTUREDMERGE_REGISTRY_PROBE_MAX_INTERVAL", 120)
 # cargo publish failures that mean "a dependency published moments ago is not in the index yet".
 INDEX_LAG_PATTERN = /no matching package named|failed to select a version for the requirement|candidate versions found which didn't match/
+DUPLICATE_PUBLISH_PATTERN = /already (?:uploaded|published|exists)|version .+ already exists/i
 
 def registry_probe_delay(attempt)
   [(REGISTRY_PROBE_INTERVAL * 1.6**(attempt - 1)).round, REGISTRY_PROBE_MAX_INTERVAL].min
@@ -76,6 +77,7 @@ options = {
   push_git: false,
   skip_tests: false,
   tag: false,
+  preflight_only: false,
 }
 
 parser = OptionParser.new do |opts|
@@ -103,6 +105,10 @@ parser = OptionParser.new do |opts|
 
   opts.on("--skip-tests", "Skip workspace cargo test before packaging") do
     options[:skip_tests] = true
+  end
+
+  opts.on("--preflight-only", "Validate local package metadata, packages, and crates.io state without publishing") do
+    options[:preflight_only] = true
   end
 
   opts.on("--only CRATE", "Release only one crate package name or crate directory") do |crate_name|
@@ -143,11 +149,56 @@ def run!(cmd, chdir:)
   raise "Command failed: #{sh(cmd)}"
 end
 
+def package_preflight!(crates, allow_dirty: false)
+  command = ["cargo", "package"]
+  command << "--allow-dirty" if allow_dirty
+  command.concat(crates.flat_map { |crate| ["-p", crate[:name]] })
+  run!(command, chdir: RUST_REPO)
+end
+
 def capture!(cmd, chdir:)
   output, status = Open3.capture2e(*cmd, chdir: chdir)
   raise "Command failed: #{sh(cmd)}\n#{output}" unless status.success?
 
   output
+end
+
+def validate_release_metadata!(crates)
+  output = capture!(["cargo", "metadata", "--no-deps", "--format-version", "1", "--locked"], chdir: RUST_REPO)
+  packages = JSON.parse(output).fetch("packages").to_h { |package| [package.fetch("name"), package] }
+  problems = []
+
+  crates.each do |crate|
+    package = packages[crate[:name]]
+    unless package
+      problems << "#{crate[:name]}: missing from cargo metadata"
+      next
+    end
+
+    checks = {
+      "version" => package["version"] == crate[:version],
+      "authors" => package["authors"].is_a?(Array) && package["authors"].any? { |author| !author.strip.empty? },
+      "description" => package["description"].is_a?(String) && !package["description"].strip.empty?,
+      # Homepage is optional in Cargo's publish metadata. When present, keep
+      # it consistent; its absence must never be treated as an ownership clash.
+      "homepage" => package["homepage"].nil? || package["homepage"] == STRUCTUREDMERGE_HOMEPAGE,
+      "repository" => package["repository"] == STRUCTUREDMERGE_REPOSITORY,
+      "license" => package["license"] == STRUCTUREDMERGE_LICENSE,
+      "crates.io publication permission" => package["publish"].nil? || package["publish"].include?("crates-io"),
+    }
+    missing = checks.filter_map { |field, valid| field unless valid }
+    problems << "#{crate[:name]}: missing or incorrect #{missing.join(", ")}" unless missing.empty?
+  end
+
+  return if problems.empty?
+
+  raise "Rust release metadata preflight failed; no crates were published:\n#{problems.join("\n")}"
+end
+
+def validate_crates_io_auth!
+  capture!(["cargo", "owner", "--list", "tree-haver"], chdir: RUST_REPO)
+rescue RuntimeError => error
+  raise "Could not authenticate Cargo with crates.io before release validation; no crates were published.\n#{error.message}"
 end
 
 def ensure_clean_git!
@@ -180,7 +231,8 @@ def crates_io_get(path)
   request = Net::HTTP::Get.new(uri)
   request["User-Agent"] = CRATES_IO_USER_AGENT
   request["Accept"] = "application/json"
-  response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == "https") do |http|
+  response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == "https",
+    open_timeout: 10, read_timeout: 30) do |http|
     http.request(request)
   end
 
@@ -188,8 +240,7 @@ def crates_io_get(path)
 end
 
 def structuredmerge_crate_metadata?(crate)
-  [STRUCTUREDMERGE_REPOSITORY, STRUCTUREDMERGE_PRE_SPLIT_REPOSITORY].include?(crate["repository"]) &&
-    crate["homepage"] == STRUCTUREDMERGE_HOMEPAGE
+  [STRUCTUREDMERGE_REPOSITORY, STRUCTUREDMERGE_PRE_SPLIT_REPOSITORY].include?(crate["repository"])
 end
 
 def crate_released?(name, version)
@@ -204,9 +255,8 @@ def crate_released?(name, version)
   payload = JSON.parse(body)
   crate = payload.fetch("crate")
   unless structuredmerge_crate_metadata?(crate)
-    raise "Crate name #{name.inspect} is already owned by a different project on crates.io.\n" \
+    raise "Crates.io package #{name.inspect} has repository metadata outside the StructuredMerge repositories.\n" \
       "repository=#{crate["repository"].inspect}\n" \
-      "homepage=#{crate["homepage"].inspect}\n" \
       "license=#{crate["license"].inspect}"
   end
 
@@ -238,13 +288,26 @@ end
 
 def publish_crate!(crate)
   index_attempt = 0
+  duplicate_attempt = 0
   loop do
     success, output = run_command(["cargo", "publish", "-p", crate[:name]], chdir: RUST_REPO)
     return if success
 
+    # Handle an ambiguous upload or a concurrent publisher: the server may have
+    # accepted the crate even when the client did not receive its success reply.
+    return if crate_released?(crate[:name], crate[:version])
+
     retry_at = publish_rate_limit_retry_at(output)
     if retry_at
       sleep_until_retry(retry_at)
+      next
+    end
+
+    if output.match?(DUPLICATE_PUBLISH_PATTERN) && (duplicate_attempt += 1) < REGISTRY_PROBE_ATTEMPTS
+      wait = registry_probe_delay(duplicate_attempt)
+      puts "\n#{crate[:name]} #{crate[:version]} was reported as already published; retrying registry confirmation " \
+        "in #{wait}s (attempt #{duplicate_attempt}/#{REGISTRY_PROBE_ATTEMPTS})."
+      sleep(wait)
       next
     end
 
@@ -281,6 +344,45 @@ end
 def tag_exists?(tag_name)
   system("git", "rev-parse", "-q", "--verify", "refs/tags/#{tag_name}",
     chdir: RUST_REPO, out: File::NULL, err: File::NULL)
+end
+
+def preflight_release_tag!(tag_name, check_remote:)
+  head_commit = capture!(%w[git rev-parse HEAD], chdir: RUST_REPO).strip
+  local_tag = tag_exists?(tag_name)
+  if local_tag
+    tag_commit = capture!(["git", "rev-parse", "#{tag_name}^{commit}"], chdir: RUST_REPO).strip
+    unless tag_commit == head_commit
+      raise "Release tag #{tag_name} points to #{tag_commit}, but HEAD is #{head_commit}; refusing to reuse it."
+    end
+  end
+
+  return unless check_remote
+
+  refs = capture!(
+    ["git", "ls-remote", "origin", "refs/tags/#{tag_name}", "refs/tags/#{tag_name}^{}"],
+    chdir: RUST_REPO
+  )
+  remote_tag = refs.lines.filter_map do |line|
+    sha, ref = line.split("\t", 2)
+    ref = ref&.strip
+    [sha, ref] if ["refs/tags/#{tag_name}", "refs/tags/#{tag_name}^{}"].include?(ref)
+  end.to_h
+  return if remote_tag.empty?
+
+  remote_commit = remote_tag["refs/tags/#{tag_name}^{}"] || remote_tag["refs/tags/#{tag_name}"]
+  unless remote_commit == head_commit
+    raise "Remote release tag #{tag_name} points to #{remote_commit}, but HEAD is #{head_commit}; refusing to publish."
+  end
+
+  remote_object = remote_tag["refs/tags/#{tag_name}"]
+  if local_tag
+    local_object = capture!(["git", "rev-parse", "refs/tags/#{tag_name}"], chdir: RUST_REPO).strip
+    unless local_object == remote_object
+      raise "Local and remote release tag objects differ for #{tag_name}; refusing to publish before resolving the tag."
+    end
+  else
+    run!(["git", "fetch", "--no-tags", "origin", "refs/tags/#{tag_name}:refs/tags/#{tag_name}"], chdir: RUST_REPO)
+  end
 end
 
 def version_minor(version)
@@ -332,6 +434,10 @@ if options[:start_at]
   crates = crates.drop(start_index)
 end
 
+if (options[:tag] || options[:push_git]) && (options[:only] || options[:start_at])
+  raise "--tag and --push-git require the complete release set; remove --only/--start-at and rerun to resume safely"
+end
+
 versions = crates.map { |crate| crate[:version] }.uniq
 tag_name = versions.one? ? "v#{versions.first}" : nil
 
@@ -342,38 +448,52 @@ end
 
 puts "Selected Rust crates: #{crates.map { |crate| crate[:name] }.join(", ")}"
 puts "Crate versions: #{versions.join(", ")}"
-puts "crates.io publish: #{options[:push] ? "enabled; pass --no-push for local validation only" : "disabled; local validation only"}"
+puts "crates.io publish: #{options[:push] && !options[:preflight_only] ? "enabled" : "disabled for this run"}"
 
 ensure_clean_git! if options[:push] || options[:push_git] || options[:tag]
 
 raise "--tag requires selected crates to share one version; found #{versions.join(", ")}" if options[:tag] && !tag_name
 raise "--push-git requires --tag or crates with a shared version" if options[:push_git] && !tag_name
+preflight_release_tag!(tag_name, check_remote: options[:push]) if options[:tag]
+
+validate_release_metadata!(crates)
+validate_crates_io_auth! if options[:push] && !options[:preflight_only]
+
+registry_states = {}
+if options[:push] || options[:preflight_only]
+  puts "\nPreflighting crates.io names and existing releases before packaging or publishing..."
+  crates.each do |crate|
+    released = crate_released?(crate[:name], crate[:version])
+    registry_states[crate[:name]] = released
+    puts "  #{crate[:name]} #{crate[:version]}: #{released ? "already released" : "available to publish"}"
+  end
+end
+
+if options[:preflight_only]
+  package_preflight!(crates, allow_dirty: !options[:push])
+  puts "\nPreflight complete for #{crates.length} crates; nothing was published."
+  exit
+end
 
 run!(%w[cargo test], chdir: RUST_REPO) unless options[:skip_tests]
+
+# Validate every selected package before the first irreversible upload. A full
+# rerun is the resume mechanism: exact versions already live are skipped below.
+package_preflight!(crates)
 
 published_crates = []
 skipped_crates = []
 
-# Without --push nothing is published, so a dependent crate cannot resolve its
-# unreleased sibling from crates.io. Package the whole selection in one cargo
-# invocation so cargo verifies them against each other's packaged output.
-unless options[:push]
-  puts "\n=== local package validation (#{crates.length} crates, one cargo invocation) ==="
-  run!(["cargo", "package", *crates.flat_map { |crate| ["-p", crate[:name]] }], chdir: RUST_REPO)
-end
-
 crates.each do |crate|
   puts "\n=== #{crate[:name]} #{crate[:version]} ==="
 
-  if options[:push] && crate_released?(crate[:name], crate[:version])
+  if options[:push] && registry_states.fetch(crate[:name])
     puts "Skipping #{crate[:name]} #{crate[:version]}; already released on crates.io."
     skipped_crates << crate[:name]
     next
   end
 
   next unless options[:push]
-
-  run!(["cargo", "package", "-p", crate[:name]], chdir: RUST_REPO)
 
   publish_crate!(crate)
   wait_for_crate_release!(crate)
@@ -382,6 +502,8 @@ end
 
 if options[:push]
   crates.each do |crate|
+    next if registry_states.fetch(crate[:name])
+
     wait_for_crate_release!(crate)
   end
 

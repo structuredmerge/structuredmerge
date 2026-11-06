@@ -35,6 +35,10 @@ aarch64_unknown_linux_gnu = false
 x86_64_unknown_linux_musl = false
 wasm32_unknown_unknown = false
 
+[workspace.package_metadata]
+repository = "https://github.com/structuredmerge/structuredmerge"
+homepage = "https://structuredmerge.org"
+
 [[crates]]
 name = "structuredmerge-core"
 sources = [

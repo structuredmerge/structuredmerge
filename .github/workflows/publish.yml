@@ -194,11 +194,53 @@ jobs:
           python -m unittest workspace-scripts/tests/test_release_manifests.py -v
       - name: Run workspace tests
         run: cargo test --workspace
+      - name: Preflight every Rust release package and registry name
+        shell: bash
+        run: |
+          git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          ruby_script="$RUNNER_TEMP/release_rust_crates.rb"
+          git show "$GITHUB_SHA:workspace-scripts/release_rust_crates.rb" > "$ruby_script"
+          STRUCTUREDMERGE_RUST_REPO="$GITHUB_WORKSPACE" \
+            ruby "$ruby_script" --no-push --preflight-only --skip-tests
+
+  preflight-cratesio-auth:
+    name: Verify crates.io credentials before release builds
+    needs: prepare
+    if: >-
+      ${{
+        needs.prepare.outputs.publish_enabled == 'true' &&
+        needs.prepare.outputs.release_crates == 'true'
+      }}
+    runs-on: ubuntu-latest
+    environment: crates-io
+    steps:
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: stable
+      - name: Verify crates.io token can authenticate
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [[ -z "$CARGO_REGISTRY_TOKEN" ]]; then
+            echo "CARGO_REGISTRY_TOKEN is empty in the crates-io environment." >&2
+            exit 1
+          fi
+          cargo owner --list tree-haver >/dev/null
 
   build-python-wheels:
     name: Build Python wheel (${{ matrix.label }})
-    needs: prepare
-    if: needs.prepare.outputs.release_python == 'true'
+    needs: [prepare, validate, preflight-cratesio-auth]
+    if: >-
+      ${{
+        always() &&
+        needs.prepare.result == 'success' &&
+        needs.validate.result == 'success' &&
+        needs.prepare.outputs.release_python == 'true' &&
+        (needs.prepare.outputs.dry_run == 'true' ||
+          needs.prepare.outputs.release_crates != 'true' ||
+          needs.preflight-cratesio-auth.result == 'success')
+      }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
@@ -390,10 +432,7 @@ jobs:
         needs.prepare.outputs.release_python == 'true' &&
         needs.build-python-wheels.result == 'success' &&
         (needs.prepare.outputs.dry_run == 'true' ||
-          needs.build-python-sdist.result == 'success') &&
-        (needs.prepare.outputs.dry_run == 'true' ||
-          fromJson(needs.check-registries.outputs.results).pypi != 'true' ||
-          needs.prepare.outputs.force_republish == 'true')
+          needs.build-python-sdist.result == 'success')
       }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -465,8 +504,17 @@ jobs:
 
   verify-ruby-platform-gems:
     name: Verify Ruby platform gem (${{ matrix.label }}, Ruby ${{ matrix.ruby }})
-    needs: prepare
-    if: needs.prepare.outputs.release_ruby == 'true'
+    needs: [prepare, validate, preflight-cratesio-auth]
+    if: >-
+      ${{
+        always() &&
+        needs.prepare.result == 'success' &&
+        needs.validate.result == 'success' &&
+        needs.prepare.outputs.release_ruby == 'true' &&
+        (needs.prepare.outputs.dry_run == 'true' ||
+          needs.prepare.outputs.release_crates != 'true' ||
+          needs.preflight-cratesio-auth.result == 'success')
+      }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
@@ -579,10 +627,7 @@ jobs:
         (needs.prepare.outputs.publish_enabled == 'true' ||
           needs.prepare.outputs.dry_run == 'true') &&
         needs.prepare.outputs.release_ruby == 'true' &&
-        needs.build-ruby-source.result == 'success' &&
-        (needs.prepare.outputs.dry_run == 'true' ||
-          fromJson(needs.check-registries.outputs.results).rubygems != 'true' ||
-          needs.prepare.outputs.force_republish == 'true')
+        needs.build-ruby-source.result == 'success'
       }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -605,7 +650,16 @@ jobs:
 
   release-binaries:
     name: Build release CLI artifact (${{ matrix.platform }})
-    needs: [prepare, validate]
+    needs: [prepare, validate, preflight-cratesio-auth]
+    if: >-
+      ${{
+        always() &&
+        needs.prepare.result == 'success' &&
+        needs.validate.result == 'success' &&
+        (needs.prepare.outputs.dry_run == 'true' ||
+          needs.prepare.outputs.release_crates != 'true' ||
+          needs.preflight-cratesio-auth.result == 'success')
+      }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -811,15 +865,19 @@ jobs:
 
   publish-rust:
     name: Publish Rust dependency closure
-    needs: [prepare, check-registries, validate, release-binaries, assemble-release-evidence]
+    needs: [prepare, validate, preflight-cratesio-auth, release-binaries, assemble-release-evidence]
     if: >-
       ${{
+        always() &&
+        needs.prepare.result == 'success' &&
+        needs.validate.result == 'success' &&
         (needs.prepare.outputs.publish_enabled == 'true' ||
           needs.prepare.outputs.dry_run == 'true') &&
         needs.prepare.outputs.release_crates == 'true' &&
+        needs.release-binaries.result == 'success' &&
+        needs.assemble-release-evidence.result == 'success' &&
         (needs.prepare.outputs.dry_run == 'true' ||
-          fromJson(needs.check-registries.outputs.results).cratesio != 'true' ||
-          needs.prepare.outputs.force_republish == 'true')
+          needs.preflight-cratesio-auth.result == 'success')
       }}
     permissions:
       contents: write
@@ -856,11 +914,15 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          STRUCTUREDMERGE_RUST_REPO: ${{ github.workspace }}
         run: |
+          git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          ruby_script="$RUNNER_TEMP/release_rust_crates.rb"
+          git show "$GITHUB_SHA:workspace-scripts/release_rust_crates.rb" > "$ruby_script"
           if [[ "${{ needs.prepare.outputs.dry_run }}" == "true" ]]; then
-            ruby workspace-scripts/release_rust_crates.rb --no-push --tag
+            ruby "$ruby_script" --no-push --tag
           else
-            ruby workspace-scripts/release_rust_crates.rb --push --tag
+            ruby "$ruby_script" --push --tag
             git push origin "$RELEASE_TAG"
           fi
 
