@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.2.1] - 2026-11-07
+
+- TAG: [v0.2.1][0.2.1t]
+- COVERAGE: 99.01% -- 100/101 lines in 3 files
+- BRANCH COVERAGE: 66.67% -- 10/15 branches in 3 files
+- 81.64% documented
+
 ### Fixed
 
 - **Generated Ruby trait bridges no longer rebind already-owned callback parameters.** The Magnus generator now emits ownership conversions only for borrowed inputs on synchronous callbacks, while retaining the renamed owned bindings required by asynchronous callbacks; generated Ruby code no longer triggers redundant-local Clippy errors.
@@ -15,7 +34,6 @@
 - Raise the Python package floor to 3.11 (abi3-py311 wheels, `StrEnum` options) and the RuboCop target to Ruby 3.3, matching the generator minimums in Alef 0.128.0 and the already-declared `required_ruby_version >= 3.3.0`; the hosted minimum-runtime job moves from Python 3.10 to 3.11.
 
 - Upgrade Alef to 0.128.0 and regenerate the polyglot bindings, package scaffolds and fixture consumers; reviewed Ruby and Python API signatures are unchanged.
-
 
 - Point kernel crate metadata and new artifact provenance at structuredmerge/structuredmerge; remove kettle-rusty from this repository’s release inventory while accepting pre-split registry metadata.
 
@@ -537,3 +555,7 @@
 - Align all kernel CI fixture checkouts with the reviewed published revision containing current CLI conformance cases.
 
 - Regenerate the Python cancellation-control wrapper with an implementation-scoped Clippy allowance, preserving explicit construction and the reviewed API.
+
+[Unreleased]: https://github.com/structuredmerge/structuredmerge/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/structuredmerge/structuredmerge/compare/b7b632b03cf86b76355080ce13bd99cd5aa4fc6d...v0.2.1
+[0.2.1t]: https://github.com/structuredmerge/structuredmerge/releases/tag/v0.2.1

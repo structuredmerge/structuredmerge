@@ -1,0 +1,35 @@
+# Shared development environment for this gem.
+# Local overrides belong in .env.local (loaded via dotenvy through mise).
+
+[env]
+FLOSS_CFG_FUND_DEBUG = "false"
+FLOSS_CFG_FUND_LOGFILE = "tmp/log/debug.log"
+FUNDING_ORG = "false"
+KETTLE_DEV_DEBUG = "false"
+KETTLE_TEST_SILENT = "true"
+K_CHANGELOG_PATH = "{{config_root}}/../../CHANGELOG.md"
+K_SOUP_COV_COMMAND_NAME = "Test Coverage"
+K_SOUP_COV_DO = "true"
+K_SOUP_COV_FORMATTERS = "html,xml,rcov,lcov,json,tty"
+K_SOUP_COV_MIN_BRANCH = "76"
+K_SOUP_COV_MIN_HARD = "false"
+K_SOUP_COV_MIN_STRICT = "false"
+K_SOUP_COV_MIN_LINE = "92"
+K_SOUP_COV_MULTI_FORMATTERS = "true"
+K_SOUP_COV_OPEN_BIN = ""
+MAX_ROWS = "1"
+OPENCOLLECTIVE_HANDLE = "false"
+_.file = { path = ".env.local", redact = true }
+_.path = ["exe", "bin"]
+_.source = ".config/mise/env.sh"
+
+[tools]
+ruby = "4.0.9"
+
+[task_config]
+includes = ["mise-family.tasks.toml"]
+
+[tasks.release]
+description = "Release the structuredmerge-core Ruby gem"
+raw = true
+run = "STRUCTUREDMERGE_DEV=false STRUCTUREDMERGE_CORE_DEV=false KETTLE_DEV_DEV=false K_JEM_TEMPLATING=false bundle exec kettle-family release --execute --publish --secrets-provider op"

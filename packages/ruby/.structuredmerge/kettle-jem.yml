@@ -169,6 +169,7 @@ ruby:
 
 # RubyGems packaging/runtime shape.
 rubygems:
+  entrypoint_require: structuredmerge_core
   # Published runtime Ruby floor used for generated gemspec metadata and README
   # compatibility text. Omit this to derive the value from the gemspec.
   # ENV override: KJ_MIN_RUBY
@@ -677,6 +678,8 @@ patterns:
 # Per-file configuration (nested directory structure)
 # Only files that need overrides belong here. Everything else defaults to merge.
 files:
+  mise-family.tasks.toml:
+    strategy: keep_destination
   README.md:
     strategy: merge
   structuredmerge_core.gemspec:

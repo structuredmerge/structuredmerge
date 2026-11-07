@@ -1,0 +1,123 @@
+{
+  "gemfiles/modular/benchmark/r4/v0.5.gemfile:425085875": [
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177542]
+  ],
+  "gemfiles/modular/benchmark/vHEAD.gemfile:3580879781": [
+    [1, 1, 0, "Naming/FileName: The name of this source file (`vHEAD.gemfile`) should use snake_case.", 5381],
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177542]
+  ],
+  "gemfiles/modular/cgi/r4/v0.5.gemfile:716484554": [
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177602]
+  ],
+  "gemfiles/modular/cgi/vHEAD.gemfile:1840553173": [
+    [1, 1, 0, "Naming/FileName: The name of this source file (`vHEAD.gemfile`) should use snake_case.", 5381],
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177602]
+  ],
+  "gemfiles/modular/changelog.gemfile:717790121": [
+    [38, 7, 528, "Metrics/BlockNesting: Avoid more than 3 levels of block nesting.", 2059279324]
+  ],
+  "gemfiles/modular/erb/r3/v5.0.gemfile:3888652802": [
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177602]
+  ],
+  "gemfiles/modular/erb/r4/v5.0.gemfile:3888652802": [
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177602]
+  ],
+  "gemfiles/modular/erb/vHEAD.gemfile:1986119783": [
+    [1, 1, 0, "Naming/FileName: The name of this source file (`vHEAD.gemfile`) should use snake_case.", 5381],
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177542]
+  ],
+  "gemfiles/modular/mutex_m/r3/v0.3.gemfile:2270429340": [
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177542]
+  ],
+  "gemfiles/modular/mutex_m/r4/v0.3.gemfile:2270429340": [
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177542]
+  ],
+  "gemfiles/modular/mutex_m/vHEAD.gemfile:256867115": [
+    [1, 1, 0, "Naming/FileName: The name of this source file (`vHEAD.gemfile`) should use snake_case.", 5381],
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177542]
+  ],
+  "gemfiles/modular/ostruct/r4/v0.6.gemfile:3174668187": [
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177542]
+  ],
+  "gemfiles/modular/rspec.gemfile:1847119889": [
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177602]
+  ],
+  "gemfiles/modular/stringio/r3/v3.0.gemfile:3485866956": [
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177542]
+  ],
+  "gemfiles/modular/stringio/r4/v3.0.gemfile:3485866956": [
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177542]
+  ],
+  "gemfiles/modular/stringio/vHEAD.gemfile:105320523": [
+    [1, 1, 0, "Naming/FileName: The name of this source file (`vHEAD.gemfile`) should use snake_case.", 5381],
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177542]
+  ],
+  "gemfiles/modular/style_local.gemfile:1045921545": [
+    [57, 1, 893, "Metrics/AbcSize: Assignment Branch Condition size for `local_gem_satisfies?` is too high. [<6, 17, 12> 21.66/20]", 3025043918],
+    [57, 1, 893, "Metrics/CyclomaticComplexity: Cyclomatic complexity for `local_gem_satisfies?` is too high. [12/7]", 3025043918],
+    [57, 1, 893, "Metrics/PerceivedComplexity: Perceived complexity for `local_gem_satisfies?` is too high. [12/8]", 3025043918],
+    [71, 23, 20, "Style/SafeNavigation: Use safe navigation (`&.`) instead of checking if an object exists before calling the method.", 1851388465]
+  ],
+  "gemfiles/modular/webrick/r4/v1.9.gemfile:295256425": [
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177602]
+  ],
+  "gemfiles/modular/webrick/vHEAD.gemfile:2605500790": [
+    [1, 1, 0, "Naming/FileName: The name of this source file (`vHEAD.gemfile`) should use snake_case.", 5381],
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177602]
+  ],
+  "gemfiles/modular/x_std_libs.gemfile:757439994": [
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177542]
+  ],
+  "gemfiles/modular/x_std_libs/r3/libs.gemfile:3085502169": [
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177600]
+  ],
+  "gemfiles/modular/x_std_libs/r4/libs.gemfile:1333589873": [
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177600]
+  ],
+  "gemfiles/modular/x_std_libs/vHEAD.gemfile:880553145": [
+    [1, 1, 0, "Naming/FileName: The name of this source file (`vHEAD.gemfile`) should use snake_case.", 5381],
+    [1, 1, 1, "Style/FrozenStringLiteralComment: Missing frozen string literal comment.", 177600]
+  ],
+  "spec/native_merge_fixture.rb:896216784": [
+    [19, 5, 39, "Lint/MissingSuper: Call `super` to initialize state of the parent class.", 4005219958],
+    [63, 5, 35, "Lint/DuplicateMethods: Method `TypedPsychHost#calls` is defined at both spec/native_merge_fixture.rb:17 and spec/native_merge_fixture.rb:63.", 2302640477],
+    [171, 3, 2037, "Metrics/CyclomaticComplexity: Cyclomatic complexity for `execute_batch` is too high. [9/7]", 2048947785],
+    [171, 3, 2037, "Metrics/PerceivedComplexity: Perceived complexity for `execute_batch` is too high. [9/8]", 2048947785],
+    [228, 1, 11938, "Metrics/ModuleLength: Module has too many lines. [339/100]", 2511864397],
+    [300, 3, 11, "Style/ModuleFunction: Use `module_function` instead of `extend self`.", 1210897631],
+    [443, 3, 2041, "Metrics/CyclomaticComplexity: Cyclomatic complexity for `run_json_common` is too high. [8/7]", 1403687490],
+    [443, 3, 2041, "Metrics/PerceivedComplexity: Perceived complexity for `run_json_common` is too high. [12/8]", 1403687490],
+    [521, 28, 54, "Metrics/ParameterLists: Avoid parameter lists longer than 5 parameters. [6/5]", 3956314655]
+  ],
+  "spec/structuredmerge_core_spec.rb:3932994179": [
+    [64, 5, 59, "Style/SafeNavigation: Use safe navigation (`&.`) instead of checking if an object exists before calling the method.", 146719968],
+    [67, 3, 2407, "RSpec/ExampleLength: Example has too many lines. [52/50]", 1106326858],
+    [122, 5, 59, "Style/SafeNavigation: Use safe navigation (`&.`) instead of checking if an object exists before calling the method.", 146719968],
+    [159, 5, 59, "Style/SafeNavigation: Use safe navigation (`&.`) instead of checking if an object exists before calling the method.", 146719968],
+    [245, 9, 46, "RSpec/PredicateMatcher: Prefer using `be_weakref_alive` matcher over `weakref_alive?`.", 4056930202],
+    [258, 7, 46, "RSpec/PredicateMatcher: Prefer using `be_weakref_alive` matcher over `weakref_alive?`.", 3741576],
+    [330, 3, 2005, "RSpec/ExampleLength: Example has too many lines. [51/50]", 2975125869],
+    [347, 15, 371, "Performance/TimesMap: Use `Array.new(4)` with a block instead of `.times.map`.", 87589816],
+    [350, 9, 191, "Performance/TimesMap: Use `Array.new(4)` with a block instead of `.times.map`.", 3707461068],
+    [361, 15, 115, "Performance/TimesMap: Use `Array.new(4)` with a block instead of `.times.map`.", 2682397268],
+    [432, 3, 2607, "RSpec/ExampleLength: Example has too many lines. [60/50]", 1166335875],
+    [496, 3, 2998, "RSpec/ExampleLength: Example has too many lines. [63/50]", 838374463],
+    [580, 7, 19, "RSpec/DescribedClass: Use `described_class` instead of `StructuredmergeCore`.", 3356059095],
+    [656, 3, 2604, "RSpec/ExampleLength: Example has too many lines. [64/50]", 2787566401],
+    [776, 19, 19, "RSpec/DescribedClass: Use `described_class` instead of `StructuredmergeCore`.", 3356059095],
+    [867, 3, 3542, "RSpec/ExampleLength: Example has too many lines. [74/50]", 4162479499],
+    [974, 3, 2949, "RSpec/ExampleLength: Example has too many lines. [56/50]", 4203099217],
+    [1138, 22, 60, "Performance/CollectionLiteralInLoop: Avoid immutable Hash literals in loops. It is better to extract it into a local variable or a constant.", 2039816439],
+    [1166, 3, 90, "RSpec/MultipleExpectations: Example has too many expectations [26/25].", 405521073],
+    [1166, 3, 3175, "RSpec/ExampleLength: Example has too many lines. [63/50]", 4249042634],
+    [1318, 3, 2555, "RSpec/ExampleLength: Example has too many lines. [67/50]", 74036796],
+    [1388, 3, 3192, "RSpec/ExampleLength: Example has too many lines. [71/50]", 3320652022],
+    [1511, 7, 46, "RSpec/PredicateMatcher: Prefer using `be_weakref_alive` matcher over `weakref_alive?`.", 4056930202],
+    [1525, 7, 46, "RSpec/PredicateMatcher: Prefer using `be_weakref_alive` matcher over `weakref_alive?`.", 3741576],
+    [1583, 15, 71, "Performance/TimesMap: Use `Array.new(2)` with a block instead of `.times.map`.", 671851584],
+    [1618, 3, 2191, "RSpec/ExampleLength: Example has too many lines. [53/50]", 3958497355],
+    [1681, 3, 2253, "RSpec/ExampleLength: Example has too many lines. [53/50]", 1215701383],
+    [1779, 3, 75, "RSpec/MultipleExpectations: Example has too many expectations [26/25].", 1841928424],
+    [1779, 3, 3382, "RSpec/ExampleLength: Example has too many lines. [68/50]", 945261163]
+  ]
+}

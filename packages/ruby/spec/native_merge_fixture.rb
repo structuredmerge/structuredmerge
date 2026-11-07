@@ -3,11 +3,15 @@
 # Test-only native provider and request setup. Merge semantics remain in Rust.
 require "structuredmerge_core"
 require "digest"
+
 if ENV["STRUCTUREDMERGE_PSYCH_INSTALLED"] == "1"
   require "psych/merge/core_parser_host"
+
   installed = Gem.loaded_specs.fetch("psych-merge").full_gem_path
   expected = File.expand_path(ENV.fetch("STRUCTUREDMERGE_EXPECT_GEM_HOME")) + File::SEPARATOR
-  raise "Psych adapter must come from the installed gem" unless File.realpath(installed).start_with?(File.realpath(expected) + File::SEPARATOR)
+  unless File.realpath(installed).start_with?(File.realpath(expected) + File::SEPARATOR)
+    raise "Psych adapter must come from the installed gem"
+  end
 
   # Test instrumentation only. Preserve the existing fixture ID while retaining
   # the installed adapter's package/parser provenance and callback implementation.
@@ -20,10 +24,27 @@ if ENV["STRUCTUREDMERGE_PSYCH_INSTALLED"] == "1"
 
     def descriptor
       original = super
-      fields = %i[id family runtime package package_version parser parser_version grammar grammar_version
-        languages dialects contracts capabilities probe_id priority metadata extensions]
+      fields = %i[
+        id
+        family
+        runtime
+        package
+        package_version
+        parser
+        parser_version
+        grammar
+        grammar_version
+        languages
+        dialects
+        contracts
+        capabilities
+        probe_id
+        priority
+        metadata
+        extensions
+      ]
       values = fields.to_h { |field| [field, original.public_send(field)] }
-      StructuredmergeCore::ParserProviderDescriptor.new(**values.merge(id: "ruby.typed.psych"))
+      StructuredmergeCore::ParserProviderDescriptor.new(**values, id: "ruby.typed.psych")
     end
 
     def parse_batch(request)
@@ -33,9 +54,12 @@ if ENV["STRUCTUREDMERGE_PSYCH_INSTALLED"] == "1"
     end
   end
 else
-  require ENV.fetch("STRUCTUREDMERGE_PSYCH_FACTS") {
-    File.expand_path("../../../crates/yaml-merge/tests/support/psych_facts.rb", __dir__)
-  }
+  require(
+
+    ENV.fetch("STRUCTUREDMERGE_PSYCH_FACTS") do
+      File.expand_path("../../../crates/yaml-merge/tests/support/psych_facts.rb", __dir__)
+    end
+  )
 
   class TypedPsychHost
     attr_reader :calls, :received_batch
@@ -46,45 +70,67 @@ else
 
     def descriptor
       StructuredmergeCore::ParserProviderDescriptor.new(
-        id: "ruby.typed.psych", family: "native", runtime: RUBY_ENGINE,
-        package: "psych", package_version: Psych::VERSION,
-        parser: "psych", parser_version: Psych::VERSION,
-        grammar: nil, grammar_version: nil, languages: ["yaml"], dialects: [],
+        id: "ruby.typed.psych",
+        family: "native",
+        runtime: RUBY_ENGINE,
+        package: "psych",
+        package_version: Psych::VERSION,
+        parser: "psych",
+        parser_version: Psych::VERSION,
+        grammar: nil,
+        grammar_version: nil,
+        languages: ["yaml"],
+        dialects: [],
         contracts: ["structuredmerge.parse-result/v1"],
-        capabilities: ["diagnostics", "native_extensions", "source_spans"], probe_id: "psych.available",
-        priority: 0, metadata: {}, extensions: []
+        capabilities: %w[diagnostics native_extensions source_spans],
+        probe_id: "psych.available",
+        priority: 0,
+        metadata: {},
+        extensions: []
       )
     end
 
     def probe_batch(request)
       raise "untyped probe callback" unless request.is_a?(StructuredmergeCore::ProbeBatchRequest)
-      StructuredmergeCore::ProbeBatchResult.new(items: request.items.map do |_item|
-        StructuredmergeCore::ParserProbeResult.new(available: true, loadable: true)
-      end)
+      StructuredmergeCore::ProbeBatchResult.new(
+        items: request.items.map do |_item|
+          StructuredmergeCore::ParserProbeResult.new(available: true, loadable: true)
+        end
+      )
     end
 
     def parse_batch(request)
       @received_batch = request
       @calls += 1
       raise "untyped parse callback" unless request.is_a?(StructuredmergeCore::ParseBatchRequest)
-      StructuredmergeCore::ParseBatchResult.new(items: request.items.map do |item|
-        source = item.source
-        descriptor = source.descriptor
-        endings = descriptor.line_endings
-        # Adapt native typed fields to the existing test-only AST projector;
-        # no JSON string or merge operation crosses the generated callback.
-        facts = project({
-          "request_id" => item.request_id,
-          "source" => {"bytes" => source.bytes, "descriptor" => {
-            "source_id" => descriptor.source_id, "role" => descriptor.role.to_s,
-            "byte_length" => descriptor.byte_length, "sha256" => descriptor.sha256,
-            "encoding" => descriptor.encoding.to_s, "bom" => descriptor.bom,
-            "line_endings" => {"lf" => endings.lf, "crlf" => endings.crlf, "bare_cr" => endings.bare_cr},
-            "final_newline" => descriptor.final_newline
-          }}
-        })
-        StructuredmergeCore::ParseOutput.new(**facts)
-      end)
+      StructuredmergeCore::ParseBatchResult.new(
+        items: request.items.map do |item|
+          source = item.source
+          descriptor = source.descriptor
+          endings = descriptor.line_endings
+          # Adapt native typed fields to the existing test-only AST projector;
+          # no JSON string or merge operation crosses the generated callback.
+          facts = project(
+            {
+              "request_id" => item.request_id,
+              "source" => {
+                "bytes" => source.bytes,
+                "descriptor" => {
+                  "source_id" => descriptor.source_id,
+                  "role" => descriptor.role.to_s,
+                  "byte_length" => descriptor.byte_length,
+                  "sha256" => descriptor.sha256,
+                  "encoding" => descriptor.encoding.to_s,
+                  "bom" => descriptor.bom,
+                  "line_endings" => {"lf" => endings.lf, "crlf" => endings.crlf, "bare_cr" => endings.bare_cr},
+                  "final_newline" => descriptor.final_newline
+                }
+              }
+            }
+          )
+          StructuredmergeCore::ParseOutput.new(**facts)
+        end
+      )
     end
   end
 end
@@ -101,12 +147,27 @@ class TypedWorkflowHost
   end
 
   def descriptor
-    StructuredmergeCore::MergeProviderDescriptor.new(provider_id: "ruby.psych.workflow", family: "yaml", role: :workflow,
-      operations: ["analyze"], dialects: [], profiles: ["ruby.psych.analysis.v1"], capabilities: ["analyze"],
-      preservation_guarantees: [], priority: 0,
-      parser_requirements: StructuredmergeCore::MergeParserRequirements.new(languages: ["yaml"], allowed_backend_ids: ["ruby.typed.psych"]),
-      allowed_delegation_targets: [], runtime: "ruby", package: "psych", package_version: Psych::VERSION,
-      metadata: {"host_tag" => tag.to_json}, extensions: [])
+    StructuredmergeCore::MergeProviderDescriptor.new(
+      provider_id: "ruby.psych.workflow",
+      family: "yaml",
+      role: :workflow,
+      operations: ["analyze"],
+      dialects: [],
+      profiles: ["ruby.psych.analysis.v1"],
+      capabilities: ["analyze"],
+      preservation_guarantees: [],
+      priority: 0,
+      parser_requirements: StructuredmergeCore::MergeParserRequirements.new(
+        languages: ["yaml"],
+        allowed_backend_ids: ["ruby.typed.psych"]
+      ),
+      allowed_delegation_targets: [],
+      runtime: "ruby",
+      package: "psych",
+      package_version: Psych::VERSION,
+      metadata: {"host_tag" => tag.to_json},
+      extensions: []
+    )
   end
 
   def execute_batch(prepared, control)
@@ -119,20 +180,52 @@ class TypedWorkflowHost
       control.cancel
       raise "private host exception"
     end
-    core::WorkflowBatchResult.new(items: prepared.items.map do |item|
-      parsed = item.parses.first.parsed
-      source = item.operation.sources.fetch(:source)
-      raise "source identity changed" unless parsed.source.source_id == source.source_id && parsed.source.sha256 == source.sha256
-      raise "no parser facts" if parsed.nodes.empty?
-      core::OperationResult.new(schema: "https://structuredmerge.org/schemas/provider-result/v1.json", request_id: item.operation.request_id,
-        operation: :analyze, ok: true, provider: core::ResultProvider.new(provider_id: "ruby.psych.workflow", family: "yaml", extra: {}),
-        profile: core::ResultProfile.new(profile_id: "ruby.psych.analysis.v1", extra: {}, parser: core::ResultParserSelection.new(
-          requested_backend: "ruby.typed.psych", selected_backend: "ruby.typed.psych", selection_mode: "explicit", extra: {})),
-        diagnostics: [], changes: [], conflicts: [], fallbacks: [], render_report: {},
-        verification: core::ResultVerification.new(consumed_source_roles: [:source], classification_reached: true, extra: {}),
-        analysis: core::ResultAnalysis.new(schema: "structuredmerge.analysis-result/v1", extra: {"native_node_count" => parsed.nodes.length.to_json}),
-        extensions: [], metadata: {"host_tag" => tag.to_json}, extra: {})
-    end)
+
+    core::WorkflowBatchResult.new(
+      items: prepared.items.map do |item|
+        parsed = item.parses.first.parsed
+        source = item.operation.sources.fetch(:source)
+        unless parsed.source.source_id == source.source_id && parsed.source.sha256 == source.sha256
+          raise "source identity changed"
+        end
+
+        raise "no parser facts" if parsed.nodes.empty?
+        core::OperationResult.new(
+          schema: "https://structuredmerge.org/schemas/provider-result/v1.json",
+          request_id: item.operation.request_id,
+          operation: :analyze,
+          ok: true,
+          provider: core::ResultProvider.new(provider_id: "ruby.psych.workflow", family: "yaml", extra: {}),
+          profile: core::ResultProfile.new(
+            profile_id: "ruby.psych.analysis.v1",
+            extra: {},
+            parser: core::ResultParserSelection.new(
+              requested_backend: "ruby.typed.psych",
+              selected_backend: "ruby.typed.psych",
+              selection_mode: "explicit",
+              extra: {}
+            )
+          ),
+          diagnostics: [],
+          changes: [],
+          conflicts: [],
+          fallbacks: [],
+          render_report: {},
+          verification: core::ResultVerification.new(
+            consumed_source_roles: [:source],
+            classification_reached: true,
+            extra: {}
+          ),
+          analysis: core::ResultAnalysis.new(
+            schema: "structuredmerge.analysis-result/v1",
+            extra: {"native_node_count" => parsed.nodes.length.to_json}
+          ),
+          extensions: [],
+          metadata: {"host_tag" => tag.to_json},
+          extra: {}
+        )
+      end
+    )
   end
 end
 
@@ -141,84 +234,194 @@ module NativeMergeFixture
     core = StructuredmergeCore
     items = ["a: λ\n", "\uFEFFb: two\n"].each_with_index.map do |text, index|
       original = common_request("analyze", [text])
-      operation = core::OperationRequest.new(schema: original.schema, request_id: "workflow-#{index}",
-        operation: original.operation, sources: original.sources, parser_selection: original.parser_selection,
-        provider_selection: core::MergeProviderSelection.new(provider_id: "ruby.psych.workflow", family: "yaml", profile_id: "ruby.psych.analysis.v1",
-          required_capabilities: ["analyze"], extra: {}), extensions: [], metadata: {}, extra: {})
-      core::WorkflowOperation.new(operation: operation, parser_language: "yaml", parser_dialect: nil,
-        parse_options: core::ParseOptions.new(native_extensions: true))
+      operation = core::OperationRequest.new(
+        schema: original.schema,
+        request_id: "workflow-#{index}",
+        operation: original.operation,
+        sources: original.sources,
+        parser_selection: original.parser_selection,
+        provider_selection: core::MergeProviderSelection.new(
+          provider_id: "ruby.psych.workflow",
+          family: "yaml",
+          profile_id: "ruby.psych.analysis.v1",
+          required_capabilities: ["analyze"],
+          extra: {}
+        ),
+        extensions: [],
+        metadata: {},
+        extra: {}
+      )
+      core::WorkflowOperation.new(
+        operation: operation,
+        parser_language: "yaml",
+        parser_dialect: nil,
+        parse_options: core::ParseOptions.new(native_extensions: true)
+      )
     end
+
     core::WorkflowBatchRequest.new(items: items)
   end
 
   def workflow_limits
-    StructuredmergeCore::WorkflowLimits.new(max_operations: 4, max_request_bytes: 1000000, max_response_bytes: 1000000, parse: merge_limits)
+    StructuredmergeCore::WorkflowLimits.new(
+      max_operations: 4,
+      max_request_bytes: 1_000_000,
+      max_response_bytes: 1_000_000,
+      parse: merge_limits
+    )
   end
 
   def run_capability_manifest(profile, operation, dialect)
-    query = StructuredmergeCore::CapabilityQuery.new(profile_id: profile, operation: operation.to_sym,
-      dialect: dialect.empty? ? nil : dialect, parser_selection: StructuredmergeCore::ParserSelection.new(
-        backend_id: "conformance.missing.parser", preference: [], required_capabilities: []))
-    limits = StructuredmergeCore::ParseLimits.new(max_batch_items: 1, max_input_bytes: 0, max_nodes: 0, max_diagnostics: 0)
+    query = StructuredmergeCore::CapabilityQuery.new(
+      profile_id: profile,
+      operation: operation.to_sym,
+      dialect: dialect.empty? ? nil : dialect,
+      parser_selection: StructuredmergeCore::ParserSelection.new(
+        backend_id: "conformance.missing.parser",
+        preference: [],
+        required_capabilities: []
+      )
+    )
+    limits = StructuredmergeCore::ParseLimits.new(
+      max_batch_items: 1,
+      max_input_bytes: 0,
+      max_nodes: 0,
+      max_diagnostics: 0
+    )
     StructuredmergeCore.capability_manifest([query], limits)
   end
 
   def run_capability_inventory
-    limits = StructuredmergeCore::ParseLimits.new(max_batch_items: 0, max_input_bytes: 0, max_nodes: 0, max_diagnostics: 0)
+    limits = StructuredmergeCore::ParseLimits.new(
+      max_batch_items: 0,
+      max_input_bytes: 0,
+      max_nodes: 0,
+      max_diagnostics: 0
+    )
     StructuredmergeCore.capability_manifest([], limits)
   end
 
   extend self
 
   def common_request(operation, texts, policy: nil, request_id: "typed-common-#{operation}")
-    roles = {"analyze" => %w[source], "diff2" => %w[before after], "merge2" => %w[incoming current], "merge3" => %w[base ours theirs]}.fetch(operation)
+    roles = {
+      "analyze" => %w[source],
+      "diff2" => %w[before after],
+      "merge2" => %w[incoming current],
+      "merge3" => %w[base ours theirs]
+    }.fetch(operation)
     sources = roles.zip(texts).to_h do |role, text|
-      [role, StructuredmergeCore::OperationSource.new(source_id: role, role: role,
-        byte_length: text.bytesize, sha256: Digest::SHA256.hexdigest(text), encoding: "utf-8", content: text, extra: {})]
+      [
+        role,
+        StructuredmergeCore::OperationSource.new(
+          source_id: role,
+          role: role,
+          byte_length: text.bytesize,
+          sha256: Digest::SHA256.hexdigest(text),
+          encoding: "utf-8",
+          content: text,
+          extra: {}
+        )
+      ]
     end
+
     policy ||= case operation
     when "analyze"
       StructuredmergeCore::OperationPolicyAnalyze.new(value: StructuredmergeCore::AnalyzePolicy.new(extra: {}))
     when "diff2"
       StructuredmergeCore::OperationPolicyDiff2.new(value: StructuredmergeCore::DiffPolicy.new(extra: {}))
     when "merge2"
-      StructuredmergeCore::OperationPolicyMerge2.new(value: StructuredmergeCore::DirectionalMergePolicy.new(
-        directional_merge: "template-into-current", render_policy: "source-preserving", extra: {}))
+      StructuredmergeCore::OperationPolicyMerge2.new(
+        value: StructuredmergeCore::DirectionalMergePolicy.new(
+          directional_merge: "template-into-current",
+          render_policy: "source-preserving",
+          extra: {}
+        )
+      )
     else
-      StructuredmergeCore::OperationPolicyMerge3.new(value: StructuredmergeCore::ThreeWayMergePolicy.new(
-        render_policy: "source-preserving", fallback_policy: "none", extra: {}))
+      StructuredmergeCore::OperationPolicyMerge3.new(
+        value: StructuredmergeCore::ThreeWayMergePolicy.new(
+          render_policy: "source-preserving",
+          fallback_policy: "none",
+          extra: {}
+        )
+      )
     end
-    StructuredmergeCore::OperationRequest.new(schema: "structuredmerge.operation-request/v1", request_id: request_id,
-      operation: policy, sources: sources, extensions: [], metadata: {}, extra: {},
-      provider_selection: StructuredmergeCore::MergeProviderSelection.new(provider_id: "kernel.yaml", family: "yaml",
-        profile_id: "kernel.yaml.native_mapping.v1", required_capabilities: [operation], extra: {}),
-      parser_selection: StructuredmergeCore::OperationParserSelection.new(backend: "ruby.typed.psych", preference: [],
-        required_capabilities: [], extra: {}))
+
+    StructuredmergeCore::OperationRequest.new(
+      schema: "structuredmerge.operation-request/v1",
+      request_id: request_id,
+      operation: policy,
+      sources: sources,
+      extensions: [],
+      metadata: {},
+      extra: {},
+      provider_selection: StructuredmergeCore::MergeProviderSelection.new(
+        provider_id: "kernel.yaml",
+        family: "yaml",
+        profile_id: "kernel.yaml.native_mapping.v1",
+        required_capabilities: [operation],
+        extra: {}
+      ),
+      parser_selection: StructuredmergeCore::OperationParserSelection.new(
+        backend: "ruby.typed.psych",
+        preference: [],
+        required_capabilities: [],
+        extra: {}
+      )
+    )
   end
 
   def merge_requests(sources, shared_source_id: nil, roles: %w[base ours theirs])
-    roles.zip(sources).map do |role, source|
-      descriptor = StructuredmergeCore::SourceDescriptor.new(
-        source_id: shared_source_id || (role == "base" ? "merge-output" : role), role: role, byte_length: source.bytesize,
-        sha256: Digest::SHA256.hexdigest(source), encoding: "utf8", bom: source.start_with?("\uFEFF"),
-        line_endings: StructuredmergeCore::LineEndings.new(
-          lf: source.count("\n") - source.scan("\r\n").length,
-          crlf: source.scan("\r\n").length, bare_cr: 0
-        ), final_newline: source.end_with?("\n")
-      )
-      StructuredmergeCore::ParseRequest.new(
-        schema: "structuredmerge.parse-request/v1", request_id: role,
-        source: StructuredmergeCore::SourceInput.new(descriptor: descriptor, bytes: source.bytes),
-        language: "yaml", dialect: nil,
-        selection: StructuredmergeCore::ParserSelection.new(backend_id: "ruby.typed.psych", preference: [], required_capabilities: []),
-        options: StructuredmergeCore::ParseOptions.new(comments: false, tokens: false, diagnostics: true, native_extensions: true),
-        metadata: {}, extra: {}
-      )
-    end.reverse # semantic roles, not argument positions
+    roles
+      .zip(sources)
+      .map do |role, source|
+        descriptor = StructuredmergeCore::SourceDescriptor.new(
+          source_id: shared_source_id || (role == "base" ? "merge-output" : role),
+          role: role,
+          byte_length: source.bytesize,
+          sha256: Digest::SHA256.hexdigest(source),
+          encoding: "utf8",
+          bom: source.start_with?("\uFEFF"),
+          line_endings: StructuredmergeCore::LineEndings.new(
+            lf: source.count("\n") - source.scan("\r\n").length,
+            crlf: source.scan("\r\n").length,
+            bare_cr: 0
+          ),
+          final_newline: source.end_with?("\n")
+        )
+        StructuredmergeCore::ParseRequest.new(
+          schema: "structuredmerge.parse-request/v1",
+          request_id: role,
+          source: StructuredmergeCore::SourceInput.new(descriptor: descriptor, bytes: source.bytes),
+          language: "yaml",
+          dialect: nil,
+          selection: StructuredmergeCore::ParserSelection.new(
+            backend_id: "ruby.typed.psych",
+            preference: [],
+            required_capabilities: []
+          ),
+          options: StructuredmergeCore::ParseOptions.new(
+            comments: false,
+            tokens: false,
+            diagnostics: true,
+            native_extensions: true
+          ),
+          metadata: {},
+          extra: {}
+        )
+        # semantic roles, not argument positions
+      end
+      .reverse
   end
 
   def merge_limits
-    StructuredmergeCore::ParseLimits.new(max_batch_items: 3, max_input_bytes: 10000, max_nodes: 1000, max_diagnostics: 20)
+    StructuredmergeCore::ParseLimits.new(
+      max_batch_items: 3,
+      max_input_bytes: 10_000,
+      max_nodes: 1000,
+      max_diagnostics: 20
+    )
   end
 
   def native_merge_profiles
@@ -243,20 +446,60 @@ module NativeMergeFixture
 
   def run_json_common(operation, dialect, sources, git_options = nil, family = "json")
     provider_id = "ruby.fixture.#{family}"
-    StructuredmergeCore.register_language_pack_parser(provider_id, %w[bash go rust typescript].include?(family) ? dialect : ((dialect == "json") ? "json" : "json5"))
+    StructuredmergeCore.register_language_pack_parser(
+      provider_id,
+      if %w[bash go rust typescript].include?(family)
+        dialect
+      else
+        (dialect == "json" ? "json" : "json5")
+      end
+    )
     begin
       original = common_request(operation, sources)
       policy = if git_options
-        StructuredmergeCore::OperationPolicyMerge3.new(value: StructuredmergeCore::ThreeWayMergePolicy.new(
-          render_policy: "source-preserving", conflict_marker_size: git_options[0], labels: {"ours" => git_options[1]}, extra: {}))
+        StructuredmergeCore::OperationPolicyMerge3.new(
+          value: StructuredmergeCore::ThreeWayMergePolicy.new(
+            render_policy: "source-preserving",
+            conflict_marker_size: git_options[0],
+            labels: {"ours" => git_options[1]},
+            extra: {}
+          )
+        )
       else
         original.operation
       end
-      request = StructuredmergeCore::OperationRequest.new(schema: original.schema, request_id: original.request_id,
-        operation: policy, sources: original.sources, extensions: [], metadata: {}, extra: {},
-        provider_selection: StructuredmergeCore::MergeProviderSelection.new(provider_id: %w[bash go rust typescript].include?(family) ? "kernel.#{family}" : (git_options ? "kernel.git.json" : "kernel.json"), family: family, dialect: dialect,
-          profile_id: %w[bash go rust typescript].include?(family) ? "kernel.#{family}.owners.v1" : (git_options ? "kernel.git.json.v1" : "kernel.json.nested.v1"), required_capabilities: [operation], extra: {}),
-        parser_selection: StructuredmergeCore::OperationParserSelection.new(backend: provider_id, preference: [], required_capabilities: [], extra: {}))
+
+      request = StructuredmergeCore::OperationRequest.new(
+        schema: original.schema,
+        request_id: original.request_id,
+        operation: policy,
+        sources: original.sources,
+        extensions: [],
+        metadata: {},
+        extra: {},
+        provider_selection: StructuredmergeCore::MergeProviderSelection.new(
+          provider_id: if %w[bash go rust typescript].include?(family)
+            "kernel.#{family}"
+          else
+            (git_options ? "kernel.git.json" : "kernel.json")
+          end,
+          family: family,
+          dialect: dialect,
+          profile_id: if %w[bash go rust typescript].include?(family)
+            "kernel.#{family}.owners.v1"
+          else
+            (git_options ? "kernel.git.json.v1" : "kernel.json.nested.v1")
+          end,
+          required_capabilities: [operation],
+          extra: {}
+        ),
+        parser_selection: StructuredmergeCore::OperationParserSelection.new(
+          backend: provider_id,
+          preference: [],
+          required_capabilities: [],
+          extra: {}
+        )
+      )
       StructuredmergeCore.execute_operation(request, merge_limits)
     ensure
       StructuredmergeCore.unregister_parser_provider(provider_id)

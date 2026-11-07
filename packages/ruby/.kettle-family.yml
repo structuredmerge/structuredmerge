@@ -1,0 +1,36 @@
+---
+family:
+  name: structuredmerge-core-ruby
+  mode: monorepo
+  members_root: .
+
+members:
+  roots:
+    - .
+
+template:
+  local_env:
+    STRUCTUREDMERGE_DEV: "{{config_root}}/../../../ruby/gems"
+    STRUCTUREDMERGE_CORE_DEV: "{{config_root}}/../.."
+    KETTLE_DEV_DEV: "{{config_root}}/../../../kettle-dev"
+
+changelog:
+  mode: root
+  path: "../../CHANGELOG.md"
+  version_file: lib/structuredmerge_core/version.rb
+
+release:
+  graph_contract: registry_only
+  disable_local_path_env:
+    - STRUCTUREDMERGE_DEV
+    - STRUCTUREDMERGE_CORE_DEV
+    - KETTLE_DEV_DEV
+
+check:
+  required_files:
+    - Gemfile
+    - Rakefile
+    - README.md
+    - LICENSE.md
+  root_required_files:
+    - ../../CHANGELOG.md

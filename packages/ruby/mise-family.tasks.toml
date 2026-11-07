@@ -1,0 +1,172 @@
+# kettle-family managed family mise tasks
+#
+# This file is owned by kettle-family and is overwritten on
+# template updates (and on kettle-jem templating runs for this
+# family). It uses the mise-task schema: each top-level table is a
+# task, addressable from the destination root mise.toml via
+# [task_config] includes.
+#
+# Family-specific tasks (for example a release task with the
+# family's publish flags and secrets provider) belong in the root
+# mise.toml. Standard task names are managed here and migrated out
+# of that file during refreshes.
+
+[check]
+description = "Run readiness, lint, and tests"
+depends = ["readiness", "lint", "test"]
+run = "true"
+
+[test]
+description = "Run each member gem suite with its own bundle"
+raw = true
+run = "bundle exec kettle-family test --execute"
+
+[lint]
+description = "Run read-only lint checks across family members"
+raw = true
+run = "bundle exec kettle-family lint --execute"
+
+[state]
+description = "Report release state for every family member"
+raw = true
+run = "bundle exec kettle-family release-state"
+
+[release-state]
+description = "Report changelog release state for every family member"
+raw = true
+run = "bundle exec kettle-family release-state"
+
+[template]
+description = "Apply kettle-jem templates across family members"
+raw = true
+run = "bundle exec kettle-family template --execute"
+
+[bump]
+description = "Bump member gem versions"
+raw = true
+run = "bundle exec kettle-family bump --execute"
+
+[changelog]
+description = "Add a structured entry to the family changelog"
+raw = true
+run = "bundle exec kettle-family add-changelog --execute"
+
+[install]
+description = "Run family install"
+raw = true
+run = "bundle exec kettle-family install --execute"
+
+[docs]
+description = "Run family docs"
+raw = true
+run = "bundle exec kettle-family docs --execute"
+
+[clean]
+description = "Run family clean"
+raw = true
+run = "bundle exec kettle-family clean-unreleased --execute"
+
+[pins]
+description = "Run family pins"
+raw = true
+run = "bundle exec kettle-family gha-sha-pins --execute --upgrade major"
+
+[bex]
+description = "Run family bex"
+raw = true
+run = "bundle exec kettle-family bex --execute"
+
+[branch-lanes]
+description = "Run family branch-lanes"
+raw = true
+run = "bundle exec kettle-family branch-lanes"
+
+[discover]
+description = "Run family discover"
+raw = true
+run = "bundle exec kettle-family discover"
+
+[metadata]
+description = "Run family metadata"
+raw = true
+run = "bundle exec kettle-family metadata"
+
+[report]
+description = "Run family report"
+raw = true
+run = "bundle exec kettle-family report"
+
+[pull]
+description = "Run family pull"
+raw = true
+run = "bundle exec kettle-family pull --execute"
+
+[push]
+description = "Run family push"
+raw = true
+run = "bundle exec kettle-family push --execute"
+
+[up]
+description = "Run family up"
+raw = true
+run = "bundle exec kettle-family up --execute"
+
+[sync]
+description = "Run family sync"
+raw = true
+run = "bundle exec kettle-family sync --execute"
+
+[reset]
+description = "Run family reset"
+raw = true
+run = "bundle exec kettle-family reset --execute"
+
+[mise-trust]
+description = "Run family mise-trust"
+raw = true
+run = "bundle exec kettle-family mise-trust"
+
+[reconcile-releases]
+description = "Run family reconcile-releases"
+raw = true
+run = "bundle exec kettle-family reconcile-releases --execute"
+
+[readiness]
+description = "Run family readiness"
+raw = true
+run = "bundle exec kettle-family check --execute"
+
+[deps]
+description = "Run family deps"
+raw = true
+run = "bundle exec kettle-family bup --execute --no-commit"
+
+[lint-fix]
+description = "Run family lint-fix"
+raw = true
+run = "bundle exec kettle-family bex --execute --no-commit -- bin/rake rubocop_gradual:autocorrect"
+
+[bup]
+description = "Update dependencies and commit lockfiles; pass gems or options after --"
+raw = true
+run = "env -- STRUCTUREDMERGE_CORE_RUBY_DEV=false STRUCTUREDMERGE_DEV=false STRUCTUREDMERGE_CORE_DEV=false KETTLE_DEV_DEV=false bundle exec kettle-family bup --execute --commit --env STRUCTUREDMERGE_CORE_RUBY_DEV={{config_root}}/. --env K_JEM_TEMPLATING=true"
+
+[bupb]
+description = "Install latest stable Bundler and update family lockfiles; pass options after --"
+raw = true
+run = "env -- STRUCTUREDMERGE_CORE_RUBY_DEV=false STRUCTUREDMERGE_DEV=false STRUCTUREDMERGE_CORE_DEV=false KETTLE_DEV_DEV=false bundle exec kettle-family update-bundler --execute --commit --env STRUCTUREDMERGE_CORE_RUBY_DEV={{config_root}}/. --env K_JEM_TEMPLATING=true"
+
+[update-bundler]
+description = "Install latest stable Bundler and update family lockfiles; pass options after --"
+raw = true
+run = "env -- STRUCTUREDMERGE_CORE_RUBY_DEV=false STRUCTUREDMERGE_DEV=false STRUCTUREDMERGE_CORE_DEV=false KETTLE_DEV_DEV=false bundle exec kettle-family update-bundler --execute --commit --env STRUCTUREDMERGE_CORE_RUBY_DEV={{config_root}}/. --env K_JEM_TEMPLATING=true"
+
+[local-template]
+description = "Apply templates using member-local Nomono and local workspace gems"
+raw = true
+run = "STRUCTUREDMERGE_DEV={{config_root}}/../../../ruby/gems STRUCTUREDMERGE_CORE_DEV={{config_root}}/../.. KETTLE_DEV_DEV={{config_root}}/../../../kettle-dev STRUCTUREDMERGE_CORE_RUBY_DEV={{config_root}} K_JEM_TEMPLATING=true RUBYOPT=-rbundler/setup BUNDLE_GEMFILE=Gemfile bundle exec kettle-family template --execute --env STRUCTUREDMERGE_DEV\\={{config_root}}/../../../ruby/gems --env STRUCTUREDMERGE_CORE_DEV\\={{config_root}}/../.. --env KETTLE_DEV_DEV\\={{config_root}}/../../../kettle-dev --env STRUCTUREDMERGE_CORE_RUBY_DEV\\={{config_root}} --env K_JEM_TEMPLATING\\=true --env RUBYOPT\\=-rbundler/setup --env BUNDLE_GEMFILE\\=Gemfile"
+
+[unreleased-template]
+description = "Apply templates to stale members using the family-root bundle"
+raw = true
+run = "STRUCTUREDMERGE_DEV={{config_root}}/../../../ruby/gems STRUCTUREDMERGE_CORE_DEV={{config_root}}/../.. KETTLE_DEV_DEV={{config_root}}/../../../kettle-dev STRUCTUREDMERGE_CORE_RUBY_DEV={{config_root}} K_JEM_TEMPLATING=true RUBYOPT=-rbundler/setup BUNDLE_GEMFILE=Gemfile bundle exec kettle-family template --execute --env STRUCTUREDMERGE_DEV\\={{config_root}}/../../../ruby/gems --env STRUCTUREDMERGE_CORE_DEV\\={{config_root}}/../.. --env KETTLE_DEV_DEV\\={{config_root}}/../../../kettle-dev --env STRUCTUREDMERGE_CORE_RUBY_DEV\\={{config_root}} --env K_JEM_TEMPLATING\\=true --env RUBYOPT\\=-rbundler/setup --env BUNDLE_GEMFILE\\={{config_root}}/Gemfile"
