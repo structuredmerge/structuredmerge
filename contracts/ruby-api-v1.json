@@ -1,11 +1,6 @@
 {
   "schema": "structuredmerge.ruby-api/v1",
-  "facade_constants": [
-    "HostBatchRequest",
-    "HostSourceSegment",
-    "VERSION",
-    "WorkflowProvider"
-  ],
+  "facade_constants": ["HostBatchRequest", "HostSourceSegment", "VERSION", "WorkflowProvider"],
   "facade_methods": [
     "apply_ast_crispr_source_edits_json",
     "cancel_identity_worker",
@@ -54,11 +49,7 @@
     "unregister_parser_host",
     "unregister_workflow_host"
   ],
-  "native_constants": [
-    "HostBatchRequest",
-    "HostPrototypeError",
-    "HostSourceSegment"
-  ],
+  "native_constants": ["HostBatchRequest", "HostPrototypeError", "HostSourceSegment"],
   "native_method_arities": {
     "apply_ast_crispr_source_edits_json": 1,
     "cancel_identity_worker": 1,

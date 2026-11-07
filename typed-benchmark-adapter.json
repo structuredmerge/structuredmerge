@@ -5,21 +5,29 @@
     "implementation": "rust-via-python",
     "package": "structuredmerge-core",
     "package_version": "0.2.0",
-    "source": {"repository": "structuredmerge/structuredmerge"}
+    "source": { "repository": "structuredmerge/structuredmerge" }
   },
   "source_root": ".",
   "provider": {
     "merge_providers": {
       "json": {
-      "provider_id": "kernel.json / kernel.git.json",
-      "package": "structuredmerge-core",
-      "profile": "kernel.json.nested.v1 (merge2); kernel.git.json.v1 (merge3)"
+        "provider_id": "kernel.json / kernel.git.json",
+        "package": "structuredmerge-core",
+        "profile": "kernel.json.nested.v1 (merge2); kernel.git.json.v1 (merge3)"
       },
-      "python": {"provider_id": "kernel.python", "package": "structuredmerge-core", "profile": "kernel.python.native_declarations.v1"},
-      "bash": {"provider_id": "kernel.bash", "package": "structuredmerge-core", "profile": "kernel.bash.owners.v1"},
-      "go": {"provider_id": "kernel.go", "package": "structuredmerge-core", "profile": "kernel.go.owners.v1"},
-      "rust": {"provider_id": "kernel.rust", "package": "structuredmerge-core", "profile": "kernel.rust.owners.v1"},
-      "typescript": {"provider_id": "kernel.typescript", "package": "structuredmerge-core", "profile": "kernel.typescript.owners.v1"}
+      "python": {
+        "provider_id": "kernel.python",
+        "package": "structuredmerge-core",
+        "profile": "kernel.python.native_declarations.v1"
+      },
+      "bash": { "provider_id": "kernel.bash", "package": "structuredmerge-core", "profile": "kernel.bash.owners.v1" },
+      "go": { "provider_id": "kernel.go", "package": "structuredmerge-core", "profile": "kernel.go.owners.v1" },
+      "rust": { "provider_id": "kernel.rust", "package": "structuredmerge-core", "profile": "kernel.rust.owners.v1" },
+      "typescript": {
+        "provider_id": "kernel.typescript",
+        "package": "structuredmerge-core",
+        "profile": "kernel.typescript.owners.v1"
+      }
     },
     "parser_provider": {
       "provider_id": "tree-sitter-language-pack / python.libcst",
@@ -35,13 +43,13 @@
     "families": ["bash", "go", "json", "python", "rust", "typescript"],
     "dialects": ["bash", "go", "json", "jsonc", "json5", "python", "rust", "typescript", "tsx"],
     "combinations": [
-      {"family": "json", "operations": ["merge2", "merge3"], "dialects": ["json", "jsonc", "json5"]},
-      {"family": "python", "operations": ["merge2", "merge3"], "dialects": ["python"]},
-      {"family": "bash", "operations": ["merge3"], "dialects": ["bash"]},
-      {"family": "go", "operations": ["merge3"], "dialects": ["go"]},
-      {"family": "rust", "operations": ["merge3"], "dialects": ["rust"]},
-      {"family": "typescript", "operations": ["merge3"], "dialects": ["typescript", "tsx"]}
+      { "family": "json", "operations": ["merge2", "merge3"], "dialects": ["json", "jsonc", "json5"] },
+      { "family": "python", "operations": ["merge2", "merge3"], "dialects": ["python"] },
+      { "family": "bash", "operations": ["merge3"], "dialects": ["bash"] },
+      { "family": "go", "operations": ["merge3"], "dialects": ["go"] },
+      { "family": "rust", "operations": ["merge3"], "dialects": ["rust"] },
+      { "family": "typescript", "operations": ["merge3"], "dialects": ["typescript", "tsx"] }
     ]
   },
-  "environment": {"binding_runtime": "python", "semantic_runtime": "rust", "publication_gate": false}
+  "environment": { "binding_runtime": "python", "semantic_runtime": "rust", "publication_gate": false }
 }

@@ -77,7 +77,17 @@
     },
     {
       "id": "parser-services",
-      "methods": ["register_parser_host", "replace_parser_host", "unregister_parser_host", "clear_parser_hosts", "registered_parser_hosts", "register_tslp_parser_host", "parse_normalized_with_tslp", "parse_with_parser", "probe_with_parser"],
+      "methods": [
+        "register_parser_host",
+        "replace_parser_host",
+        "unregister_parser_host",
+        "clear_parser_hosts",
+        "registered_parser_hosts",
+        "register_tslp_parser_host",
+        "parse_normalized_with_tslp",
+        "parse_with_parser",
+        "probe_with_parser"
+      ],
       "disposition": "local_consumer_migrated",
       "consumer_revision": "structuredmerge/structuredmerge-ruby@1a13e6484",
       "consumers": ["ruby/gems/tree_haver/lib/tree_haver/backends/rust_tslp.rb", "retired Ruby boundary coverage"],
@@ -94,7 +104,14 @@
     },
     {
       "id": "workflow-hosts",
-      "methods": ["register_workflow_host", "replace_workflow_host", "unregister_workflow_host", "clear_workflow_hosts", "registered_workflow_hosts", "execute_typed_workflow"],
+      "methods": [
+        "register_workflow_host",
+        "replace_workflow_host",
+        "unregister_workflow_host",
+        "clear_workflow_hosts",
+        "registered_workflow_hosts",
+        "execute_typed_workflow"
+      ],
       "disposition": "retain_regression_only",
       "consumers": ["retired Ruby boundary coverage", "retired provider adapter"],
       "replacement": "Typed WorkflowHost coarse callbacks with explicit host-owned workflow boundaries; Rust retains merge semantics.",
@@ -102,7 +119,21 @@
     },
     {
       "id": "runtime-identity-probes",
-      "methods": ["execute_identity", "execute_async_identity", "execute_detached_identity", "execute_in_process_identity", "execute_typed_identity", "start_identity_worker", "prepare_identity_worker", "dispatch_identity_worker", "cancel_identity_worker", "identity_worker_cancelled", "poll_identity_worker", "start_host_runtime", "shutdown_host_runtime"],
+      "methods": [
+        "execute_identity",
+        "execute_async_identity",
+        "execute_detached_identity",
+        "execute_in_process_identity",
+        "execute_typed_identity",
+        "start_identity_worker",
+        "prepare_identity_worker",
+        "dispatch_identity_worker",
+        "cancel_identity_worker",
+        "identity_worker_cancelled",
+        "poll_identity_worker",
+        "start_host_runtime",
+        "shutdown_host_runtime"
+      ],
       "disposition": "retain_regression_only",
       "consumers": ["retired Ruby boundary coverage"],
       "replacement": "Real typed-operation lifecycle tests, OperationControl and generated runtime-affine callback infrastructure; no identity-worker product API by default.",

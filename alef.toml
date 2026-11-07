@@ -20,6 +20,12 @@ user_owned = [
   # PEP 621 requires homepage under project.urls, and RubyGems rejects identical
   # summary/description values. Their release metadata is checked by local tests.
   "packages/python/pyproject.toml",
+  # Kettle Jem layers the Ruby package's release workflow and public-facing
+  # metadata over these Alef scaffolds; after templating, Kettle Jem owns them.
+  "packages/ruby/README.md",
+  "packages/ruby/Rakefile",
+  "packages/ruby/lib/structuredmerge_core.rb",
+  "packages/ruby/lib/structuredmerge_core/version.rb",
   "packages/ruby/structuredmerge_core.gemspec",
 ]
 

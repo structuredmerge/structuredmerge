@@ -78,7 +78,22 @@
   "supports": {
     "operations": ["merge2", "merge3", "metamorphic"],
     "families": ["bash", "go", "json", "markdown", "python", "rbs", "ruby", "rust", "toml", "typescript", "yaml"],
-    "dialects": ["bash", "go", "json", "jsonc", "json5", "markdown", "python", "rbs", "ruby", "rust", "toml", "typescript", "tsx", "yaml"],
+    "dialects": [
+      "bash",
+      "go",
+      "json",
+      "jsonc",
+      "json5",
+      "markdown",
+      "python",
+      "rbs",
+      "ruby",
+      "rust",
+      "toml",
+      "typescript",
+      "tsx",
+      "yaml"
+    ],
     "combinations": [
       {
         "family": "bash",
