@@ -5,7 +5,10 @@ use structuredmerge_core::{
 };
 
 fn fixture() -> Value {
-    serde_json::from_str(include_str!("../../../../fixtures/diagnostics/slice-1025-versioned-merge-operation-envelopes/contract.json")).unwrap()
+    serde_json::from_str(include_str!(
+        "../../../fixtures/diagnostics/slice-1025-versioned-merge-operation-envelopes/contract.json"
+    ))
+    .unwrap()
 }
 
 fn validated(value: Value) -> ValidatedOperationRequest {

@@ -1,0 +1,17 @@
+{
+  "id": "bash_merge3_inline_comment_owner_deletion",
+  "contract": "bash_merge3_inline_comment_owner_deletion",
+  "description": "Removing an assignment promotes its parser-owned inline comment using the shared line plan while retaining an independently edited function.",
+  "input": {
+    "base": "x=1 # x docs\ny=1 # y docs\nf() { :; }\n",
+    "ours": "x=1 # x docs\ny=1 # y docs\nf() { echo changed; }\n",
+    "theirs": "y=1 # y docs\nf() { :; }\n"
+  },
+  "expected": {
+    "output": "# x docs\ny=1 # y docs\nf() { echo changed; }\n"
+  },
+  "ruby_native_expected": {
+    "ok": false,
+    "diagnostic_category": "unsafe_source_range"
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "id": "rust_parser_owner_profile_failure_boundary",
+  "contract": "rust_parser_owner_profile_failure_boundary",
+  "description": "Malformed Rust remains rejected. A valid foreign module now demonstrates the richer syn owner projection while the Ruby Tree-sitter provider retains its unsupported-feature boundary.",
+  "cases": [
+    {
+      "name": "valid foreign module is supported by native syn",
+      "source": "unsafe extern \"C\" { fn native_symbol(); }\n",
+      "expected": {
+        "ok": false,
+        "ruby_native_ok": false,
+        "rust_syn_host_ok": true,
+        "ruby_native_merge_ok": false,
+        "rust_syn_host_merge_ok": true,
+        "rust_syn_host_merge_output": "unsafe extern \"C\" { fn native_symbol(); fn second_symbol(); }\nfn stable() {}\n",
+        "ruby_native_category": "unsupported_feature",
+        "native_rust_ok": true,
+        "tree_sitter_rust_ok": false,
+        "rust_family_category": "unsupported_feature",
+        "rust_treesitter_ok": false,
+        "rust_treesitter_category": "unsupported_feature",
+        "rust_treesitter_merge_ok": false,
+        "rust_treesitter_merge_category": "unsupported_feature",
+        "native_rust_merge_ok": true,
+        "native_rust_merge_output": "unsafe extern \"C\" { fn native_symbol(); fn second_symbol(); }\nfn stable() {}\n",
+        "tree_sitter_rust_merge_ok": false,
+        "tree_sitter_rust_merge_category": "parse_error"
+      },
+      "merge3": {
+        "base": "unsafe extern \"C\" { fn native_symbol(); }\nfn stable() {}\n",
+        "ours": "unsafe extern \"C\" { fn native_symbol(); fn second_symbol(); }\nfn stable() {}\n",
+        "theirs": "unsafe extern \"C\" { fn native_symbol(); }\nfn stable() {}\n"
+      },
+      "description": "Native syn accepts the valid unsafe extern block, retains its foreign-module owner, and merges an independent function edit. The Ruby Tree-sitter host rejects the form as unsupported."
+    },
+    {
+      "name": "malformed function syntax is rejected",
+      "source": "fn broken(\n",
+      "expected": {
+        "ok": false,
+        "ruby_native_category": "parse_error",
+        "rust_family_category": "parse_error",
+        "rust_syn_host_category": "parse_error"
+      },
+      "merge3": {
+        "base": "fn stable() {}\n",
+        "ours": "fn broken(\n",
+        "theirs": "fn stable() {}\n"
+      }
+    },
+    {
+      "name": "Rust test attribute and doc comment stay with their item",
+      "source": "/// unit test docs\n#[test]\nfn unit() { assert_eq!(1, 1); }\n\nfn stable() {}\n",
+      "expected": {
+        "ok": false,
+        "ruby_native_ok": true,
+        "rust_syn_host_ok": true,
+        "ruby_native_merge_ok": true,
+        "rust_syn_host_merge_ok": true,
+        "rust_syn_host_merge_output": "/// unit test docs\n#[test]\nfn unit() { assert_eq!(1, 2); }\n\nfn stable() { 2 }\n",
+        "native_rust_ok": true,
+        "tree_sitter_rust_ok": false,
+        "rust_family_category": "unsupported_feature",
+        "rust_treesitter_ok": true,
+        "rust_treesitter_merge_ok": true,
+        "rust_treesitter_merge_output": "/// unit test docs\n#[test]\nfn unit() { assert_eq!(1, 2); }\n\nfn stable() { 2 }\n"
+      },
+      "merge3": {
+        "base": "/// unit test docs\n#[test]\nfn unit() { assert_eq!(1, 1); }\n\nfn stable() {}\n",
+        "ours": "/// unit test docs\n#[test]\nfn unit() { assert_eq!(1, 2); }\n\nfn stable() {}\n",
+        "theirs": "/// unit test docs\n#[test]\nfn unit() { assert_eq!(1, 1); }\n\nfn stable() { 2 }\n"
+      },
+      "description": "Both Rust parser paths retain an outer doc comment and the test attribute with their function owner while independent owner edits merge."
+    }
+  ]
+}

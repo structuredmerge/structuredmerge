@@ -1,0 +1,14 @@
+{
+  "id": "bash_merge3_multiple_removed_owner_rehome",
+  "contract": "bash_merge3_multiple_removed_owner_rehome",
+  "description": "Deleting adjacent commented Bash owners rehomes both comments before the independently edited surviving function.",
+  "input": {
+    "base": "# x docs\nx=1\n\n# y docs\ny=2\n\nf() { :; }\n",
+    "ours": "# x docs\nx=1\n\n# y docs\ny=2\n\nf() { echo changed; }\n",
+    "theirs": "# x docs\n\n# y docs\n\nf() { :; }\n"
+  },
+  "expected": {
+    "ok": true,
+    "output": "# x docs\n\n# y docs\n\nf() { echo changed; }\n"
+  }
+}

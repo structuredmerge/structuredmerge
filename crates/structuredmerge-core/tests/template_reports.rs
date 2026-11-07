@@ -85,7 +85,7 @@ fn profile_resolution_preserves_defaults_overrides_and_missing_diagnostics() {
 fn directory_plan_matches_shared_golden_without_applying() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../../fixtures/diagnostics/slice-362-template-directory-session-options-report");
-    let golden: serde_json::Value = serde_json::from_str(include_str!("../../../../fixtures/diagnostics/slice-362-template-directory-session-options-report/template-directory-session-options-report.json")).unwrap();
+    let golden: serde_json::Value = serde_json::from_str(include_str!("../../../fixtures/diagnostics/slice-362-template-directory-session-options-report/template-directory-session-options-report.json")).unwrap();
     let mut input = golden["plan_run"]["options"].clone();
     input["template_root"] = root.join("dry-run/template").to_str().unwrap().into();
     input["destination_root"] = root.join("dry-run/destination").to_str().unwrap().into();

@@ -1,0 +1,18 @@
+{
+  "id": "rust_merge3_compatible_reorders_with_two_interior_additions",
+  "contract": "rust_merge3_compatible_reorders_with_two_interior_additions",
+  "description": "Two documented additions in distinct stable gaps compose with compatible independent two-tip reorders and controller-owned blank-line layout.",
+  "input": {
+    "base": "// docs a\nfn a() {}\n\n// docs b\nfn b() {}\n// docs c\nfn c() {}\n\n// docs d\nfn d() {}\n// docs e\nfn e() {}\n// docs f\nfn f() {}\n",
+    "ours": "// docs b\nfn b() {}\n// docs a\nfn a() {}\n\n// docs c\nfn c() {}\n// docs x\nfn x() {}\n\n// docs d\nfn d() {}\n// docs e\nfn e() {}\n// docs f\nfn f() {}\n",
+    "theirs": "// docs a\nfn a() {}\n\n// docs b\nfn b() {}\n// docs c\nfn c() {}\n\n// docs d\nfn d() {}\n// docs y\nfn y() {}\n// docs f\nfn f() {}\n// docs e\nfn e() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "// docs b\nfn b() {}\n// docs a\nfn a() {}\n\n// docs c\nfn c() {}\n// docs x\nfn x() {}\n\n// docs d\nfn d() {}\n// docs y\nfn y() {}\n// docs f\nfn f() {}\n// docs e\nfn e() {}\n"
+  },
+  "ruby_native_expected": {
+    "outcome": "clean",
+    "output": "// docs b\nfn b() {}\n// docs a\nfn a() {}\n\n// docs c\nfn c() {}\n// docs x\nfn x() {}\n\n// docs d\nfn d() {}\n// docs e\nfn e() {}\n// docs y\nfn y() {}\n// docs f\nfn f() {}\n"
+  }
+}

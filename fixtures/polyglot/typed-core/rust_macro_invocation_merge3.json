@@ -1,0 +1,36 @@
+{
+  "id": "rust_macro_invocation_merge3",
+  "contract": "rust_macro_invocation_merge3",
+  "description": "Unique top-level macro invocations are source owners keyed by their native Rust path and merge independently.",
+  "input": {
+    "base": "fn stable() {}\nleft!(1);\nright!(1);\n",
+    "ours": "fn stable() {}\nleft!(2);\nright!(1);\n",
+    "theirs": "fn stable() {}\nleft!(1);\nright!(2);\n"
+  },
+  "expected": {
+    "output": "fn stable() {}\nleft!(2);\nright!(2);\n",
+    "left_owner_path": "/macro_invocation:left",
+    "right_owner_path": "/macro_invocation:right",
+    "parser_paths": {
+      "ruby_native": {
+        "ok": true
+      },
+      "rust_treesitter": {
+        "ok": false,
+        "category": "unsupported_feature"
+      },
+      "rust_syn": {
+        "ok": true
+      }
+    }
+  },
+  "duplicate_identity": {
+    "source": "build!();\nbuild!();\n",
+    "expected": {
+      "ok": false,
+      "ruby_native_category": "ambiguous_owner",
+      "rust_syn_host_category": "ambiguous_owner",
+      "owner_path": "/macro_invocation:build"
+    }
+  }
+}

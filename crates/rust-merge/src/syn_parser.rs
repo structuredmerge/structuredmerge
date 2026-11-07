@@ -932,7 +932,7 @@ mod tests {
     #[test]
     fn syn_inline_module_inner_docs_keep_module_scope() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../fixtures/polyglot/typed-core/rust_merge3_delete_module_inner_doc_owner_with_independent_edit.json"
+            "../../../fixtures/polyglot/typed-core/rust_merge3_delete_module_inner_doc_owner_with_independent_edit.json"
         ))
         .unwrap();
         let source = fixture["input"]["base"].as_str().unwrap();
@@ -1060,7 +1060,7 @@ mod tests {
     #[test]
     fn native_parser_reports_syntax_errors_as_blocking_diagnostics() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../fixtures/polyglot/typed-core/rust_syn_parse_diagnostic_span.json"
+            "../../../fixtures/polyglot/typed-core/rust_syn_parse_diagnostic_span.json"
         ))
         .unwrap();
         let source = fixture["input"]["source"].as_str().unwrap();
@@ -1133,7 +1133,7 @@ mod tests {
     #[test]
     fn syn_directional_additions_preserve_attached_comment_and_blank_gap_lines() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../fixtures/polyglot/typed-core/rust_trait_alias_merge3.json"
+            "../../../fixtures/polyglot/typed-core/rust_trait_alias_merge3.json"
         ))
         .unwrap();
         let incoming_source = fixture["input"]["base"].as_str().unwrap();
@@ -1168,7 +1168,7 @@ mod tests {
     #[test]
     fn syn_macro_rules_item_projects_as_named_source_owner() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../fixtures/polyglot/typed-core/rust_macro_definition_merge3.json"
+            "../../../fixtures/polyglot/typed-core/rust_macro_definition_merge3.json"
         ))
         .unwrap();
         let source = fixture["input"]["base"].as_str().unwrap();
@@ -1198,7 +1198,7 @@ mod tests {
     #[test]
     fn repeated_macro_invocation_paths_fail_closed_as_ambiguous_owners() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../fixtures/polyglot/typed-core/rust_macro_invocation_merge3.json"
+            "../../../fixtures/polyglot/typed-core/rust_macro_invocation_merge3.json"
         ))
         .unwrap();
         let source = fixture["duplicate_identity"]["source"].as_str().unwrap();
@@ -1221,7 +1221,7 @@ mod tests {
     #[test]
     fn native_parser_conforms_to_shared_owner_prefix_fixture() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../fixtures/polyglot/ast-merge/native_owner_prefix_ownership.json"
+            "../../../fixtures/polyglot/ast-merge/native_owner_prefix_ownership.json"
         ))
         .unwrap();
         let registry = ParserRegistry::default();
@@ -1270,7 +1270,7 @@ mod tests {
     #[test]
     fn native_parser_accepts_syntax_without_tree_sitter_as_an_acceptance_oracle() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../fixtures/polyglot/typed-core/rust_parser_owner_profile_failure_boundary.json"
+            "../../../fixtures/polyglot/typed-core/rust_parser_owner_profile_failure_boundary.json"
         ))
         .unwrap();
         let source = fixture["cases"][0]["source"].as_str().unwrap();

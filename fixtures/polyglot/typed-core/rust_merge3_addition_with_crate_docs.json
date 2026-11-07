@@ -1,0 +1,14 @@
+{
+  "id": "rust_merge3_addition_with_crate_docs",
+  "contract": "rust_merge3_addition_with_crate_docs",
+  "description": "Adding a Rust owner before existing owners preserves the syn-derived crate-level inner doc region and uses the shared preamble gap ownership rules.",
+  "input": {
+    "base": "//! crate docs\n\nfn alpha() {}\n",
+    "ours": "//! crate docs\n\n// start docs\nfn start() {}\n\nfn alpha() {}\n",
+    "theirs": "//! crate docs\n\nfn alpha() {}\n\n// finish docs\nfn finish() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "//! crate docs\n\n// start docs\nfn start() {}\n\nfn alpha() {}\n// finish docs\nfn finish() {}\n"
+  }
+}

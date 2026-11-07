@@ -3,23 +3,25 @@
 
 This is a local runtime gate, not publication approval or the full platform matrix.
 """
-import email.parser
+
 import argparse
 import ast
-from contextlib import contextmanager
+import email.parser
 import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
 import venv
 import zipfile
+from contextlib import contextmanager
+from pathlib import Path
 
 
 def inspect_wheel(root, wheel):
+    """Handle inspect wheel."""
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
         metadata_files = [name for name in names if name.endswith(".dist-info/METADATA")]
@@ -43,8 +45,11 @@ def inspect_wheel(root, wheel):
             raise ValueError("wheel must contain native type declarations and py.typed")
         ast.parse(archive.read(stub).decode("utf-8"))
         baseline = json.loads((root / "contracts/typed-api/python/manifest.json").read_text(encoding="utf-8"))
-        surfaces = [name for name in names if name.startswith("structuredmerge_core/")
-                    and (name.endswith((".py", ".pyi")) or name.endswith("/py.typed"))]
+        surfaces = [
+            name
+            for name in names
+            if name.startswith("structuredmerge_core/") and (name.endswith((".py", ".pyi", "/py.typed")))
+        ]
         if len(surfaces) != len(set(surfaces)) or set(surfaces) != baseline["files"].keys():
             raise ValueError("wheel API file set differs from reviewed baseline")
         for name, digest in baseline["files"].items():
@@ -76,8 +81,7 @@ def artifact_workspace(root):
     free_bytes = shutil.disk_usage(scratch).free
     if free_bytes < 22 * 1024**3:
         raise RuntimeError(
-            "artifact check requires 22 GiB free "
-            f"(20 GiB reserve + 2 GiB budget); found {free_bytes / 1024**3:.1f} GiB"
+            f"artifact check requires 22 GiB free (20 GiB reserve + 2 GiB budget); found {free_bytes / 1024**3:.1f} GiB"
         )
     stage = Path(tempfile.mkdtemp(prefix="core-python-artifact-", dir=scratch))
     try:
@@ -92,9 +96,13 @@ def artifact_workspace(root):
 
 
 def main():
+    """Run the command line entry point."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wheel")
-    parser.add_argument("--provider-wheel", help="Install the independent structuredmerge-libcst provider instead of the conformance adapter")
+    parser.add_argument(
+        "--provider-wheel",
+        help="Install the independent structuredmerge-libcst provider instead of the conformance adapter",
+    )
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     wheel = resolve_wheel(args.wheel)
@@ -103,18 +111,34 @@ def main():
     with artifact_workspace(root) as stage:
         print(f"Artifact report directory: {stage}", flush=True)
         try:
-            run_checks(root, wheel, metadata, license_files, stage,
-                **({"provider_wheel": provider_wheel} if provider_wheel else {}))
+            run_checks(
+                root,
+                wheel,
+                metadata,
+                license_files,
+                stage,
+                **({"provider_wheel": provider_wheel} if provider_wheel else {}),
+            )
         except BaseException as error:
-            (stage / "report.json").write_text(json.dumps({
-                "artifact": str(wheel), "publication_gate": False,
-                "status": "failed", "error": type(error).__name__,
-                "message": str(error),
-            }, indent=2) + "\n", encoding="utf-8")
+            (stage / "report.json").write_text(
+                json.dumps(
+                    {
+                        "artifact": str(wheel),
+                        "publication_gate": False,
+                        "status": "failed",
+                        "error": type(error).__name__,
+                        "message": str(error),
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
             raise
 
 
 def run_checks(root, wheel, metadata, license_files, stage, provider_wheel=None):
+    """Run checks."""
     environment = stage / "venv"
     venv.EnvBuilder(with_pip=True).create(environment)
     python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -135,30 +159,49 @@ def run_checks(root, wheel, metadata, license_files, stage, provider_wheel=None)
     if provider_wheel:
         env["STRUCTUREDMERGE_LIBCST_INSTALLED"] = "1"
     env.setdefault("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR", str(root / "tmp/typed-tslp-cache"))
-    subprocess.run([str(python), "-m", "pip", "install", "--no-cache-dir", str(wheel),
-                    str(provider_wheel) if provider_wheel else "libcst==1.9.0", "pytest>=7.4",
-                    "pytest-asyncio>=0.23", "pytest-timeout>=2.1"],
-        cwd=consumer, env=env, check=True)
-    subprocess.run([str(python), "-m", "unittest", "discover", "-s", ".", "-v"],
-        cwd=consumer, env=env, check=True)
-    subprocess.run([str(python), "-m", "pytest", "generated", "-v"],
-        cwd=consumer, env=env, check=True)
-    subprocess.run([str(python), "-m", "pytest", "tests", "-v"],
-        cwd=test_app, env=env, check=True)
+    subprocess.run(
+        [
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "--no-cache-dir",
+            str(wheel),
+            str(provider_wheel) if provider_wheel else "libcst==1.9.0",
+            "pytest>=7.4",
+            "pytest-asyncio>=0.23",
+            "pytest-timeout>=2.1",
+        ],
+        cwd=consumer,
+        env=env,
+        check=True,
+    )
+    subprocess.run([str(python), "-m", "unittest", "discover", "-s", ".", "-v"], cwd=consumer, env=env, check=True)
+    subprocess.run([str(python), "-m", "pytest", "generated", "-v"], cwd=consumer, env=env, check=True)
+    subprocess.run([str(python), "-m", "pytest", "tests", "-v"], cwd=test_app, env=env, check=True)
     report = {
-        "artifact": str(wheel), "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
-        "package": metadata["Name"], "version": metadata["Version"],
-        "python": sys.version, "libcst": "1.9.0", "license_files": license_files,
-        "installed_merge_tests": "passed", "publication_gate": False,
+        "artifact": str(wheel),
+        "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        "package": metadata["Name"],
+        "version": metadata["Version"],
+        "python": sys.version,
+        "libcst": "1.9.0",
+        "license_files": license_files,
+        "installed_merge_tests": "passed",
+        "publication_gate": False,
         "generated_e2e_tests": "passed",
-        "generated_test_app": "passed with local wheels and independent provider" if provider_wheel else "passed with local wheel and copied native-provider support",
+        "generated_test_app": "passed with local wheels and independent provider"
+        if provider_wheel
+        else "passed with local wheel and copied native-provider support",
         "native_provider_mode": "installed-provider" if provider_wheel else "conformance-adapter",
         "registry_install": "not_run",
         "api_review_baseline": "python source surface matched",
     }
     if provider_wheel:
-        report.update(provider_artifact=str(provider_wheel),
-            provider_sha256=hashlib.sha256(provider_wheel.read_bytes()).hexdigest())
+        report.update(
+            provider_artifact=str(provider_wheel),
+            provider_sha256=hashlib.sha256(provider_wheel.read_bytes()).hexdigest(),
+        )
     (stage / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report))
     print(f"Report: {stage / 'report.json'} (temporary consumer removed on exit)")

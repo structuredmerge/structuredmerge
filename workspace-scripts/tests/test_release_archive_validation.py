@@ -4,16 +4,19 @@ import unittest
 import zipfile
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).parents[1]))
 import package_release_archive as packager
 import validate_release_archive as validator
+import pytest
 
 
 class ReleaseArchiveValidationTest(unittest.TestCase):
     def test_tar_archive_runs_both_installed_executables(self):
-        with tempfile.TemporaryDirectory() as root:
-            root = Path(root)
-            binaries = root / "bin"; binaries.mkdir()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            binaries = root / "bin"
+            binaries.mkdir()
             for name in packager.BINARIES:
                 path = binaries / name
                 path.write_text(f"#!/bin/sh\nprintf '%s\\n' '{name} 0.2.1'\n")
@@ -27,7 +30,7 @@ class ReleaseArchiveValidationTest(unittest.TestCase):
             with zipfile.ZipFile(archive, "w") as output:
                 output.writestr("../smorg", b"bad")
                 output.writestr("smorg-rs", b"bad")
-            with self.assertRaisesRegex(ValueError, "unsafe archive member"):
+            with pytest.raises(ValueError, match="unsafe archive member"):
                 validator.validate(archive, "0.2.1", "linux-x86_64")
 
 

@@ -1,8 +1,8 @@
 """Typed mode of check_installed_cli_git; local POSIX evidence, not publication."""
+
 import hashlib
 import json
 import os
-from pathlib import Path
 import shlex
 import shutil
 import signal
@@ -10,6 +10,7 @@ import socket
 import subprocess
 import tempfile
 import time
+from pathlib import Path
 
 from check_installed_cli_git import require
 
@@ -19,7 +20,9 @@ FILE_LIMIT = 8 * 1024**2
 
 
 def child_limits():
-    import resource
+    """Configure limits."""
+    import resource  # noqa: PLC0415
+
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     # This bounds each regular file written by Git and its driver descendants,
     # not total storage. The live free-space check remains necessary.
@@ -27,11 +30,13 @@ def child_limits():
 
 
 def digest(path):
+    """Calculate."""
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def validate_cases(cases):
+    """Validate cases."""
     require(cases["schema"] == "structuredmerge.cli-typed-git-cases/v1", "wrong fixture schema")
     require(0 < len(cases["cases"]) <= 100, "fixture suite must contain 1..100 cases")
     ids = set()
@@ -43,13 +48,21 @@ def validate_cases(cases):
         for role in ("base", "ours", "theirs"):
             require(isinstance(case[role], str) and len(case[role].encode()) <= 16384, "source fixture exceeds 16 KiB")
         expected = case["expected"]
-        require((expected["git_exit"], expected["driver_exit"], expected["outcome"]) in
-                ((0, 0, "changed"), (0, 0, "clean"), (1, 1, "conflict"), (1, 2, "error")), "invalid exit/outcome expectation")
-        require("json" in expected or expected.get("preserve_ours") is True or
-                expected.get("provider_conflicted_output") is True, "output assertion required")
+        require(
+            (expected["git_exit"], expected["driver_exit"], expected["outcome"])
+            in ((0, 0, "changed"), (0, 0, "clean"), (1, 1, "conflict"), (1, 2, "error")),
+            "invalid exit/outcome expectation",
+        )
+        require(
+            "json" in expected
+            or expected.get("preserve_ours") is True
+            or expected.get("provider_conflicted_output") is True,
+            "output assertion required",
+        )
 
 
 def command(argv, cwd, env, data=None, timeout=20):
+    """Run."""
     require(os.name == "posix", "Git observation requires POSIX resource limits")
     require(data is None or len(data) <= CAPTURE_LIMIT, "command input exceeds 1 MiB")
     require(shutil.disk_usage(cwd).free >= RESERVE, "disk reserve reached")
@@ -61,15 +74,25 @@ def command(argv, cwd, env, data=None, timeout=20):
         incoming, outgoing, errors = [scratch / name for name in ("stdin", "stdout", "stderr")]
         incoming.write_bytes(data or b"")
         with incoming.open("rb") as stdin, outgoing.open("wb") as stdout, errors.open("wb") as stderr:
-            process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=stdin,
-                stdout=stdout, stderr=stderr, start_new_session=True, preexec_fn=child_limits)
+            process = subprocess.Popen(
+                argv,
+                cwd=cwd,
+                env=env,
+                stdin=stdin,
+                stdout=stdout,
+                stderr=stderr,
+                start_new_session=True,
+                preexec_fn=child_limits,  # noqa: PLW1509 -- resource limits must apply before the child runs.
+            )
             started = time.monotonic()
             try:
                 while process.poll() is None:
                     require(time.monotonic() - started < timeout, "process exceeded gate deadline")
                     require(shutil.disk_usage(cwd).free >= RESERVE, "disk reserve reached")
-                    require(outgoing.stat().st_size < CAPTURE_LIMIT and errors.stat().st_size < CAPTURE_LIMIT,
-                            "command output exceeds 1 MiB capture budget")
+                    require(
+                        outgoing.stat().st_size < CAPTURE_LIMIT and errors.stat().st_size < CAPTURE_LIMIT,
+                        "command output exceeds 1 MiB capture budget",
+                    )
                     time.sleep(0.01)
             finally:
                 # Retire descendants even if the observed leader already exited.
@@ -78,8 +101,10 @@ def command(argv, cwd, env, data=None, timeout=20):
                 except ProcessLookupError:
                     pass
                 process.wait()
-        require(outgoing.stat().st_size < CAPTURE_LIMIT and errors.stat().st_size < CAPTURE_LIMIT,
-                "command output exceeds 1 MiB capture budget")
+        require(
+            outgoing.stat().st_size < CAPTURE_LIMIT and errors.stat().st_size < CAPTURE_LIMIT,
+            "command output exceeds 1 MiB capture budget",
+        )
         return subprocess.CompletedProcess(argv, process.returncode, outgoing.read_bytes(), errors.read_bytes())
 
 
@@ -100,6 +125,7 @@ def import_history(git, case, path):
 
 
 def check_case(binary, grammar, case, work, evidence):
+    """Check case."""
     repo = work / "repository"
     repo.mkdir()
     libs, cache = work / "libs", work / "cache"
@@ -114,11 +140,17 @@ def check_case(binary, grammar, case, work, evidence):
     shutil.copy2(binary, executable)
     path = "document '雪.txt"
     env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
-    env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
-               GIT_TERMINAL_PROMPT="0", GIT_EDITOR="true", LC_ALL="C",
-               TMPDIR=str(work), TREE_SITTER_LANGUAGE_PACK_LIBS_DIR=str(libs),
-               TREE_HAVER_LANGUAGE_PACK_CACHE_DIR=str(cache),
-               TREE_SITTER_LANGUAGE_PACK_CACHE_DIR=str(cache))
+    env.update(
+        GIT_CONFIG_NOSYSTEM="1",
+        GIT_CONFIG_GLOBAL=os.devnull,
+        GIT_TERMINAL_PROMPT="0",
+        GIT_EDITOR="true",
+        LC_ALL="C",
+        TMPDIR=str(work),
+        TREE_SITTER_LANGUAGE_PACK_LIBS_DIR=str(libs),
+        TREE_HAVER_LANGUAGE_PACK_CACHE_DIR=str(cache),
+        TREE_SITTER_LANGUAGE_PACK_CACHE_DIR=str(cache),
+    )
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         listener.listen()
@@ -130,6 +162,7 @@ def check_case(binary, grammar, case, work, evidence):
         env.pop("no_proxy", None)
 
         def git(*arguments, check=True, data=None):
+            """Run."""
             result = command(["git", *arguments], repo, env, data)
             if check:
                 require(result.returncode == 0, (arguments, result.stderr.decode(errors="replace")))
@@ -142,11 +175,13 @@ def check_case(binary, grammar, case, work, evidence):
         import_history(git, case, path)
         (repo / ".git/info").mkdir(exist_ok=True)
         (repo / ".git/info/attributes").write_text("*.txt merge=typed-test\n")
-        driver = (shlex.quote(str(executable)) + " merge-driver --provider kernel.git.json "
-                  "--backend kernel.tslp.json --profile kernel.git.json.v1 "
-                  "--report .git/driver-report.json "
-                  + ("--conflict-policy write " if case.get("conflict_policy") == "write" else "")
-                  + '"%O" "%A" "%B" %P')
+        driver = (
+            shlex.quote(str(executable)) + " merge-driver --provider kernel.git.json "
+            "--backend kernel.tslp.json --profile kernel.git.json.v1 "
+            "--report .git/driver-report.json "
+            + ("--conflict-policy write " if case.get("conflict_policy") == "write" else "")
+            + '"%O" "%A" "%B" %P'
+        )
         git("config", "merge.typed-test.driver", driver)
         before_head = git("rev-parse", "HEAD").stdout
         merged = git("merge", "--no-commit", "--no-ff", "theirs", check=False)
@@ -169,9 +204,13 @@ def check_case(binary, grammar, case, work, evidence):
         require(result["request_forwarding"]["path_name"] == path, result)
         require(not result["fallbacks"], "unexpected fallback")
         if expected["outcome"] == "conflict":
-            require(result["ok"] is False and any(
-                conflict.get("resolution", {}).get("status") == "unresolved"
-                for conflict in result["conflicts"]), "missing typed unresolved-conflict evidence")
+            require(
+                result["ok"] is False
+                and any(
+                    conflict.get("resolution", {}).get("status") == "unresolved" for conflict in result["conflicts"]
+                ),
+                "missing typed unresolved-conflict evidence",
+            )
         actual = (repo / path).read_bytes()
         (evidence / "actual-source").write_bytes(actual)
         if "json" in expected:
@@ -202,9 +241,12 @@ def check_case(binary, grammar, case, work, evidence):
             # Use Git's actual external-diff protocol, not synthetic positional
             # arguments. Git controls its temporary source files and hashes.
             (repo / ".git/info/attributes").write_text("*.txt merge=typed-test diff=typed-test\n")
-            git("config", "diff.typed-test.command", shlex.quote(str(executable)) +
-                " diff-driver --provider kernel.json --backend kernel.tslp.json "
-                "--profile kernel.json.nested.v1 --json")
+            git(
+                "config",
+                "diff.typed-test.command",
+                shlex.quote(str(executable)) + " diff-driver --provider kernel.json --backend kernel.tslp.json "
+                "--profile kernel.json.nested.v1 --json",
+            )
             compared = git("diff", "--ext-diff", "base", "ours", "--", path)
             (evidence / "diff-report.json").write_bytes(compared.stdout)
             diff = json.loads(compared.stdout)
@@ -216,8 +258,7 @@ def check_case(binary, grammar, case, work, evidence):
             # A real empty tree lets Git supply its own absent-side token for
             # both directions without changing the worktree or index.
             empty_tree = git("hash-object", "-w", "-t", "tree", "--stdin", data=b"").stdout.decode().strip()
-            for direction, left, right in (("added", empty_tree, "ours"),
-                                           ("deleted", "ours", empty_tree)):
+            for direction, left, right in (("added", empty_tree, "ours"), ("deleted", "ours", empty_tree)):
                 compared = git("diff", "--ext-diff", left, right, "--", path)
                 (evidence / f"diff-{direction}-report.json").write_bytes(compared.stdout)
                 diff = json.loads(compared.stdout)
@@ -245,27 +286,42 @@ def check_case(binary, grammar, case, work, evidence):
             connection.close()
             raise AssertionError("unexpected proxy connection")
         require(not list(repo.glob(".smorg-write-*")), "staging debris")
-        return {"git_exit": merged.returncode, "driver_exit": report["exit_code"], "outcome": report["outcome"],
-                "git_diff_verified": diff_verified, "git_absent_side_diff_verified": absent_side_diff_verified}
+        return {
+            "git_exit": merged.returncode,
+            "driver_exit": report["exit_code"],
+            "outcome": report["outcome"],
+            "git_diff_verified": diff_verified,
+            "git_absent_side_diff_verified": absent_side_diff_verified,
+        }
 
 
 def run(binary, fixture, grammar):
+    """Run."""
     require(os.name == "posix", "typed Git gate currently requires POSIX process groups")
     binary, fixture, grammar = [path.resolve(strict=True) for path in (binary, fixture, grammar)]
     require(fixture.stat().st_size <= 1024**2, "fixture file exceeds 1 MiB")
     for artifact in (binary, grammar):
-        require(artifact.is_file() and artifact.stat().st_size <= 128 * 1024**2,
-                "artifact must be a regular file of at most 128 MiB")
+        require(
+            artifact.is_file() and artifact.stat().st_size <= 128 * 1024**2,
+            "artifact must be a regular file of at most 128 MiB",
+        )
     cases = json.loads(fixture.read_text())
     validate_cases(cases)
     root = Path(__file__).resolve().parent.parent / "tmp"
     root.mkdir(exist_ok=True)
     require(shutil.disk_usage(root).free >= 21 * 1024**3, "requires 20 GiB reserve plus 1 GiB job budget")
     stage = Path(tempfile.mkdtemp(prefix="typed-cli-git-", dir=root))
-    report = {"schema": "structuredmerge.typed-cli-git-gate/v1", "binary": str(binary),
-              "binary_sha256": digest(binary), "fixture_sha256": digest(fixture),
-              "grammar_sha256": digest(grammar), "results": [], "publication_gate": False,
-              "full_cli_conformance": False, "default_approved": False}
+    report = {
+        "schema": "structuredmerge.typed-cli-git-gate/v1",
+        "binary": str(binary),
+        "binary_sha256": digest(binary),
+        "fixture_sha256": digest(fixture),
+        "grammar_sha256": digest(grammar),
+        "results": [],
+        "publication_gate": False,
+        "full_cli_conformance": False,
+        "default_approved": False,
+    }
     version = command(["git", "--version"], stage, dict(os.environ), timeout=10)
     require(version.returncode == 0, "git --version failed")
     report["git_version"] = version.stdout.decode().strip()

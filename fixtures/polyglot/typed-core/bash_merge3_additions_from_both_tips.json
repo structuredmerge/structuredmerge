@@ -1,0 +1,14 @@
+{
+  "id": "bash_merge3_additions_from_both_tips",
+  "contract": "bash_merge3_additions_from_both_tips",
+  "description": "Independent owner additions from both tips retain the Ruby composite order: ours layout followed by theirs-only additions.",
+  "input": {
+    "base": "a() { echo base; }\nb() { echo base; }\n",
+    "ours": "a() { echo ours; }\nc() { echo ours; }\nb() { echo base; }\n",
+    "theirs": "a() { echo base; }\nb() { echo base; }\nd() { echo theirs; }\n"
+  },
+  "expected": {
+    "ok": true,
+    "output": "a() { echo ours; }\nc() { echo ours; }\nb() { echo base; }\nd() { echo theirs; }\n"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "rust_merge3_edge_addition_with_reorder",
+  "contract": "rust_merge3_edge_addition_with_reorder",
+  "description": "A documented leading owner addition composes with a one-sided reorder of stable Rust owners.",
+  "input": {
+    "base": "fn a() {}\nfn b() {}\n",
+    "ours": "/// ours docs\nfn ours() {}\nfn a() {}\nfn b() {}\n",
+    "theirs": "fn b() {}\nfn a() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "fn b() {}\n/// ours docs\nfn ours() {}\nfn a() {}\n"
+  },
+  "ruby_native_expected": {
+    "outcome": "clean",
+    "output": "/// ours docs\nfn ours() {}\nfn a() {}\nfn b() {}\n"
+  }
+}

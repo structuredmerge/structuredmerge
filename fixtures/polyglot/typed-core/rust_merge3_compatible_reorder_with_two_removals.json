@@ -1,0 +1,19 @@
+{
+  "id": "rust_merge3_compatible_reorder_with_two_removals",
+  "contract": "rust_merge3_compatible_reorder_with_two_removals",
+  "description": "A one-sided acyclic reorder composes with independent owner removals from both tips while documented comments and blank gaps remain attached.",
+  "input": {
+    "base": "// docs a\nfn a() {}\n\n// docs b\nfn b() {}\n// docs c\nfn c() {}\n\n// docs d\nfn d() {}\n// docs e\nfn e() {}\n// docs f\nfn f() {}\n",
+    "ours": "// docs b\nfn b() {}\n// docs a\nfn a() {}\n\n// docs c\nfn c() {}\n\n// docs d\nfn d() {}\n// docs e\nfn e() {}\n",
+    "theirs": "// docs a\nfn a() {}\n\n// docs b\nfn b() {}\n// docs d\nfn d() {}\n// docs f\nfn f() {}\n// docs e\nfn e() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "// docs b\nfn b() {}\n// docs a\nfn a() {}\n\n// docs d\nfn d() {}\n// docs e\nfn e() {}\n"
+  },
+  "ruby_native_expected": {
+    "outcome": "conflict",
+    "diagnostic_category": "merge_conflict",
+    "conflict_category": "unmanaged_source_change"
+  }
+}

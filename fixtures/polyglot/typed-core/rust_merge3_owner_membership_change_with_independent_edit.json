@@ -1,0 +1,31 @@
+{
+  "id": "rust_merge3_owner_membership_change_with_independent_edit",
+  "contract": "rust_merge3_owner_membership_change_with_independent_edit",
+  "description": "One tip edits a retained documented function and adds an ordinarily commented function while the other tip deletes a separate documented function.",
+  "input": {
+    "base": "/// Alpha owner.\nfn alpha() { 1 }\n\n/// Beta owner.\nfn beta() { 1 }\n\n// Gamma owner.\nfn gamma() { 1 } // trailing gamma comment\n",
+    "ours": "/// Alpha owner.\nfn alpha() { 2 }\n\n/// Beta owner.\nfn beta() { 1 }\n\n// New owner.\nfn added() { 1 }\n\n// Gamma owner.\nfn gamma() { 1 } // trailing gamma comment\n",
+    "theirs": "/// Alpha owner.\nfn alpha() { 1 }\n\n/// Beta owner.\nfn beta() { 1 }\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "/// Alpha owner.\nfn alpha() { 2 }\n\n/// Beta owner.\nfn beta() { 1 }\n\n// New owner.\nfn added() { 1 }\n\n"
+  },
+  "ruby_native_expected": {
+    "outcome": "conflict",
+    "diagnostic_category": "merge_conflict",
+    "conflict_category": "unmanaged_source_change"
+  },
+  "rust_host_expected": {
+    "rust_tslp": {
+      "outcome": "conflict",
+      "diagnostic_category": "merge_conflict",
+      "diagnostic_code": "rust.membership_with_owner_edit",
+      "conflict_category": "ownership"
+    },
+    "rust_syn": {
+      "outcome": "clean",
+      "output": "/// Alpha owner.\nfn alpha() { 2 }\n\n/// Beta owner.\nfn beta() { 1 }\n\n// New owner.\nfn added() { 1 }\n\n"
+    }
+  }
+}

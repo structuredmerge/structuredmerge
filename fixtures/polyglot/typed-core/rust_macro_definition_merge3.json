@@ -1,0 +1,14 @@
+{
+  "id": "rust_macro_definition_merge3",
+  "contract": "rust_macro_definition_merge3",
+  "description": "A named macro_rules definition merges independently from a function while retaining its leading doc and ordinary comments.",
+  "input": {
+    "base": "// Macro-level note.\n/// builds a number\nmacro_rules! build { () => { 1 }; } // trailing macro note\n\nfn stable() -> i32 { 1 }\n",
+    "ours": "// Macro-level note.\n/// builds a number\nmacro_rules! build { () => { 2 }; } // trailing macro note\n\nfn stable() -> i32 { 1 }\n",
+    "theirs": "// Macro-level note.\n/// builds a number\nmacro_rules! build { () => { 1 }; } // trailing macro note\n\nfn stable() -> i32 { 2 }\n"
+  },
+  "expected": {
+    "output": "// Macro-level note.\n/// builds a number\nmacro_rules! build { () => { 2 }; } // trailing macro note\n\nfn stable() -> i32 { 2 }\n",
+    "macro_owner_path": "/macro:build"
+  }
+}

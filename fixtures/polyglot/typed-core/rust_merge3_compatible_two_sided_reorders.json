@@ -1,0 +1,15 @@
+{
+  "id": "rust_merge3_compatible_two_sided_reorders",
+  "contract": "rust_merge3_compatible_two_sided_reorders",
+  "description": "Two tips independently reorder disjoint stable Rust owners and edit different owners; syn owner identities combine the compatible pairwise order changes while attached comments stay with their owners.",
+  "input": {
+    "base": "// docs for a\nfn a() { 1 }\n// docs for b\nfn b() { 1 }\n// docs for c\nfn c() { 1 }\n// docs for d\nfn d() { 1 }\n",
+    "ours": "// docs for b\nfn b() { 2 }\n// docs for a\nfn a() { 1 }\n// docs for c\nfn c() { 1 }\n// docs for d\nfn d() { 1 }\n",
+    "theirs": "// docs for a\nfn a() { 1 }\n// docs for b\nfn b() { 1 }\n// docs for d\nfn d() { 2 }\n// docs for c\nfn c() { 1 }\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "// docs for b\nfn b() { 2 }\n// docs for a\nfn a() { 1 }\n// docs for d\nfn d() { 2 }\n// docs for c\nfn c() { 1 }\n",
+    "ruby_native_output": "// docs for b\nfn b() { 2 }\n// docs for a\nfn a() { 1 }\n// docs for c\nfn c() { 1 }\n// docs for d\nfn d() { 2 }\n"
+  }
+}

@@ -1,0 +1,694 @@
+{
+  "schema": "https://structuredmerge.org/schemas/diagnostic-fixture/v1.json",
+  "slice": "1025",
+  "name": "versioned-merge-operation-envelopes",
+  "request_schema": "structuredmerge.operation-request/v1",
+  "result_schema": "https://structuredmerge.org/schemas/provider-result/v1.json",
+  "source_catalog": {
+    "source:json:a1": {
+      "content": "{\"a\":1}\n",
+      "byte_length": 8,
+      "sha256": "e346432021b04179518d9614f3560ccd71354a4ee101ddcb893d6959a9d6301c",
+      "encoding": "utf-8"
+    },
+    "source:json:a2": {
+      "content": "{\"a\":2}\n",
+      "byte_length": 8,
+      "sha256": "0f117a2ab60ad469a0ac81c31e1a5a9bc833e7792983400278ea770db93d0aae",
+      "encoding": "utf-8"
+    },
+    "source:merge2:incoming": {
+      "content": "{\"managed\":2}\n",
+      "byte_length": 14,
+      "sha256": "a28c7cde1c394f1d32a8afd04357ae91a13a419c7f3aa63a759049c778a5c208",
+      "encoding": "utf-8"
+    },
+    "source:merge2:current": {
+      "content": "{\n  \"managed\": 1,\n\n  \"local\": true\n}\n",
+      "byte_length": 37,
+      "sha256": "b4cd623f2ffa9d3cb8254e3ef82be95b840b92d68b74e162208cb414bae59ffb",
+      "encoding": "utf-8"
+    },
+    "source:merge3:theirs": {
+      "content": "{\"a\":1,\"b\":3}\n",
+      "byte_length": 14,
+      "sha256": "bdbbd2ea9cb98eb9c6878831fb504212caa355a66e585699fb07713290f73ed7",
+      "encoding": "utf-8"
+    },
+    "source:merge3:malformed-ours": {
+      "content": "{\"a\":\n",
+      "byte_length": 6,
+      "sha256": "a1eac6f8a1cfe4f0643eba0a749e5cc77855e9ba0069d5feb3b2849ee7d9bec6",
+      "encoding": "utf-8"
+    },
+    "source:merge3:a3": {
+      "content": "{\"a\":3}\n",
+      "byte_length": 8,
+      "sha256": "8de03d7e7c2dc8c66fb6aa651f61478fb045c0882de13843d68edf8d0b56bed3",
+      "encoding": "utf-8"
+    }
+  },
+  "operations": [
+    {
+      "request": {
+        "schema": "structuredmerge.operation-request/v1",
+        "request_id": "operation:analyze:001",
+        "operation": "analyze",
+        "provider_selection": {
+          "provider_id": "ruby.json",
+          "family": "json",
+          "dialect": "json",
+          "profile_id": "source-preserving",
+          "required_capabilities": ["analyze"]
+        },
+        "parser_selection": {
+          "backend": "tslp",
+          "preference": [],
+          "required_capabilities": ["exact-source-spans", "normalized-tree"]
+        },
+        "sources": {
+          "source": {
+            "source_id": "source:json:a1",
+            "role": "source",
+            "reference": "fixture-source:source:json:a1",
+            "byte_length": 8,
+            "sha256": "e346432021b04179518d9614f3560ccd71354a4ee101ddcb893d6959a9d6301c",
+            "encoding": "utf-8"
+          }
+        },
+        "path_name": "example.json",
+        "policy": {
+          "analysis_depth": "owners",
+          "comments": true,
+          "native_extensions": true,
+          "ownership": true,
+          "tokens": false
+        },
+        "extensions": [],
+        "metadata": {}
+      },
+      "result": {
+        "schema": "https://structuredmerge.org/schemas/provider-result/v1.json",
+        "request_id": "operation:analyze:001",
+        "operation": "analyze",
+        "ok": true,
+        "provider": {
+          "provider_id": "ruby.json",
+          "family": "json",
+          "dialect": "json",
+          "role": "workflow",
+          "package": "json-merge",
+          "package_version": "fixture",
+          "delegation": []
+        },
+        "profile": {
+          "profile_id": "source-preserving",
+          "parser": {
+            "requested_backend": "tslp",
+            "selected_backend": "tslp",
+            "selection_mode": "explicit"
+          }
+        },
+        "diagnostics": [],
+        "changes": [],
+        "conflicts": [],
+        "fallbacks": [],
+        "render_report": {},
+        "verification": {
+          "consumed_source_roles": ["source"]
+        },
+        "analysis": {
+          "schema": "structuredmerge.analysis-result/v1",
+          "parse_result_ref": "fixture:slice-1024:parse:json:tslp:001",
+          "owner_ids": ["owner:a"]
+        },
+        "extensions": [],
+        "metadata": {}
+      }
+    },
+    {
+      "request": {
+        "schema": "structuredmerge.operation-request/v1",
+        "request_id": "operation:diff2:001",
+        "operation": "diff2",
+        "provider_selection": {
+          "provider_id": "ruby.json",
+          "family": "json",
+          "dialect": "json",
+          "profile_id": "source-preserving",
+          "required_capabilities": ["diff2"]
+        },
+        "parser_selection": {
+          "backend": "tslp",
+          "preference": [],
+          "required_capabilities": ["exact-source-spans", "normalized-tree"]
+        },
+        "sources": {
+          "before": {
+            "source_id": "source:json:a1",
+            "role": "before",
+            "reference": "fixture-source:source:json:a1",
+            "byte_length": 8,
+            "sha256": "e346432021b04179518d9614f3560ccd71354a4ee101ddcb893d6959a9d6301c",
+            "encoding": "utf-8"
+          },
+          "after": {
+            "source_id": "source:json:a2",
+            "role": "after",
+            "reference": "fixture-source:source:json:a2",
+            "byte_length": 8,
+            "sha256": "0f117a2ab60ad469a0ac81c31e1a5a9bc833e7792983400278ea770db93d0aae",
+            "encoding": "utf-8"
+          }
+        },
+        "path_name": "example.json",
+        "policy": {
+          "comparison_profile": "structural",
+          "equivalence": ["structural-ast"],
+          "source_preservation_evidence": true
+        },
+        "extensions": [],
+        "metadata": {}
+      },
+      "result": {
+        "schema": "https://structuredmerge.org/schemas/provider-result/v1.json",
+        "request_id": "operation:diff2:001",
+        "operation": "diff2",
+        "ok": true,
+        "provider": {
+          "provider_id": "ruby.json",
+          "family": "json",
+          "dialect": "json",
+          "role": "workflow",
+          "package": "json-merge",
+          "package_version": "fixture",
+          "delegation": []
+        },
+        "profile": {
+          "profile_id": "source-preserving",
+          "parser": {
+            "requested_backend": "tslp",
+            "selected_backend": "tslp",
+            "selection_mode": "explicit"
+          }
+        },
+        "diagnostics": [],
+        "changes": [
+          {
+            "id": "change:a",
+            "classification": "modified",
+            "subject_ref": "json-pointer:/a",
+            "role_states": {
+              "before": "1",
+              "after": "2"
+            },
+            "source_spans": {},
+            "metadata": {}
+          }
+        ],
+        "conflicts": [],
+        "fallbacks": [],
+        "render_report": {},
+        "verification": {
+          "consumed_source_roles": ["before", "after"]
+        },
+        "diff": {
+          "change_ids": ["change:a"],
+          "equivalence": "structural-ast"
+        },
+        "extensions": [],
+        "metadata": {}
+      }
+    },
+    {
+      "request": {
+        "schema": "structuredmerge.operation-request/v1",
+        "request_id": "operation:merge2:001",
+        "operation": "merge2",
+        "provider_selection": {
+          "provider_id": "ruby.json",
+          "family": "json",
+          "dialect": "json",
+          "profile_id": "source-preserving",
+          "required_capabilities": ["merge2"]
+        },
+        "parser_selection": {
+          "backend": "tslp",
+          "preference": [],
+          "required_capabilities": ["exact-source-spans", "normalized-tree"]
+        },
+        "sources": {
+          "incoming": {
+            "source_id": "source:merge2:incoming",
+            "role": "incoming",
+            "reference": "fixture-source:source:merge2:incoming",
+            "byte_length": 14,
+            "sha256": "a28c7cde1c394f1d32a8afd04357ae91a13a419c7f3aa63a759049c778a5c208",
+            "encoding": "utf-8"
+          },
+          "current": {
+            "source_id": "source:merge2:current",
+            "role": "current",
+            "reference": "fixture-source:source:merge2:current",
+            "byte_length": 37,
+            "sha256": "b4cd623f2ffa9d3cb8254e3ef82be95b840b92d68b74e162208cb414bae59ffb",
+            "encoding": "utf-8"
+          }
+        },
+        "path_name": "example.json",
+        "policy": {
+          "directional_merge": "template-into-current",
+          "fallback_policy": "none",
+          "render_policy": "source-preserving"
+        },
+        "extensions": [],
+        "metadata": {}
+      },
+      "result": {
+        "schema": "https://structuredmerge.org/schemas/provider-result/v1.json",
+        "request_id": "operation:merge2:001",
+        "operation": "merge2",
+        "ok": true,
+        "provider": {
+          "provider_id": "ruby.json",
+          "family": "json",
+          "dialect": "json",
+          "role": "workflow",
+          "package": "json-merge",
+          "package_version": "fixture",
+          "delegation": []
+        },
+        "profile": {
+          "profile_id": "source-preserving",
+          "parser": {
+            "requested_backend": "tslp",
+            "selected_backend": "tslp",
+            "selection_mode": "explicit"
+          }
+        },
+        "diagnostics": [],
+        "changes": [
+          {
+            "id": "change:managed",
+            "classification": "incoming-replaced-current",
+            "subject_ref": "json-pointer:/managed",
+            "role_states": {
+              "incoming": "2",
+              "current": "1"
+            },
+            "source_spans": {},
+            "metadata": {}
+          },
+          {
+            "id": "change:local",
+            "classification": "retained-current-only",
+            "subject_ref": "json-pointer:/local",
+            "role_states": {
+              "incoming": "absent",
+              "current": "true"
+            },
+            "source_spans": {},
+            "metadata": {}
+          }
+        ],
+        "conflicts": [],
+        "fallbacks": [],
+        "render_report": {
+          "producer": "ruby.json",
+          "strategy": "source-plan",
+          "source_fragment_count": 2,
+          "synthesized_fragment_count": 1,
+          "conflict_fragment_count": 0
+        },
+        "verification": {
+          "directional_roles_preserved": true,
+          "consumed_source_roles": ["incoming", "current"],
+          "output_reparsed": true,
+          "structural_equivalence": true,
+          "preservation": [
+            {"property": "current-only-content", "required": true, "status": "passed"},
+            {"property": "current-layout", "required": true, "status": "passed"}
+          ],
+          "retained_source_regions": [
+            {
+              "source_role": "current",
+              "source_id": "source:merge2:current",
+              "range": {"start_byte": 18, "end_byte": 35},
+              "sha256": "71c94c77d08a84e6509a0b9a01f908e9b1e1c075dc52da271a79e62f275da29a"
+            }
+          ],
+          "synthesized_regions": [
+            {"producer": "ruby.json", "reason": "managed-value-replacement"}
+          ]
+        },
+        "output": "{\n  \"managed\": 2,\n\n  \"local\": true\n}\n",
+        "extensions": [],
+        "metadata": {}
+      }
+    },
+    {
+      "request": {
+        "schema": "structuredmerge.operation-request/v1",
+        "request_id": "operation:merge3:001",
+        "operation": "merge3",
+        "provider_selection": {
+          "provider_id": "ruby.json",
+          "family": "json",
+          "dialect": "json",
+          "profile_id": "source-preserving",
+          "required_capabilities": ["merge3"]
+        },
+        "parser_selection": {
+          "backend": "tslp",
+          "preference": [],
+          "required_capabilities": ["exact-source-spans", "normalized-tree"]
+        },
+        "sources": {
+          "base": {
+            "source_id": "source:json:a1",
+            "role": "base",
+            "reference": "fixture-source:source:json:a1",
+            "byte_length": 8,
+            "sha256": "e346432021b04179518d9614f3560ccd71354a4ee101ddcb893d6959a9d6301c",
+            "encoding": "utf-8"
+          },
+          "ours": {
+            "source_id": "source:json:a2",
+            "role": "ours",
+            "reference": "fixture-source:source:json:a2",
+            "byte_length": 8,
+            "sha256": "0f117a2ab60ad469a0ac81c31e1a5a9bc833e7792983400278ea770db93d0aae",
+            "encoding": "utf-8"
+          },
+          "theirs": {
+            "source_id": "source:merge3:theirs",
+            "role": "theirs",
+            "reference": "fixture-source:source:merge3:theirs",
+            "byte_length": 14,
+            "sha256": "bdbbd2ea9cb98eb9c6878831fb504212caa355a66e585699fb07713290f73ed7",
+            "encoding": "utf-8"
+          }
+        },
+        "path_name": "example.json",
+        "policy": {
+          "fallback_policy": "none",
+          "render_policy": "source-preserving",
+          "conflict_marker_size": 7,
+          "labels": {"base": "base", "ours": "ours", "theirs": "theirs"}
+        },
+        "extensions": [],
+        "metadata": {}
+      },
+      "result": {
+        "schema": "https://structuredmerge.org/schemas/provider-result/v1.json",
+        "request_id": "operation:merge3:001",
+        "operation": "merge3",
+        "ok": true,
+        "provider": {
+          "provider_id": "ruby.json",
+          "family": "json",
+          "dialect": "json",
+          "role": "workflow",
+          "package": "json-merge",
+          "package_version": "fixture",
+          "delegation": []
+        },
+        "profile": {
+          "profile_id": "source-preserving",
+          "parser": {
+            "requested_backend": "tslp",
+            "selected_backend": "tslp",
+            "selection_mode": "explicit"
+          }
+        },
+        "diagnostics": [],
+        "changes": [
+          {
+            "id": "change:ours:a",
+            "classification": "modified-ours",
+            "subject_ref": "json-pointer:/a",
+            "role_states": {"base": "1", "ours": "2", "theirs": "1"},
+            "source_spans": {},
+            "metadata": {}
+          },
+          {
+            "id": "change:theirs:b",
+            "classification": "added-theirs",
+            "subject_ref": "json-pointer:/b",
+            "role_states": {"base": "absent", "ours": "absent", "theirs": "3"},
+            "source_spans": {},
+            "metadata": {}
+          }
+        ],
+        "conflicts": [],
+        "fallbacks": [],
+        "render_report": {
+          "producer": "ruby.json",
+          "strategy": "source-plan",
+          "source_fragment_count": 0,
+          "synthesized_fragment_count": 1,
+          "conflict_fragment_count": 0
+        },
+        "verification": {
+          "base_participated": true,
+          "consumed_source_roles": ["base", "ours", "theirs"],
+          "output_reparsed": true,
+          "structural_equivalence": true,
+          "preservation": [
+            {"property": "semantic-values", "required": true, "status": "passed"}
+          ],
+          "retained_source_regions": [],
+          "synthesized_regions": [
+            {"producer": "ruby.json", "reason": "independent-field-composition"}
+          ]
+        },
+        "output": "{\"a\":2,\"b\":3}\n",
+        "extensions": [],
+        "metadata": {}
+      }
+    }
+  ],
+  "supplemental_outcomes": [
+    {
+      "id": "merge3-parse-failure-ours",
+      "base_request_id": "operation:merge3:001",
+      "request_id": "operation:merge3:parse-failure:001",
+      "source_overrides": {
+        "ours": {
+          "source_id": "source:merge3:malformed-ours",
+          "role": "ours",
+          "reference": "fixture-source:source:merge3:malformed-ours",
+          "byte_length": 6,
+          "sha256": "a1eac6f8a1cfe4f0643eba0a749e5cc77855e9ba0069d5feb3b2849ee7d9bec6",
+          "encoding": "utf-8"
+        }
+      },
+      "result": {
+        "schema": "https://structuredmerge.org/schemas/provider-result/v1.json",
+        "request_id": "operation:merge3:parse-failure:001",
+        "operation": "merge3",
+        "ok": false,
+        "provider": {
+          "provider_id": "ruby.json",
+          "family": "json",
+          "dialect": "json",
+          "role": "workflow",
+          "package": "json-merge",
+          "package_version": "fixture",
+          "delegation": []
+        },
+        "profile": {
+          "profile_id": "source-preserving",
+          "parser": {
+            "requested_backend": "tslp",
+            "selected_backend": "tslp",
+            "selection_mode": "explicit"
+          }
+        },
+        "diagnostics": [
+          {
+            "id": "diagnostic:parse:ours:001",
+            "severity": "error",
+            "category": "parse-error",
+            "code": "unexpected-eof",
+            "message": "The ours revision is incomplete.",
+            "source_role": "ours",
+            "span": {
+              "range": {"start_byte": 5, "end_byte": 6},
+              "start_point": {"row": 0, "column": 5},
+              "end_point": {"row": 1, "column": 0}
+            },
+            "blocking": true,
+            "metadata": {}
+          }
+        ],
+        "changes": [],
+        "conflicts": [],
+        "fallbacks": [],
+        "render_report": {},
+        "verification": {
+          "base_participated": false,
+          "classification_reached": false,
+          "output_reparsed": false,
+          "preservation": []
+        },
+        "extensions": [],
+        "metadata": {}
+      }
+    },
+    {
+      "id": "merge3-structured-conflict-without-markers",
+      "base_request_id": "operation:merge3:001",
+      "request_id": "operation:merge3:conflict:001",
+      "source_overrides": {
+        "theirs": {
+          "source_id": "source:merge3:a3",
+          "role": "theirs",
+          "reference": "fixture-source:source:merge3:a3",
+          "byte_length": 8,
+          "sha256": "8de03d7e7c2dc8c66fb6aa651f61478fb045c0882de13843d68edf8d0b56bed3",
+          "encoding": "utf-8"
+        }
+      },
+      "result": {
+        "schema": "https://structuredmerge.org/schemas/provider-result/v1.json",
+        "request_id": "operation:merge3:conflict:001",
+        "operation": "merge3",
+        "ok": false,
+        "provider": {
+          "provider_id": "ruby.json",
+          "family": "json",
+          "dialect": "json",
+          "role": "workflow",
+          "package": "json-merge",
+          "package_version": "fixture",
+          "delegation": []
+        },
+        "profile": {
+          "profile_id": "source-preserving",
+          "parser": {
+            "requested_backend": "tslp",
+            "selected_backend": "tslp",
+            "selection_mode": "explicit"
+          }
+        },
+        "diagnostics": [
+          {
+            "id": "diagnostic:conflict:a:001",
+            "severity": "error",
+            "category": "merge-conflict",
+            "code": "edit-edit",
+            "message": "Both revisions changed the same owner.",
+            "source_role": "ours",
+            "blocking": true,
+            "metadata": {}
+          }
+        ],
+        "changes": [],
+        "conflicts": [
+          {
+            "id": "conflict:a",
+            "category": "edit-edit",
+            "subject_ref": "json-pointer:/a",
+            "roles": ["base", "ours", "theirs"],
+            "source_regions": [
+              {
+                "source_role": "base",
+                "source_id": "source:json:a1",
+                "range": {"start_byte": 5, "end_byte": 6}
+              },
+              {
+                "source_role": "ours",
+                "source_id": "source:json:a2",
+                "range": {"start_byte": 5, "end_byte": 6}
+              },
+              {
+                "source_role": "theirs",
+                "source_id": "source:merge3:a3",
+                "range": {"start_byte": 5, "end_byte": 6}
+              }
+            ],
+            "localized": true,
+            "resolution": "unresolved",
+            "metadata": {}
+          }
+        ],
+        "fallbacks": [],
+        "render_report": {
+          "producer": "ruby.json",
+          "strategy": "none",
+          "source_fragment_count": 0,
+          "synthesized_fragment_count": 0,
+          "conflict_fragment_count": 0
+        },
+        "verification": {
+          "base_participated": true,
+          "classification_reached": true,
+          "consumed_source_roles": ["base", "ours", "theirs"],
+          "preservation": []
+        },
+        "extensions": [],
+        "metadata": {}
+      }
+    }
+  ],
+  "invalid_cases": [
+    {
+      "id": "missing-required-role",
+      "mutation": "remove current from merge2 sources",
+      "expected_category": "invalid-request-roles"
+    },
+    {
+      "id": "source-role-mismatch",
+      "mutation": "store role current under merge2 sources.incoming",
+      "expected_category": "invalid-source-role"
+    },
+    {
+      "id": "provider-parser-selection-conflated",
+      "mutation": "set provider_id to tslp and omit parser_selection",
+      "expected_category": "invalid-selection-layer"
+    },
+    {
+      "id": "merge2-role-reversal",
+      "mutation": "consume current as incoming and incoming as current",
+      "expected_category": "directional-role-contract-violation"
+    },
+    {
+      "id": "merge3-base-ignored",
+      "mutation": "set verification.base_participated to false after semantic classification",
+      "expected_category": "base-participation-contract-violation"
+    },
+    {
+      "id": "clean-and-conflicted-output",
+      "mutation": "add conflicted_output to successful merge3 result",
+      "expected_category": "contradictory-output"
+    },
+    {
+      "id": "successful-unresolved-conflict",
+      "mutation": "add unresolved conflict while ok remains true",
+      "expected_category": "contradictory-outcome"
+    },
+    {
+      "id": "undeclared-fallback",
+      "mutation": "record textual fallback when request fallback_policy is none",
+      "expected_category": "undeclared-fallback"
+    },
+    {
+      "id": "successful-preservation-failure",
+      "mutation": "mark required current-layout failed while ok remains true",
+      "expected_category": "preservation-contract-violation"
+    }
+  ],
+  "expected": {
+    "operation_order": ["analyze", "diff2", "merge2", "merge3"],
+    "request_ids_unique": true,
+    "request_result_ids_match": true,
+    "source_descriptors_verified": true,
+    "merge2_directional_roles_preserved": true,
+    "merge2_retained_region_verified": true,
+    "merge3_base_participated": true,
+    "supplemental_outcome_count": 2,
+    "structured_conflict_requires_markers": false,
+    "invalid_case_count": 9
+  }
+}

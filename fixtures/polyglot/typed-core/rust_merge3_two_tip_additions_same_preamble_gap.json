@@ -1,0 +1,14 @@
+{
+  "id": "rust_merge3_two_tip_additions_same_preamble_gap",
+  "contract": "rust_merge3_two_tip_additions_same_preamble_gap",
+  "description": "When both tips add owners in the preamble gap, compose ours before theirs and preserve both leading comments and blank-line gaps.",
+  "input": {
+    "base": "fn alpha() {}\n",
+    "ours": "// ours docs\nfn ours() {}\n\nfn alpha() {}\n",
+    "theirs": "// theirs docs\nfn theirs() {}\n\nfn alpha() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "// ours docs\nfn ours() {}\n\n// theirs docs\nfn theirs() {}\n\nfn alpha() {}\n"
+  }
+}

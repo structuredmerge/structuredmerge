@@ -14,6 +14,8 @@ sys.path.insert(0, str(ROOT / "workspace-scripts"))
 import authenticate_cli_artifact_manifest as auth
 import assemble_cli_artifact_manifest as assembler
 import check_cli_artifact_manifest as checker
+import pytest
+
 sys.path.pop(0)
 
 
@@ -29,9 +31,10 @@ class ManifestAuthenticationTest(unittest.TestCase):
         self.sign()
 
     def invoke(self, *args):
-        result = subprocess.run(["ssh-keygen", *args], stdin=subprocess.DEVNULL,
-                                capture_output=True, timeout=10, check=False)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        result = subprocess.run(
+            ["ssh-keygen", *args], stdin=subprocess.DEVNULL, capture_output=True, timeout=10, check=False
+        )
+        assert result.returncode == 0, result.stderr
 
     def sign(self, namespace=auth.NAMESPACE):
         self.signature = Path(str(self.path) + ".sig")
@@ -39,68 +42,77 @@ class ManifestAuthenticationTest(unittest.TestCase):
         self.invoke("-Y", "sign", "-f", str(self.key), "-n", namespace, str(self.path))
 
     def authenticate(self, **overrides):
-        args = dict(manifest=self.path, artifact=self.binary, target="test-target", profile="standalone",
-                    signature=self.signature, allowed_signers=self.trust,
-                    allowed_signers_digest=auth.digest(self.trust.read_bytes()), principal="test@example.invalid")
+        args = dict(
+            manifest=self.path,
+            artifact=self.binary,
+            target="test-target",
+            profile="standalone",
+            signature=self.signature,
+            allowed_signers=self.trust,
+            allowed_signers_digest=auth.digest(self.trust.read_bytes()),
+            principal="test@example.invalid",
+        )
         args.update(overrides)
         before = set((ROOT / "tmp").iterdir())
         try:
             return auth.authenticate(**args)
         finally:
-            self.assertEqual(before, set((ROOT / "tmp").iterdir()), "authentication scratch leaked")
+            assert before == set((ROOT / "tmp").iterdir()), "authentication scratch leaked"
 
     def test_real_signature_binds_manifest_and_artifact_without_authorizing_runtime(self):
         result = self.authenticate(assets={"json": self.asset})
-        self.assertTrue(result["passed"])
-        self.assertTrue(result["signature_verified"])
-        self.assertFalse(result["revocation_checked"])
-        self.assertEqual(result["authorized_principal"], "test@example.invalid")
-        self.assertEqual(result["manifest_digest"], result["integrity"]["manifest_digest"])
-        self.assertEqual(result["integrity"]["assets"][0]["byte_integrity"], "matched")
+        assert result["passed"]
+        assert result["signature_verified"]
+        assert not result["revocation_checked"]
+        assert result["authorized_principal"] == "test@example.invalid"
+        assert result["manifest_digest"] == result["integrity"]["manifest_digest"]
+        assert result["integrity"]["assets"][0]["byte_integrity"] == "matched"
         for name in ("build_provenance_verified", "runtime_availability_checked", "publication_authorized"):
-            self.assertFalse(result[name])
+            assert not result[name]
 
     def test_wrong_principal_key_namespace_and_manifest_reject(self):
-        with self.assertRaisesRegex(auth.Rejected, "not authorized"):
+        with pytest.raises(auth.RejectedError, match="not authorized"):
             self.authenticate(principal="other@example.invalid")
         trust = self.trust.read_bytes()
         other = self.root / "other-key"
         self.invoke("-q", "-t", "ed25519", "-N", "", "-f", str(other))
         self.trust.write_text("test@example.invalid " + other.with_suffix(".pub").read_text())
-        with self.assertRaisesRegex(auth.Rejected, "not authorized"):
+        with pytest.raises(auth.RejectedError, match="not authorized"):
             self.authenticate()
         self.trust.write_bytes(trust)
         self.sign("file")
-        with self.assertRaisesRegex(auth.Rejected, "not authorized"):
+        with pytest.raises(auth.RejectedError, match="not authorized"):
             self.authenticate()
         self.sign()
         self.path.write_bytes(self.path.read_bytes() + b"\n")
-        with self.assertRaisesRegex(auth.Rejected, "not authorized"):
+        with pytest.raises(auth.RejectedError, match="not authorized"):
             self.authenticate()
 
     def test_trust_pin_revocation_and_expiry_reject(self):
-        with self.assertRaisesRegex(auth.Rejected, "trust input digest mismatch"):
+        with pytest.raises(auth.RejectedError, match="trust input digest mismatch"):
             self.authenticate(allowed_signers_digest="sha256:" + "0" * 64)
         revoked = self.root / "revoked"
         revoked.write_bytes(self.key.with_suffix(".pub").read_bytes())
-        with self.assertRaisesRegex(auth.Rejected, "not authorized"):
+        with pytest.raises(auth.RejectedError, match="not authorized"):
             self.authenticate(revoked_keys=revoked, revoked_keys_digest=auth.digest(revoked.read_bytes()))
         revoked.write_bytes(b"")
         result = self.authenticate(revoked_keys=revoked, revoked_keys_digest=auth.digest(b""))
-        self.assertTrue(result["revocation_checked"])
-        with self.assertRaisesRegex(auth.Rejected, "supplied together"):
+        assert result["revocation_checked"]
+        with pytest.raises(auth.RejectedError, match="supplied together"):
             self.authenticate(revoked_keys=revoked)
-        self.trust.write_text('test@example.invalid valid-before="20000101Z" ' + self.key.with_suffix(".pub").read_text())
-        with self.assertRaisesRegex(auth.Rejected, "not authorized"):
+        self.trust.write_text(
+            'test@example.invalid valid-before="20000101Z" ' + self.key.with_suffix(".pub").read_text()
+        )
+        with pytest.raises(auth.RejectedError, match="not authorized"):
             self.authenticate()
 
     def test_signed_manifest_does_not_excuse_artifact_or_asset_tampering(self):
         self.binary.write_bytes(b"tampered")
-        with self.assertRaisesRegex(auth.Rejected, "artifact bytes differ"):
+        with pytest.raises(auth.RejectedError, match="artifact bytes differ"):
             self.authenticate()
         self.binary.write_bytes(b"opaque test artifact; never executed")
         self.asset.write_bytes(b"tampered")
-        with self.assertRaisesRegex(auth.Rejected, "asset bytes differ"):
+        with pytest.raises(auth.RejectedError, match="asset bytes differ"):
             self.authenticate(assets={"json": self.asset})
 
     def test_replacement_after_verification_rejects_instead_of_authenticating_other_bytes(self):
@@ -108,41 +120,44 @@ class ManifestAuthenticationTest(unittest.TestCase):
 
         def replace(*args, **kwargs):
             result = original(*args, **kwargs)
-            self.assertEqual(result.returncode, 0)
+            assert result.returncode == 0
             self.path.write_bytes(self.path.read_bytes() + b"\n")
             return result
 
         with patch.object(auth, "command", side_effect=replace):
-            with self.assertRaisesRegex(auth.Rejected, "pinned manifest digest mismatch"):
+            with pytest.raises(auth.RejectedError, match="pinned manifest digest mismatch"):
                 self.authenticate()
 
     def test_limits_and_verifier_failure_clean_scratch(self):
-        with patch.object(auth, "MAX_TRUST", 1):
-            with self.assertRaisesRegex(auth.Rejected, "bounded regular file"):
-                self.authenticate()
+        with patch.object(auth, "MAX_TRUST", 1), pytest.raises(auth.RejectedError, match="bounded regular file"):
+            self.authenticate()
         with patch.object(auth, "command", side_effect=AssertionError("deadline")):
-            with self.assertRaisesRegex(auth.Rejected, "bounded signature verifier failed"):
+            with pytest.raises(auth.RejectedError, match="bounded signature verifier failed"):
                 self.authenticate()
         with patch.object(auth.shutil, "which", return_value=None):
-            with self.assertRaisesRegex(auth.Rejected, "unavailable"):
+            with pytest.raises(auth.RejectedError, match="unavailable"):
                 self.authenticate()
         with patch.object(auth, "RESERVE", 10**30):
-            with self.assertRaisesRegex(auth.Rejected, "disk reserve reached"):
+            with pytest.raises(auth.RejectedError, match="disk reserve reached"):
                 self.authenticate()
 
     def test_authorized_signature_does_not_excuse_invalid_manifest(self):
         self.manifest["network_policy"]["operation_time_acquisition"] = True
         self.path.write_text(json.dumps(self.manifest))
         self.sign()
-        with self.assertRaisesRegex(auth.Rejected, "network acquisition forbidden"):
+        with pytest.raises(auth.RejectedError, match="network acquisition forbidden"):
             self.authenticate()
 
     @unittest.skipUnless(os.environ.get("SMORG_TEST_ARTIFACT"), "requires explicitly supplied built CLI")
     def test_real_cli_candidate_authentication_roundtrip(self):
         binary = Path(os.environ["SMORG_TEST_ARTIFACT"])
         declarations = {key: self.manifest[key] for key in assembler.DECLARED}
-        declarations.update(schema="structuredmerge.cli-artifact-declarations/v1",
-                            built_in_provider_descriptors=[], grammar_assets=[], host_bridge_protocols=[])
+        declarations.update(
+            schema="structuredmerge.cli-artifact-declarations/v1",
+            built_in_provider_descriptors=[],
+            grammar_assets=[],
+            host_bridge_protocols=[],
+        )
         declaration_file = self.root / "declarations.json"
         declaration_file.write_text(json.dumps(declarations))
         candidate = assembler.collect(binary, declaration_file, "local-signature-test", True, self.root)
@@ -151,37 +166,44 @@ class ManifestAuthenticationTest(unittest.TestCase):
         # This key authenticates only a local test candidate. Partial descriptor
         # declarations and unknown source provenance must not become release truth.
         result = self.authenticate(artifact=binary, target=candidate["target"])
-        self.assertTrue(result["signature_verified"])
-        self.assertEqual(result["integrity"]["artifact_digest"], candidate["artifact_digest"])
-        self.assertFalse(result["build_provenance_verified"])
-        self.assertFalse(result["publication_authorized"])
-        with self.assertRaisesRegex(auth.Rejected, "omitted"):
+        assert result["signature_verified"]
+        assert result["integrity"]["artifact_digest"] == candidate["artifact_digest"]
+        assert not result["build_provenance_verified"]
+        assert not result["publication_authorized"]
+        with pytest.raises(auth.RejectedError, match="omitted"):
             self.authenticate(artifact=binary, target=candidate["target"], require_complete_inventory=True)
         inventory = candidate["compiled_provider_inventory"]
         for kind, field, identity_field in (("parser", "parsers", "id"), ("workflow", "workflows", "provider_id")):
-            declarations["built_in_provider_descriptors"].extend({
-                "id": descriptor[identity_field], "kind": kind, "origin": "in_process",
-                "contract": "test/v1", "descriptor": descriptor, "asset_requirements": [],
-            } for descriptor in inventory[field])
+            declarations["built_in_provider_descriptors"].extend(
+                {
+                    "id": descriptor[identity_field],
+                    "kind": kind,
+                    "origin": "in_process",
+                    "contract": "test/v1",
+                    "descriptor": descriptor,
+                    "asset_requirements": [],
+                }
+                for descriptor in inventory[field]
+            )
         declaration_file.write_text(json.dumps(declarations))
         candidate = assembler.collect(binary, declaration_file, "local-signature-test", True, self.root, True)
         self.path.write_text(json.dumps(candidate))
         self.sign()
         result = self.authenticate(artifact=binary, target=candidate["target"], require_complete_inventory=True)
-        self.assertTrue(result["integrity"]["compiled_inventory_coverage"]["complete"])
-        self.assertFalse(result["integrity"]["provider_descriptors_verified"])
+        assert result["integrity"]["compiled_inventory_coverage"]["complete"]
+        assert not result["integrity"]["provider_descriptors_verified"]
 
     def test_authorized_signature_does_not_excuse_missing_inventory(self):
-        with self.assertRaisesRegex(auth.Rejected, "inventory is required"):
+        with pytest.raises(auth.RejectedError, match="inventory is required"):
             self.authenticate(require_complete_inventory=True)
 
     def test_authorized_signature_does_not_excuse_unchecked_assets(self):
-        with self.assertRaisesRegex(auth.Rejected, "every declared asset"):
+        with pytest.raises(auth.RejectedError, match="every declared asset"):
             self.authenticate(require_all_assets=True)
         result = self.authenticate(require_all_assets=True, assets={"json": self.asset})
-        self.assertTrue(result["signature_verified"])
-        self.assertTrue(result["integrity"]["asset_evidence"]["all_declared_bytes_verified"])
-        self.assertFalse(result["runtime_availability_checked"])
+        assert result["signature_verified"]
+        assert result["integrity"]["asset_evidence"]["all_declared_bytes_verified"]
+        assert not result["runtime_availability_checked"]
 
     @unittest.skipUnless(os.environ.get("SMORG_TEST_GRAMMAR"), "requires explicitly supplied grammar file")
     def test_real_grammar_bytes_authenticate_without_loading(self):
@@ -191,21 +213,38 @@ class ManifestAuthenticationTest(unittest.TestCase):
         self.path.write_text(json.dumps(self.manifest))
         self.sign()
         result = self.authenticate(require_all_assets=True, assets={"json": grammar})
-        self.assertEqual(result["integrity"]["assets"][0]["digest"], expected)
-        self.assertTrue(result["integrity"]["asset_evidence"]["all_declared_bytes_verified"])
-        self.assertFalse(result["integrity"]["asset_evidence"]["runtime_loading_verified"])
+        assert result["integrity"]["assets"][0]["digest"] == expected
+        assert result["integrity"]["asset_evidence"]["all_declared_bytes_verified"]
+        assert not result["integrity"]["asset_evidence"]["runtime_loading_verified"]
 
     def test_cli_optimized_success_and_failure(self):
-        args = [sys.executable, "-O", str(ROOT / "workspace-scripts/authenticate_cli_artifact_manifest.py"),
-                "--manifest", str(self.path), "--artifact", str(self.binary), "--signature", str(self.signature),
-                "--allowed-signers", str(self.trust), "--allowed-signers-digest", auth.digest(self.trust.read_bytes()),
-                "--principal", "test@example.invalid", "--target", "test-target", "--profile", "standalone"]
+        args = [
+            sys.executable,
+            "-O",
+            str(ROOT / "workspace-scripts/authenticate_cli_artifact_manifest.py"),
+            "--manifest",
+            str(self.path),
+            "--artifact",
+            str(self.binary),
+            "--signature",
+            str(self.signature),
+            "--allowed-signers",
+            str(self.trust),
+            "--allowed-signers-digest",
+            auth.digest(self.trust.read_bytes()),
+            "--principal",
+            "test@example.invalid",
+            "--target",
+            "test-target",
+            "--profile",
+            "standalone",
+        ]
         for tamper in (False, True):
             if tamper:
                 self.signature.write_bytes(b"invalid signature")
             result = subprocess.run(args, capture_output=True, timeout=15, check=False)
-            self.assertEqual(result.returncode, 2 if tamper else 0)
-            self.assertEqual(result.stderr, b"")
+            assert result.returncode == (2 if tamper else 0)
+            assert result.stderr == b""
             report = json.loads(result.stdout)
-            self.assertEqual(report["signature_verified"], not tamper)
-            self.assertFalse(report["publication_authorized"])
+            assert report["signature_verified"] == (not tamper)
+            assert not report["publication_authorized"]

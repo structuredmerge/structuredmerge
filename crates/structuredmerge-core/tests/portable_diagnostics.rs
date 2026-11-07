@@ -11,7 +11,7 @@ use structuredmerge_core::{
 };
 
 fn fixture() -> Value {
-    serde_json::from_str(include_str!("../../../../fixtures/diagnostics/slice-1028-stable-diagnostic-conflict-serialization/contract.json")).unwrap()
+    serde_json::from_str(include_str!("../../../fixtures/diagnostics/slice-1028-stable-diagnostic-conflict-serialization/contract.json")).unwrap()
 }
 
 fn source_map() -> SourceMap {
@@ -184,7 +184,10 @@ fn unknown_fields_and_extensions_survive_canonical_forwarding() {
 }
 
 fn legacy_case(index: usize) -> (ValidatedOperationRequest, OperationResult) {
-    let fixture: Value = serde_json::from_str(include_str!("../../../../fixtures/diagnostics/slice-1025-versioned-merge-operation-envelopes/contract.json")).unwrap();
+    let fixture: Value = serde_json::from_str(include_str!(
+        "../../../fixtures/diagnostics/slice-1025-versioned-merge-operation-envelopes/contract.json"
+    ))
+    .unwrap();
     let outcome = &fixture["supplemental_outcomes"][index];
     let mut request = fixture["operations"][3]["request"].clone();
     request["request_id"] = outcome["request_id"].clone();

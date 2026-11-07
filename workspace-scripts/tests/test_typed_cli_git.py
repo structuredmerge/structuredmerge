@@ -1,4 +1,5 @@
 """Gate assertions and cleanup are tested independently of any installed grammar."""
+
 import contextlib
 import copy
 import io
@@ -16,26 +17,38 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "workspace-scripts"))
 import typed_cli_git as gate
 import check_installed_cli_git as legacy
+import pytest
+
 sys.path.pop(0)
 
 
 class TypedCliGitTest(unittest.TestCase):
     def fixture(self):
-        return {"schema": "structuredmerge.cli-typed-git-cases/v1", "cases": [{
-            "id": "test", "base": "{}", "ours": "{\"a\":1}", "theirs": "{\"b\":2}",
-            "expected": {"git_exit": 0, "driver_exit": 0, "outcome": "changed", "json": {"a": 1, "b": 2}},
-        }]}
+        return {
+            "schema": "structuredmerge.cli-typed-git-cases/v1",
+            "cases": [
+                {
+                    "id": "test",
+                    "base": "{}",
+                    "ours": '{"a":1}',
+                    "theirs": '{"b":2}',
+                    "expected": {"git_exit": 0, "driver_exit": 0, "outcome": "changed", "json": {"a": 1, "b": 2}},
+                }
+            ],
+        }
 
     def test_fixture_validation_rejects_empty_duplicate_and_weak_cases(self):
         gate.validate_cases(self.fixture())
-        for mutate in [lambda f: f.update(cases=[]),
-                       lambda f: f["cases"].append(copy.deepcopy(f["cases"][0])),
-                       lambda f: f["cases"][0]["expected"].pop("json"),
-                       lambda f: f["cases"][0].update(conflict_policy="silent"),
-                       lambda f: f["cases"][0].update(base="x" * 16385)]:
+        for mutate in [
+            lambda f: f.update(cases=[]),
+            lambda f: f["cases"].append(copy.deepcopy(f["cases"][0])),
+            lambda f: f["cases"][0]["expected"].pop("json"),
+            lambda f: f["cases"][0].update(conflict_policy="silent"),
+            lambda f: f["cases"][0].update(base="x" * 16385),
+        ]:
             fixture = self.fixture()
             mutate(fixture)
-            with self.assertRaises(AssertionError):
+            with pytest.raises(AssertionError):
                 gate.validate_cases(fixture)
 
     def exercise(self, fail_case=False, fail_report=False):
@@ -48,34 +61,42 @@ class TypedCliGitTest(unittest.TestCase):
             grammar.write_bytes(b"grammar")
             stage = root / "evidence"
             stage.mkdir()
+
             def check(binary, grammar, case, work, evidence):
                 (work / "disposable").write_bytes(b"compiler/install/repo stand-in")
                 if fail_case:
                     raise RuntimeError("injected case failure")
                 return {"git_exit": 0, "driver_exit": 0, "outcome": "changed"}
+
             real_write = Path.write_text
             real_mkdtemp = tempfile.mkdtemp
+
             def mkdtemp(*args, **kwargs):
                 if kwargs.get("prefix") == "typed-cli-git-":
                     return str(stage)
                 return real_mkdtemp(*args, **kwargs)
+
             def write(path, *args, **kwargs):
                 if fail_report and path.name == "report.json":
                     raise OSError("injected report write failure")
                 return real_write(path, *args, **kwargs)
-            with patch.object(gate.tempfile, "mkdtemp", side_effect=mkdtemp), \
-                    patch.object(gate, "check_case", side_effect=check), \
-                    patch.object(Path, "write_text", write), contextlib.redirect_stdout(io.StringIO()):
+
+            with (
+                patch.object(gate.tempfile, "mkdtemp", side_effect=mkdtemp),
+                patch.object(gate, "check_case", side_effect=check),
+                patch.object(Path, "write_text", write),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
                 if fail_report:
-                    with self.assertRaisesRegex(OSError, "report write failure"):
+                    with pytest.raises(OSError, match="report write failure"):
                         gate.run(binary, fixture, grammar)
                 else:
-                    self.assertEqual(gate.run(binary, fixture, grammar), int(fail_case))
-            self.assertFalse(list(stage.glob("work-*")))
+                    assert gate.run(binary, fixture, grammar) == int(fail_case)
+            assert not list(stage.glob("work-*"))
             if not fail_report:
                 report = json.loads((stage / "report.json").read_text())
-                self.assertEqual(report["results"][0]["passed"], not fail_case)
-                self.assertFalse(report["publication_gate"])
+                assert report["results"][0]["passed"] == (not fail_case)
+                assert not report["publication_gate"]
 
     def test_success_cleans_disposable_work(self):
         self.exercise()
@@ -95,21 +116,26 @@ class TypedCliGitTest(unittest.TestCase):
                 fixture.write_text(json.dumps({"cases": [{"case_id": "injected"}]}))
                 stage.mkdir()
                 original = Path.write_text
+
                 def write(path, *args, **kwargs):
                     if fail_report and path.name == "report.json":
                         raise OSError("injected report failure")
                     return original(path, *args, **kwargs)
-                with patch.object(sys, "argv", ["gate", str(binary), "--fixtures", str(fixture)]), \
-                        patch.object(legacy, "warm_language_cache"), \
-                        patch.object(gate, "command", side_effect=RuntimeError("injected command failure")), \
-                        patch.object(legacy.tempfile, "mkdtemp", return_value=str(stage)), \
-                        patch.object(Path, "write_text", write), contextlib.redirect_stdout(io.StringIO()):
+
+                with (
+                    patch.object(sys, "argv", ["gate", str(binary), "--fixtures", str(fixture)]),
+                    patch.object(legacy, "warm_language_cache"),
+                    patch.object(gate, "command", side_effect=RuntimeError("injected command failure")),
+                    patch.object(legacy.tempfile, "mkdtemp", return_value=str(stage)),
+                    patch.object(Path, "write_text", write),
+                    contextlib.redirect_stdout(io.StringIO()),
+                ):
                     if fail_report:
-                        with self.assertRaisesRegex(OSError, "report failure"):
+                        with pytest.raises(OSError, match="report failure"):
                             legacy.main()
                     else:
-                        self.assertEqual(legacy.main(), 1)
-                self.assertFalse(list(stage.glob("work-*")))
+                        assert legacy.main() == 1
+                assert not list(stage.glob("work-*"))
 
 
 @unittest.skipUnless(os.name == "posix", "POSIX process resource limits")
@@ -127,48 +153,55 @@ class CommandBudgetTest(unittest.TestCase):
         return gate.command([sys.executable, "-c", program], self.root, dict(os.environ), **kwargs)
 
     def assert_clean(self):
-        self.assertEqual(list(self.root.iterdir()), [])
-        self.assertFalse(list(self.root.parent.glob("command-*")))
+        assert list(self.root.iterdir()) == []
+        assert not list(self.root.parent.glob("command-*"))
 
     def test_capture_stdin_exit_and_cleanup(self):
-        result = self.run_program("import sys; print(sys.stdin.read()); print('error', file=sys.stderr); sys.exit(7)", data=b"input")
-        self.assertEqual((result.returncode, result.stdout, result.stderr), (7, b"input\n", b"error\n"))
+        result = self.run_program(
+            "import sys; print(sys.stdin.read()); print('error', file=sys.stderr); sys.exit(7)", data=b"input"
+        )
+        assert (result.returncode, result.stdout, result.stderr) == (7, b"input\n", b"error\n")
         self.assert_clean()
 
     def test_output_floods_reject_and_cleanup_without_core(self):
         for channel in ("stdout", "stderr"):
-            with self.assertRaisesRegex(AssertionError, "capture budget"):
+            with pytest.raises(AssertionError, match="capture budget"):
                 self.run_program(f"import sys; sys.{channel}.write('x' * {gate.FILE_LIMIT * 2})")
             self.assert_clean()
 
     def test_timeout_and_launch_failure_cleanup(self):
-        with self.assertRaisesRegex(AssertionError, "deadline"):
+        with pytest.raises(AssertionError, match="deadline"):
             self.run_program("import time; time.sleep(30)", timeout=0.1)
         self.assert_clean()
-        with self.assertRaises(OSError):
+        with pytest.raises(OSError):
             gate.command([str(self.root / "missing")], self.root, dict(os.environ))
         self.assert_clean()
 
     def test_live_disk_reserve_cancels_command(self):
-        with patch.object(gate.shutil, "disk_usage", side_effect=[
-                SimpleNamespace(free=gate.RESERVE + 1), SimpleNamespace(free=gate.RESERVE - 1)]):
-            with self.assertRaisesRegex(AssertionError, "disk reserve"):
+        with patch.object(
+            gate.shutil,
+            "disk_usage",
+            side_effect=[SimpleNamespace(free=gate.RESERVE + 1), SimpleNamespace(free=gate.RESERVE - 1)],
+        ):
+            with pytest.raises(AssertionError, match="disk reserve"):
                 self.run_program("import time; time.sleep(30)")
         self.assert_clean()
 
     def test_low_space_and_oversized_input_do_not_launch(self):
         with patch.object(gate.subprocess, "Popen") as launch:
-            with self.assertRaisesRegex(AssertionError, "command input"):
+            with pytest.raises(AssertionError, match="command input"):
                 self.run_program("", data=b"x" * (gate.CAPTURE_LIMIT + 1))
             with patch.object(gate.shutil, "disk_usage", return_value=SimpleNamespace(free=0)):
-                with self.assertRaisesRegex(AssertionError, "disk reserve"):
+                with pytest.raises(AssertionError, match="disk reserve"):
                     self.run_program("")
             launch.assert_not_called()
         self.assert_clean()
 
     def test_child_core_and_file_limits_are_enforced(self):
-        result = self.run_program("import resource; print(resource.getrlimit(resource.RLIMIT_CORE)); print(resource.getrlimit(resource.RLIMIT_FSIZE))")
-        self.assertEqual(result.stdout.decode().splitlines(), ["(0, 0)", f"({gate.FILE_LIMIT}, {gate.FILE_LIMIT})"])
+        result = self.run_program(
+            "import resource; print(resource.getrlimit(resource.RLIMIT_CORE)); print(resource.getrlimit(resource.RLIMIT_FSIZE))"
+        )
+        assert result.stdout.decode().splitlines() == ["(0, 0)", f"({gate.FILE_LIMIT}, {gate.FILE_LIMIT})"]
         self.assert_clean()
 
     def test_descendant_is_retired_after_leader_exits(self):
@@ -176,14 +209,14 @@ class CommandBudgetTest(unittest.TestCase):
         # returns. It inherits the leader's process group, as Git drivers do.
         child = "import time; time.sleep(0.2); open('survived', 'w').write('leaked')"
         result = self.run_program(f"import subprocess, sys; subprocess.Popen([sys.executable, '-c', {child!r}])")
-        self.assertEqual(result.returncode, 0)
+        assert result.returncode == 0
         time.sleep(0.35)
         self.assert_clean()
 
     def test_capture_files_are_not_staged_by_git_add(self):
         for args in (["init", "--template=", "-b", "test"], ["add", "."]):
             result = gate.command(["git", *args], self.root, dict(os.environ))
-            self.assertEqual(result.returncode, 0, result.stderr)
+            assert result.returncode == 0, result.stderr
         result = gate.command(["git", "status", "--porcelain"], self.root, dict(os.environ))
-        self.assertEqual(result.stdout, b"")
-        self.assertFalse(list(self.root.parent.glob("command-*")))
+        assert result.stdout == b""
+        assert not list(self.root.parent.glob("command-*"))

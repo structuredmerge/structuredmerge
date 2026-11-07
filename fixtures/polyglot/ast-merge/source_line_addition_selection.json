@@ -1,0 +1,96 @@
+{
+  "id": "ast_merge_source_line_addition_selection",
+  "contract": "ast_merge_source_line_addition_selection",
+  "description": "A template-only owner carries every gap controlled by it, including its leading interstitial gap and trailing postlude, when appended after destination owners.",
+  "baseline_revision": "ours",
+  "documents": [
+    {
+      "revision": "ours",
+      "source": "pub fn shared() {}\n",
+      "owners": [
+        {
+          "id": "shared",
+          "start_line": 1,
+          "end_line": 1,
+          "indent": 0
+        }
+      ],
+      "comment_regions": [],
+      "layout_gaps": []
+    },
+    {
+      "revision": "theirs",
+      "source": "fn shared() {}\n\nfn added() {}\n\n",
+      "owners": [
+        {
+          "id": "shared",
+          "start_line": 1,
+          "end_line": 1,
+          "indent": 0
+        },
+        {
+          "id": "added",
+          "start_line": 3,
+          "end_line": 3,
+          "indent": 0
+        }
+      ],
+      "comment_regions": [],
+      "layout_gaps": [
+        {
+          "id": "layout-gap:2-2",
+          "selection_key": "gap:interstitial:shared:added",
+          "kind": "interstitial",
+          "start_line": 2,
+          "end_line": 2,
+          "before_owner_id": "shared",
+          "after_owner_id": "added",
+          "controller_side": "after",
+          "controller_owner_id": "added"
+        },
+        {
+          "id": "layout-gap:4-4",
+          "selection_key": "gap:postlude:added:root",
+          "kind": "postlude",
+          "start_line": 4,
+          "end_line": 4,
+          "before_owner_id": "added",
+          "after_owner_id": null,
+          "controller_side": "before",
+          "controller_owner_id": "added"
+        }
+      ]
+    }
+  ],
+  "owner_revisions": [
+    {
+      "owner_id": "shared",
+      "revision": "ours"
+    },
+    {
+      "owner_id": "added",
+      "revision": "theirs"
+    }
+  ],
+  "expected": {
+    "selections": [
+      {
+        "selection_key": "owner:shared",
+        "revision": "ours"
+      },
+      {
+        "selection_key": "gap:interstitial:shared:added",
+        "revision": "theirs"
+      },
+      {
+        "selection_key": "owner:added",
+        "revision": "theirs"
+      },
+      {
+        "selection_key": "gap:postlude:added:root",
+        "revision": "theirs"
+      }
+    ],
+    "content": "pub fn shared() {}\n\nfn added() {}\n\n"
+  }
+}

@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """Run canonical JSON fixtures through real Git merges and an installed CLI."""
+
 import argparse
 import json
 import os
-from pathlib import Path
 import shlex
 import shutil
 import subprocess
 import tempfile
+from pathlib import Path
 
 
 def require(condition, detail):
+    """Require."""
     if not condition:
         raise AssertionError(detail)
 
@@ -23,7 +25,8 @@ def warm_language_cache(binary, stage, env):
     extraction — and because the cache directory persists across runs,
     pass/fail silently depended on cache warmth. Warm it deterministically
     here (outside the per-file limit, still timeout-bounded) so every gated
-    case starts from the same cache state."""
+    case starts from the same cache state.
+    """
     warm = stage / "warmup"
     warm.mkdir()
     for name, body in (
@@ -34,12 +37,21 @@ def warm_language_cache(binary, stage, env):
         (warm / name).write_bytes(body)
     result = subprocess.run(
         [
-            str(binary), "merge-driver", "--strict",
-            "--report", str(warm / "report.json"),
-            str(warm / "base"), str(warm / "ours"), str(warm / "theirs"),
+            str(binary),
+            "merge-driver",
+            "--strict",
+            "--report",
+            str(warm / "report.json"),
+            str(warm / "base"),
+            str(warm / "ours"),
+            str(warm / "theirs"),
             "warmup.json",
         ],
-        cwd=warm, env=env, timeout=120, capture_output=True, check=False,
+        cwd=warm,
+        env=env,
+        timeout=120,
+        capture_output=True,
+        check=False,
     )
     require(
         result.returncode == 0 and (warm / "report.json").is_file(),
@@ -48,6 +60,7 @@ def warm_language_cache(binary, stage, env):
 
 
 def main():
+    """Run the command line entry point."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary", type=Path)
     parser.add_argument("--fixtures", type=Path, required=True)
@@ -57,13 +70,15 @@ def main():
     if args.typed:
         if not args.grammar_library:
             parser.error("--typed requires --grammar-library")
-        from typed_cli_git import run
+        from typed_cli_git import run  # noqa: PLC0415
+
         return run(args.binary, args.fixtures, args.grammar_library)
     if args.grammar_library:
         parser.error("--grammar-library requires --typed")
     binary = args.binary.resolve(strict=True)
     fixture = args.fixtures.resolve(strict=True)
-    from typed_cli_git import command, digest, CAPTURE_LIMIT
+    from typed_cli_git import CAPTURE_LIMIT, command, digest  # noqa: PLC0415
+
     require(os.name == "posix", "installed Git gate currently requires POSIX resource limits")
     require(binary.is_file() and binary.stat().st_size <= 128 * 1024**2, "binary exceeds 128 MiB")
     require(fixture.is_file() and fixture.stat().st_size <= 1024**2, "fixture exceeds 1 MiB")
@@ -74,8 +89,9 @@ def main():
     require(shutil.disk_usage(root).free >= 21 * 1024**3, "requires 20 GiB reserve plus 1 GiB job budget")
     stage = Path(tempfile.mkdtemp(prefix="installed-cli-git-", dir=root / "tmp"))
     env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
-    env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
-               GIT_TERMINAL_PROMPT="0", GIT_EDITOR="true", LC_ALL="C")
+    env.update(
+        GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_TERMINAL_PROMPT="0", GIT_EDITOR="true", LC_ALL="C"
+    )
     env.setdefault("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR", str(root / "tmp/typed-tslp-cache"))
     warm_language_cache(binary, stage, env)
     results = []
@@ -86,7 +102,8 @@ def main():
         evidence.mkdir()
         env["TMPDIR"] = str(repo)
 
-        def git(*arguments, check=True):
+        def git(*arguments, check=True, repo=repo):
+            """Run."""
             output = command(["git", *arguments], cwd=repo, env=env, timeout=30)
             if check and output.returncode:
                 raise RuntimeError((arguments, output.returncode, output.stderr.decode()))
@@ -97,8 +114,9 @@ def main():
             git("config", "user.name", "Installed CLI test")
             git("config", "user.email", "installed-cli@example.invalid")
             git("config", "core.hooksPath", str(stage / "no-hooks"))
-            driver = (shlex.quote(str(binary)) + ' merge-driver --strict --report .git/driver-report.json '
-                      '"%O" "%A" "%B" %P')  # Git shell-quotes %P itself.
+            driver = (
+                shlex.quote(str(binary)) + ' merge-driver --strict --report .git/driver-report.json "%O" "%A" "%B" %P'
+            )  # Git shell-quotes %P itself.
             git("config", "merge.smorg-test.driver", driver)
             (repo / ".gitattributes").write_text("*.json merge=smorg-test smorg.language=json\n")
             path = Path(case["path_name"])
@@ -144,8 +162,10 @@ def main():
             else:
                 require(len(unmerged.splitlines()) == 3, unmerged)
                 for number, role in enumerate(("base", "ours", "theirs"), 1):
-                    require(git("show", f":{number}:{path}").stdout == case[f"{role}_source"].encode(),
-                            f"unmerged index stage {number} differs from {role}")
+                    require(
+                        git("show", f":{number}:{path}").stdout == case[f"{role}_source"].encode(),
+                        f"unmerged index stage {number} differs from {role}",
+                    )
             results.append({"case": case["case_id"], "passed": True})
         except Exception as error:
             results.append({"case": case["case_id"], "passed": False, "error": str(error)})
@@ -153,9 +173,15 @@ def main():
             # These are this invocation's disposable repositories only. Preserve
             # compact evidence separately even when assertions/report writes fail.
             shutil.rmtree(repo)
-    report = {"binary": str(binary), "sha256": digest(binary),
-              "fixture": str(fixture), "fixture_sha256": digest(fixture),
-              "results": results, "publication_gate": False, "default_approved": False}
+    report = {
+        "binary": str(binary),
+        "sha256": digest(binary),
+        "fixture": str(fixture),
+        "fixture_sha256": digest(fixture),
+        "results": results,
+        "publication_gate": False,
+        "default_approved": False,
+    }
     (stage / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
     print(f"Evidence: {stage}")

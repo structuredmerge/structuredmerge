@@ -51,7 +51,7 @@ fn revision(name: &str) -> SourceRevision {
 #[test]
 fn shared_source_line_selection_fixture_renders_exact_bytes_and_provenance() {
     let fixture: Fixture = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/ast-merge/source_line_selection.json"
+        "../../../fixtures/polyglot/ast-merge/source_line_selection.json"
     ))
     .expect("shared source line selection fixture is valid");
     let mut sources = HashMap::new();
@@ -139,7 +139,7 @@ struct GapArbitrationExpected {
 #[test]
 fn shared_gap_removal_arbitration_prefers_surviving_before_owner_controller() {
     let fixture: GapArbitrationFixture = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/ast-merge/source_line_gap_removal_arbitration.json"
+        "../../../fixtures/polyglot/ast-merge/source_line_gap_removal_arbitration.json"
     ))
     .expect("shared gap removal arbitration fixture is valid");
     let mut sources = HashMap::new();
@@ -213,7 +213,7 @@ struct AdditionExpected {
 #[test]
 fn added_owner_selection_carries_its_leading_gap_from_the_selected_source() {
     let fixture: AdditionFixture = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/ast-merge/source_line_addition_selection.json"
+        "../../../fixtures/polyglot/ast-merge/source_line_addition_selection.json"
     ))
     .expect("shared source line addition fixture is valid");
     let mut sources = HashMap::new();
@@ -268,7 +268,7 @@ struct DispositionCase {
 #[test]
 fn attached_comment_source_range_excludes_preceding_owner_postlude_gap() {
     let fixture: DispositionFixture = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/ast-merge/source_line_disposition.json"
+        "../../../fixtures/polyglot/ast-merge/source_line_disposition.json"
     ))
     .expect("shared source line disposition fixture is valid");
     let case = fixture

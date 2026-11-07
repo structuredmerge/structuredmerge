@@ -1,0 +1,18 @@
+{
+  "id": "rust_syn_crate_doc_edit_with_independent_addition",
+  "contract": "rust_syn_crate_doc_edit_with_independent_addition",
+  "description": "A crate-level inner-doc edit on one tip composes with an independent Rust owner addition on the other tip.",
+  "input": {
+    "base": "//! base crate docs\nfn stable() {}\n",
+    "ours": "//! ours crate docs\nfn stable() {}\n",
+    "theirs": "//! base crate docs\nfn added() {}\nfn stable() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "//! ours crate docs\nfn added() {}\nfn stable() {}\n"
+  },
+  "ruby_native_expected": {
+    "outcome": "conflict",
+    "diagnostic_category": "merge_conflict"
+  }
+}

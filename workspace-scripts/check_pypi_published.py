@@ -24,6 +24,7 @@ Steps:
 
 Standard library only, so it runs on a bare runner.
 """
+
 import argparse
 import hashlib
 import json
@@ -40,6 +41,7 @@ BACKOFF_FACTOR = 1.6
 
 
 def env_positive_int(name, default, env=os.environ):
+    """Read a positive integer from the environment or use its default."""
     value = env.get(name, "").strip()
     return int(value) if value.isdigit() and int(value) > 0 else default
 
@@ -48,6 +50,7 @@ class Schedule:
     """Retry schedule; defaults mirror kettle-dev's release availability probe."""
 
     def __init__(self, env=os.environ, sleep=time.sleep):
+        """Configure retry delays from the provided environment."""
         self.attempts = env_positive_int("STRUCTUREDMERGE_REGISTRY_PROBE_ATTEMPTS", 15, env)
         self.initial_delay = env_positive_int("STRUCTUREDMERGE_REGISTRY_PROBE_INITIAL_DELAY", 5, env)
         self.interval = env_positive_int("STRUCTUREDMERGE_REGISTRY_PROBE_INTERVAL", 10, env)
@@ -55,6 +58,7 @@ class Schedule:
         self.sleep = sleep
 
     def delay(self, attempt):
+        """Handle delay."""
         return min(round(self.interval * BACKOFF_FACTOR ** (attempt - 1)), self.max_interval)
 
     def retry(self, label, step):
@@ -65,23 +69,24 @@ class Schedule:
             print(f"{label} (attempt {attempt}/{self.attempts})", flush=True)
             try:
                 return step()
-            except Retry as error:
+            except RetryError as error:
                 last = error
                 print(f"  not ready: {error}", flush=True)
                 if attempt < self.attempts:
                     self.sleep(self.delay(attempt))
-        raise Failure(f"{label} failed after {self.attempts} attempt(s): {last}")
+        raise FailureError(f"{label} failed after {self.attempts} attempt(s): {last}")
 
 
-class Retry(Exception):
-    """A transient condition; try again later."""
+class RetryError(Exception):
+    """Represent a transient condition that may succeed on retry."""
 
 
-class Failure(Exception):
-    pass
+class FailureError(Exception):
+    """Represent a permanent post-publish verification failure."""
 
 
 def sha256_file(path):
+    """Return the SHA-256 digest of a file."""
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
         for chunk in iter(lambda: handle.read(1 << 20), b""):
@@ -91,12 +96,13 @@ def sha256_file(path):
 
 def expected_files(dist_dir):
     """Map filename -> sha256 of every release artifact built for this version."""
-    files = {p.name: sha256_file(p) for p in sorted(pathlib.Path(dist_dir).iterdir())
-             if p.name.endswith((".whl", ".tar.gz"))}
+    files = {
+        p.name: sha256_file(p) for p in sorted(pathlib.Path(dist_dir).iterdir()) if p.name.endswith((".whl", ".tar.gz"))
+    }
     if not any(name.endswith(".tar.gz") for name in files):
-        raise Failure(f"no sdist (.tar.gz) in {dist_dir}")
+        raise FailureError(f"no sdist (.tar.gz) in {dist_dir}")
     if not any(name.endswith(".whl") for name in files):
-        raise Failure(f"no wheels in {dist_dir}")
+        raise FailureError(f"no wheels in {dist_dir}")
     return files
 
 
@@ -109,9 +115,9 @@ def fetch_release(index_url, package, version, opener=urllib.request.urlopen):
     except urllib.error.HTTPError as error:
         if error.code == 404:
             return None
-        raise Retry(f"{url} answered HTTP {error.code}")
+        raise RetryError(f"{url} answered HTTP {error.code}") from error
     except (urllib.error.URLError, TimeoutError) as error:
-        raise Retry(f"{url} unreachable: {error}")
+        raise RetryError(f"{url} unreachable: {error}") from error
 
 
 def check_listed(index_url, package, version, files, schedule, fetch=fetch_release):
@@ -123,76 +129,117 @@ def check_listed(index_url, package, version, files, schedule, fetch=fetch_relea
     seen_listed = {"value": False}
 
     def step():
+        """Handle step."""
         release = fetch(index_url, package, version)
         if release is None:
-            raise Retry(f"{package} {version} is not listed on {index_url} yet")
+            raise RetryError(f"{package} {version} is not listed on {index_url} yet")
         seen_listed["value"] = True
         published = {entry["filename"]: entry["digests"]["sha256"] for entry in release.get("urls", [])}
         missing = sorted(set(files) - set(published))
         if missing:
-            raise Retry("not yet listed: " + ", ".join(missing))
+            raise RetryError("not yet listed: " + ", ".join(missing))
         wrong = sorted(name for name, digest in files.items() if published[name] != digest)
         if wrong:
-            raise Failure("sha256 differs from the built artifact for: " + ", ".join(wrong))
+            raise FailureError("sha256 differs from the built artifact for: " + ", ".join(wrong))
         return True
 
     try:
         return schedule.retry(f"Checking {package} {version} on {index_url}", step)
-    except Failure as error:
+    except FailureError as error:
         if seen_listed["value"] or "sha256 differs" in str(error):
             raise
-        raise Failure(f"{error}; the release is not visible at all, so the publish itself may have failed")
+        raise FailureError(
+            f"{error}; the release is not visible at all, so the publish itself may have failed"
+        ) from error
 
 
 def run_pip(args, schedule, label, run=subprocess.run):
     """Run a pip command, retrying while the CDN catches up with the API."""
+
     def step():
+        """Handle step."""
         completed = run(args, capture_output=True, text=True, check=False)
         if completed.returncode != 0:
             tail = (completed.stdout + completed.stderr)[-1500:]
-            raise Retry(f"exit {completed.returncode}: {tail}")
+            raise RetryError(f"exit {completed.returncode}: {tail}")
         return completed
 
     return schedule.retry(label, step)
 
 
 def check_wheel_install(package, version, index_url, schedule, run=subprocess.run):
+    """Handle check wheel install."""
     with tempfile.TemporaryDirectory(prefix="pypi-wheel-check-") as tmp:
         venv = pathlib.Path(tmp) / "venv"
         run([sys.executable, "-m", "venv", str(venv)], check=True)
         python = str(venv / ("Scripts" if os.name == "nt" else "bin") / "python")
-        run_pip([python, "-m", "pip", "install", "--no-deps", "--only-binary", ":all:",
-                 "--index-url", f"{index_url.rstrip('/')}/simple", f"{package}=={version}"],
-                schedule, f"Installing published {package} {version} wheel")
+        run_pip(
+            [
+                python,
+                "-m",
+                "pip",
+                "install",
+                "--no-deps",
+                "--only-binary",
+                ":all:",
+                "--index-url",
+                f"{index_url.rstrip('/')}/simple",
+                f"{package}=={version}",
+            ],
+            schedule,
+            f"Installing published {package} {version} wheel",
+        )
         module = package.replace("-", "_")
-        imported = run([python, "-c",
-                        f"import {module}; print('{module}', getattr({module}, '__version__', 'ok'))"],
-                       capture_output=True, text=True, check=False)
+        imported = run(
+            [python, "-c", f"import {module}; print('{module}', getattr({module}, '__version__', 'ok'))"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         if imported.returncode != 0:
-            raise Failure("published wheel installed but does not import:\n" + imported.stderr[-1500:])
+            raise FailureError("published wheel installed but does not import:\n" + imported.stderr[-1500:])
         print(imported.stdout.strip())
 
 
 def check_sdist_build(package, version, index_url, schedule, run=subprocess.run):
+    """Handle check sdist build."""
     with tempfile.TemporaryDirectory(prefix="pypi-sdist-check-") as tmp:
-        run_pip([sys.executable, "-m", "pip", "wheel", "--no-deps", "--no-binary", package,
-                 "--index-url", f"{index_url.rstrip('/')}/simple", "--wheel-dir", tmp,
-                 f"{package}=={version}"],
-                schedule, f"Building {package} {version} wheel from the published sdist")
+        run_pip(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "wheel",
+                "--no-deps",
+                "--no-binary",
+                package,
+                "--index-url",
+                f"{index_url.rstrip('/')}/simple",
+                "--wheel-dir",
+                tmp,
+                f"{package}=={version}",
+            ],
+            schedule,
+            f"Building {package} {version} wheel from the published sdist",
+        )
         built = [p.name for p in pathlib.Path(tmp).glob("*.whl")]
         if not built:
-            raise Failure("sdist build produced no wheel")
+            raise FailureError("sdist build produced no wheel")
         print("built from sdist:", ", ".join(built))
 
 
 def main(argv=None):
+    """Verify a published release and return its process status."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--package", default="structuredmerge-core")
     parser.add_argument("--version", required=True)
     parser.add_argument("--dist-dir", required=True, help="directory with the wheels and sdist that were published")
     parser.add_argument("--index-url", default="https://pypi.org")
-    parser.add_argument("--skip-install-checks", action="store_true",
-                        help="only verify listing and digests (used by tests and local runs)")
+    parser.add_argument(
+        "--skip-install-checks",
+        action="store_true",
+        help="only verify listing and digests (used by tests and local runs)",
+    )
     args = parser.parse_args(argv)
 
     schedule = Schedule()
@@ -206,7 +253,7 @@ def main(argv=None):
         if not args.skip_install_checks:
             check_wheel_install(args.package, args.version, args.index_url, schedule)
             check_sdist_build(args.package, args.version, args.index_url, schedule)
-    except Failure as error:
+    except FailureError as error:
         print(f"PyPI post-publish verification failed: {error}", file=sys.stderr)
         return 1
     print("PyPI post-publish verification passed.")

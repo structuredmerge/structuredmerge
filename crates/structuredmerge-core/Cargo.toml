@@ -8,21 +8,21 @@ homepage = "https://structuredmerge.org"
 repository = "https://github.com/structuredmerge/structuredmerge"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
+ast-crispr = { version = "0.2.1", path = "../ast-crispr" }
+ast-merge = { version = "0.2.1", path = "../ast-merge" }
+ast-merge-git = { version = "0.2.1", path = "../ast-merge-git" }
+ast-template = { version = "0.2.1", path = "../ast-template" }
 bash-merge = { version = "0.2.1", path = "../bash-merge" }
 go-merge = { version = "0.2.1", path = "../go-merge" }
-rust-merge = { version = "0.2.1", path = "../rust-merge" }
-typescript-merge = { version = "0.2.1", path = "../typescript-merge" }
-ast-merge-git = { version = "0.2.1", path = "../ast-merge-git" }
 json-merge = { version = "0.2.1", path = "../json-merge" }
-ast-template = { version = "0.2.1", path = "../ast-template" }
-ast-crispr = { version = "0.2.1", path = "../ast-crispr" }
 python-merge = { version = "0.2.1", path = "../python-merge" }
-ast-merge = { version = "0.2.1", path = "../ast-merge" }
-yaml-merge = { version = "0.2.1", path = "../yaml-merge" }
+rust-merge = { version = "0.2.1", path = "../rust-merge" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tree-haver = { version = "0.2.1", path = "../tree-haver" }
-
-[lib]
-path = "src/lib.rs"
+typescript-merge = { version = "0.2.1", path = "../typescript-merge" }
+yaml-merge = { version = "0.2.1", path = "../yaml-merge" }

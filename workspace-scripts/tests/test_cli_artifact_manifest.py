@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "workspace-scripts/check_cli_artifact_manifest.py"
@@ -21,50 +22,71 @@ class ArtifactManifestTest(unittest.TestCase):
         provider.update(kind="workflow", descriptor={"provider_id": provider["id"]})
         checker.validate(self.manifest)
         provider["descriptor"] = {"id": provider["id"]}
-        with self.assertRaisesRegex(checker.Rejected, "identity mismatch"):
+        with pytest.raises(checker.RejectedError, match="identity mismatch"):
             checker.validate(self.manifest)
 
     def test_complete_inventory_requires_both_kinds_and_preserves_missing_identities(self):
         descriptor = self.manifest["built_in_provider_descriptors"][0]["descriptor"]
-        inventory = {"schema": "structuredmerge.compiled-provider-inventory/v1",
-                     "scope": "typed-common-operation-kernel", "kernel_version": "0.2.0",
-                     "runtime_availability_checked": False,
-                     "parsers": [descriptor], "workflows": [{"provider_id": descriptor["id"]}]}
+        inventory = {
+            "schema": "structuredmerge.compiled-provider-inventory/v1",
+            "scope": "typed-common-operation-kernel",
+            "kernel_version": "0.2.0",
+            "runtime_availability_checked": False,
+            "parsers": [descriptor],
+            "workflows": [{"provider_id": descriptor["id"]}],
+        }
         self.manifest.update(compiled_provider_inventory=inventory, linked_kernel_version="0.2.0")
         self.write()
         report = self.check()["compiled_inventory_coverage"]
-        self.assertFalse(report["complete"])
-        self.assertEqual(report["undeclared_providers"], [{"kind": "workflow", "id": descriptor["id"]}])
-        with self.assertRaisesRegex(checker.Rejected, "omitted"):
+        assert not report["complete"]
+        assert report["undeclared_providers"] == [{"kind": "workflow", "id": descriptor["id"]}]
+        with pytest.raises(checker.RejectedError, match="omitted"):
             self.check(require_complete_inventory=True)
         provider = copy.deepcopy(self.manifest["built_in_provider_descriptors"][0])
         provider.update(kind="workflow", descriptor=inventory["workflows"][0])
         self.manifest["built_in_provider_descriptors"].append(provider)
         self.write()
-        self.assertTrue(self.check(require_complete_inventory=True)["compiled_inventory_coverage"]["complete"])
+        assert self.check(require_complete_inventory=True)["compiled_inventory_coverage"]["complete"]
         self.manifest["compiled_descriptor_coverage"] = {"declared": 1, "compiled": 1}
         self.write()
-        with self.assertRaisesRegex(checker.Rejected, "coverage claim"):
+        with pytest.raises(checker.RejectedError, match="coverage claim"):
             self.check()
         del self.manifest["compiled_descriptor_coverage"]
         inventory["parsers"][0] = {"id": descriptor["id"], "spoofed": True}
         self.write()
-        with self.assertRaisesRegex(checker.Rejected, "differs from compiled"):
+        with pytest.raises(checker.RejectedError, match="differs from compiled"):
             self.check()
 
     def test_strict_inventory_rejects_absence_and_cli_exits_two(self):
         self.write()
-        with self.assertRaisesRegex(checker.Rejected, "inventory is required"):
+        with pytest.raises(checker.RejectedError, match="inventory is required"):
             self.check(require_complete_inventory=True)
-        result = subprocess.run([sys.executable, str(SCRIPT), "--manifest", str(self.path),
-            "--artifact", str(self.binary), "--target", "test-target", "--profile", "standalone",
-            "--require-complete-inventory"], capture_output=True, text=True, timeout=10)
-        self.assertEqual(result.returncode, 2)
-        self.assertEqual(json.loads(result.stdout)["code"], "artifact.inventory_incomplete")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--manifest",
+                str(self.path),
+                "--artifact",
+                str(self.binary),
+                "--target",
+                "test-target",
+                "--profile",
+                "standalone",
+                "--require-complete-inventory",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 2
+        assert json.loads(result.stdout)["code"] == "artifact.inventory_incomplete"
 
     def test_required_fields_match_shared_slice_1032_policy(self):
-        policy = json.loads((ROOT.parent / "fixtures/diagnostics/slice-1032-cli-artifact-provider-policy/contract.json").read_text())
-        self.assertEqual(checker.REQUIRED, set(policy["artifact_manifest"]["required_fields"]))
+        policy = json.loads(
+            (ROOT.parent / "fixtures/diagnostics/slice-1032-cli-artifact-provider-policy/contract.json").read_text()
+        )
+        assert checker.REQUIRED == set(policy["artifact_manifest"]["required_fields"])
 
     def setUp(self):
         (ROOT / "tmp").mkdir(exist_ok=True)
@@ -77,18 +99,39 @@ class ArtifactManifestTest(unittest.TestCase):
         self.asset.write_bytes(b"opaque test asset; never loaded")
         self.path = self.root / "manifest.json"
         self.manifest = {
-            "schema": checker.SCHEMA, "artifact_id": "smorg.test", "artifact_version": "0.2.0",
-            "build_revision": "test-fixture-not-a-build-attestation", "target": "test-target", "profile": "standalone",
+            "schema": checker.SCHEMA,
+            "artifact_id": "smorg.test",
+            "artifact_version": "0.2.0",
+            "build_revision": "test-fixture-not-a-build-attestation",
+            "target": "test-target",
+            "profile": "standalone",
             "artifact_digest": checker.digest_file(self.binary)[0],
-            "schema_contracts": {key: "test/v1" for key in ("kernel", "operation", "provider", "diagnostic", "preservation")},
-            "built_in_provider_descriptors": [{"id": "parser.test", "kind": "parser", "origin": "in_process",
-                "contract": "test/v1", "descriptor": {"id": "parser.test"}, "asset_requirements": ["json"]}],
+            "schema_contracts": dict.fromkeys(
+                ("kernel", "operation", "provider", "diagnostic", "preservation"), "test/v1"
+            ),
+            "built_in_provider_descriptors": [
+                {
+                    "id": "parser.test",
+                    "kind": "parser",
+                    "origin": "in_process",
+                    "contract": "test/v1",
+                    "descriptor": {"id": "parser.test"},
+                    "asset_requirements": ["json"],
+                }
+            ],
             "host_bridge_protocols": ["bridge.test/v1"],
-            "grammar_assets": [{"id": "json", "source": "external", "digest": checker.digest_file(self.asset)[0],
-                                "locator": "https://must-not-be-fetched.invalid/grammar"}],
+            "grammar_assets": [
+                {
+                    "id": "json",
+                    "source": "external",
+                    "digest": checker.digest_file(self.asset)[0],
+                    "locator": "https://must-not-be-fetched.invalid/grammar",
+                }
+            ],
             "grammar_installation_policy": {"implicit_installation": False, "explicit_preparation_supported": False},
             "network_policy": {"operation_time_acquisition": False},
-            "compiled_features": [], "platform_requirements": [],
+            "compiled_features": [],
+            "platform_requirements": [],
         }
 
     def write(self, manifest=None):
@@ -100,43 +143,49 @@ class ArtifactManifestTest(unittest.TestCase):
     def test_exact_byte_check_does_not_confer_trust_or_availability(self):
         self.write()
         result = self.check(assets={"json": self.asset}, expected_manifest_digest=checker.digest_file(self.path)[0])
-        self.assertTrue(result["passed"])
-        self.assertTrue(result["manifest_digest_pinned"])
-        self.assertEqual(result["assets"][0]["byte_integrity"], "matched")
-        for field in ("signature_verified", "build_provenance_verified", "binary_target_verified",
-                      "provider_descriptors_verified", "runtime_availability_checked", "publication_authorized"):
-            self.assertFalse(result[field])
+        assert result["passed"]
+        assert result["manifest_digest_pinned"]
+        assert result["assets"][0]["byte_integrity"] == "matched"
+        for field in (
+            "signature_verified",
+            "build_provenance_verified",
+            "binary_target_verified",
+            "provider_descriptors_verified",
+            "runtime_availability_checked",
+            "publication_authorized",
+        ):
+            assert not result[field]
 
     def test_absent_explicit_asset_is_unchecked_not_missing_or_available(self):
         self.write()
         self.asset.unlink()
-        self.assertEqual(self.check()["assets"][0]["byte_integrity"], "not_checked")
+        assert self.check()["assets"][0]["byte_integrity"] == "not_checked"
 
     def test_complete_asset_evidence_is_explicit_and_separate_from_runtime(self):
         self.write()
         report = self.check()["asset_evidence"]
-        self.assertEqual(report["unchecked_asset_ids"], ["json"])
-        self.assertFalse(report["all_declared_bytes_verified"])
-        self.assertEqual(report["provider_requirements"][0]["byte_integrity"], "not_checked")
-        with self.assertRaises(checker.Rejected) as caught:
+        assert report["unchecked_asset_ids"] == ["json"]
+        assert not report["all_declared_bytes_verified"]
+        assert report["provider_requirements"][0]["byte_integrity"] == "not_checked"
+        with pytest.raises(checker.RejectedError) as caught:
             self.check(require_all_assets=True)
-        self.assertEqual(caught.exception.code, "artifact.asset_evidence_incomplete")
+        assert caught.value.code == "artifact.asset_evidence_incomplete"
         report = self.check(assets={"json": self.asset}, require_all_assets=True)["asset_evidence"]
-        self.assertTrue(report["all_declared_bytes_verified"])
-        self.assertEqual(report["checked"], 1)
-        self.assertEqual(report["provider_requirements"][0]["byte_integrity"], "matched")
+        assert report["all_declared_bytes_verified"]
+        assert report["checked"] == 1
+        assert report["provider_requirements"][0]["byte_integrity"] == "matched"
         for field in ("linkage_verified", "runtime_loading_verified", "requirement_completeness_verified"):
-            self.assertFalse(report[field])
+            assert not report[field]
 
     def test_empty_asset_requirements_do_not_prove_asset_independence(self):
         self.manifest["built_in_provider_descriptors"][0]["asset_requirements"] = []
         self.manifest["grammar_assets"] = []
         self.write()
         report = self.check(require_all_assets=True)["asset_evidence"]
-        self.assertTrue(report["all_declared_bytes_verified"])
-        self.assertEqual(report["declared"], 0)
-        self.assertEqual(report["provider_requirements"][0]["byte_integrity"], "no_declared_requirements")
-        self.assertFalse(report["requirement_completeness_verified"])
+        assert report["all_declared_bytes_verified"]
+        assert report["declared"] == 0
+        assert report["provider_requirements"][0]["byte_integrity"] == "no_declared_requirements"
+        assert not report["requirement_completeness_verified"]
 
     def test_asset_evidence_maps_both_provider_kinds_and_all_sources_without_linkage_claim(self):
         workflow = copy.deepcopy(self.manifest["built_in_provider_descriptors"][0])
@@ -147,61 +196,78 @@ class ArtifactManifestTest(unittest.TestCase):
             self.write()
             report = self.check(assets={"json": self.asset}, require_all_assets=True)
             evidence = report["asset_evidence"]
-            self.assertEqual([p["kind"] for p in evidence["provider_requirements"]], ["parser", "workflow"])
-            self.assertTrue(all(p["declared_requirements"] == ["json"] for p in evidence["provider_requirements"]))
-            self.assertFalse(evidence["linkage_verified"])
+            assert [p["kind"] for p in evidence["provider_requirements"]] == ["parser", "workflow"]
+            assert all(p["declared_requirements"] == ["json"] for p in evidence["provider_requirements"])
+            assert not evidence["linkage_verified"]
 
     def test_all_asset_cli_gate_rejects_omission_and_accepts_explicit_bytes(self):
         self.write()
-        args = [sys.executable, "-O", str(SCRIPT), "--manifest", str(self.path),
-                "--artifact", str(self.binary), "--target", "test-target", "--profile", "standalone",
-                "--require-all-assets"]
+        args = [
+            sys.executable,
+            "-O",
+            str(SCRIPT),
+            "--manifest",
+            str(self.path),
+            "--artifact",
+            str(self.binary),
+            "--target",
+            "test-target",
+            "--profile",
+            "standalone",
+            "--require-all-assets",
+        ]
         for supplied in (False, True):
-            result = subprocess.run(args + (["--asset", "json", str(self.asset)] if supplied else []),
-                                    capture_output=True, text=True, timeout=10)
-            self.assertEqual(result.returncode, 0 if supplied else 2)
+            result = subprocess.run(
+                args + (["--asset", "json", str(self.asset)] if supplied else []),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            assert result.returncode == (0 if supplied else 2)
             report = json.loads(result.stdout)
             if not supplied:
-                self.assertEqual(report["code"], "artifact.asset_evidence_incomplete")
+                assert report["code"] == "artifact.asset_evidence_incomplete"
             else:
-                self.assertTrue(report["asset_evidence"]["all_declared_bytes_verified"])
+                assert report["asset_evidence"]["all_declared_bytes_verified"]
 
     def test_binary_asset_and_manifest_tampering_are_rejected(self):
         self.write()
         pinned = checker.digest_file(self.path)[0]
         self.binary.write_bytes(b"different artifact")
-        with self.assertRaisesRegex(checker.Rejected, "artifact bytes differ"):
+        with pytest.raises(checker.RejectedError, match="artifact bytes differ"):
             self.check()
         self.binary.write_bytes(b"opaque test artifact; never executed")
         self.asset.write_bytes(b"different asset")
-        with self.assertRaisesRegex(checker.Rejected, "asset bytes differ"):
+        with pytest.raises(checker.RejectedError, match="asset bytes differ"):
             self.check(assets={"json": self.asset})
         self.path.write_text(self.path.read_text() + "\n")
-        with self.assertRaisesRegex(checker.Rejected, "pinned manifest digest mismatch"):
+        with pytest.raises(checker.RejectedError, match="pinned manifest digest mismatch"):
             self.check(expected_manifest_digest=pinned)
 
     def test_missing_required_fields_reject(self):
         for field in checker.REQUIRED:
             manifest = copy.deepcopy(self.manifest)
             del manifest[field]
-            with self.subTest(field=field), self.assertRaises(checker.Rejected):
+            with self.subTest(field=field), pytest.raises(checker.RejectedError):
                 checker.validate(manifest)
 
     def test_runtime_claims_policy_bypasses_and_descriptor_confusion_reject(self):
-        mutations = [lambda m: m.update(available=True),
-                     lambda m: m.update(default_approved=True),
-                     lambda m: m["network_policy"].update(operation_time_acquisition=True),
-                     lambda m: m["grammar_installation_policy"].update(implicit_installation=True),
-                     lambda m: m["built_in_provider_descriptors"][0].update(kind="bridge"),
-                     lambda m: m["built_in_provider_descriptors"][0].update(origin="host"),
-                     lambda m: m["built_in_provider_descriptors"][0].update(available=True),
-                     lambda m: m["built_in_provider_descriptors"][0].update(asset_requirements=["missing"]),
-                     lambda m: m["built_in_provider_descriptors"][0]["descriptor"].update(id="different"),
-                     lambda m: m["grammar_assets"][0].update(digest=None)]
+        mutations = [
+            lambda m: m.update(available=True),
+            lambda m: m.update(default_approved=True),
+            lambda m: m["network_policy"].update(operation_time_acquisition=True),
+            lambda m: m["grammar_installation_policy"].update(implicit_installation=True),
+            lambda m: m["built_in_provider_descriptors"][0].update(kind="bridge"),
+            lambda m: m["built_in_provider_descriptors"][0].update(origin="host"),
+            lambda m: m["built_in_provider_descriptors"][0].update(available=True),
+            lambda m: m["built_in_provider_descriptors"][0].update(asset_requirements=["missing"]),
+            lambda m: m["built_in_provider_descriptors"][0]["descriptor"].update(id="different"),
+            lambda m: m["grammar_assets"][0].update(digest=None),
+        ]
         for mutate in mutations:
             manifest = copy.deepcopy(self.manifest)
             mutate(manifest)
-            with self.subTest(mutate=mutate), self.assertRaises(checker.Rejected):
+            with self.subTest(mutate=mutate), pytest.raises(checker.RejectedError):
                 checker.validate(manifest)
 
     def test_duplicate_fields_and_non_json_constants_reject(self):
@@ -209,40 +275,56 @@ class ArtifactManifestTest(unittest.TestCase):
         valid = self.path.read_text()
         for raw in [valid[:-1] + ', "profile":"standalone"}', valid[:-1] + ', "extra":NaN}']:
             self.path.write_text(raw)
-            with self.assertRaises(checker.Rejected):
+            with pytest.raises(checker.RejectedError):
                 self.check()
 
     def test_platform_profile_and_undeclared_asset_mismatch_reject(self):
         self.write()
         for target, profile in [("wrong-target", "standalone"), ("test-target", "embedded_host")]:
-            with self.assertRaises(checker.Rejected):
+            with pytest.raises(checker.RejectedError):
                 checker.check(self.path, self.binary, target, profile)
-        with self.assertRaisesRegex(checker.Rejected, "undeclared asset"):
+        with pytest.raises(checker.RejectedError, match="undeclared asset"):
             self.check(assets={"not-declared": self.asset})
 
     def test_process_failure_remains_failure_under_python_optimization(self):
         self.write()
         self.binary.write_bytes(b"tampered")
         for mode in ([], ["-O"]):
-            result = subprocess.run([sys.executable, *mode, str(SCRIPT), "--manifest", str(self.path),
-                "--artifact", str(self.binary), "--target", "test-target", "--profile", "standalone"],
-                capture_output=True, text=True, timeout=10, check=False)
-            self.assertEqual(result.returncode, 2)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    *mode,
+                    str(SCRIPT),
+                    "--manifest",
+                    str(self.path),
+                    "--artifact",
+                    str(self.binary),
+                    "--target",
+                    "test-target",
+                    "--profile",
+                    "standalone",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            assert result.returncode == 2
             report = json.loads(result.stdout)
-            self.assertEqual(report["code"], "artifact.digest_mismatch")
-            self.assertFalse(report["passed"])
-            self.assertEqual(result.stderr, "")
+            assert report["code"] == "artifact.digest_mismatch"
+            assert not report["passed"]
+            assert result.stderr == ""
 
     def test_size_budgets_and_nonregular_inputs_reject(self):
-        with self.assertRaises(checker.Rejected):
+        with pytest.raises(checker.RejectedError):
             checker.digest_file(self.root)
-        with self.assertRaises(checker.Rejected):
+        with pytest.raises(checker.RejectedError):
             checker.digest_file(self.binary, maximum=2)
         self.write()
         with patch.object(checker, "MAX_TOTAL", self.binary.stat().st_size + 1):
-            with self.assertRaises(checker.Rejected):
+            with pytest.raises(checker.RejectedError):
                 self.check(assets={"json": self.asset})
         with self.path.open("wb") as stream:
             stream.truncate(checker.MAX_MANIFEST + 1)
-        with self.assertRaises(checker.Rejected):
+        with pytest.raises(checker.RejectedError):
             self.check()

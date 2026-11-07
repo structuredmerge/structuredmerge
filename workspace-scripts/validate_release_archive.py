@@ -2,14 +2,15 @@
 """Safely extract and smoke-test a platform-specific smorg archive."""
 
 import argparse
-from pathlib import Path
 import subprocess
 import tarfile
 import tempfile
 import zipfile
+from pathlib import Path
 
 
 def _safe_member(name: str) -> Path:
+    """Handle safe member."""
     path = Path(name)
     if path.is_absolute() or ".." in path.parts or len(path.parts) != 1:
         raise ValueError(f"unsafe archive member: {name}")
@@ -17,6 +18,7 @@ def _safe_member(name: str) -> Path:
 
 
 def validate(archive: Path, version: str, platform: str) -> None:
+    """Validate."""
     windows = platform.startswith("windows")
     suffix = ".exe" if windows else ""
     expected = {f"smorg{suffix}", f"smorg-rs{suffix}"}
@@ -53,6 +55,7 @@ def validate(archive: Path, version: str, platform: str) -> None:
 
 
 def main() -> int:
+    """Run the command line entry point."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("archive", type=Path)
     parser.add_argument("--version", required=True)

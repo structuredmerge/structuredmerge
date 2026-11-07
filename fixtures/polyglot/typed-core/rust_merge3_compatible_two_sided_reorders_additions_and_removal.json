@@ -1,0 +1,18 @@
+{
+  "id": "rust_merge3_compatible_two_sided_reorders_additions_and_removal",
+  "contract": "rust_merge3_compatible_two_sided_reorders_additions_and_removal",
+  "description": "Compatible two-sided Rust reorders compose with documented additions in distinct stable gaps and an independent owner deletion.",
+  "input": {
+    "base": "// docs a\nfn a() {}\n\n// docs b\nfn b() {}\n// docs c\nfn c() {}\n\n// docs d\nfn d() {}\n// docs e\nfn e() {}\n// docs f\nfn f() {}\n// docs g\nfn g() {}\n",
+    "ours": "// docs b\nfn b() {}\n// docs a\nfn a() {}\n\n// docs c\nfn c() {}\n// docs x\nfn x() {}\n\n// docs d\nfn d() {}\n// docs e\nfn e() {}\n// docs f\nfn f() {}\n// docs g\nfn g() {}\n",
+    "theirs": "// docs a\nfn a() {}\n\n// docs b\nfn b() {}\n// docs c\nfn c() {}\n\n// docs d\nfn d() {}\n// docs y\nfn y() {}\n// docs f\nfn f() {}\n// docs e\nfn e() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "// docs b\nfn b() {}\n// docs a\nfn a() {}\n\n// docs c\nfn c() {}\n// docs x\nfn x() {}\n\n// docs d\nfn d() {}\n// docs y\nfn y() {}\n// docs f\nfn f() {}\n// docs e\nfn e() {}\n"
+  },
+  "ruby_native_expected": {
+    "outcome": "clean",
+    "output": "// docs b\nfn b() {}\n// docs a\nfn a() {}\n\n// docs c\nfn c() {}\n// docs x\nfn x() {}\n\n// docs d\nfn d() {}\n// docs e\nfn e() {}\n// docs y\nfn y() {}\n// docs f\nfn f() {}\n"
+  }
+}

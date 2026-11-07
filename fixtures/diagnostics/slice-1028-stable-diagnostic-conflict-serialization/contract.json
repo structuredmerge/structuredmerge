@@ -1,0 +1,425 @@
+{
+  "schema": "https://structuredmerge.org/schemas/diagnostic-fixture/v1.json",
+  "slice": "1028",
+  "name": "stable-diagnostic-conflict-serialization",
+  "description": "Portable diagnostics preserve deterministic causes and structured conflicts preserve exact alternatives independently of rendered markers.",
+  "contract": {
+    "schemas": {
+      "diagnostic": "structuredmerge.diagnostic/v1",
+      "conflict": "structuredmerge.conflict/v1"
+    },
+    "severities": ["info", "warning", "error"],
+    "categories": [
+      "parse_error",
+      "destination_parse_error",
+      "invalid_request",
+      "configuration_error",
+      "selection_error",
+      "backend_unavailable",
+      "unsupported_feature",
+      "unsafe_source_range",
+      "ambiguity",
+      "analysis_error",
+      "merge_conflict",
+      "render_error",
+      "preservation_error",
+      "verification_error",
+      "fallback_applied",
+      "assumed_default",
+      "cancelled",
+      "deadline_exceeded",
+      "resource_limit",
+      "replay_rejected",
+      "internal_error"
+    ],
+    "conflict_categories": [
+      "content",
+      "delete_modify",
+      "add_add",
+      "move",
+      "rename",
+      "order",
+      "identity",
+      "ownership",
+      "syntax",
+      "binary_overlap",
+      "archive_entry",
+      "provider_specific"
+    ],
+    "origin_layers": [
+      "transport",
+      "registry",
+      "parser",
+      "analysis",
+      "provider",
+      "renderer",
+      "verifier",
+      "adapter",
+      "runner"
+    ],
+    "localization_statuses": ["exact", "owner", "coarse", "whole_document", "unavailable"],
+    "resolution_statuses": ["unresolved", "resolved"],
+    "resolution_strategies": ["none", "select_role", "combine", "policy", "custom"],
+    "alternative_states": ["present", "absent", "invalid", "opaque"],
+    "portable_code_pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+    "canonical_value_style": "lowercase_snake_case",
+    "legacy_aliases": {
+      "parse-error": "parse_error",
+      "merge-conflict": "merge_conflict",
+      "unexpected-eof": "parse.unexpected_eof",
+      "edit-edit": "merge.edit_edit"
+    },
+    "message_is_machine_key": false,
+    "marker_text_is_conflict_model": false
+  },
+  "source_catalog": {
+    "source.base": {
+      "source_id": "source.base",
+      "role": "base",
+      "content": "{\"a\":1}\n",
+      "byte_length": 8,
+      "sha256": "e346432021b04179518d9614f3560ccd71354a4ee101ddcb893d6959a9d6301c",
+      "encoding": "UTF-8"
+    },
+    "source.ours": {
+      "source_id": "source.ours",
+      "role": "ours",
+      "content": "{\"a\":2}\n",
+      "byte_length": 8,
+      "sha256": "0f117a2ab60ad469a0ac81c31e1a5a9bc833e7792983400278ea770db93d0aae",
+      "encoding": "UTF-8"
+    },
+    "source.theirs": {
+      "source_id": "source.theirs",
+      "role": "theirs",
+      "content": "{\"a\":3}\n",
+      "byte_length": 8,
+      "sha256": "8de03d7e7c2dc8c66fb6aa651f61478fb045c0882de13843d68edf8d0b56bed3",
+      "encoding": "UTF-8"
+    },
+    "source.malformed_ours": {
+      "source_id": "source.malformed_ours",
+      "role": "ours",
+      "content": "{\"a\":\n",
+      "byte_length": 6,
+      "sha256": "a1eac6f8a1cfe4f0643eba0a749e5cc77855e9ba0069d5feb3b2849ee7d9bec6",
+      "encoding": "UTF-8"
+    }
+  },
+  "diagnostic_examples": [
+    {
+      "example_id": "merge3-parse-failure-cause-chain",
+      "request_id": "request.merge3.parse-failure.001",
+      "operation": "merge3",
+      "result_ok": false,
+      "conflicts": [],
+      "diagnostics": [
+        {
+          "schema": "structuredmerge.diagnostic/v1",
+          "id": "diagnostic.parse.ours.001",
+          "sequence": 0,
+          "severity": "error",
+          "category": "parse_error",
+          "code": "parse.unexpected_eof",
+          "message": "The ours revision is incomplete.",
+          "blocking": true,
+          "operation": "merge3",
+          "request_id": "request.merge3.parse-failure.001",
+          "source_refs": [
+            {
+              "source_id": "source.malformed_ours",
+              "role": "ours",
+              "span": {
+                "range": {"start_byte": 5, "end_byte": 6},
+                "start_point": {"row": 0, "column": 5},
+                "end_point": {"row": 1, "column": 0}
+              }
+            }
+          ],
+          "subject_refs": [
+            {"kind": "operation", "id": "merge3.classification"}
+          ],
+          "cause_ids": [],
+          "related_ids": [],
+          "origin": {
+            "layer": "parser",
+            "backend_id": "tslp",
+            "package": "tree_sitter_language_pack",
+            "package_version": "fixture",
+            "native_code": "ERROR"
+          },
+          "data": {"expected": "value", "actual": "end_of_input"},
+          "extensions": [],
+          "metadata": {}
+        },
+        {
+          "schema": "structuredmerge.diagnostic/v1",
+          "id": "diagnostic.merge3.classification-aborted.001",
+          "sequence": 1,
+          "severity": "error",
+          "category": "analysis_error",
+          "code": "merge.classification_not_reached",
+          "message": "Merge classification did not run because one revision failed to parse.",
+          "blocking": true,
+          "operation": "merge3",
+          "request_id": "request.merge3.parse-failure.001",
+          "source_refs": [
+            {"source_id": "source.malformed_ours", "role": "ours"}
+          ],
+          "subject_refs": [
+            {"kind": "operation", "id": "merge3.classification"}
+          ],
+          "cause_ids": ["diagnostic.parse.ours.001"],
+          "related_ids": [],
+          "origin": {
+            "layer": "provider",
+            "provider_id": "ruby.json",
+            "package": "json-merge",
+            "package_version": "fixture",
+            "native_code": null
+          },
+          "data": {"base_participated": false, "classification_reached": false},
+          "extensions": [],
+          "metadata": {}
+        }
+      ]
+    }
+  ],
+  "conflict_examples": [
+    {
+      "example_id": "unresolved-exact-conflict-without-markers",
+      "request_id": "request.merge3.conflict.001",
+      "operation": "merge3",
+      "result_ok": false,
+      "rendered_markers": false,
+      "diagnostics": [
+        {
+          "schema": "structuredmerge.diagnostic/v1",
+          "id": "diagnostic.conflict.a.001",
+          "sequence": 0,
+          "severity": "error",
+          "category": "merge_conflict",
+          "code": "merge.edit_edit",
+          "message": "Both revisions changed the same owner incompatibly.",
+          "blocking": true,
+          "operation": "merge3",
+          "request_id": "request.merge3.conflict.001",
+          "source_refs": [
+            {"source_id": "source.base", "role": "base", "span": {"range": {"start_byte": 5, "end_byte": 6}, "start_point": {"row": 0, "column": 5}, "end_point": {"row": 0, "column": 6}}},
+            {"source_id": "source.ours", "role": "ours", "span": {"range": {"start_byte": 5, "end_byte": 6}, "start_point": {"row": 0, "column": 5}, "end_point": {"row": 0, "column": 6}}},
+            {"source_id": "source.theirs", "role": "theirs", "span": {"range": {"start_byte": 5, "end_byte": 6}, "start_point": {"row": 0, "column": 5}, "end_point": {"row": 0, "column": 6}}}
+          ],
+          "subject_refs": [
+            {"kind": "conflict", "id": "conflict.a.001"},
+            {"kind": "structural_path", "id": "json-pointer:/a"}
+          ],
+          "cause_ids": [],
+          "related_ids": [],
+          "origin": {
+            "layer": "provider",
+            "provider_id": "ruby.json",
+            "package": "json-merge",
+            "package_version": "fixture",
+            "native_code": null
+          },
+          "data": {},
+          "extensions": [],
+          "metadata": {}
+        }
+      ],
+      "conflicts": [
+        {
+          "schema": "structuredmerge.conflict/v1",
+          "id": "conflict.a.001",
+          "operation": "merge3",
+          "category": "content",
+          "code": "merge.edit_edit",
+          "message": "The value at /a was changed differently by ours and theirs.",
+          "subject": {
+            "structural_path": "json-pointer:/a",
+            "owner_ref": "owner.json.a",
+            "whole_document": false
+          },
+          "roles": ["base", "ours", "theirs"],
+          "alternatives": [
+            {
+              "role": "base",
+              "state": "present",
+              "source_id": "source.base",
+              "regions": [
+                {"range": {"start_byte": 5, "end_byte": 6}, "byte_length": 1, "sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"}
+              ],
+              "change_ids": []
+            },
+            {
+              "role": "ours",
+              "state": "present",
+              "source_id": "source.ours",
+              "regions": [
+                {"range": {"start_byte": 5, "end_byte": 6}, "byte_length": 1, "sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"}
+              ],
+              "change_ids": ["change.ours.a"]
+            },
+            {
+              "role": "theirs",
+              "state": "present",
+              "source_id": "source.theirs",
+              "regions": [
+                {"range": {"start_byte": 5, "end_byte": 6}, "byte_length": 1, "sha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce"}
+              ],
+              "change_ids": ["change.theirs.a"]
+            }
+          ],
+          "classification": {
+            "base_participated": true,
+            "change_ids": ["change.ours.a", "change.theirs.a"],
+            "decision_ids": ["decision.match.a", "decision.classify.a"],
+            "evidence": "both sides replaced the base value with unequal values"
+          },
+          "localization": {
+            "status": "exact",
+            "verified": true,
+            "output_regions": []
+          },
+          "resolution": {
+            "status": "unresolved",
+            "strategy": "none",
+            "selected_roles": [],
+            "decision_id": null,
+            "resolver": null,
+            "reason": null
+          },
+          "diagnostic_ids": ["diagnostic.conflict.a.001"],
+          "change_ids": ["change.ours.a", "change.theirs.a"],
+          "decision_ids": ["decision.match.a", "decision.classify.a"],
+          "render_fragment_ids": [],
+          "extensions": [],
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "example_id": "resolved-conflict-retained-as-audit-evidence",
+      "request_id": "request.merge3.conflict-resolved.001",
+      "operation": "merge3",
+      "result_ok": true,
+      "rendered_markers": false,
+      "diagnostics": [
+        {
+          "schema": "structuredmerge.diagnostic/v1",
+          "id": "diagnostic.conflict.a.resolved.001",
+          "sequence": 0,
+          "severity": "info",
+          "category": "merge_conflict",
+          "code": "merge.conflict_resolved",
+          "message": "The conflicting value was resolved by an explicit select-ours policy.",
+          "blocking": false,
+          "operation": "merge3",
+          "request_id": "request.merge3.conflict-resolved.001",
+          "source_refs": [
+            {"source_id": "source.base", "role": "base"},
+            {"source_id": "source.ours", "role": "ours"},
+            {"source_id": "source.theirs", "role": "theirs"}
+          ],
+          "subject_refs": [
+            {"kind": "conflict", "id": "conflict.a.resolved.001"}
+          ],
+          "cause_ids": [],
+          "related_ids": [],
+          "origin": {
+            "layer": "provider",
+            "provider_id": "ruby.json",
+            "package": "json-merge",
+            "package_version": "fixture",
+            "native_code": null
+          },
+          "data": {"resolution_decision_id": "decision.resolve.a"},
+          "extensions": [],
+          "metadata": {}
+        }
+      ],
+      "conflicts": [
+        {
+          "schema": "structuredmerge.conflict/v1",
+          "id": "conflict.a.resolved.001",
+          "operation": "merge3",
+          "category": "content",
+          "code": "merge.edit_edit",
+          "message": "The value at /a was changed differently by ours and theirs.",
+          "subject": {
+            "structural_path": "json-pointer:/a",
+            "owner_ref": "owner.json.a",
+            "whole_document": false
+          },
+          "roles": ["base", "ours", "theirs"],
+          "alternatives": [
+            {"role": "base", "state": "present", "source_id": "source.base", "regions": [{"range": {"start_byte": 5, "end_byte": 6}, "byte_length": 1, "sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"}], "change_ids": []},
+            {"role": "ours", "state": "present", "source_id": "source.ours", "regions": [{"range": {"start_byte": 5, "end_byte": 6}, "byte_length": 1, "sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"}], "change_ids": ["change.ours.a"]},
+            {"role": "theirs", "state": "present", "source_id": "source.theirs", "regions": [{"range": {"start_byte": 5, "end_byte": 6}, "byte_length": 1, "sha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce"}], "change_ids": ["change.theirs.a"]}
+          ],
+          "classification": {
+            "base_participated": true,
+            "change_ids": ["change.ours.a", "change.theirs.a"],
+            "decision_ids": ["decision.match.a", "decision.classify.a"],
+            "evidence": "both sides replaced the base value with unequal values"
+          },
+          "localization": {
+            "status": "exact",
+            "verified": true,
+            "output_regions": [
+              {"range": {"start_byte": 5, "end_byte": 6}, "byte_length": 1, "sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"}
+            ]
+          },
+          "resolution": {
+            "status": "resolved",
+            "strategy": "select_role",
+            "selected_roles": ["ours"],
+            "decision_id": "decision.resolve.a",
+            "resolver": "policy.explicit-select-ours",
+            "reason": "the caller explicitly authorized ours for this structural path"
+          },
+          "diagnostic_ids": ["diagnostic.conflict.a.resolved.001"],
+          "change_ids": ["change.ours.a", "change.theirs.a"],
+          "decision_ids": ["decision.match.a", "decision.classify.a", "decision.resolve.a"],
+          "render_fragment_ids": ["render.ours.a"],
+          "extensions": [],
+          "metadata": {}
+        }
+      ]
+    }
+  ],
+  "invalid_examples": [
+    {"id": "hyphenated-portable-category", "mutation": "serialize parse-error instead of parse_error", "rejected_by": "canonical_value_style"},
+    {"id": "native-code-as-portable-code", "mutation": "serialize parser-native ERROR as code", "rejected_by": "portable_code_pattern"},
+    {"id": "message-as-machine-key", "mutation": "classify by matching the English message", "rejected_by": "message_is_machine_key"},
+    {"id": "unstable-diagnostic-id", "mutation": "include a timestamp or parser object ID in a diagnostic ID", "rejected_by": "deterministic_identity"},
+    {"id": "noncontiguous-sequence", "mutation": "serialize diagnostic sequences 0 and 2", "rejected_by": "ordered_diagnostics"},
+    {"id": "forward-cause", "mutation": "a diagnostic names a cause with a greater sequence", "rejected_by": "causal_order"},
+    {"id": "causal-cycle", "mutation": "two diagnostics cause each other", "rejected_by": "acyclic_causes"},
+    {"id": "source-role-mismatch", "mutation": "an ours reference resolves to a source descriptor with role theirs", "rejected_by": "source_reference_integrity"},
+    {"id": "out-of-bounds-span", "mutation": "a diagnostic or alternative range exceeds its source byte length", "rejected_by": "source_reference_integrity"},
+    {"id": "marker-only-conflict", "mutation": "infer a conflict only by scanning rendered marker text", "rejected_by": "marker_text_is_conflict_model"},
+    {"id": "merge3-conflict-without-base", "mutation": "omit the base alternative or mark base_participated false", "rejected_by": "base_participation"},
+    {"id": "false-exact-localization", "mutation": "claim exact localization while one present alternative has no verified region", "rejected_by": "exact_localization"},
+    {"id": "successful-unresolved-conflict", "mutation": "set result_ok true while resolution remains unresolved", "rejected_by": "outcome_consistency"},
+    {"id": "resolved-without-authorization", "mutation": "mark resolved without strategy, decision, resolver, and reason", "rejected_by": "resolution_authorization"},
+    {"id": "conflict-diagnostic-only", "mutation": "emit merge_conflict diagnostic but omit the conflict envelope", "rejected_by": "structured_conflict_required"},
+    {"id": "duplicate-conflict-id", "mutation": "serialize two conflicts with the same result-local ID", "rejected_by": "deterministic_identity"}
+  ],
+  "expected": {
+    "source_count": 4,
+    "diagnostic_example_count": 1,
+    "diagnostic_count": 4,
+    "conflict_example_count": 2,
+    "conflict_count": 2,
+    "unresolved_conflict_count": 1,
+    "resolved_conflict_count": 1,
+    "invalid_example_count": 16,
+    "canonical_categories_are_snake_case": true,
+    "causes_precede_effects": true,
+    "exact_regions_verified": true,
+    "base_participation_required": true,
+    "markers_required": false,
+    "messages_are_stable_keys": false
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "rust_merge2_directional_comment_gap_ownership",
+  "contract": "rust_merge2_directional_comment_gap_ownership",
+  "description": "Directional Rust merge keeps module docs at document scope, attaches added-owner docs, retains inline comments on current owners, and preserves the current footer gap.",
+  "input": {
+    "incoming": "/// added docs\nfn added() {}\nfn f() {}\n",
+    "current": "//! module docs\n/// current docs\nfn f() {} // inline current\n\n// footer\n"
+  },
+  "expected": {
+    "ok": true,
+    "output": "//! module docs\n/// added docs\nfn added() {}\n/// current docs\nfn f() {} // inline current\n\n// footer\n"
+  },
+  "ruby_native_expected": {
+    "ok": true,
+    "output": "/// added docs\nfn added() {}\nfn f() {}\n"
+  }
+}

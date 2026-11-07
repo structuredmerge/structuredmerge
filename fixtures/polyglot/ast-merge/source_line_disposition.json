@@ -1,0 +1,618 @@
+{
+  "id": "ast_merge_source_line_disposition",
+  "contract": "ast_merge_source_line_disposition",
+  "description": "Each physical source line has one explicit owner, comment, layout-gap, root-region, or unmanaged disposition.",
+  "cases": [
+    {
+      "name": "comments_and_blank_gaps_have_single_line_disposition",
+      "source": "# header\n\nalpha() # inline alpha\n\nbeta()\n# footer\n",
+      "style": "hash_comment",
+      "owners": [
+        {
+          "id": "alpha",
+          "start_line": 3,
+          "end_line": 3,
+          "indent": 0
+        },
+        {
+          "id": "beta",
+          "start_line": 5,
+          "end_line": 5,
+          "indent": 0
+        }
+      ],
+      "comments": [
+        {
+          "line": 1,
+          "text": "# header",
+          "normalized_content": "header",
+          "full_line": true,
+          "indent": 0
+        },
+        {
+          "line": 3,
+          "text": "# inline alpha",
+          "normalized_content": "inline alpha",
+          "full_line": false,
+          "indent": 0
+        },
+        {
+          "line": 6,
+          "text": "# footer",
+          "normalized_content": "footer",
+          "full_line": true,
+          "indent": 0
+        }
+      ],
+      "comment_regions": [
+        {
+          "id": "comment-region:preamble:1-1",
+          "owner_id": null,
+          "kind": "preamble",
+          "start_line": 1,
+          "end_line": 1,
+          "selection_key": "root:preamble"
+        },
+        {
+          "id": "comment-region:inline:3-3",
+          "owner_id": "alpha",
+          "kind": "inline",
+          "start_line": 3,
+          "end_line": 3,
+          "selection_key": "comment:alpha:inline"
+        },
+        {
+          "id": "comment-region:trailing:6-6",
+          "owner_id": "beta",
+          "kind": "trailing",
+          "start_line": 6,
+          "end_line": 6,
+          "selection_key": "comment:beta:trailing"
+        }
+      ],
+      "layout_gaps": [
+        {
+          "id": "layout-gap:2-2",
+          "kind": "preamble",
+          "start_line": 2,
+          "end_line": 2,
+          "before_owner_id": null,
+          "after_owner_id": "alpha",
+          "controller_side": "after",
+          "controller_owner_id": "alpha",
+          "selection_key": "gap:preamble:root:alpha"
+        },
+        {
+          "id": "layout-gap:4-4",
+          "kind": "interstitial",
+          "start_line": 4,
+          "end_line": 4,
+          "before_owner_id": "alpha",
+          "after_owner_id": "beta",
+          "controller_side": "after",
+          "controller_owner_id": "beta",
+          "selection_key": "gap:interstitial:alpha:beta"
+        }
+      ],
+      "expected": [
+        {
+          "line_number": 1,
+          "line": "# header\n",
+          "kind": "root_region",
+          "owner_id": null,
+          "comment_region_ids": [
+            "comment-region:preamble:1-1"
+          ],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": "preamble",
+          "selection_key": "root:preamble"
+        },
+        {
+          "line_number": 2,
+          "line": "\n",
+          "kind": "layout_gap",
+          "owner_id": null,
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": "layout-gap:2-2",
+          "controller_owner_id": "alpha",
+          "root_region_kind": null,
+          "selection_key": "gap:preamble:root:alpha",
+          "before_owner_id": null,
+          "after_owner_id": "alpha"
+        },
+        {
+          "line_number": 3,
+          "line": "alpha() # inline alpha\n",
+          "kind": "structural_owner",
+          "owner_id": "alpha",
+          "comment_region_ids": [
+            "comment-region:inline:3-3"
+          ],
+          "comment_kind": "inline",
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null,
+          "selection_key": "owner:alpha"
+        },
+        {
+          "line_number": 4,
+          "line": "\n",
+          "kind": "layout_gap",
+          "owner_id": null,
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": "layout-gap:4-4",
+          "controller_owner_id": "beta",
+          "root_region_kind": null,
+          "selection_key": "gap:interstitial:alpha:beta",
+          "before_owner_id": "alpha",
+          "after_owner_id": "beta"
+        },
+        {
+          "line_number": 5,
+          "line": "beta()\n",
+          "kind": "structural_owner",
+          "owner_id": "beta",
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null,
+          "selection_key": "owner:beta"
+        },
+        {
+          "line_number": 6,
+          "line": "# footer\n",
+          "kind": "comment_owner",
+          "owner_id": "beta",
+          "comment_region_ids": [
+            "comment-region:trailing:6-6"
+          ],
+          "comment_kind": "trailing",
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null,
+          "selection_key": "comment:beta:trailing"
+        }
+      ]
+    },
+    {
+      "name": "unmanaged_syntax_is_explicit",
+      "source": "alpha()\nunknown syntax\n",
+      "style": "hash_comment",
+      "owners": [
+        {
+          "id": "alpha",
+          "start_line": 1,
+          "end_line": 1,
+          "indent": 0
+        }
+      ],
+      "comments": [],
+      "comment_regions": [],
+      "layout_gaps": [],
+      "expected": [
+        {
+          "line_number": 1,
+          "line": "alpha()\n",
+          "kind": "structural_owner",
+          "owner_id": "alpha",
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null,
+          "selection_key": "owner:alpha"
+        },
+        {
+          "line_number": 2,
+          "line": "unknown syntax\n",
+          "kind": "unmanaged",
+          "owner_id": null,
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null,
+          "selection_key": "unmanaged:2"
+        }
+      ]
+    },
+    {
+      "name": "orphan_comment_and_unmanaged_lines_are_explicit",
+      "source": "# orphan\n\nunknown syntax\n",
+      "style": "hash_comment",
+      "owners": [],
+      "comments": [
+        {
+          "line": 1,
+          "text": "# orphan",
+          "normalized_content": "orphan",
+          "full_line": true,
+          "indent": 0
+        }
+      ],
+      "comment_regions": [
+        {
+          "id": "comment-region:orphan:1-1",
+          "owner_id": null,
+          "kind": "orphan",
+          "start_line": 1,
+          "end_line": 1,
+          "selection_key": "root:orphan:0"
+        }
+      ],
+      "layout_gaps": [],
+      "expected": [
+        {
+          "line_number": 1,
+          "line": "# orphan\n",
+          "kind": "root_region",
+          "owner_id": null,
+          "comment_region_ids": [
+            "comment-region:orphan:1-1"
+          ],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": "orphan",
+          "selection_key": "root:orphan:0"
+        },
+        {
+          "line_number": 2,
+          "line": "\n",
+          "kind": "unmanaged",
+          "owner_id": null,
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null,
+          "selection_key": "unmanaged:2"
+        },
+        {
+          "line_number": 3,
+          "line": "unknown syntax\n",
+          "kind": "unmanaged",
+          "owner_id": null,
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null,
+          "selection_key": "unmanaged:3"
+        }
+      ]
+    },
+    {
+      "name": "a blank gap before a leading comment remains controlled by the preceding owner",
+      "source": "alpha()\n\n\n# beta docs\nbeta()\n",
+      "style": "hash_comment",
+      "owners": [
+        {
+          "id": "alpha",
+          "start_line": 1,
+          "end_line": 1,
+          "indent": 0
+        },
+        {
+          "id": "beta",
+          "start_line": 5,
+          "end_line": 5,
+          "indent": 0
+        }
+      ],
+      "comments": [
+        {
+          "line": 4,
+          "text": "# beta docs",
+          "normalized_content": "beta docs",
+          "full_line": true,
+          "indent": 0
+        }
+      ],
+      "comment_regions": [
+        {
+          "id": "comment-region:leading:4-4",
+          "selection_key": "comment:beta:leading",
+          "owner_id": "beta",
+          "kind": "leading",
+          "start_line": 4,
+          "end_line": 4
+        }
+      ],
+      "layout_gaps": [
+        {
+          "id": "layout-gap:2-3",
+          "selection_key": "gap:interstitial:alpha:beta",
+          "kind": "interstitial",
+          "start_line": 2,
+          "end_line": 3,
+          "before_owner_id": "alpha",
+          "after_owner_id": "beta",
+          "controller_side": "before",
+          "controller_owner_id": "alpha"
+        }
+      ],
+      "expected": [
+        {
+          "line_number": 1,
+          "line": "alpha()\n",
+          "kind": "structural_owner",
+          "selection_key": "owner:alpha",
+          "owner_id": "alpha",
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null
+        },
+        {
+          "line_number": 2,
+          "line": "\n",
+          "kind": "layout_gap",
+          "selection_key": "gap:interstitial:alpha:beta",
+          "owner_id": null,
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": "layout-gap:2-3",
+          "controller_owner_id": "alpha",
+          "before_owner_id": "alpha",
+          "after_owner_id": "beta",
+          "root_region_kind": null
+        },
+        {
+          "line_number": 3,
+          "line": "\n",
+          "kind": "layout_gap",
+          "selection_key": "gap:interstitial:alpha:beta",
+          "owner_id": null,
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": "layout-gap:2-3",
+          "controller_owner_id": "alpha",
+          "before_owner_id": "alpha",
+          "after_owner_id": "beta",
+          "root_region_kind": null
+        },
+        {
+          "line_number": 4,
+          "line": "# beta docs\n",
+          "kind": "comment_owner",
+          "selection_key": "comment:beta:leading",
+          "owner_id": "beta",
+          "comment_region_ids": [
+            "comment-region:leading:4-4"
+          ],
+          "comment_kind": "leading",
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null
+        },
+        {
+          "line_number": 5,
+          "line": "beta()\n",
+          "kind": "structural_owner",
+          "selection_key": "owner:beta",
+          "owner_id": "beta",
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null
+        }
+      ]
+    },
+    {
+      "name": "root_comment_inside_owner_span_remains_in_that_owner_source",
+      "source": "extern \"C\" {\n    // nested comment\n}\nfn value() {}\n",
+      "style": "c_style_line",
+      "owners": [
+        {
+          "id": "foreign",
+          "start_line": 1,
+          "end_line": 3,
+          "indent": 0
+        },
+        {
+          "id": "value",
+          "start_line": 4,
+          "end_line": 4,
+          "indent": 0
+        }
+      ],
+      "comments": [
+        {
+          "line": 2,
+          "text": "// nested comment",
+          "normalized_content": "nested comment",
+          "full_line": true,
+          "indent": 4
+        }
+      ],
+      "comment_regions": [
+        {
+          "id": "comment-region:orphan:2-2",
+          "owner_id": null,
+          "kind": "orphan",
+          "start_line": 2,
+          "end_line": 2,
+          "selection_key": "root:orphan:0"
+        }
+      ],
+      "layout_gaps": [],
+      "expected": [
+        {
+          "line_number": 1,
+          "line": "extern \"C\" {\n",
+          "kind": "structural_owner",
+          "owner_id": "foreign",
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null,
+          "selection_key": "owner:foreign"
+        },
+        {
+          "line_number": 2,
+          "line": "    // nested comment\n",
+          "kind": "structural_owner",
+          "owner_id": "foreign",
+          "comment_region_ids": [
+            "comment-region:orphan:2-2"
+          ],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": "orphan",
+          "selection_key": "owner:foreign"
+        },
+        {
+          "line_number": 3,
+          "line": "}\n",
+          "kind": "structural_owner",
+          "owner_id": "foreign",
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null,
+          "selection_key": "owner:foreign"
+        },
+        {
+          "line_number": 4,
+          "line": "fn value() {}\n",
+          "kind": "structural_owner",
+          "owner_id": "value",
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null,
+          "selection_key": "owner:value"
+        }
+      ]
+    },
+    {
+      "name": "root_comment_separator_before_owner_docs_uses_following_owner_gap",
+      "source": "// Retiring owner.\n\n/// Following owner.\nfn following() {}\n",
+      "style": "c_style_line",
+      "owners": [
+        {
+          "id": "following",
+          "start_line": 4,
+          "end_line": 4,
+          "indent": 0
+        }
+      ],
+      "comments": [
+        {
+          "line": 1,
+          "text": "// Retiring owner.",
+          "normalized_content": "Retiring owner.",
+          "full_line": true,
+          "indent": 0
+        },
+        {
+          "line": 3,
+          "text": "/// Following owner.",
+          "normalized_content": "Following owner.",
+          "full_line": true,
+          "indent": 0,
+          "structural_prefix": true
+        }
+      ],
+      "comment_regions": [
+        {
+          "id": "comment-region:preamble:1-1",
+          "owner_id": null,
+          "kind": "preamble",
+          "start_line": 1,
+          "end_line": 1,
+          "selection_key": "root:preamble"
+        },
+        {
+          "id": "comment-region:leading:3-3",
+          "owner_id": "following",
+          "kind": "leading",
+          "start_line": 3,
+          "end_line": 3,
+          "selection_key": "comment:following:leading"
+        }
+      ],
+      "layout_gaps": [
+        {
+          "id": "layout-gap:2-2",
+          "kind": "preamble",
+          "start_line": 2,
+          "end_line": 2,
+          "before_owner_id": null,
+          "after_owner_id": "following",
+          "controller_side": "after",
+          "controller_owner_id": "following",
+          "selection_key": "gap:preamble:root:following"
+        }
+      ],
+      "expected": [
+        {
+          "line_number": 1,
+          "line": "// Retiring owner.\n",
+          "kind": "root_region",
+          "owner_id": null,
+          "comment_region_ids": [
+            "comment-region:preamble:1-1"
+          ],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": "preamble",
+          "selection_key": "root:preamble"
+        },
+        {
+          "line_number": 2,
+          "line": "\n",
+          "kind": "layout_gap",
+          "owner_id": null,
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": "layout-gap:2-2",
+          "controller_owner_id": "following",
+          "root_region_kind": null,
+          "selection_key": "gap:preamble:root:following",
+          "after_owner_id": "following",
+          "before_owner_id": null
+        },
+        {
+          "line_number": 3,
+          "line": "/// Following owner.\n",
+          "kind": "comment_owner",
+          "owner_id": "following",
+          "comment_region_ids": [
+            "comment-region:leading:3-3"
+          ],
+          "comment_kind": "leading",
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null,
+          "selection_key": "comment:following:leading"
+        },
+        {
+          "line_number": 4,
+          "line": "fn following() {}\n",
+          "kind": "structural_owner",
+          "owner_id": "following",
+          "comment_region_ids": [],
+          "comment_kind": null,
+          "gap_id": null,
+          "controller_owner_id": null,
+          "root_region_kind": null,
+          "selection_key": "owner:following"
+        }
+      ]
+    }
+  ]
+}

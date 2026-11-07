@@ -157,7 +157,7 @@ fn merge3_retains_native_decisions_and_fresh_output_verification() {
 #[test]
 fn multi_declarator_edits_return_a_typed_whole_statement_conflict() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/typescript_merge3_multi_declarator.json"
+        "../../../fixtures/polyglot/typed-core/typescript_merge3_multi_declarator.json"
     ))
     .unwrap();
     let input = &fixture["input"];

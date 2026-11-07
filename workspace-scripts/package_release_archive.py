@@ -5,15 +5,15 @@ import argparse
 import gzip
 import io
 import os
-from pathlib import Path
 import tarfile
 import zipfile
-
+from pathlib import Path
 
 BINARIES = ("smorg", "smorg-rs")
 
 
 def source_epoch() -> int:
+    """Handle source epoch."""
     value = os.environ.get("SOURCE_DATE_EPOCH", "0")
     try:
         epoch = int(value)
@@ -25,6 +25,7 @@ def source_epoch() -> int:
 
 
 def collect_binaries(binary_dir: Path, windows: bool) -> list[Path]:
+    """Handle collect binaries."""
     suffix = ".exe" if windows else ""
     binaries = [binary_dir / f"{name}{suffix}" for name in BINARIES]
     missing = [str(path) for path in binaries if not path.is_file()]
@@ -34,6 +35,7 @@ def collect_binaries(binary_dir: Path, windows: bool) -> list[Path]:
 
 
 def package(version: str, platform: str, binary_dir: Path, output_dir: Path) -> Path:
+    """Package."""
     if version.startswith("v") or not version:
         raise ValueError("version must be non-empty and omit the leading v")
     if not platform or "/" in platform or "\\" in platform:
@@ -69,6 +71,7 @@ def package(version: str, platform: str, binary_dir: Path, output_dir: Path) -> 
 
 
 def main() -> int:
+    """Run the command line entry point."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True)
     parser.add_argument("--platform", required=True)

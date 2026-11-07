@@ -1,0 +1,19 @@
+{
+  "id": "rust_syn_divergent_crate_doc_edits",
+  "contract": "rust_syn_divergent_crate_doc_edits",
+  "description": "Different edits to the same pre-existing crate-level inner-doc region must fail closed as a merge conflict.",
+  "input": {
+    "base": "//! base crate docs\nfn stable() {}\n",
+    "ours": "//! ours crate docs\nfn stable() {}\n",
+    "theirs": "//! theirs crate docs\nfn stable() {}\n"
+  },
+  "expected": {
+    "outcome": "conflict",
+    "diagnostic_category": "merge_conflict",
+    "conflict_category": "unmanaged_source_change"
+  },
+  "ruby_native_expected": {
+    "outcome": "conflict",
+    "diagnostic_category": "merge_conflict"
+  }
+}

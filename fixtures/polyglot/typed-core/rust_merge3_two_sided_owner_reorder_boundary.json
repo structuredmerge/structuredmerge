@@ -1,0 +1,20 @@
+{
+  "id": "rust_merge3_two_sided_owner_reorder_boundary",
+  "contract": "rust_merge3_two_sided_owner_reorder_boundary",
+  "description": "When Rust tips impose a cyclic pairwise owner order, syn owner facts produce a portable full-file conflict with source regions for all three revisions.",
+  "input": {
+    "base": "fn a() {}\nfn b() {}\nfn c() {}\n",
+    "ours": "fn b() {}\nfn a() {}\nfn c() {}\n",
+    "theirs": "fn a() {}\nfn c() {}\nfn b() {}\n"
+  },
+  "expected": {
+    "outcome": "conflict",
+    "diagnostic_category": "merge_conflict",
+    "conflict_id": "rust-owner-order-divergence",
+    "path": "<owner-order>",
+    "ruby_native_expected": {
+      "outcome": "clean",
+      "output": "fn b() {}\nfn a() {}\nfn c() {}\n"
+    }
+  }
+}

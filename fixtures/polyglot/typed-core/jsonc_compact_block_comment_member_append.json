@@ -1,0 +1,17 @@
+{
+  "id": "jsonc_compact_block_comment_member_append",
+  "description": "Rust source-preserving JSONC output keeps an inline block comment attached to its member in a compact object while appending another member.",
+  "input": {
+    "dialect": "jsonc",
+    "incoming": "{\"config\":{\"keep\":9,\"add\":2}}",
+    "current": "{\"config\":{\"keep\":9 /* keep inline */}}"
+  },
+  "expected": {
+    "ok": true,
+    "output": "{\"config\":{\"keep\":9, /* keep inline */ \"add\":2}}"
+  },
+  "ruby_native_expected": {
+    "ok": true,
+    "output": "{\n  \"config\": {\n    \"keep\":9,\n    \"add\":2\n  }\n}\n"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "id": "rust_syn_parse_diagnostic_span",
+  "contract": "rust_syn_parse_diagnostic_span",
+  "description": "Native syn syntax diagnostics carry the exact source span of the offending token.",
+  "input": {
+    "source": "// λ\nfn broken() { let value = ; }\n"
+  },
+  "expected": {
+    "ok": false,
+    "diagnostic_category": "parse_error",
+    "blocking": true,
+    "diagnostic_byte_range": [
+      32,
+      33
+    ],
+    "diagnostic_text": ";",
+    "ruby_native_category": "parse_error",
+    "rust_tslp_category": "parse_error"
+  }
+}

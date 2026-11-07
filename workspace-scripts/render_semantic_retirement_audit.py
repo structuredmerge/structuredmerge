@@ -5,7 +5,6 @@ import argparse
 import json
 from pathlib import Path
 
-
 DISPOSITION_ACTIONS = {
     "local_consumer_migrated": "Candidate for explicit authority review; retain legacy regression evidence and do not delete yet.",
     "retain_until_consumer_migration": "Retain until every listed consumer is migrated and installed gates pass.",
@@ -14,6 +13,7 @@ DISPOSITION_ACTIONS = {
 
 
 def render(inventory: dict) -> str:
+    """Render."""
     groups = inventory["groups"]
     lines = [
         "# Semantic Retirement Audit",
@@ -29,28 +29,27 @@ def render(inventory: dict) -> str:
     ]
     for group in groups:
         disposition = group["disposition"]
-        action = DISPOSITION_ACTIONS.get(
-            disposition, "Stop and obtain an explicit disposition before changing code."
-        )
-        lines.append(
-            f"| `{group['id']}` | `{disposition}` | {len(group.get('consumers', []))} | {action} |"
-        )
+        action = DISPOSITION_ACTIONS.get(disposition, "Stop and obtain an explicit disposition before changing code.")
+        lines.append(f"| `{group['id']}` | `{disposition}` | {len(group.get('consumers', []))} | {action} |")
     lines.extend(["", "## Group review records", ""])
     for group in groups:
-        lines.extend([
-            f"### `{group['id']}`",
-            "",
-            f"- Methods: `{', '.join(group['methods'])}`",
-            f"- Consumers: {', '.join(f'`{consumer}`' for consumer in group.get('consumers', [])) or 'none recorded'}",
-            f"- Replacement: {group['replacement']}",
-            f"- Disposition: `{group['disposition']}`",
-            f"- Gap / gate: {group['gap']}",
-            "",
-        ])
+        lines.extend(
+            [
+                f"### `{group['id']}`",
+                "",
+                f"- Methods: `{', '.join(group['methods'])}`",
+                f"- Consumers: {', '.join(f'`{consumer}`' for consumer in group.get('consumers', [])) or 'none recorded'}",
+                f"- Replacement: {group['replacement']}",
+                f"- Disposition: `{group['disposition']}`",
+                f"- Gap / gate: {group['gap']}",
+                "",
+            ]
+        )
     return "\n".join(lines)
 
 
 def main() -> int:
+    """Run the command line entry point."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("inventory", type=Path)
     parser.add_argument("output", type=Path)

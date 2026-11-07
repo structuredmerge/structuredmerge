@@ -1,0 +1,31 @@
+{
+  "id": "rust_merge3_edge_additions_with_owner_removals",
+  "contract": "rust_merge3_edge_additions_with_owner_removals",
+  "description": "A documented file-edge owner addition composes with an independent opposite-edge owner deletion.",
+  "cases": [
+    {
+      "name": "leading addition with tail deletion",
+      "input": {
+        "base": "fn a() {}\nfn b() {}\n",
+        "ours": "/// ours docs\nfn ours() {}\nfn a() {}\nfn b() {}\n",
+        "theirs": "fn a() {}\n"
+      },
+      "expected": {
+        "outcome": "clean",
+        "output": "/// ours docs\nfn ours() {}\nfn a() {}\n"
+      }
+    },
+    {
+      "name": "trailing addition with head deletion",
+      "input": {
+        "base": "fn a() {}\nfn b() {}\n",
+        "ours": "fn a() {}\nfn b() {}\n/// ours docs\nfn ours() {}\n",
+        "theirs": "fn b() {}\n"
+      },
+      "expected": {
+        "outcome": "clean",
+        "output": "fn b() {}\n/// ours docs\nfn ours() {}\n"
+      }
+    }
+  ]
+}

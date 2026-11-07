@@ -4,7 +4,7 @@ use serde_json::Value;
 #[test]
 fn shared_unmanaged_source_membership_fixture_matches_ruby() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/ast-merge/bash_unmanaged_source_membership_conflict.json"
+        "../../../fixtures/polyglot/ast-merge/bash_unmanaged_source_membership_conflict.json"
     ))
     .unwrap();
     for case in fixture["cases"].as_array().unwrap() {

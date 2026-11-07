@@ -8,6 +8,9 @@ homepage = "https://structuredmerge.org"
 repository = "https://github.com/structuredmerge/structuredmerge"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -16,6 +19,3 @@ tree-sitter-language-pack = "1.17.0"
 
 [dev-dependencies]
 tempfile = "3"
-
-[lib]
-path = "src/lib.rs"

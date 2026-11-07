@@ -1,0 +1,259 @@
+{
+  "id": "ast_merge_source_line_selection",
+  "contract": "ast_merge_source_line_selection",
+  "description": "An explicit ordered selection of semantic line regions from source revisions renders exact bytes and provenance.",
+  "documents": [
+    {
+      "revision": "base",
+      "source": "# alpha base\nalpha base\n\n# beta base\nbeta base\n",
+      "owners": [
+        {
+          "id": "alpha",
+          "start_line": 2,
+          "end_line": 2
+        },
+        {
+          "id": "beta",
+          "start_line": 5,
+          "end_line": 5
+        }
+      ],
+      "comment_regions": [
+        {
+          "id": "comment-region:leading:1-1",
+          "selection_key": "comment:alpha:leading",
+          "owner_id": "alpha",
+          "kind": "leading",
+          "start_line": 1,
+          "end_line": 1
+        },
+        {
+          "id": "comment-region:leading:4-4",
+          "selection_key": "comment:beta:leading",
+          "owner_id": "beta",
+          "kind": "leading",
+          "start_line": 4,
+          "end_line": 4
+        }
+      ],
+      "comments": [
+        {
+          "line": 1,
+          "text": "# alpha base",
+          "normalized_content": "alpha base",
+          "full_line": true,
+          "indent": 0
+        },
+        {
+          "line": 4,
+          "text": "# beta base",
+          "normalized_content": "beta base",
+          "full_line": true,
+          "indent": 0
+        }
+      ],
+      "layout_gaps": [
+        {
+          "id": "layout-gap:3-3",
+          "selection_key": "gap:postlude:alpha:root",
+          "kind": "postlude",
+          "start_line": 3,
+          "end_line": 3,
+          "before_owner_id": "alpha",
+          "after_owner_id": null,
+          "controller_side": "before",
+          "controller_owner_id": "alpha"
+        }
+      ]
+    },
+    {
+      "revision": "ours",
+      "source": "# alpha ours\nalpha ours\n\n# beta ours\nbeta ours\n",
+      "owners": [
+        {
+          "id": "alpha",
+          "start_line": 2,
+          "end_line": 2
+        },
+        {
+          "id": "beta",
+          "start_line": 5,
+          "end_line": 5
+        }
+      ],
+      "comment_regions": [
+        {
+          "id": "comment-region:leading:1-1",
+          "selection_key": "comment:alpha:leading",
+          "owner_id": "alpha",
+          "kind": "leading",
+          "start_line": 1,
+          "end_line": 1
+        },
+        {
+          "id": "comment-region:leading:4-4",
+          "selection_key": "comment:beta:leading",
+          "owner_id": "beta",
+          "kind": "leading",
+          "start_line": 4,
+          "end_line": 4
+        }
+      ],
+      "comments": [
+        {
+          "line": 1,
+          "text": "# alpha ours",
+          "normalized_content": "alpha ours",
+          "full_line": true,
+          "indent": 0
+        },
+        {
+          "line": 4,
+          "text": "# beta ours",
+          "normalized_content": "beta ours",
+          "full_line": true,
+          "indent": 0
+        }
+      ],
+      "layout_gaps": [
+        {
+          "id": "layout-gap:3-3",
+          "selection_key": "gap:postlude:alpha:root",
+          "kind": "postlude",
+          "start_line": 3,
+          "end_line": 3,
+          "before_owner_id": "alpha",
+          "after_owner_id": null,
+          "controller_side": "before",
+          "controller_owner_id": "alpha"
+        }
+      ]
+    },
+    {
+      "revision": "theirs",
+      "source": "# alpha theirs\nalpha theirs\n\n# beta theirs\nbeta theirs\n",
+      "owners": [
+        {
+          "id": "alpha",
+          "start_line": 2,
+          "end_line": 2
+        },
+        {
+          "id": "beta",
+          "start_line": 5,
+          "end_line": 5
+        }
+      ],
+      "comment_regions": [
+        {
+          "id": "comment-region:leading:1-1",
+          "selection_key": "comment:alpha:leading",
+          "owner_id": "alpha",
+          "kind": "leading",
+          "start_line": 1,
+          "end_line": 1
+        },
+        {
+          "id": "comment-region:leading:4-4",
+          "selection_key": "comment:beta:leading",
+          "owner_id": "beta",
+          "kind": "leading",
+          "start_line": 4,
+          "end_line": 4
+        }
+      ],
+      "comments": [
+        {
+          "line": 1,
+          "text": "# alpha theirs",
+          "normalized_content": "alpha theirs",
+          "full_line": true,
+          "indent": 0
+        },
+        {
+          "line": 4,
+          "text": "# beta theirs",
+          "normalized_content": "beta theirs",
+          "full_line": true,
+          "indent": 0
+        }
+      ],
+      "layout_gaps": [
+        {
+          "id": "layout-gap:3-3",
+          "selection_key": "gap:postlude:alpha:root",
+          "kind": "postlude",
+          "start_line": 3,
+          "end_line": 3,
+          "before_owner_id": "alpha",
+          "after_owner_id": null,
+          "controller_side": "before",
+          "controller_owner_id": "alpha"
+        }
+      ]
+    }
+  ],
+  "selections": [
+    {
+      "selection_key": "comment:alpha:leading",
+      "revision": "ours"
+    },
+    {
+      "selection_key": "owner:alpha",
+      "revision": "ours"
+    },
+    {
+      "selection_key": "gap:postlude:alpha:root",
+      "revision": "ours"
+    },
+    {
+      "selection_key": "comment:beta:leading",
+      "revision": "theirs"
+    },
+    {
+      "selection_key": "owner:beta",
+      "revision": "theirs"
+    }
+  ],
+  "expected": {
+    "content": "# alpha ours\nalpha ours\n\n# beta theirs\nbeta theirs\n",
+    "line_records": [
+      {
+        "output_line": 1,
+        "revision": "ours",
+        "original_line": 1,
+        "selection_key": "comment:alpha:leading",
+        "disposition_kind": "comment_owner"
+      },
+      {
+        "output_line": 2,
+        "revision": "ours",
+        "original_line": 2,
+        "selection_key": "owner:alpha",
+        "disposition_kind": "structural_owner"
+      },
+      {
+        "output_line": 3,
+        "revision": "ours",
+        "original_line": 3,
+        "selection_key": "gap:postlude:alpha:root",
+        "disposition_kind": "layout_gap"
+      },
+      {
+        "output_line": 4,
+        "revision": "theirs",
+        "original_line": 4,
+        "selection_key": "comment:beta:leading",
+        "disposition_kind": "comment_owner"
+      },
+      {
+        "output_line": 5,
+        "revision": "theirs",
+        "original_line": 5,
+        "selection_key": "owner:beta",
+        "disposition_kind": "structural_owner"
+      }
+    ]
+  },
+  "baseline_revision": "ours"
+}

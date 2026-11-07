@@ -1,0 +1,14 @@
+{
+  "id": "rust_merge3_reorder_with_interior_addition",
+  "contract": "rust_merge3_reorder_with_interior_addition",
+  "description": "A one-sided reorder composes with a documented addition in an interior gap whose stable neighboring owners retain their relative order.",
+  "input": {
+    "base": "fn a() {}\nfn b() {}\nfn c() {}\nfn d() {}\n",
+    "ours": "fn b() {}\nfn a() {}\nfn c() {}\nfn d() {}\n",
+    "theirs": "fn a() {}\nfn b() {}\nfn c() {}\n/// Independent interior addition.\nfn x() {}\nfn d() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "fn b() {}\nfn a() {}\nfn c() {}\n/// Independent interior addition.\nfn x() {}\nfn d() {}\n"
+  }
+}

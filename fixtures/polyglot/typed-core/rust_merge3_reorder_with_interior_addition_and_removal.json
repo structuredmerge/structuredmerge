@@ -1,0 +1,18 @@
+{
+  "id": "rust_merge3_reorder_with_interior_addition_and_removal",
+  "contract": "rust_merge3_reorder_with_interior_addition_and_removal",
+  "description": "A one-sided reorder composes with an owner addition from the other tip and an independent deletion.",
+  "input": {
+    "base": "// docs a\nfn a() {}\n\n// docs b\nfn b() {}\n// docs c\nfn c() {}\n\n// docs d\nfn d() {}\n",
+    "ours": "// docs b\nfn b() {}\n// docs a\nfn a() {}\n// docs c\nfn c() {}\n\n",
+    "theirs": "// docs a\nfn a() {}\n\n// docs b\nfn b() {}\n// docs c\nfn c() {}\n// docs x\nfn x() {}\n// docs d\nfn d() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "// docs b\nfn b() {}\n// docs a\nfn a() {}\n// docs c\nfn c() {}\n// docs x\nfn x() {}\n"
+  },
+  "ruby_native_expected": {
+    "outcome": "render_failure",
+    "diagnostic_category": "render_failure"
+  }
+}

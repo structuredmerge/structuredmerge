@@ -1,0 +1,31 @@
+{
+  "id": "rust_merge3_two_tip_additions_empty_base",
+  "contract": "rust_merge3_two_tip_additions_empty_base",
+  "description": "Two independent additions from an ownerless base compose in ours-then-theirs order; unchanged syn-classified crate docs are emitted once.",
+  "cases": [
+    {
+      "name": "empty source",
+      "input": {
+        "base": "",
+        "ours": "// ours docs\nfn ours() {}\n",
+        "theirs": "// theirs docs\nfn theirs() {}\n"
+      },
+      "expected": {
+        "outcome": "clean",
+        "output": "// ours docs\nfn ours() {}\n// theirs docs\nfn theirs() {}\n"
+      }
+    },
+    {
+      "name": "comment-only base with syn crate docs",
+      "input": {
+        "base": "//! module note\n",
+        "ours": "//! module note\n// ours docs\nfn ours() {}\n",
+        "theirs": "//! module note\n// theirs docs\nfn theirs() {}\n"
+      },
+      "expected": {
+        "outcome": "clean",
+        "output": "//! module note\n// ours docs\nfn ours() {}\n// theirs docs\nfn theirs() {}\n"
+      }
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "id": "typescript_merge3_multi_declarator",
+  "category": "typescript_merge3",
+  "call": "typescript_common_merge3",
+  "description": "Independent edits to one variable in a multi-declarator statement fail closed as the native statement owner conflicts.",
+  "input": {
+    "base": "const first = 1, second = 2;\n",
+    "ours": "const first = 3, second = 2;\n",
+    "theirs": "const first = 1, second = 4;\n",
+    "dialect": "typescript"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "ok",
+      "value": false
+    }
+  ]
+}

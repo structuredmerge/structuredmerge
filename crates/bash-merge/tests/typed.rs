@@ -189,7 +189,7 @@ fn typed_bash_preserves_existing_family_semantics_and_verifies_noops() {
 #[test]
 fn typed_bash_merges_independent_inline_commented_assignments() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/bash_merge3_inline_comment_owner_edits.json"
+        "../../../fixtures/polyglot/typed-core/bash_merge3_inline_comment_owner_edits.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -215,7 +215,7 @@ fn typed_bash_merges_independent_inline_commented_assignments() {
 #[test]
 fn typed_bash_line_plan_orders_added_owners_from_selected_membership_layout() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/bash_merge3_added_owner_layout.json"
+        "../../../fixtures/polyglot/typed-core/bash_merge3_added_owner_layout.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -241,7 +241,7 @@ fn typed_bash_line_plan_orders_added_owners_from_selected_membership_layout() {
 #[test]
 fn typed_bash_line_plan_appends_independent_additions_from_both_tips() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/bash_merge3_additions_from_both_tips.json"
+        "../../../fixtures/polyglot/typed-core/bash_merge3_additions_from_both_tips.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -283,11 +283,11 @@ fn unsupported_or_ambiguous_bash_remains_rejected() {
 fn removed_owner_layout_fixtures_match_ruby_output() {
     let fixtures = [
         serde_json::from_str::<serde_json::Value>(include_str!(
-            "../../../../fixtures/polyglot/typed-core/bash_merge3_removed_owner_layout.json"
+            "../../../fixtures/polyglot/typed-core/bash_merge3_removed_owner_layout.json"
         ))
         .unwrap(),
         serde_json::from_str::<serde_json::Value>(include_str!(
-            "../../../../fixtures/polyglot/typed-core/bash_merge3_multiple_removed_owner_rehome.json"
+            "../../../fixtures/polyglot/typed-core/bash_merge3_multiple_removed_owner_rehome.json"
         ))
         .unwrap(),
     ];
@@ -363,7 +363,7 @@ fn failed_changed_output_never_exposes_clean_result_or_source_evidence() {
 #[test]
 fn shared_unmanaged_source_fixture_is_guarded_by_the_core_engine_callback() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/ast-merge/bash_unmanaged_source_membership_conflict.json"
+        "../../../fixtures/polyglot/ast-merge/bash_unmanaged_source_membership_conflict.json"
     ))
     .unwrap();
     let parser = Parser::new("bash");

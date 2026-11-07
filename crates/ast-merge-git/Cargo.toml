@@ -8,14 +8,14 @@ edition = "2024"
 description = "Git merge contracts for Structured Merge"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 ast-merge = { version = "0.2.1", path = "../ast-merge" }
 json-merge = { version = "0.2.1", path = "../json-merge" }
-tree-haver = { version = "0.2.1", path = "../tree-haver" }
 serde = { version = "1.0", features = ["derive"] }
+tree-haver = { version = "0.2.1", path = "../tree-haver" }
 
 [dev-dependencies]
 serde_json = "1.0"
-
-[lib]
-path = "src/lib.rs"

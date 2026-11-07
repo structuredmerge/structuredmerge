@@ -1,0 +1,13 @@
+{
+  "id": "jsonc_inline_comment_member_append",
+  "description": "Appending a member keeps a trailing inline comment attached to the existing member; native Ruby and the Rust host share this exact JSONC output contract.",
+  "input": {
+    "dialect": "jsonc",
+    "incoming": "{\n  \"config\": {\n    \"keep\": 9,\n    \"add\": 2\n  }\n}\n",
+    "current": "{\n  \"config\": {\n    \"keep\": 9 // keep inline\n  }\n}\n"
+  },
+  "expected": {
+    "ok": true,
+    "output": "{\n  \"config\": {\n    \"keep\": 9, // keep inline\n    \"add\": 2\n  }\n}\n"
+  }
+}

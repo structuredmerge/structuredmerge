@@ -1,0 +1,31 @@
+{
+  "id": "rust_merge3_delete_owner_trailing_block_comment_with_independent_edit",
+  "contract": "rust_merge3_delete_owner_trailing_block_comment_with_independent_edit",
+  "description": "A same-line trailing block comment belongs to its Rust item owner and is removed with that owner while an independent retained owner edit is selected.",
+  "input": {
+    "base": "fn removed() {} /* removed owner note */\n\nfn retained() { 1 }\n",
+    "ours": "fn retained() { 1 }\n",
+    "theirs": "fn removed() {} /* removed owner note */\n\nfn retained() { 2 }\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "fn retained() { 2 }\n"
+  },
+  "ruby_native_expected": {
+    "outcome": "conflict",
+    "diagnostic_category": "merge_conflict",
+    "conflict_category": "unmanaged_source_change"
+  },
+  "rust_host_expected": {
+    "rust_tslp": {
+      "outcome": "conflict",
+      "diagnostic_category": "merge_conflict",
+      "diagnostic_code": "rust.membership_with_owner_edit",
+      "conflict_category": "ownership"
+    },
+    "rust_syn": {
+      "outcome": "clean",
+      "output": "fn retained() { 2 }\n"
+    }
+  }
+}

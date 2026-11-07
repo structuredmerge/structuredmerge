@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Installed typed-core adapter for the retained Slice 1023 harness, not a harness."""
+
 import base64
 import hashlib
 import importlib.util
 import json
 import os
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
 
 import structuredmerge_core as core
 
@@ -17,11 +18,11 @@ if not Path(core.__file__).resolve().is_relative_to(Path(sys.prefix).resolve()):
 
 ROLES = {"merge2": ("incoming", "current"), "merge3": ("base", "ours", "theirs")}
 PARSERS = set()
-OWNER_DIALECTS = {"bash": ("bash",), "go": ("go",), "rust": ("rust",),
-                  "typescript": ("typescript", "tsx")}
+OWNER_DIALECTS = {"bash": ("bash",), "go": ("go",), "rust": ("rust",), "typescript": ("typescript", "tsx")}
 
 
 def execute(operation, family, dialect, texts, request_id):
+    """Handle execute."""
     json_family = family == "json" and dialect in ("json", "jsonc", "json5")
     owner_family = operation == "merge3" and dialect in OWNER_DIALECTS.get(family, ())
     python_family = family == "python" and dialect == "python"
@@ -46,42 +47,77 @@ def execute(operation, family, dialect, texts, request_id):
             core.register_language_pack_parser(backend, language)
         PARSERS.add(backend)
     sources = {}
-    for name, text in zip(ROLES[operation], texts):
+    for name, text in zip(ROLES[operation], texts, strict=False):
         role = getattr(core.SourceRole, name.upper())
         data = text.encode("utf-8")
-        sources[role] = core.OperationSource(source_id=name, role=role, encoding="utf-8",
-            content=text, byte_length=len(data), sha256=hashlib.sha256(data).hexdigest(), extra={})
+        sources[role] = core.OperationSource(
+            source_id=name,
+            role=role,
+            encoding="utf-8",
+            content=text,
+            byte_length=len(data),
+            sha256=hashlib.sha256(data).hexdigest(),
+            extra={},
+        )
     if operation == "merge2":
-        policy = core.OperationPolicy.from_merge2(core.DirectionalMergePolicy(
-            directional_merge="template-into-current", render_policy="source-preserving", extra={}))
+        policy = core.OperationPolicy.from_merge2(
+            core.DirectionalMergePolicy(
+                directional_merge="template-into-current", render_policy="source-preserving", extra={}
+            )
+        )
         provider, profile = "kernel.json", "kernel.json.nested.v1"
     else:
-        policy = core.OperationPolicy.from_merge3(core.ThreeWayMergePolicy(
-            render_policy="source-preserving", fallback_policy="none", extra={}))
+        policy = core.OperationPolicy.from_merge3(
+            core.ThreeWayMergePolicy(render_policy="source-preserving", fallback_policy="none", extra={})
+        )
         provider, profile = "kernel.git.json", "kernel.git.json.v1"
     if owner_family:
         provider, profile = "kernel." + family, "kernel." + family + ".owners.v1"
     if python_family:
         provider, profile = "kernel.python", "kernel.python.native_declarations.v1"
-    request = core.OperationRequest(schema="structuredmerge.operation-request/v1",
-        request_id=request_id, operation=policy, sources=sources,
-        provider_selection=core.MergeProviderSelection(provider_id=provider, family=family,
-            dialect=None if python_family else dialect, profile_id=profile, required_capabilities=[operation], extra={}),
-        parser_selection=core.OperationParserSelection(backend=backend, preference=[],
-            required_capabilities=[], extra={}), extensions=[], metadata={}, extra={})
-    result = core.execute_operation(request, core.ParseLimits(max_batch_items=3,
-        max_input_bytes=16 * 1024 * 1024, max_nodes=1000000, max_diagnostics=1000))
+    request = core.OperationRequest(
+        schema="structuredmerge.operation-request/v1",
+        request_id=request_id,
+        operation=policy,
+        sources=sources,
+        provider_selection=core.MergeProviderSelection(
+            provider_id=provider,
+            family=family,
+            dialect=None if python_family else dialect,
+            profile_id=profile,
+            required_capabilities=[operation],
+            extra={},
+        ),
+        parser_selection=core.OperationParserSelection(
+            backend=backend, preference=[], required_capabilities=[], extra={}
+        ),
+        extensions=[],
+        metadata={},
+        extra={},
+    )
+    result = core.execute_operation(
+        request,
+        core.ParseLimits(max_batch_items=3, max_input_bytes=16 * 1024 * 1024, max_nodes=1000000, max_diagnostics=1000),
+    )
     status = 0 if result.ok else (1 if result.conflicts else 2)
     output = result.output if result.ok else result.conflicted_output
-    diagnostics = [{"category": str(item.canonical.category), "code": item.canonical.code, "message": item.canonical.message}
-                   for item in result.diagnostics]
-    summary = {"ok": result.ok, "provider_id": result.provider.provider_id,
-               "profile_id": result.profile.profile_id, "conflict_count": len(result.conflicts),
-               "diagnostics": diagnostics, "output": output}
+    diagnostics = [
+        {"category": str(item.canonical.category), "code": item.canonical.code, "message": item.canonical.message}
+        for item in result.diagnostics
+    ]
+    summary = {
+        "ok": result.ok,
+        "provider_id": result.provider.provider_id,
+        "profile_id": result.profile.profile_id,
+        "conflict_count": len(result.conflicts),
+        "diagnostics": diagnostics,
+        "output": output,
+    }
     return status, output, summary
 
 
 def serve():
+    """Serve."""
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -94,23 +130,30 @@ def serve():
             if request["schema_version"] != "structuredmerge.benchmark.adapter-request/v1":
                 raise ValueError("unsupported adapter schema")
             operation = request["operation"]
-            texts = [base64.b64decode(request["sources"][role], validate=True).decode("utf-8")
-                     for role in ROLES[operation]]
+            texts = [
+                base64.b64decode(request["sources"][role], validate=True).decode("utf-8") for role in ROLES[operation]
+            ]
             selector = request["selector"]
             status, output, result = execute(operation, selector["family"], selector["dialect"], texts, request_id)
             stderr = ""
         except (ValueError, KeyError, TypeError, RuntimeError) as error:
             status, output, result, stderr = 2, None, {}, str(error)
-        response = {"schema_version": "structuredmerge.benchmark.adapter-response/v1",
-            "request_id": request_id, "process_id": os.getpid(), "status": status,
+        response = {
+            "schema_version": "structuredmerge.benchmark.adapter-response/v1",
+            "request_id": request_id,
+            "process_id": os.getpid(),
+            "status": status,
             "operation": operation,
             "duration_ns": time.monotonic_ns() - started,
             "output_base64": base64.b64encode((output or "").encode("utf-8")).decode("ascii"),
-            "result": result, "stderr": stderr}
+            "result": result,
+            "stderr": stderr,
+        }
         print(json.dumps(response), flush=True)
 
 
 def main(args):
+    """Run the command line entry point."""
     if args == ["benchmark-provider-session"]:
         serve()
         return 0
@@ -121,9 +164,14 @@ def main(args):
         raise ValueError("expected incoming current path or base ours theirs path marker-size")
     if operation == "merge3" and paths[4] != "7":
         raise ValueError("unsupported conflict marker size")
-    texts = [Path(path).read_bytes().decode("utf-8") for path in paths[:len(ROLES[operation])]]
-    status, output, result = execute(operation, os.environ.get("AST_MERGE_FAMILY"),
-        os.environ.get("AST_MERGE_DIALECT"), texts, "benchmark.cold." + operation)
+    texts = [Path(path).read_bytes().decode("utf-8") for path in paths[: len(ROLES[operation])]]
+    status, output, result = execute(
+        operation,
+        os.environ.get("AST_MERGE_FAMILY"),
+        os.environ.get("AST_MERGE_DIALECT"),
+        texts,
+        "benchmark.cold." + operation,
+    )
     if operation == "merge2":
         print(json.dumps(result))
     elif output is not None:

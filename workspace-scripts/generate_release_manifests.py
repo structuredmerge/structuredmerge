@@ -6,7 +6,6 @@ import hashlib
 import json
 from pathlib import Path
 
-
 PLATFORMS = {
     "linux-x86_64": ("linux", "x86_64"),
     "linux-aarch64": ("linux", "aarch64"),
@@ -18,6 +17,7 @@ PLATFORMS = {
 
 
 def digest(path: Path) -> str:
+    """Calculate."""
     hasher = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -26,6 +26,7 @@ def digest(path: Path) -> str:
 
 
 def collect_assets(asset_dir: Path, version: str) -> dict[str, dict[str, str]]:
+    """Handle collect assets."""
     assets: dict[str, dict[str, str]] = {}
     for platform in PLATFORMS:
         prefix = f"smorg-{version}-{platform}"
@@ -40,6 +41,7 @@ def collect_assets(asset_dir: Path, version: str) -> dict[str, dict[str, str]]:
 
 
 def render_homebrew(version: str, assets: dict[str, dict[str, str]]) -> str:
+    """Render homebrew."""
     lines = [
         "class Smorg < Formula",
         '  desc "StructuredMerge typed merge and diff CLI"',
@@ -77,6 +79,7 @@ def render_homebrew(version: str, assets: dict[str, dict[str, str]]) -> str:
 
 
 def render_scoop(version: str, assets: dict[str, dict[str, str]]) -> str:
+    """Render scoop."""
     architecture = {
         "64bit": assets["windows-x86_64"],
         "arm64": assets["windows-arm64"],
@@ -101,16 +104,16 @@ def render_scoop(version: str, assets: dict[str, dict[str, str]]) -> str:
 
 
 def generate_manifests(version: str, asset_dir: Path, output_dir: Path) -> None:
+    """Generate manifests."""
     assets = collect_assets(asset_dir, version)
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "smorg.rb").write_text(render_homebrew(version, assets))
     (output_dir / "smorg.json").write_text(render_scoop(version, assets))
-    (output_dir / "smorg-assets.json").write_text(
-        json.dumps({"version": version, "assets": assets}, indent=2) + "\n"
-    )
+    (output_dir / "smorg-assets.json").write_text(json.dumps({"version": version, "assets": assets}, indent=2) + "\n")
 
 
 def main() -> int:
+    """Run the command line entry point."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True)
     parser.add_argument("--asset-dir", type=Path, required=True)

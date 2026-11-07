@@ -8,9 +8,9 @@ class ParserPromotionEvidenceTest(unittest.TestCase):
     def test_matrix_covers_all_candidates_and_keeps_defaults_closed(self):
         text = self.path.read_text()
         for candidate in ("ruby-prism", "oxc_parser", "swc_ecma_parser", "saphyr", "taplo", "comrak"):
-            self.assertIn(f"`{candidate}`", text)
-        self.assertEqual(text.count("Deferred; no promotion"), 6)
-        self.assertIn("must remain out of the kernel", text)
+            assert f"`{candidate}`" in text
+        assert text.count("Deferred; no promotion") == 6
+        assert "must remain out of the kernel" in text
 
 
 if __name__ == "__main__":

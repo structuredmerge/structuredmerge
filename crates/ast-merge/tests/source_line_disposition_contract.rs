@@ -45,7 +45,7 @@ fn source_lines(source: &str) -> Vec<String> {
 #[test]
 fn shared_source_line_disposition_fixture_matches_common_contract() {
     let fixture: Fixture = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/ast-merge/source_line_disposition.json"
+        "../../../fixtures/polyglot/ast-merge/source_line_disposition.json"
     ))
     .expect("shared source line disposition fixture is valid");
     for case in fixture.cases {

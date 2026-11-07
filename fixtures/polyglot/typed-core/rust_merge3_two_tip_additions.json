@@ -1,0 +1,14 @@
+{
+  "id": "rust_merge3_two_tip_additions",
+  "contract": "rust_merge3_two_tip_additions",
+  "description": "Independent declaration additions from both tips retain ours order, then append theirs-only owners with attached comments.",
+  "input": {
+    "base": "fn base() { 0 }\n",
+    "ours": "fn base() { 0 }\n\n// ours docs\nfn ours() { 1 }\n",
+    "theirs": "fn base() { 0 }\n\n// theirs docs\nfn theirs() { 2 }\n"
+  },
+  "expected": {
+    "ok": true,
+    "output": "fn base() { 0 }\n\n// ours docs\nfn ours() { 1 }\n// theirs docs\nfn theirs() { 2 }\n"
+  }
+}

@@ -145,7 +145,7 @@ fn bash_conflicts_and_failures_do_not_invent_outputs_or_capabilities() {
 #[test]
 fn bash_analyze_and_diff_reject_unsafe_owner_ranges() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/bash_analysis_unsafe_source_range.json"
+        "../../../fixtures/polyglot/typed-core/bash_analysis_unsafe_source_range.json"
     ))
     .unwrap();
     let source = fixture["input"]["source"].as_str().unwrap();
@@ -169,7 +169,7 @@ fn bash_analyze_and_diff_reject_unsafe_owner_ranges() {
 #[test]
 fn bash_merge3_accepts_parser_owned_inline_comments() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/bash_merge3_inline_comment_owner_edits.json"
+        "../../../fixtures/polyglot/typed-core/bash_merge3_inline_comment_owner_edits.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -189,7 +189,7 @@ fn bash_merge3_accepts_parser_owned_inline_comments() {
 #[test]
 fn bash_merge3_promotes_inline_comment_from_removed_owner_with_source_evidence() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/bash_merge3_inline_comment_owner_deletion.json"
+        "../../../fixtures/polyglot/typed-core/bash_merge3_inline_comment_owner_deletion.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -224,7 +224,7 @@ fn bash_merge3_promotes_inline_comment_from_removed_owner_with_source_evidence()
 #[test]
 fn bash_merge3_promotes_inline_comment_from_removed_owner_in_crlf_source() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/bash_merge3_inline_comment_owner_deletion.json"
+        "../../../fixtures/polyglot/typed-core/bash_merge3_inline_comment_owner_deletion.json"
     ))
     .unwrap();
     let input = &fixture["input"];

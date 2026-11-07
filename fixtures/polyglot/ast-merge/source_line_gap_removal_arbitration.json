@@ -1,0 +1,165 @@
+{
+  "id": "ast_merge_source_line_gap_removal_arbitration",
+  "contract": "ast_merge_source_line_gap_removal_arbitration",
+  "description": "When deleting an owner collapses adjacent source gaps onto one surviving boundary, retain one gap. A gap before the deleted owner comment is controlled by the surviving preceding owner; a gap after the owner is controlled by the surviving following owner. The preceding controller wins the collapsed boundary.",
+  "baseline_revision": "ours",
+  "documents": [
+    {
+      "revision": "ours",
+      "source": "fn before() {}\n\n// removed docs\nfn removed() {}\n\n\nfn after() {}\n",
+      "owners": [
+        {
+          "id": "before",
+          "start_line": 1,
+          "end_line": 1
+        },
+        {
+          "id": "removed",
+          "start_line": 4,
+          "end_line": 4
+        },
+        {
+          "id": "after",
+          "start_line": 7,
+          "end_line": 7
+        }
+      ],
+      "comment_regions": [
+        {
+          "id": "comment-region:leading:3-3",
+          "selection_key": "comment:removed:leading",
+          "owner_id": "removed",
+          "kind": "leading",
+          "start_line": 3,
+          "end_line": 3
+        }
+      ],
+      "layout_gaps": [
+        {
+          "id": "gap-before-removed",
+          "selection_key": "gap:interstitial:before:removed",
+          "kind": "interstitial",
+          "start_line": 2,
+          "end_line": 2,
+          "before_owner_id": "before",
+          "after_owner_id": "removed",
+          "controller_side": "before",
+          "controller_owner_id": "before"
+        },
+        {
+          "id": "gap-removed-after",
+          "selection_key": "gap:interstitial:removed:after",
+          "kind": "interstitial",
+          "start_line": 5,
+          "end_line": 6,
+          "before_owner_id": "removed",
+          "after_owner_id": "after",
+          "controller_side": "after",
+          "controller_owner_id": "after"
+        }
+      ]
+    },
+    {
+      "revision": "theirs",
+      "source": "fn before() {}\n\n// removed docs\nfn removed() {}\n\n\nfn after() {}\n",
+      "owners": [
+        {
+          "id": "before",
+          "start_line": 1,
+          "end_line": 1
+        },
+        {
+          "id": "removed",
+          "start_line": 4,
+          "end_line": 4
+        },
+        {
+          "id": "after",
+          "start_line": 7,
+          "end_line": 7
+        }
+      ],
+      "comment_regions": [
+        {
+          "id": "comment-region:leading:3-3",
+          "selection_key": "comment:removed:leading",
+          "owner_id": "removed",
+          "kind": "leading",
+          "start_line": 3,
+          "end_line": 3
+        }
+      ],
+      "layout_gaps": [
+        {
+          "id": "gap-before-removed",
+          "selection_key": "gap:interstitial:before:removed",
+          "kind": "interstitial",
+          "start_line": 2,
+          "end_line": 2,
+          "before_owner_id": "before",
+          "after_owner_id": "removed",
+          "controller_side": "before",
+          "controller_owner_id": "before"
+        },
+        {
+          "id": "gap-removed-after",
+          "selection_key": "gap:interstitial:removed:after",
+          "kind": "interstitial",
+          "start_line": 5,
+          "end_line": 6,
+          "before_owner_id": "removed",
+          "after_owner_id": "after",
+          "controller_side": "after",
+          "controller_owner_id": "after"
+        }
+      ]
+    }
+  ],
+  "owner_revisions": [
+    {
+      "owner_id": "before",
+      "revision": "ours"
+    },
+    {
+      "owner_id": "after",
+      "revision": "theirs"
+    }
+  ],
+  "deleted_owner_ids": [
+    "removed"
+  ],
+  "expected": {
+    "selections": [
+      {
+        "selection_key": "owner:before",
+        "revision": "ours"
+      },
+      {
+        "selection_key": "gap:interstitial:before:removed",
+        "revision": "ours"
+      },
+      {
+        "selection_key": "owner:after",
+        "revision": "theirs"
+      }
+    ],
+    "content": "fn before() {}\n\nfn after() {}\n",
+    "retained_gap_key": "gap:interstitial:before:removed",
+    "collapsed_boundary": {
+      "before_owner_id": "before",
+      "after_owner_id": "after"
+    },
+    "gap_controllers_after_deletion": [
+      {
+        "selection_key": "gap:interstitial:before:removed",
+        "controller_owner_id": "before",
+        "priority": 0
+      },
+      {
+        "selection_key": "gap:interstitial:removed:after",
+        "controller_owner_id": "after",
+        "priority": 1
+      }
+    ]
+  }
+}

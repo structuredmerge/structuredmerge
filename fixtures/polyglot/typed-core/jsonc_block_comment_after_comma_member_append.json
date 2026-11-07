@@ -1,0 +1,17 @@
+{
+  "id": "jsonc_block_comment_after_comma_member_append",
+  "description": "An existing comma after a trailing block comment is normalized before that comment so the comment remains attached to its member when appending another member.",
+  "input": {
+    "dialect": "jsonc",
+    "incoming": "{\n  \"config\": {\n    \"keep\": 9,\n    \"add\": 2\n  }\n}\n",
+    "current": "{\n  \"config\": {\n    \"keep\": 9 /* keep inline */,\n  }\n}\n"
+  },
+  "expected": {
+    "ok": true,
+    "output": "{\n  \"config\": {\n    \"keep\": 9, /* keep inline */\n    \"add\": 2\n  }\n}\n"
+  },
+  "ruby_native_expected": {
+    "ok": true,
+    "output": "{\n  \"config\": {\n    \"keep\": 9,\n    \"add\": 2\n  }\n}\n"
+  }
+}

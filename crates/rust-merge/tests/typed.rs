@@ -154,7 +154,7 @@ fn clean_merge_selects_root_module_docs_from_the_selected_revision() {
 #[test]
 fn clean_merge_selects_independent_owner_additions_from_both_tips() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions.json"
+        "../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -176,7 +176,7 @@ fn clean_merge_selects_independent_owner_additions_from_both_tips() {
 #[test]
 fn two_tip_additions_in_the_same_internal_gap_follow_native_owner_order() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions_same_internal_gap.json"
+        "../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions_same_internal_gap.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -206,7 +206,7 @@ fn two_tip_additions_in_the_same_internal_gap_follow_native_owner_order() {
 #[test]
 fn two_tip_additions_in_preamble_and_postlude_gaps_keep_source_positions() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions_file_edges.json"
+        "../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions_file_edges.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -231,7 +231,7 @@ fn two_tip_additions_in_preamble_and_postlude_gaps_keep_source_positions() {
 #[test]
 fn same_gap_preamble_additions_follow_ours_then_theirs_with_blank_lines() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions_same_preamble_gap.json"
+        "../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions_same_preamble_gap.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -256,7 +256,7 @@ fn same_gap_preamble_additions_follow_ours_then_theirs_with_blank_lines() {
 #[test]
 fn keeps_syn_crate_doc_region_when_composing_a_preamble_addition() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/rust_merge3_addition_with_crate_docs.json"
+        "../../../fixtures/polyglot/typed-core/rust_merge3_addition_with_crate_docs.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -281,7 +281,7 @@ fn keeps_syn_crate_doc_region_when_composing_a_preamble_addition() {
 #[test]
 fn composes_two_tip_additions_from_an_empty_or_comment_only_base() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions_empty_base.json"
+        "../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions_empty_base.json"
     ))
     .unwrap();
     let parser = Parser::new("rust");
@@ -434,7 +434,7 @@ fn native_analysis_retains_all_supported_declaration_kinds_and_exact_references(
 #[test]
 fn native_owner_prefix_projection_matches_shared_fixture() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/ast-merge/native_owner_prefix_ownership.json"
+        "../../../fixtures/polyglot/ast-merge/native_owner_prefix_ownership.json"
     ))
     .unwrap();
     let parser = Parser::new("rust");
@@ -634,7 +634,7 @@ fn output_identity_bytes_backend_and_parse_service_failure_cannot_claim_success(
 #[test]
 fn two_tip_owner_removals_use_shared_line_selection() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_owner_removals.json"
+        "../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_owner_removals.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -664,7 +664,7 @@ fn two_tip_owner_removals_use_shared_line_selection() {
 #[test]
 fn two_tip_additions_at_distinct_source_gaps_follow_native_owner_order() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions_distinct_source_gaps.json"
+        "../../../fixtures/polyglot/typed-core/rust_merge3_two_tip_additions_distinct_source_gaps.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -694,7 +694,7 @@ fn two_tip_additions_at_distinct_source_gaps_follow_native_owner_order() {
 #[test]
 fn deleted_rust_owner_takes_its_inline_trailing_comment_with_it() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/rust_merge3_delete_owner_trailing_comment_with_independent_edit.json"
+        "../../../fixtures/polyglot/typed-core/rust_merge3_delete_owner_trailing_comment_with_independent_edit.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -713,7 +713,7 @@ fn deleted_rust_owner_takes_its_inline_trailing_comment_with_it() {
 #[test]
 fn deleted_rust_owner_takes_its_trailing_block_comment_with_it() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/rust_merge3_delete_owner_trailing_block_comment_with_independent_edit.json"
+        "../../../fixtures/polyglot/typed-core/rust_merge3_delete_owner_trailing_block_comment_with_independent_edit.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -732,7 +732,7 @@ fn deleted_rust_owner_takes_its_trailing_block_comment_with_it() {
 #[test]
 fn deleted_rust_owner_takes_its_multiline_trailing_block_comment_with_it() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/rust_merge3_delete_owner_multiline_trailing_block_comment_with_independent_edit.json"
+        "../../../fixtures/polyglot/typed-core/rust_merge3_delete_owner_multiline_trailing_block_comment_with_independent_edit.json"
     ))
     .unwrap();
     let input = &fixture["input"];

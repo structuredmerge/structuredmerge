@@ -1,0 +1,14 @@
+{
+  "id": "rust_merge3_two_tip_additions_file_edges",
+  "contract": "rust_merge3_two_tip_additions_file_edges",
+  "description": "Two-tip additions in the preamble and postlude gaps preserve source order and each added owner's leading comment.",
+  "input": {
+    "base": "fn alpha() {}\n",
+    "ours": "// lead\nfn start() {}\nfn alpha() {}\n",
+    "theirs": "fn alpha() {}\n// tail\nfn finish() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "// lead\nfn start() {}\nfn alpha() {}\n// tail\nfn finish() {}\n"
+  }
+}

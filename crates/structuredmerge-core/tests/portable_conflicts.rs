@@ -13,7 +13,7 @@ use structuredmerge_core::{
 };
 
 fn fixture() -> Value {
-    serde_json::from_str(include_str!("../../../../fixtures/diagnostics/slice-1028-stable-diagnostic-conflict-serialization/contract.json")).unwrap()
+    serde_json::from_str(include_str!("../../../fixtures/diagnostics/slice-1028-stable-diagnostic-conflict-serialization/contract.json")).unwrap()
 }
 fn conflict(index: usize) -> PortableConflict {
     serde_json::from_value(fixture()["conflict_examples"][index]["conflicts"][0].clone()).unwrap()
@@ -214,7 +214,10 @@ fn unknown_fields_and_extensions_survive_forwarding_at_each_evidence_layer() {
 }
 
 fn operation_case(index: usize) -> (ValidatedOperationRequest, OperationResult) {
-    let old: Value = serde_json::from_str(include_str!("../../../../fixtures/diagnostics/slice-1025-versioned-merge-operation-envelopes/contract.json")).unwrap();
+    let old: Value = serde_json::from_str(include_str!(
+        "../../../fixtures/diagnostics/slice-1025-versioned-merge-operation-envelopes/contract.json"
+    ))
+    .unwrap();
     let fixture = fixture();
     let case = &fixture["conflict_examples"][index];
     let mut request = old["operations"][3]["request"].clone();

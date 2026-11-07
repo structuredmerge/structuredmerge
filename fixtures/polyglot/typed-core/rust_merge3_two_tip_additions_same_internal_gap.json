@@ -1,0 +1,14 @@
+{
+  "id": "rust_merge3_two_tip_additions_same_internal_gap",
+  "contract": "rust_merge3_two_tip_additions_same_internal_gap",
+  "description": "When both tips add owners in the same bounded source gap, compose them in ours-then-theirs order and preserve their comments and one blank separator between each owner.",
+  "input": {
+    "base": "fn alpha() {}\n\nfn beta() {}\n",
+    "ours": "fn alpha() {}\n\n// ours docs\nfn ours() {}\n\nfn beta() {}\n",
+    "theirs": "fn alpha() {}\n\n// theirs docs\nfn theirs() {}\n\nfn beta() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "fn alpha() {}\n\n// ours docs\nfn ours() {}\n\n// theirs docs\nfn theirs() {}\n\nfn beta() {}\n"
+  }
+}

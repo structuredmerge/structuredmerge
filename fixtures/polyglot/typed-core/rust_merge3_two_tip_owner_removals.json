@@ -1,0 +1,15 @@
+{
+  "id": "rust_merge3_two_tip_owner_removals",
+  "contract": "rust_merge3_two_tip_owner_removals",
+  "description": "Two tips delete different owners while preserving an unchanged middle owner; source comments and blank-line control follow the shared line-ownership rubric.",
+  "input": {
+    "base": "// left\nfn left() {}\n\n// middle\nfn middle() {}\n\n// right\nfn right() {}\n",
+    "ours": "// middle\nfn middle() {}\n\n// right\nfn right() {}\n",
+    "theirs": "// left\nfn left() {}\n\n// middle\nfn middle() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "// middle\nfn middle() {}\n\n",
+    "surviving_owner_path": "/function:middle"
+  }
+}

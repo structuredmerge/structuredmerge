@@ -172,7 +172,7 @@ fn merge3_preserves_native_decisions_and_verifies_every_clean_output() {
 #[test]
 fn conflict_preview_localizes_the_go_owner_and_keeps_its_leading_comment() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/go_merge3_conflict.json"
+        "../../../fixtures/polyglot/typed-core/go_merge3_conflict.json"
     ))
     .unwrap();
     let input = &fixture["input"];
@@ -194,7 +194,7 @@ fn conflict_preview_localizes_the_go_owner_and_keeps_its_leading_comment() {
 #[test]
 fn owner_deletion_with_independent_edit_merges_cleanly_through_line_selection() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/go_merge3_membership_edit_conflict.json"
+        "../../../fixtures/polyglot/typed-core/go_merge3_membership_edit_conflict.json"
     ))
     .unwrap();
     let input = &fixture["input"];

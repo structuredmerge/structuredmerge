@@ -1,0 +1,16 @@
+{
+  "id": "bash_merge3_inline_comment_owner_edits",
+  "contract": "bash_merge3_inline_comment_owner_edits",
+  "description": "Independent Bash assignment edits keep each same-line hash comment with its owner through merge3.",
+  "input": {
+    "base": "x=1 # x docs\ny=1 # y docs\nf() { :; }\n",
+    "ours": "x=2 # x docs\ny=1 # y docs\nf() { :; }\n",
+    "theirs": "x=1 # x docs\ny=2 # y docs\nf() { :; }\n"
+  },
+  "expected": {
+    "ok": true,
+    "output": "x=2 # x docs\ny=2 # y docs\nf() { :; }\n",
+    "ruby_native_ok": false,
+    "ruby_native_category": "unsafe_source_range"
+  }
+}

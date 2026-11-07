@@ -1,0 +1,31 @@
+{
+  "id": "bash_analysis_unsafe_source_range",
+  "category": "bash_common_analyze",
+  "call": "bash_common_analyze",
+  "description": "Inline comment bytes outside a Bash owner span reject analysis with a stable unsafe-source-range diagnostic.",
+  "input": {
+    "source": "x=1 # inline docs\ny=1\n"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "ok",
+      "value": false
+    },
+    {
+      "type": "equals",
+      "field": "analysis",
+      "value": null
+    },
+    {
+      "type": "count_equals",
+      "field": "diagnostics",
+      "value": 1
+    }
+  ],
+  "expected": {
+    "diagnostic_category": "unsafe_source_range",
+    "diagnostic_code": "source.unsafe_range",
+    "diagnostic_message": "source parse error: unsafe declaration range [:variable_assignment, \"x\"]"
+  }
+}

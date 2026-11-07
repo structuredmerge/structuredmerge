@@ -8,6 +8,10 @@ edition = "2024"
 description = "TOML merge helpers for Structured Merge"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
+[lib]
+name = "toml_merge"
+path = "src/lib.rs"
+
 [dependencies]
 ast-merge = { version = "0.2.1", path = "../ast-merge" }
 serde = { version = "1", features = ["derive"] }
@@ -15,7 +19,3 @@ tree-haver = { version = "0.2.1", path = "../tree-haver" }
 
 [dev-dependencies]
 serde_json = "1"
-
-[lib]
-name = "toml_merge"
-path = "src/lib.rs"

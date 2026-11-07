@@ -1,0 +1,33 @@
+{
+  "id": "rust_merge3_conflict",
+  "category": "rust_common_merge3",
+  "call": "rust_common_merge3",
+  "description": "Shared typed Rust merge3: merge3_conflict",
+  "input": {
+    "base": "use std::fmt;\n// é\nfn f() -> i32 { 1 }\nfn g() -> i32 { 1 }\n",
+    "ours": "use std::fmt;\n// é\nfn f() -> i32 { 2 }\nfn g() -> i32 { 1 }\n",
+    "theirs": "use std::fmt;\n// é\nfn f() -> i32 { 3 }\nfn g() -> i32 { 1 }\n"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "ok",
+      "value": false
+    },
+    {
+      "type": "equals",
+      "field": "output",
+      "value": null
+    },
+    {
+      "type": "count_equals",
+      "field": "conflicts",
+      "value": 1
+    }
+  ],
+  "expected_conflicted_output": {
+    "ruby_native": "<<<<<<< ours\nuse std::fmt;\n// é\nfn f() -> i32 { 2 }\nfn g() -> i32 { 1 }\n||||||| base\nuse std::fmt;\n// é\nfn f() -> i32 { 1 }\nfn g() -> i32 { 1 }\n=======\nuse std::fmt;\n// é\nfn f() -> i32 { 3 }\nfn g() -> i32 { 1 }\n>>>>>>> theirs\n",
+    "rust_tslp": "use std::fmt;\n<<<<<<< ours\n// é\nfn f() -> i32 { 2 }\n||||||| base\n// é\nfn f() -> i32 { 1 }\n=======\n// é\nfn f() -> i32 { 3 }\n>>>>>>> theirs\nfn g() -> i32 { 1 }\n",
+    "rust_syn": "use std::fmt;\n<<<<<<< ours\n// é\nfn f() -> i32 { 2 }\n||||||| base\n// é\nfn f() -> i32 { 1 }\n=======\n// é\nfn f() -> i32 { 3 }\n>>>>>>> theirs\nfn g() -> i32 { 1 }\n"
+  }
+}

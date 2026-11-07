@@ -1,0 +1,18 @@
+{
+  "id": "rust_merge3_enum_doc_attributes_with_independent_function_edit",
+  "contract": "rust_merge3_enum_doc_attributes_with_independent_function_edit",
+  "description": "A documented enum variant addition composes with an independent function edit while preserving item and variant documentation attributes.",
+  "input": {
+    "base": "/// State for the worker.\n#[non_exhaustive]\nenum State {\n    /// Ready to work.\n    Ready,\n    Waiting,\n}\n\nfn helper() -> usize { 1 }\n",
+    "ours": "/// State for the worker.\n#[non_exhaustive]\nenum State {\n    /// Ready to work.\n    Ready,\n    /// Actively working.\n    Running,\n    Waiting,\n}\n\nfn helper() -> usize { 1 }\n",
+    "theirs": "/// State for the worker.\n#[non_exhaustive]\nenum State {\n    /// Ready to work.\n    Ready,\n    Waiting,\n}\n\nfn helper() -> usize { 2 }\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "/// State for the worker.\n#[non_exhaustive]\nenum State {\n    /// Ready to work.\n    Ready,\n    /// Actively working.\n    Running,\n    Waiting,\n}\n\nfn helper() -> usize { 2 }\n"
+  },
+  "ruby_native_expected": {
+    "outcome": "clean",
+    "output": "/// State for the worker.\n#[non_exhaustive]\nenum State {\n    /// Ready to work.\n    Ready,\n    /// Actively working.\n    Running,\n    Waiting,\n}\n\nfn helper() -> usize { 2 }\n"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "rust_trait_alias_merge3",
+  "contract": "rust_trait_alias_merge3",
+  "description": "Native syn accepts an unstable Rust trait alias and supplies its item/doc-attribute facts; source comments and the blank gap remain governed by shared line ownership while independent alias and function edits merge.",
+  "input": {
+    "base": "// Alias owner comment\npub trait Sendable = Send + Sync; // Alias trailing comment\n\n/// Stable function contract.\nfn stable() -> i32 { 1 }\n",
+    "ours": "// Alias owner comment\npub trait Sendable = Send + Sync + 'static; // Alias trailing comment\n\n/// Stable function contract.\nfn stable() -> i32 { 1 }\n",
+    "theirs": "// Alias owner comment\npub trait Sendable = Send + Sync; // Alias trailing comment\n\n/// Stable function contract.\nfn stable() -> i32 { 2 }\n"
+  },
+  "expected": {
+    "output": "// Alias owner comment\npub trait Sendable = Send + Sync + 'static; // Alias trailing comment\n\n/// Stable function contract.\nfn stable() -> i32 { 2 }\n",
+    "trait_alias_path": "/trait_alias:Sendable",
+    "ruby_tree_sitter_boundary": {
+      "ok": false,
+      "diagnostic_category": "parse_error"
+    }
+  }
+}

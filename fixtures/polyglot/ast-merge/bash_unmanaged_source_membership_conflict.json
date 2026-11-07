@@ -1,0 +1,33 @@
+{
+  "id": "bash_merge3_unmanaged_source_membership_conflict",
+  "contract": "bash_merge3_unmanaged_source_membership_conflict",
+  "description": "Bash provider unmanaged-source rule: comments outside owners cannot be silently discarded during a combined owner deletion and independent edit.",
+  "cases": [
+    {
+      "name": "deleted_owner_comment_conflicts_with_independent_owner_edit",
+      "input": {
+        "base": "# left docs\nleft() { echo one; }\n\n# right docs\nright() { echo one; }\n",
+        "ours": "# left docs\nleft() { echo one; }\n",
+        "theirs": "# left docs\nleft() { echo two; }\n\n# right docs\nright() { echo one; }\n"
+      },
+      "expected": {
+        "ok": false,
+        "output": null,
+        "conflict": true
+      }
+    },
+    {
+      "name": "exact_theirs_revision_wins_over_unmanaged_change",
+      "input": {
+        "base": "# left docs\nleft() { echo one; }\n",
+        "ours": "# changed left docs\nleft() { echo one; }\n",
+        "theirs": "# left docs\nleft() { echo one; }\n"
+      },
+      "expected": {
+        "ok": true,
+        "output": "# changed left docs\nleft() { echo one; }\n",
+        "conflict": false
+      }
+    }
+  ]
+}

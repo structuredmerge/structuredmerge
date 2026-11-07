@@ -13,7 +13,7 @@ your licenses.
 The licensor grants you a copyright license for the
 software to do everything you might do with the software
 that would otherwise infringe the licensor's copyright
-in it for any permitted purpose.  However, you may
+in it for any permitted purpose. However, you may
 only distribute the software according to [Distribution
 License](#distribution-license) and make changes or new works
 based on the software according to [Changes and New Works
@@ -22,7 +22,7 @@ License](#changes-and-new-works-license).
 ## Distribution License
 
 The licensor grants you an additional copyright license
-to distribute copies of the software.  Your license
+to distribute copies of the software. Your license
 to distribute covers distributing the software with
 changes and new works permitted by [Changes and New Works
 License](#changes-and-new-works-license).
@@ -33,9 +33,9 @@ You must ensure that anyone who gets a copy of any part of
 the software from you also gets a copy of these terms or the
 URL for them above, as well as copies of any plain-text lines
 beginning with `Required Notice:` that the licensor provided
-with the software.  For example:
+with the software. For example:
 
-> Required Notice: Copyright Yoyodyne, Inc. (http://example.com)
+> Required Notice: Copyright Yoyodyne, Inc. (<http://example.com>)
 
 ## Changes and New Works License
 
@@ -60,7 +60,7 @@ Use of the software for the benefit of your company is use for
 a permitted purpose if your company has fewer than 100 total
 individuals working as employees and independent contractors,
 and less than 1,000,000 USD (2019) total revenue in the prior
-tax year.  Adjust this revenue threshold for inflation according
+tax year. Adjust this revenue threshold for inflation according
 to the United States Bureau of Labor Statistics' consumer price
 index for all urban consumers, U.S. city average, for all items,
 not seasonally adjusted, with 1982–1984=100 reference base.
@@ -69,7 +69,7 @@ not seasonally adjusted, with 1982–1984=100 reference base.
 
 These terms do not allow you to sublicense or transfer any of
 your licenses to anyone else, or prevent the licensor from
-granting licenses to anyone else.  These terms do not imply
+granting licenses to anyone else. These terms do not imply
 any other licenses.
 
 ## Patent Defense
@@ -87,7 +87,7 @@ violated any of these terms, or done anything with the software
 not covered by your licenses, your licenses can nonetheless
 continue if you come into full compliance with these terms,
 and take practical steps to correct past violations, within
-32 days of receiving notice.  Otherwise, all your licenses
+32 days of receiving notice. Otherwise, all your licenses
 end immediately.
 
 ## No Liability
@@ -109,10 +109,10 @@ terms.
 **Your company** is any legal entity, sole proprietorship,
 or other kind of organization that you work for, plus all
 organizations that have control over, are under the control of,
-or are under common control with that organization.  **Control**
+or are under common control with that organization. **Control**
 means ownership of substantially all the assets of an entity,
 or the power to direct its management and policies by vote,
-contract, or otherwise.  Control can be direct or indirect.
+contract, or otherwise. Control can be direct or indirect.
 
 **Your licenses** are all the licenses granted to you for the
 software under these terms.

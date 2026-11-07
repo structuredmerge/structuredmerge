@@ -11,22 +11,31 @@ class SemanticRetirementAuditTest(unittest.TestCase):
 
     def test_render_covers_every_inventory_group_without_authorizing_deletion(self):
         import json
+
         inventory = json.loads((self.root / "contracts/legacy-operation-migration.json").read_text())
         rendered = audit.render(inventory)
         for group in inventory["groups"]:
-            self.assertIn(f"`{group['id']}`", rendered)
-        self.assertIn("authorizes no deletion", rendered)
-        self.assertIn("retain legacy regression evidence", rendered)
+            assert f"`{group['id']}`" in rendered
+        assert "authorizes no deletion" in rendered
+        assert "retain legacy regression evidence" in rendered
 
     def test_unknown_disposition_fails_closed_in_rendered_action(self):
-        rendered = audit.render({
-            "schema": "test",
-            "groups": [{
-                "id": "unknown", "methods": ["m"], "disposition": "new",
-                "replacement": "none", "gap": "review", "consumers": [],
-            }],
-        })
-        self.assertIn("Stop and obtain an explicit disposition", rendered)
+        rendered = audit.render(
+            {
+                "schema": "test",
+                "groups": [
+                    {
+                        "id": "unknown",
+                        "methods": ["m"],
+                        "disposition": "new",
+                        "replacement": "none",
+                        "gap": "review",
+                        "consumers": [],
+                    }
+                ],
+            }
+        )
+        assert "Stop and obtain an explicit disposition" in rendered
 
 
 if __name__ == "__main__":

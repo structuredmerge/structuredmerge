@@ -32,7 +32,6 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 [features]
 default = []
 
-
 [dependencies]
 ahash = "0.8"
 serde = "1"

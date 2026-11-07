@@ -1,0 +1,169 @@
+{
+  "id": "ast_merge_native_owner_prefix_ownership",
+  "contract": "ast_merge_native_owner_prefix_ownership",
+  "description": "A parser-backed shared contract for outer documentation and attributes attached to one declaration owner, plus crate-level inner documentation that stays at document scope.",
+  "cases": [
+    {
+      "name": "outer documentation and spaced attribute prefix",
+      "family": "rust",
+      "source": "#![allow(dead_code)]\n\n/// docs\n\n#[cold]\n\nfn stable() {}\n",
+      "owner_path": "/function:stable",
+      "owner_source": "/// docs\n\n#[cold]\n\nfn stable() {}",
+      "owner_line_range": [
+        3,
+        7
+      ],
+      "owner_node_kinds": [
+        "attribute_item",
+        "function_item"
+      ],
+      "attached_comment_texts": [
+        "/// docs"
+      ],
+      "owner_byte_range": [
+        22,
+        55
+      ]
+    },
+    {
+      "name": "attribute precedes structural documentation",
+      "family": "rust",
+      "source": "#[cold]\n/// docs\n\nfn stable() {}\n",
+      "owner_path": "/function:stable",
+      "owner_source": "#[cold]\n/// docs\n\nfn stable() {}",
+      "owner_line_range": [
+        1,
+        4
+      ],
+      "owner_node_kinds": [
+        "attribute_item",
+        "function_item"
+      ],
+      "attached_comment_texts": [
+        "/// docs"
+      ],
+      "owner_byte_range": [
+        0,
+        32
+      ]
+    },
+    {
+      "name": "block documentation attribute prefix",
+      "family": "rust",
+      "source": "/** block docs */\n#[cold]\nfn stable() {}\n",
+      "owner_path": "/function:stable",
+      "owner_source": "/** block docs */\n#[cold]\nfn stable() {}",
+      "owner_line_range": [
+        1,
+        3
+      ],
+      "owner_node_kinds": [
+        "attribute_item",
+        "function_item"
+      ],
+      "attached_comment_texts": [
+        "/** block docs */"
+      ],
+      "owner_byte_range": [
+        0,
+        40
+      ]
+    },
+    {
+      "name": "crate inner documentation remains at document root",
+      "family": "rust",
+      "source": "//! crate docs\n\nfn stable() {}\n",
+      "owner_path": "/function:stable",
+      "owner_source": "fn stable() {}",
+      "owner_line_range": [
+        3,
+        3
+      ],
+      "owner_node_kinds": [
+        "function_item"
+      ],
+      "attached_comment_texts": [],
+      "owner_byte_range": [
+        16,
+        30
+      ]
+    },
+    {
+      "name": "block crate inner documentation remains at document root",
+      "family": "rust",
+      "source": "/*! crate docs */\n\nfn stable() {}\n",
+      "owner_path": "/function:stable",
+      "owner_source": "fn stable() {}",
+      "owner_line_range": [
+        3,
+        3
+      ],
+      "owner_node_kinds": [
+        "function_item"
+      ],
+      "attached_comment_texts": [],
+      "owner_byte_range": [
+        19,
+        33
+      ]
+    },
+    {
+      "name": "four-slash comment is not an outer documentation prefix",
+      "family": "rust",
+      "source": "//// ordinary\n\nfn stable() {}\n",
+      "owner_path": "/function:stable",
+      "owner_source": "fn stable() {}",
+      "owner_line_range": [
+        3,
+        3
+      ],
+      "owner_node_kinds": [
+        "function_item"
+      ],
+      "attached_comment_texts": [],
+      "owner_byte_range": [
+        15,
+        29
+      ]
+    },
+    {
+      "name": "three-star block comment is not an outer documentation prefix",
+      "family": "rust",
+      "source": "/*** ordinary block */\n\nfn stable() {}\n",
+      "owner_path": "/function:stable",
+      "owner_source": "fn stable() {}",
+      "owner_line_range": [
+        3,
+        3
+      ],
+      "owner_node_kinds": [
+        "function_item"
+      ],
+      "attached_comment_texts": [],
+      "owner_byte_range": [
+        24,
+        38
+      ]
+    },
+    {
+      "name": "doc attribute is native syntax attached to the item",
+      "family": "rust",
+      "source": "#[doc = \"generated docs\"]\nfn stable() {}\n",
+      "owner_path": "/function:stable",
+      "owner_source": "#[doc = \"generated docs\"]\nfn stable() {}",
+      "owner_line_range": [
+        1,
+        2
+      ],
+      "owner_node_kinds": [
+        "attribute_item",
+        "function_item"
+      ],
+      "attached_comment_texts": [],
+      "owner_byte_range": [
+        0,
+        40
+      ]
+    }
+  ]
+}

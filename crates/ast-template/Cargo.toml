@@ -7,6 +7,8 @@ authors = ["Peter H. Boling"]
 edition = "2024"
 description = "Recipe and template helpers for Structured Merge AST libraries"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
+[lib]
+path = "src/lib.rs"
 
 [dependencies]
 ast-merge = { version = "0.2.1", path = "../ast-merge" }
@@ -17,5 +19,3 @@ serde_json = "1.0"
 toml-merge = { package = "structuredmerge-toml-merge", version = "0.2.1", path = "../toml-merge" }
 
 [dev-dependencies]
-[lib]
-path = "src/lib.rs"

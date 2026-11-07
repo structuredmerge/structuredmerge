@@ -10,9 +10,9 @@ license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
 ast-merge = { version = "0.2.1", path = "../ast-merge" }
-tree-haver = { version = "0.2.1", path = "../tree-haver" }
 regex-lite = "0.1"
 serde_json = "1"
+tree-haver = { version = "0.2.1", path = "../tree-haver" }
 
 [dev-dependencies]
 serde_json = "1"

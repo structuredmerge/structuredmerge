@@ -1,0 +1,193 @@
+{
+  "id": "ast_merge_comment_layout_emission",
+  "contract": "ast_merge_comment_layout_emission",
+  "description": "Shared retained-owner leading segment line selection contract ported from Ruby ast-merge.",
+  "cases": [
+    {
+      "name": "uses_output_owners_attached_leading_region_blank_prefix",
+      "source_lines": [
+        "alpha",
+        "",
+        "# shared",
+        "",
+        "beta"
+      ],
+      "output_lines": [
+        "alpha",
+        "",
+        "# shared",
+        "",
+        "beta"
+      ],
+      "source_region_start_line": 3,
+      "output_owner_start_line": 5,
+      "target_leading_region_start_line": 3,
+      "previous_owner_trailing_region_matches": false,
+      "expected_line_numbers": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "name": "does_not_duplicate_previous_owner_trailing_region",
+      "source_lines": [
+        "alpha",
+        "",
+        "# shared",
+        "beta"
+      ],
+      "output_lines": [
+        "alpha",
+        "",
+        "# shared",
+        "beta"
+      ],
+      "source_region_start_line": 3,
+      "output_owner_start_line": 4,
+      "target_leading_region_start_line": null,
+      "previous_owner_trailing_region_matches": true,
+      "expected_line_numbers": [
+        3
+      ]
+    },
+    {
+      "name": "uses_source_blank_prefix_when_output_has_no_attached_region",
+      "source_lines": [
+        "alpha",
+        "",
+        "",
+        "# different",
+        "beta"
+      ],
+      "output_lines": [
+        "alpha",
+        "# other",
+        "beta"
+      ],
+      "source_region_start_line": 4,
+      "output_owner_start_line": 3,
+      "target_leading_region_start_line": null,
+      "previous_owner_trailing_region_matches": false,
+      "expected_line_numbers": [
+        2
+      ]
+    }
+  ],
+  "root_boundary_cases": [
+    {
+      "name": "comment_only_file_is_entire_preamble",
+      "kind": "preamble",
+      "lines": [
+        "# only",
+        "",
+        "# comments"
+      ],
+      "owners": [],
+      "preamble_region": null,
+      "postlude_region": null,
+      "fallback_to_owner_bounds": false,
+      "expected_line_numbers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "name": "preamble_region_extends_to_first_owner",
+      "kind": "preamble",
+      "lines": [
+        "#!/usr/bin/env bash",
+        "# header",
+        "",
+        "body"
+      ],
+      "owners": [
+        {
+          "start_line": 4,
+          "end_line": 4
+        }
+      ],
+      "preamble_region": {
+        "start_line": 1,
+        "end_line": 3
+      },
+      "postlude_region": null,
+      "fallback_to_owner_bounds": false,
+      "expected_line_numbers": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "name": "postlude_region_starts_after_last_owner",
+      "kind": "postlude",
+      "lines": [
+        "body",
+        "",
+        "# footer"
+      ],
+      "owners": [
+        {
+          "start_line": 1,
+          "end_line": 1
+        }
+      ],
+      "preamble_region": null,
+      "postlude_region": {
+        "start_line": 3,
+        "end_line": 3
+      },
+      "fallback_to_owner_bounds": false,
+      "expected_line_numbers": [
+        2,
+        3
+      ]
+    },
+    {
+      "name": "fallback_preamble_uses_owner_boundary",
+      "kind": "preamble",
+      "lines": [
+        "#!/usr/bin/env bash",
+        "# header",
+        "body"
+      ],
+      "owners": [
+        {
+          "start_line": 3,
+          "end_line": 3
+        }
+      ],
+      "preamble_region": null,
+      "postlude_region": null,
+      "fallback_to_owner_bounds": true,
+      "expected_line_numbers": [
+        1,
+        2
+      ]
+    },
+    {
+      "name": "fallback_postlude_uses_owner_boundary",
+      "kind": "postlude",
+      "lines": [
+        "body",
+        "",
+        "# footer"
+      ],
+      "owners": [
+        {
+          "start_line": 1,
+          "end_line": 1
+        }
+      ],
+      "preamble_region": null,
+      "postlude_region": null,
+      "fallback_to_owner_bounds": true,
+      "expected_line_numbers": [
+        2,
+        3
+      ]
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 """Consumer rejects incompatible or mismatched exports before installation."""
+
 import hashlib
 import json
 import pathlib
@@ -17,7 +18,7 @@ class RubyExportTest(unittest.TestCase):
         cls.directory = pathlib.Path(cls.scratch.name)
         # Build a harmless archive: deliberately no executable native code. This
         # verifies metadata only; passing must never imply a runtime test passed.
-        build = r'''
+        build = r"""
 require "rubygems/package"
 require "rbconfig"
 require "fileutils"
@@ -42,16 +43,21 @@ artifact = Gem::Package.build(spec)
 puts JSON.generate(artifact: artifact, package: spec.name, version: spec.version.to_s,
   platform: spec.platform.to_s, ruby: RUBY_VERSION, ruby_abi: abi,
   required_ruby_version: spec.required_ruby_version.to_s, files: files.sort)
-'''
-        result = subprocess.run(["ruby", "-e", build], cwd=cls.directory,
-                                capture_output=True, text=True, check=True)
+"""
+        result = subprocess.run(["ruby", "-e", build], cwd=cls.directory, capture_output=True, text=True, check=True)
         cls.report = json.loads(result.stdout.splitlines()[-1])
         cls.artifact = cls.directory / cls.report["artifact"]
-        cls.report.update(sha256=hashlib.sha256(cls.artifact.read_bytes()).hexdigest(),
-                          mode="package-only", installed_merge_tests="not_run",
-                          generated_e2e_tests="not_run", type_declarations="not_validated",
-                          publication_gate=False, source_gem_gate=False,
-                          linkage_check="passed", api_review_baseline="ruby source surface matched")
+        cls.report.update(
+            sha256=hashlib.sha256(cls.artifact.read_bytes()).hexdigest(),
+            mode="package-only",
+            installed_merge_tests="not_run",
+            generated_e2e_tests="not_run",
+            type_declarations="not_validated",
+            publication_gate=False,
+            source_gem_gate=False,
+            linkage_check="passed",
+            api_review_baseline="ruby source surface matched",
+        )
 
     @classmethod
     def tearDownClass(cls):
@@ -60,39 +66,56 @@ puts JSON.generate(artifact: artifact, package: spec.name, version: spec.version
     def verify(self, report, artifact=None):
         report_path = self.directory / "report.json"
         report_path.write_text(json.dumps(report))
-        return subprocess.run(["ruby", str(self.root / "workspace-scripts/verify_core_ruby_export.rb"),
-                               str(artifact or self.artifact), str(report_path)],
-                              capture_output=True, text=True, check=False)
+        return subprocess.run(
+            [
+                "ruby",
+                str(self.root / "workspace-scripts/verify_core_ruby_export.rb"),
+                str(artifact or self.artifact),
+                str(report_path),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
 
     def test_matching_export_is_not_a_runtime_claim(self):
         result = self.verify(self.report)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["runtime_tests"], "not_run")
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout)["runtime_tests"] == "not_run"
 
     def test_mismatches_fail_closed(self):
         for key, value in {
-            "artifact": "other.gem", "sha256": "0" * 64, "package": "prototype",
-            "version": "99.0", "platform": "ruby", "ruby_abi": "0.0.0",
-            "ruby": "0.0.1", "required_ruby_version": ">= 0", "files": [],
-            "installed_merge_tests": "passed", "publication_gate": True,
-            "source_gem_gate": True, "linkage_check": "not_run", "mode": "full",
+            "artifact": "other.gem",
+            "sha256": "0" * 64,
+            "package": "prototype",
+            "version": "99.0",
+            "platform": "ruby",
+            "ruby_abi": "0.0.0",
+            "ruby": "0.0.1",
+            "required_ruby_version": ">= 0",
+            "files": [],
+            "installed_merge_tests": "passed",
+            "publication_gate": True,
+            "source_gem_gate": True,
+            "linkage_check": "not_run",
+            "mode": "full",
         }.items():
             with self.subTest(key=key):
                 result = self.verify(dict(self.report, **{key: value}))
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("core export verification failed:", result.stderr)
+                assert result.returncode != 0
+                assert "core export verification failed:" in result.stderr
 
     def test_missing_fields_fail_closed(self):
         for key in self.report:
             with self.subTest(key=key):
                 report = self.report.copy()
                 del report[key]
-                self.assertNotEqual(self.verify(report).returncode, 0)
+                assert self.verify(report).returncode != 0
 
     def test_matching_report_cannot_authorize_wrong_archive(self):
         changes = {
             "package": 'spec.name = "unrelated_host_package"',
-            "platform": 'spec.platform = Gem::Platform::RUBY',
+            "platform": "spec.platform = Gem::Platform::RUBY",
             "ruby_requirement": 'spec.required_ruby_version = Gem::Requirement.new(">= 0")',
             "extra_file": 'File.write("extra.rb", ""); spec.files += ["extra.rb"]',
             "build_step": 'File.write("extconf.rb", ""); spec.extensions = ["extconf.rb"]',
@@ -106,23 +129,28 @@ puts JSON.generate(artifact: artifact, package: spec.name, version: spec.version
                     target = directory / file
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(self.directory / file, target)
-                build = '''
+                build = (
+                    """
 require "rubygems/package"
 require "json"
 require "fileutils"
 spec = Gem::Package.new(ARGV.fetch(0)).spec
-''' + change + '''
+"""
+                    + change
+                    + """
 artifact = Gem::Package.build(spec)
 puts JSON.generate(artifact: artifact, package: spec.name, version: spec.version.to_s,
   platform: spec.platform.to_s, required_ruby_version: spec.required_ruby_version.to_s,
   files: Gem::Package.new(artifact).contents.sort)
-'''
-                result = subprocess.run(["ruby", "-e", build, str(self.artifact)],
-                                        cwd=directory, text=True, capture_output=True, check=True)
+"""
+                )
+                result = subprocess.run(
+                    ["ruby", "-e", build, str(self.artifact)], cwd=directory, text=True, capture_output=True, check=True
+                )
                 metadata = json.loads(result.stdout.splitlines()[-1])
                 artifact = directory / metadata["artifact"]
                 report = dict(self.report, **metadata)
                 report["sha256"] = hashlib.sha256(artifact.read_bytes()).hexdigest()
                 result = self.verify(report, artifact)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("core export verification failed:", result.stderr)
+                assert result.returncode != 0
+                assert "core export verification failed:" in result.stderr

@@ -5,11 +5,11 @@ Requires Python 3.11+, maturin in this interpreter and cached Cargo dependencies
 local debug source-build gate, not publication or cross-platform approval.
 Only pass trusted development sources: Cargo executes their build scripts.
 """
+
 import argparse
 import hashlib
 import json
 import os
-from pathlib import Path, PurePosixPath
 import shutil
 import signal
 import subprocess
@@ -18,6 +18,7 @@ import tarfile
 import tempfile
 import time
 import tomllib
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 RESERVE = 30 * 1024**3
@@ -34,9 +35,14 @@ def extract_source(archive, destination):
         members, names, roots, size = [], set(), set(), 0
         for member in source:
             path = PurePosixPath(member.name)
-            if (path.is_absolute() or ".." in path.parts or "\\" in member.name
-                    or not path.parts or path.as_posix() in names
-                    or not (member.isfile() or member.isdir())):
+            if (
+                path.is_absolute()
+                or ".." in path.parts
+                or "\\" in member.name
+                or not path.parts
+                or path.as_posix() in names
+                or not (member.isfile() or member.isdir())
+            ):
                 raise ValueError("unsafe or duplicate source archive entry")
             names.add(path.as_posix())
             roots.add(path.parts[0])
@@ -83,45 +89,54 @@ def check_metadata(metadata, source):
                 raise ValueError("source dependency escapes archive")
     unexpected = set(local) - expected
     if unexpected:
-        raise ValueError(
-            f"unexpected local prototype package(s) in source archive: {sorted(unexpected)}"
-        )
+        raise ValueError(f"unexpected local prototype package(s) in source archive: {sorted(unexpected)}")
     if not expected.issubset(local):
         raise ValueError("typed facade and Python binding must be in source archive")
     return sorted(local)
 
 
 def child_limits():
-    import resource
+    """Configure limits."""
+    import resource  # noqa: PLC0415
+
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     resource.setrlimit(resource.RLIMIT_FSIZE, (512 * 1024**2, 512 * 1024**2))
 
 
 def verify_lock_pruning(before, after):
     """Cargo may prune the exported workspace, never introduce/change a pin."""
+
     def packages(document):
-        return {(p["name"], p["version"], p.get("source")): p
-                for p in tomllib.loads(document)["package"]}
+        """Handle packages."""
+        return {(p["name"], p["version"], p.get("source")): p for p in tomllib.loads(document)["package"]}
+
     old, new = packages(before), packages(after)
+
     def edges(package, index):
+        """Handle edges."""
         result = set()
         for dependency in package.get("dependencies", []):
             parts = dependency.split(" ", 2)
-            matches = [key for key in index if key[0] == parts[0]
-                       and (len(parts) < 2 or key[1] == parts[1])
-                       and (len(parts) < 3 or key[2] == parts[2].removeprefix("(").removesuffix(")"))]
+            matches = [
+                key
+                for key in index
+                if key[0] == parts[0]
+                and (len(parts) < 2 or key[1] == parts[1])
+                and (len(parts) < 3 or key[2] == parts[2].removeprefix("(").removesuffix(")"))
+            ]
             if len(matches) != 1:
                 raise ValueError("ambiguous or missing Cargo lock dependency")
             result.add(matches[0])
         return result
+
     for key, package in new.items():
         if key not in old or {k: v for k, v in package.items() if k != "dependencies"} != {
-                k: v for k, v in old.get(key, {}).items() if k != "dependencies"}:
+            k: v for k, v in old.get(key, {}).items() if k != "dependencies"
+        }:
             raise ValueError("source preparation changed a locked package pin")
         if not edges(package, new).issubset(edges(old[key], old)):
             raise ValueError("source preparation introduced a dependency edge")
-    return {"removed_packages": len(old.keys() - new.keys()), "retained_packages": len(new),
-            "new_or_changed_pins": 0}
+    return {"removed_packages": len(old.keys() - new.keys()), "retained_packages": len(new), "new_or_changed_pins": 0}
 
 
 def run(argv, cwd, env, evidence, label, work, timeout=180, work_budget=None):
@@ -132,10 +147,20 @@ def run(argv, cwd, env, evidence, label, work, timeout=180, work_budget=None):
         raise RuntimeError("source gate requires 30 GiB free")
     paths = [evidence / (label + suffix) for suffix in (".stdout", ".stderr")]
     with paths[0].open("wb") as stdout, paths[1].open("wb") as stderr:
-        process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-            stdout=stdout, stderr=stderr, start_new_session=True, preexec_fn=child_limits)
+        process = subprocess.Popen(
+            argv,
+            cwd=cwd,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=stdout,
+            stderr=stderr,
+            start_new_session=True,
+            preexec_fn=child_limits,  # noqa: PLW1509 -- resource limits must apply before the child runs.
+        )
         start = time.monotonic()
+
         def check_budget():
+            """Check budget."""
             size = 0
             for path in work.rglob("*"):
                 try:
@@ -144,10 +169,14 @@ def run(argv, cwd, env, evidence, label, work, timeout=180, work_budget=None):
                 except FileNotFoundError:
                     # Cargo atomically replaces/removes intermediates.
                     continue
-            if (shutil.disk_usage(work).free < RESERVE or size > work_budget
-                    or time.monotonic() - start > timeout
-                    or any(path.stat().st_size > LOG_BUDGET for path in paths)):
+            if (
+                shutil.disk_usage(work).free < RESERVE
+                or size > work_budget
+                or time.monotonic() - start > timeout
+                or any(path.stat().st_size > LOG_BUDGET for path in paths)
+            ):
                 raise RuntimeError(f"{label}: source gate resource budget exceeded")
+
         try:
             while process.poll() is None:
                 check_budget()
@@ -165,10 +194,14 @@ def run(argv, cwd, env, evidence, label, work, timeout=180, work_budget=None):
 
 
 def main():
+    """Run the command line entry point."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sdist", type=Path)
-    parser.add_argument("--prepare", action="store_true",
-        help="let Cargo prune the exported lock, repack with maturin, then test that exact new sdist")
+    parser.add_argument(
+        "--prepare",
+        action="store_true",
+        help="let Cargo prune the exported lock, repack with maturin, then test that exact new sdist",
+    )
     args = parser.parse_args()
     if os.name != "posix":
         parser.error("this bounded source-build gate requires POSIX")
@@ -178,9 +211,15 @@ def main():
         raise RuntimeError("source gate requires 38 GiB free (30 GiB floor + 8 GiB budget)")
     archive = args.sdist.resolve()
     evidence = Path(tempfile.mkdtemp(prefix="core-python-source-", dir=scratch))
-    report = {"schema": "structuredmerge.python-source-gate/v1", "status": "failed",
-        "source": str(archive), "publication_gate": False, "registry_install": "not_run",
-        "profile": "dev", "python": sys.version}
+    report = {
+        "schema": "structuredmerge.python-source-gate/v1",
+        "status": "failed",
+        "source": str(archive),
+        "publication_gate": False,
+        "registry_install": "not_run",
+        "profile": "dev",
+        "python": sys.version,
+    }
     print(f"Source evidence: {evidence}", flush=True)
     try:
         with tempfile.TemporaryDirectory(prefix="work-", dir=evidence) as directory:
@@ -188,13 +227,25 @@ def main():
             source = extract_source(archive, work)
             with archive.open("rb") as stream:
                 report["source_sha256"] = hashlib.file_digest(stream, "sha256").hexdigest()
-            env = {key: value for key, value in os.environ.items()
-                   if key not in ("PYTHONPATH", "PYTHONHOME", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER")}
-            env.update(TMPDIR=str(work), PYTHONDONTWRITEBYTECODE="1", CARGO_INCREMENTAL="0",
-                CARGO_BUILD_JOBS="1", CARGO_PROFILE_DEV_DEBUG="0", CARGO_PROFILE_TEST_DEBUG="0",
-                CARGO_TARGET_DIR=str(work / "target"))
+            env = {
+                key: value
+                for key, value in os.environ.items()
+                if key not in ("PYTHONPATH", "PYTHONHOME", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER")
+            }
+            env.update(
+                TMPDIR=str(work),
+                PYTHONDONTWRITEBYTECODE="1",
+                CARGO_INCREMENTAL="0",
+                CARGO_BUILD_JOBS="1",
+                CARGO_PROFILE_DEV_DEBUG="0",
+                CARGO_PROFILE_TEST_DEBUG="0",
+                CARGO_TARGET_DIR=str(work / "target"),
+            )
+
             def command(argv, label, timeout=180):
+                """Run."""
                 return run(argv, source, env, evidence, label, work, timeout)
+
             report["maturin"] = command([sys.executable, "-m", "maturin", "--version"], "maturin").decode().strip()
             report["cargo"] = command(["cargo", "--version"], "cargo-version").decode().strip()
             report["rustc"] = command(["rustc", "--version"], "rustc-version").decode().strip()
@@ -213,19 +264,41 @@ def main():
                 report["prepared_source"] = str(archives[0])
                 with archives[0].open("rb") as stream:
                     report["prepared_source_sha256"] = hashlib.file_digest(stream, "sha256").hexdigest()
-            metadata = json.loads(command(["cargo", "metadata", "--format-version", "1",
-                "--no-deps", "--locked", "--offline"], "metadata"))
+            metadata = json.loads(
+                command(
+                    ["cargo", "metadata", "--format-version", "1", "--no-deps", "--locked", "--offline"], "metadata"
+                )
+            )
             report["local_packages"] = check_metadata(metadata, source)
             report["build_lock_sha256"] = hashlib.sha256((source / "Cargo.lock").read_bytes()).hexdigest()
-            command([sys.executable, "-m", "maturin", "build", "--locked", "--offline",
-                "--profile", "dev", "-j", "1", "--out", str(work / "wheels")], "build", 900)
+            command(
+                [
+                    sys.executable,
+                    "-m",
+                    "maturin",
+                    "build",
+                    "--locked",
+                    "--offline",
+                    "--profile",
+                    "dev",
+                    "-j",
+                    "1",
+                    "--out",
+                    str(work / "wheels"),
+                ],
+                "build",
+                900,
+            )
             wheels = list((work / "wheels").glob("*.whl"))
             if len(wheels) != 1:
                 raise ValueError("source build must produce exactly one wheel")
             with wheels[0].open("rb") as wheel:
                 report["wheel_sha256"] = hashlib.file_digest(wheel, "sha256").hexdigest()
-            command([sys.executable, str(ROOT / "workspace-scripts/check_core_python_artifact.py"),
-                str(wheels[0])], "installed", 300)
+            command(
+                [sys.executable, str(ROOT / "workspace-scripts/check_core_python_artifact.py"), str(wheels[0])],
+                "installed",
+                300,
+            )
             report["status"] = "passed"
             report["installed_wheel_gate"] = "passed"
     except BaseException as error:

@@ -1,0 +1,32 @@
+{
+  "id": "go_merge3_conflict",
+  "category": "go_common_merge3",
+  "call": "go_common_merge3",
+  "description": "Shared typed Go merge3 contract: go_merge3_conflict",
+  "input": {
+    "base": "package main\n// é\nfunc f() { println(1) }\nfunc g() { println(1) }\n",
+    "ours": "package main\n// é\nfunc f() { println(2) }\nfunc g() { println(1) }\n",
+    "theirs": "package main\n// é\nfunc f() { println(3) }\nfunc g() { println(1) }\n"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "ok",
+      "value": false
+    },
+    {
+      "type": "equals",
+      "field": "output",
+      "value": null
+    },
+    {
+      "type": "count_equals",
+      "field": "conflicts",
+      "value": 1
+    }
+  ],
+  "expected_conflicted_output": {
+    "ruby_native": "<<<<<<< ours\npackage main\n// é\nfunc f() { println(2) }\nfunc g() { println(1) }\n||||||| base\npackage main\n// é\nfunc f() { println(1) }\nfunc g() { println(1) }\n=======\npackage main\n// é\nfunc f() { println(3) }\nfunc g() { println(1) }\n>>>>>>> theirs\n",
+    "rust_host": "package main\n<<<<<<< ours\n// é\nfunc f() { println(2) }\n||||||| base\n// é\nfunc f() { println(1) }\n=======\n// é\nfunc f() { println(3) }\n>>>>>>> theirs\nfunc g() { println(1) }\n"
+  }
+}

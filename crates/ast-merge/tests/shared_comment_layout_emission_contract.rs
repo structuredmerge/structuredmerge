@@ -37,7 +37,7 @@ struct RootBoundaryCase {
 #[test]
 fn shared_comment_layout_emission_fixture_matches_ruby() {
     let fixture: Fixture = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/ast-merge/comment_layout_emission.json"
+        "../../../fixtures/polyglot/ast-merge/comment_layout_emission.json"
     ))
     .expect("shared comment layout emission fixture is valid");
     for case in fixture.cases {
@@ -61,7 +61,7 @@ fn shared_comment_layout_emission_fixture_matches_ruby() {
 #[test]
 fn shared_root_boundary_emission_fixture_matches_ruby() {
     let fixture: Fixture = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/ast-merge/comment_layout_emission.json"
+        "../../../fixtures/polyglot/ast-merge/comment_layout_emission.json"
     ))
     .expect("shared comment layout emission fixture is valid");
     for case in fixture.root_boundary_cases {

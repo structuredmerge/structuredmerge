@@ -1,0 +1,40 @@
+{
+  "id": "rust_merge3_delete_module_inner_doc_owner_with_independent_edit",
+  "contract": "rust_merge3_delete_module_inner_doc_owner_with_independent_edit",
+  "description": "Deleting a Rust module removes its inner docs and ordinary nested comments with the module while preserving an independent edit and retained item docs.",
+  "input": {
+    "base": "//! Crate documentation.\n\nmod retiring {\n    //! Retiring module docs.\n    // This ordinary comment is inside the deleted module.\n    mod nested {\n        //! Nested module docs.\n        /* This block comment is also inside the deleted module. */\n        // This comment sits between nested syntax owners.\n        fn inner() {}\n    }\n    // This postlude comment remains inside the module braces.\n}\n\n/// Stable API.\nfn stable() { 1 }\n",
+    "ours": "//! Crate documentation.\n\nmod retiring {\n    //! Retiring module docs.\n    // This ordinary comment is inside the deleted module.\n    mod nested {\n        //! Nested module docs.\n        /* This block comment is also inside the deleted module. */\n        // This comment sits between nested syntax owners.\n        fn inner() {}\n    }\n    // This postlude comment remains inside the module braces.\n}\n\n/// Stable API.\nfn stable() { 2 }\n",
+    "theirs": "//! Crate documentation.\n\n/// Stable API.\nfn stable() { 1 }\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "//! Crate documentation.\n\n/// Stable API.\nfn stable() { 2 }\n"
+  },
+  "ruby_native_expected": {
+    "outcome": "conflict",
+    "diagnostic_category": "merge_conflict",
+    "conflict_category": "unmanaged_source_change"
+  },
+  "rust_host_expected": {
+    "rust_tslp": {
+      "outcome": "conflict",
+      "diagnostic_category": "merge_conflict",
+      "diagnostic_code": "rust.membership_with_owner_edit",
+      "conflict_category": "ownership"
+    },
+    "rust_syn": {
+      "outcome": "clean",
+      "output": "//! Crate documentation.\n\n/// Stable API.\nfn stable() { 2 }\n"
+    }
+  },
+  "syn_doc_scope_expected": {
+    "root_doc_text": "//! Crate documentation.",
+    "module_doc_text": "//! Retiring module docs.",
+    "nested_module_doc_text": "//! Nested module docs.",
+    "module_owner_path": "/mod:retiring",
+    "root_doc_scope": "root",
+    "module_doc_scope": "owner",
+    "nested_module_doc_scope": "owner"
+  }
+}

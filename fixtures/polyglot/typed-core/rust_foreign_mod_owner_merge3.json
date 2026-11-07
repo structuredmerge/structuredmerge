@@ -1,0 +1,15 @@
+{
+  "id": "rust_foreign_mod_owner_merge3",
+  "contract": "rust_foreign_mod_owner_merge3",
+  "description": "A syn-projected extern block is one source owner; its leading and nested comments stay with the block while an independent function edit composes.",
+  "input": {
+    "base": "// C ABI owner\nextern \"C\" {\n    // Foreign declaration comment stays inside this owner.\n    pub fn read(fd: i32) -> isize;\n}\n\n/// Value owner.\nfn value() -> i32 { 1 }\n",
+    "ours": "// C ABI owner\nextern \"C\" {\n    // Foreign declaration comment stays inside this owner.\n    pub fn read(fd: i32) -> isize;\n    pub fn write(fd: i32, byte: u8) -> isize;\n}\n\n/// Value owner.\nfn value() -> i32 { 1 }\n",
+    "theirs": "// C ABI owner\nextern \"C\" {\n    // Foreign declaration comment stays inside this owner.\n    pub fn read(fd: i32) -> isize;\n}\n\n/// Value owner.\nfn value() -> i32 { 2 }\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "// C ABI owner\nextern \"C\" {\n    // Foreign declaration comment stays inside this owner.\n    pub fn read(fd: i32) -> isize;\n    pub fn write(fd: i32, byte: u8) -> isize;\n}\n\n/// Value owner.\nfn value() -> i32 { 2 }\n",
+    "foreign_mod_path": "/foreign_mod:extern_mod:C"
+  }
+}

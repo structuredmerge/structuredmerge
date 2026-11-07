@@ -1,0 +1,32 @@
+{
+  "id": "rust_merge3_comment_rehome_on_owner_deletion_with_independent_edit",
+  "contract": "rust_merge3_comment_rehome_on_owner_deletion_with_independent_edit",
+  "description": "Deleting an owner rehomes its ordinary comment as a preamble, preserves the separator at the following owner boundary, and composes an independent edit to that owner.",
+  "input": {
+    "base": "// Retiring owner.\nfn retiring() { 1 }\n\n\n/// Following owner.\nfn following() { 1 }\n",
+    "ours": "// Retiring owner.\nfn retiring() { 1 }\n\n\n/// Following owner.\nfn following() { 2 }\n",
+    "theirs": "// Retiring owner.\n\n\n/// Following owner.\nfn following() { 1 }\n"
+  },
+  "expected": {
+    "outcome": "conflict",
+    "diagnostic_category": "merge_conflict",
+    "conflict_category": "unmanaged_source_change"
+  },
+  "ruby_native_expected": {
+    "outcome": "conflict",
+    "diagnostic_category": "merge_conflict",
+    "conflict_category": "unmanaged_source_change"
+  },
+  "rust_host_expected": {
+    "rust_tslp": {
+      "outcome": "conflict",
+      "diagnostic_category": "merge_conflict",
+      "diagnostic_code": "rust.membership_with_owner_edit",
+      "conflict_category": "ownership"
+    },
+    "rust_syn": {
+      "outcome": "clean",
+      "output": "// Retiring owner.\n\n\n/// Following owner.\nfn following() { 2 }\n"
+    }
+  }
+}

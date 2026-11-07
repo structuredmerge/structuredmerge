@@ -486,7 +486,7 @@ mod tests {
     #[test]
     fn shared_comment_ownership_fixture_matches_the_bash_typed_merge_contract() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../fixtures/polyglot/typed-core/bash_merge3_comment_ownership.json"
+            "../../../fixtures/polyglot/typed-core/bash_merge3_comment_ownership.json"
         ))
         .unwrap();
         let input = &fixture["input"];

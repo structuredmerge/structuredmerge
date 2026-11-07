@@ -1,0 +1,19 @@
+{
+  "id": "rust_merge3_root_doc_edit_reorder_with_removal",
+  "contract": "rust_merge3_root_doc_edit_reorder_with_removal",
+  "description": "A one-sided crate-level inner-doc edit composes with an independent owner reorder and deletion.",
+  "input": {
+    "base": "//! Base crate docs\n\n// docs a\nfn a() {}\n\n// docs b\nfn b() {}\n// docs c\nfn c() {}\n",
+    "ours": "//! Updated crate docs\n\n// docs b\nfn b() {}\n// docs a\nfn a() {}\n// docs c\nfn c() {}\n",
+    "theirs": "//! Base crate docs\n\n// docs a\nfn a() {}\n\n// docs b\nfn b() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "//! Updated crate docs\n\n// docs b\nfn b() {}\n// docs a\nfn a() {}\n"
+  },
+  "ruby_native_expected": {
+    "outcome": "conflict",
+    "diagnostic_category": "merge_conflict",
+    "conflict_category": "unmanaged_source_change"
+  }
+}

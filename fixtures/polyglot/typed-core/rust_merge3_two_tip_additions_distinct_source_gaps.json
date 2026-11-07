@@ -1,0 +1,14 @@
+{
+  "id": "rust_merge3_two_tip_additions_distinct_source_gaps",
+  "contract": "rust_merge3_two_tip_additions_distinct_source_gaps",
+  "description": "When both tips add owners at different source gaps, preserve each addition at its original gap and retain its attached comment.",
+  "input": {
+    "base": "fn alpha() {}\n\nfn beta() {}\n\nfn gamma() {}\n",
+    "ours": "fn alpha() {}\n\n// ours docs\nfn ours() {}\n\nfn beta() {}\n\nfn gamma() {}\n",
+    "theirs": "fn alpha() {}\n\nfn beta() {}\n\n// theirs docs\nfn theirs() {}\n\nfn gamma() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "fn alpha() {}\n\n// ours docs\nfn ours() {}\n\nfn beta() {}\n\n// theirs docs\nfn theirs() {}\n\nfn gamma() {}\n"
+  }
+}

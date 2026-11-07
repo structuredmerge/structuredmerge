@@ -9,7 +9,7 @@ fn typed_boundary_preserves_the_historical_fixture_without_null_transport_keys()
     assert_eq!(ruby.require_path.as_deref(), Some("ast/crispr"));
     assert!(ruby.import_path.is_none());
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/diagnostics/slice-916-ast-crispr-package-boundary/ast-crispr-package-boundary.json"
+        "../../../fixtures/diagnostics/slice-916-ast-crispr-package-boundary/ast-crispr-package-boundary.json"
     )).unwrap();
     assert_eq!(serde_json::to_value(report).unwrap(), fixture["boundary"]);
 }

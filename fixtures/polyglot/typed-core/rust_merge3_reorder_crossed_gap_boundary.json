@@ -1,0 +1,16 @@
+{
+  "id": "rust_merge3_reorder_crossed_gap_boundary",
+  "contract": "rust_merge3_reorder_crossed_gap_boundary",
+  "description": "When one tip reorders base owners across an insertion gap fixed by the other tip, the combined pairwise owner constraints form a cycle and produce a portable owner-order conflict.",
+  "input": {
+    "base": "fn a() {}\nfn b() {}\nfn c() {}\n",
+    "ours": "fn b() {}\nfn a() {}\nfn c() {}\n",
+    "theirs": "fn a() {}\nfn x() {}\nfn b() {}\nfn c() {}\n"
+  },
+  "expected": {
+    "outcome": "conflict",
+    "diagnostic_category": "merge_conflict",
+    "conflict_id": "rust-owner-order-divergence",
+    "path": "<owner-order>"
+  }
+}

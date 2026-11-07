@@ -1,0 +1,14 @@
+{
+  "id": "bash_merge3_removed_owner_layout",
+  "contract": "bash_merge3_removed_owner_layout",
+  "description": "Deleting a commented Bash variable while editing a function preserves the leading comment and stable preamble and postlude lines.",
+  "input": {
+    "base": "# file preamble\n\n# x docs\nx=1\n\nf() { :; }\n\n# file postlude\n",
+    "ours": "# file preamble\n\n# x docs\nx=1\n\nf() { echo changed; }\n\n# file postlude\n",
+    "theirs": "# file preamble\n\n# x docs\n\nf() { :; }\n\n# file postlude\n"
+  },
+  "expected": {
+    "ok": true,
+    "output": "# file preamble\n\n# x docs\n\nf() { echo changed; }\n\n# file postlude\n"
+  }
+}

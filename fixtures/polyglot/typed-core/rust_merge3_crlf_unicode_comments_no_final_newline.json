@@ -1,0 +1,19 @@
+{
+  "id": "rust_merge3_crlf_unicode_comments_no_final_newline",
+  "contract": "rust_merge3_crlf_unicode_comments_no_final_newline",
+  "description": "Independent owner edits preserve Unicode identifiers, doc comments, CRLF endings, and the absent final newline.",
+  "input": {
+    "base": "//! crate docs\r\n\r\n/// docs a\r\nfn caf\u00e9() { 1 }\r\n\r\n// b note\r\nfn b() { 1 }",
+    "ours": "//! crate docs\r\n\r\n/// updated docs a\r\nfn caf\u00e9() { 2 }\r\n\r\n// b note\r\nfn b() { 1 }",
+    "theirs": "//! crate docs\r\n\r\n/// docs a\r\nfn caf\u00e9() { 1 }\r\n\r\n// b note\r\nfn b() { 3 }"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "//! crate docs\r\n\r\n/// updated docs a\r\nfn caf\u00e9() { 2 }\r\n\r\n// b note\r\nfn b() { 3 }"
+  },
+  "ruby_native_expected": {
+    "outcome": "conflict",
+    "diagnostic_category": "unsafe_source_range",
+    "conflict_category": "unsafe_source_range"
+  }
+}

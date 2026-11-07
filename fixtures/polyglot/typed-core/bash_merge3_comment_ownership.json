@@ -1,0 +1,28 @@
+{
+  "id": "bash_merge3_comment_ownership",
+  "category": "bash_common_merge3",
+  "call": "bash_common_merge3",
+  "description": "Independent Bash owner edits preserve the adjacent comment bytes through native Ruby and Rust providers.",
+  "input": {
+    "base": "left() { echo one; }\n# documentation for right\nright() { echo one; }\n",
+    "ours": "left() { echo two; }\n# documentation for right\nright() { echo one; }\n",
+    "theirs": "left() { echo one; }\n# documentation for right\nright() { echo three; }\n"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "ok",
+      "value": true
+    },
+    {
+      "type": "equals",
+      "field": "output",
+      "value": "left() { echo two; }\n# documentation for right\nright() { echo three; }\n"
+    },
+    {
+      "type": "equals",
+      "field": "verification.base_participated",
+      "value": true
+    }
+  ]
+}

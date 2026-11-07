@@ -7,8 +7,10 @@ import unittest
 import zipfile
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).parents[1]))
 import package_release_archive as archives
+import pytest
 
 
 class ReleaseArchiveTest(unittest.TestCase):
@@ -23,8 +25,8 @@ class ReleaseArchiveTest(unittest.TestCase):
             (directory / f"{name}.exe").write_bytes(name.encode())
 
     def test_tar_archive_is_normalized_and_contains_both_executables(self):
-        with tempfile.TemporaryDirectory() as root:
-            root = Path(root)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
             binary_dir = root / "bin"
             binary_dir.mkdir()
             self.binaries(binary_dir)
@@ -40,26 +42,26 @@ class ReleaseArchiveTest(unittest.TestCase):
                     os.environ["SOURCE_DATE_EPOCH"] = old
             with tarfile.open(archive, "r:gz") as stream:
                 members = stream.getmembers()
-                self.assertEqual([member.name for member in members], ["smorg", "smorg-rs"])
-                self.assertTrue(all(member.uid == member.gid == 0 for member in members))
-                self.assertTrue(all(member.mtime == 123 for member in members))
-            self.assertEqual(hashlib.sha256(archive.read_bytes()).digest(), hashlib.sha256(repeat.read_bytes()).digest())
+                assert [member.name for member in members] == ["smorg", "smorg-rs"]
+                assert all(member.uid == member.gid == 0 for member in members)
+                assert all(member.mtime == 123 for member in members)
+            assert hashlib.sha256(archive.read_bytes()).digest() == hashlib.sha256(repeat.read_bytes()).digest()
 
     def test_windows_archive_is_repeatable(self):
-        with tempfile.TemporaryDirectory() as root:
-            root = Path(root)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
             binary_dir = root / "bin"
             binary_dir.mkdir()
             self.windows_binaries(binary_dir)
             first = archives.package("0.2.1", "windows-x86_64", binary_dir, root / "one")
             second = archives.package("0.2.1", "windows-x86_64", binary_dir, root / "two")
-            self.assertEqual(hashlib.sha256(first.read_bytes()).digest(), hashlib.sha256(second.read_bytes()).digest())
+            assert hashlib.sha256(first.read_bytes()).digest() == hashlib.sha256(second.read_bytes()).digest()
             with zipfile.ZipFile(first) as stream:
-                self.assertEqual(stream.namelist(), ["smorg.exe", "smorg-rs.exe"])
+                assert stream.namelist() == ["smorg.exe", "smorg-rs.exe"]
 
     def test_missing_binary_fails_closed(self):
         with tempfile.TemporaryDirectory() as root:
-            with self.assertRaisesRegex(ValueError, "missing release executable"):
+            with pytest.raises(ValueError, match="missing release executable"):
                 archives.package("0.2.1", "linux-x86_64", Path(root), Path(root) / "out")
 
 

@@ -608,7 +608,7 @@ fn common_merge3_proves_selected_theirs_and_nested_independent_changes() {
 #[test]
 fn duplicate_member_keys_preserve_exact_revisions_and_fail_closed_on_ambiguity() {
     let fixture: Value = serde_json::from_str(include_str!(
-        "../../../../fixtures/polyglot/typed-core/json_duplicate_object_keys.json"
+        "../../../fixtures/polyglot/typed-core/json_duplicate_object_keys.json"
     ))
     .unwrap();
     let input = &fixture["input"];

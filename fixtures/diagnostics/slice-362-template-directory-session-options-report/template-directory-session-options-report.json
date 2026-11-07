@@ -1,0 +1,461 @@
+{
+  "plan_run": {
+    "options": {
+      "mode": "plan",
+      "context": {
+        "project_name": "demo"
+      },
+      "default_strategy": "merge",
+      "overrides": [
+        {
+          "path": "README.md",
+          "strategy": "accept_template"
+        },
+        {
+          "path": "config/mise.toml",
+          "strategy": "keep_destination"
+        },
+        {
+          "path": "bin/setup.sh",
+          "strategy": "raw_copy"
+        }
+      ],
+      "replacements": {
+        "KJ|GEM_NAME": "demo",
+        "KJ|SUMMARY": "Example gem summary",
+        "KJ|APP_ENV": "development"
+      },
+      "allowed_families": null
+    },
+    "expected": {
+      "session_report": {
+        "mode": "plan",
+        "runner_report": {
+          "plan_report": {
+            "entries": [
+              {
+                "template_source_path": ".env.local.example",
+                "logical_destination_path": ".env.local",
+                "destination_path": ".env.local.example",
+                "execution_action": "merge_prepared_content",
+                "write_action": "create",
+                "status": "create",
+                "previewable": true
+              },
+              {
+                "template_source_path": ".kettle-jem.yml.example",
+                "logical_destination_path": ".kettle-jem.yml",
+                "destination_path": null,
+                "execution_action": "omit",
+                "write_action": "omit",
+                "status": "omitted",
+                "previewable": true
+              },
+              {
+                "template_source_path": "README.md.example",
+                "logical_destination_path": "README.md",
+                "destination_path": "README.md",
+                "execution_action": "blocked",
+                "write_action": "update",
+                "status": "blocked",
+                "previewable": false
+              },
+              {
+                "template_source_path": "bin/setup.sh.example",
+                "logical_destination_path": "bin/setup.sh",
+                "destination_path": "bin/setup.sh",
+                "execution_action": "raw_copy",
+                "write_action": "create",
+                "status": "create",
+                "previewable": true
+              },
+              {
+                "template_source_path": "config/mise.toml.example",
+                "logical_destination_path": "config/mise.toml",
+                "destination_path": "config/mise.toml",
+                "execution_action": "keep",
+                "write_action": "keep",
+                "status": "keep",
+                "previewable": true
+              },
+              {
+                "template_source_path": "gem.gemspec.example",
+                "logical_destination_path": "gem.gemspec",
+                "destination_path": "demo.gemspec",
+                "execution_action": "merge_prepared_content",
+                "write_action": "create",
+                "status": "create",
+                "previewable": true
+              }
+            ],
+            "summary": {
+              "create": 3,
+              "update": 0,
+              "keep": 1,
+              "blocked": 1,
+              "omitted": 1
+            }
+          },
+          "preview": {
+            "result_files": {
+              ".env.local.example": "APP_ENV=development\n",
+              "bin/setup.sh": "echo setup\n",
+              "config/mise.toml": "project = \"existing\"\n",
+              "demo.gemspec": "spec.name = \"demo\"\nspec.summary = \"Example gem summary\"\n"
+            },
+            "created_paths": [
+              ".env.local.example",
+              "bin/setup.sh",
+              "demo.gemspec"
+            ],
+            "updated_paths": [],
+            "kept_paths": [
+              "config/mise.toml"
+            ],
+            "blocked_paths": [
+              "README.md"
+            ],
+            "omitted_paths": [
+              ".kettle-jem.yml"
+            ]
+          },
+          "run_report": null,
+          "apply_report": null
+        }
+      },
+      "status": {
+        "mode": "plan",
+        "ready": false,
+        "missing_families": [
+          "dotenv"
+        ],
+        "blocked_paths": [
+          "README.md"
+        ],
+        "planned_write_count": 3,
+        "written_count": 0
+      },
+      "diagnostics": {
+        "mode": "plan",
+        "ready": false,
+        "diagnostics": [
+          {
+            "severity": "error",
+            "category": "configuration_error",
+            "reason": "missing_family_adapter",
+            "path": ".env.local.example",
+            "family": "dotenv",
+            "message": "missing family adapter for dotenv blocks .env.local.example"
+          },
+          {
+            "severity": "error",
+            "category": "configuration_error",
+            "reason": "unresolved_tokens",
+            "path": "README.md",
+            "message": "unresolved template tokens block README.md"
+          }
+        ]
+      }
+    }
+  },
+  "apply_run": {
+    "options": {
+      "mode": "apply",
+      "context": {},
+      "default_strategy": "merge",
+      "overrides": [],
+      "replacements": {},
+      "allowed_families": null
+    },
+    "expected": {
+      "session_report": {
+        "mode": "apply",
+        "adapter_families": [
+          "markdown",
+          "ruby",
+          "toml"
+        ],
+        "diagnostics": [],
+        "runner_report": {
+          "plan_report": {
+            "entries": [
+              {
+                "template_source_path": "README.md.example",
+                "logical_destination_path": "README.md",
+                "destination_path": "README.md",
+                "execution_action": "merge_prepared_content",
+                "write_action": "update",
+                "status": "update",
+                "previewable": false
+              },
+              {
+                "template_source_path": "config/app.toml.example",
+                "logical_destination_path": "config/app.toml",
+                "destination_path": "config/app.toml",
+                "execution_action": "merge_prepared_content",
+                "write_action": "update",
+                "status": "update",
+                "previewable": false
+              },
+              {
+                "template_source_path": "lib/greeter.rb.example",
+                "logical_destination_path": "lib/greeter.rb",
+                "destination_path": "lib/greeter.rb",
+                "execution_action": "merge_prepared_content",
+                "write_action": "update",
+                "status": "update",
+                "previewable": false
+              }
+            ],
+            "summary": {
+              "create": 0,
+              "update": 3,
+              "keep": 0,
+              "blocked": 0,
+              "omitted": 0
+            }
+          },
+          "preview": {
+            "result_files": {},
+            "created_paths": [],
+            "updated_paths": [],
+            "kept_paths": [],
+            "blocked_paths": [],
+            "omitted_paths": []
+          },
+          "run_report": {
+            "entries": [
+              {
+                "template_source_path": "README.md.example",
+                "logical_destination_path": "README.md",
+                "destination_path": "README.md",
+                "execution_action": "merge_prepared_content",
+                "status": "updated"
+              },
+              {
+                "template_source_path": "config/app.toml.example",
+                "logical_destination_path": "config/app.toml",
+                "destination_path": "config/app.toml",
+                "execution_action": "merge_prepared_content",
+                "status": "updated"
+              },
+              {
+                "template_source_path": "lib/greeter.rb.example",
+                "logical_destination_path": "lib/greeter.rb",
+                "destination_path": "lib/greeter.rb",
+                "execution_action": "merge_prepared_content",
+                "status": "updated"
+              }
+            ],
+            "summary": {
+              "created": 0,
+              "updated": 3,
+              "kept": 0,
+              "blocked": 0,
+              "omitted": 0
+            }
+          },
+          "apply_report": {
+            "entries": [
+              {
+                "template_source_path": "README.md.example",
+                "logical_destination_path": "README.md",
+                "destination_path": "README.md",
+                "execution_action": "merge_prepared_content",
+                "status": "updated",
+                "written": true
+              },
+              {
+                "template_source_path": "config/app.toml.example",
+                "logical_destination_path": "config/app.toml",
+                "destination_path": "config/app.toml",
+                "execution_action": "merge_prepared_content",
+                "status": "updated",
+                "written": true
+              },
+              {
+                "template_source_path": "lib/greeter.rb.example",
+                "logical_destination_path": "lib/greeter.rb",
+                "destination_path": "lib/greeter.rb",
+                "execution_action": "merge_prepared_content",
+                "status": "updated",
+                "written": true
+              }
+            ],
+            "summary": {
+              "created": 0,
+              "updated": 3,
+              "kept": 0,
+              "blocked": 0,
+              "omitted": 0,
+              "written": 3
+            }
+          }
+        }
+      },
+      "status": {
+        "mode": "apply",
+        "ready": true,
+        "missing_families": [],
+        "blocked_paths": [],
+        "planned_write_count": 3,
+        "written_count": 3
+      },
+      "diagnostics": {
+        "mode": "apply",
+        "ready": true,
+        "diagnostics": []
+      }
+    }
+  },
+  "reapply_run": {
+    "options": {
+      "mode": "reapply",
+      "context": {},
+      "default_strategy": "merge",
+      "overrides": [],
+      "replacements": {},
+      "allowed_families": null
+    },
+    "expected": {
+      "session_report": {
+        "mode": "reapply",
+        "adapter_families": [
+          "markdown",
+          "ruby",
+          "toml"
+        ],
+        "diagnostics": [],
+        "runner_report": {
+          "plan_report": {
+            "entries": [
+              {
+                "template_source_path": "README.md.example",
+                "logical_destination_path": "README.md",
+                "destination_path": "README.md",
+                "execution_action": "merge_prepared_content",
+                "write_action": "update",
+                "status": "update",
+                "previewable": false
+              },
+              {
+                "template_source_path": "config/app.toml.example",
+                "logical_destination_path": "config/app.toml",
+                "destination_path": "config/app.toml",
+                "execution_action": "merge_prepared_content",
+                "write_action": "update",
+                "status": "update",
+                "previewable": false
+              },
+              {
+                "template_source_path": "lib/greeter.rb.example",
+                "logical_destination_path": "lib/greeter.rb",
+                "destination_path": "lib/greeter.rb",
+                "execution_action": "merge_prepared_content",
+                "write_action": "update",
+                "status": "update",
+                "previewable": false
+              }
+            ],
+            "summary": {
+              "create": 0,
+              "update": 3,
+              "keep": 0,
+              "blocked": 0,
+              "omitted": 0
+            }
+          },
+          "preview": {
+            "result_files": {},
+            "created_paths": [],
+            "updated_paths": [],
+            "kept_paths": [],
+            "blocked_paths": [],
+            "omitted_paths": []
+          },
+          "run_report": {
+            "entries": [
+              {
+                "template_source_path": "README.md.example",
+                "logical_destination_path": "README.md",
+                "destination_path": "README.md",
+                "execution_action": "merge_prepared_content",
+                "status": "kept"
+              },
+              {
+                "template_source_path": "config/app.toml.example",
+                "logical_destination_path": "config/app.toml",
+                "destination_path": "config/app.toml",
+                "execution_action": "merge_prepared_content",
+                "status": "kept"
+              },
+              {
+                "template_source_path": "lib/greeter.rb.example",
+                "logical_destination_path": "lib/greeter.rb",
+                "destination_path": "lib/greeter.rb",
+                "execution_action": "merge_prepared_content",
+                "status": "kept"
+              }
+            ],
+            "summary": {
+              "created": 0,
+              "updated": 0,
+              "kept": 3,
+              "blocked": 0,
+              "omitted": 0
+            }
+          },
+          "apply_report": {
+            "entries": [
+              {
+                "template_source_path": "README.md.example",
+                "logical_destination_path": "README.md",
+                "destination_path": "README.md",
+                "execution_action": "merge_prepared_content",
+                "status": "kept",
+                "written": false
+              },
+              {
+                "template_source_path": "config/app.toml.example",
+                "logical_destination_path": "config/app.toml",
+                "destination_path": "config/app.toml",
+                "execution_action": "merge_prepared_content",
+                "status": "kept",
+                "written": false
+              },
+              {
+                "template_source_path": "lib/greeter.rb.example",
+                "logical_destination_path": "lib/greeter.rb",
+                "destination_path": "lib/greeter.rb",
+                "execution_action": "merge_prepared_content",
+                "status": "kept",
+                "written": false
+              }
+            ],
+            "summary": {
+              "created": 0,
+              "updated": 0,
+              "kept": 3,
+              "blocked": 0,
+              "omitted": 0,
+              "written": 0
+            }
+          }
+        }
+      },
+      "status": {
+        "mode": "reapply",
+        "ready": true,
+        "missing_families": [],
+        "blocked_paths": [],
+        "planned_write_count": 3,
+        "written_count": 0
+      },
+      "diagnostics": {
+        "mode": "reapply",
+        "ready": true,
+        "diagnostics": []
+      }
+    }
+  }
+}

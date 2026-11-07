@@ -8,6 +8,6 @@ repository = "https://github.com/structuredmerge/structuredmerge"
 license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 
 [dependencies]
-unicode-normalization = "0.1.25"
 ast-merge = { version = "0.2.1", path = "../ast-merge" }
 tree-haver = { version = "0.2.1", path = "../tree-haver" }
+unicode-normalization = "0.1.25"

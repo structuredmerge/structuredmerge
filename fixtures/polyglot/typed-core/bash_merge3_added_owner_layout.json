@@ -1,0 +1,14 @@
+{
+  "id": "bash_merge3_added_owner_layout",
+  "contract": "bash_merge3_added_owner_layout",
+  "description": "An independently edited owner and a newly added owner render in the selected membership layout order.",
+  "input": {
+    "base": "x=1\n",
+    "ours": "x=2\n",
+    "theirs": "x=1\ny=3\n"
+  },
+  "expected": {
+    "ok": true,
+    "output": "x=2\ny=3\n"
+  }
+}

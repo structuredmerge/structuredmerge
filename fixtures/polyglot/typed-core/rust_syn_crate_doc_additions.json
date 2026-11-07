@@ -1,0 +1,18 @@
+{
+  "id": "rust_syn_crate_doc_additions",
+  "contract": "rust_syn_crate_doc_additions",
+  "description": "Native Rust doc attributes identify divergent crate-level additions as document-scope content and preserve both ahead of independently added owners.",
+  "input": {
+    "base": "",
+    "ours": "//! ours crate docs\nfn ours() {}\n",
+    "theirs": "//! theirs crate docs\nfn theirs() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "//! ours crate docs\n//! theirs crate docs\nfn ours() {}\nfn theirs() {}\n"
+  },
+  "ruby_native_expected": {
+    "outcome": "conflict",
+    "diagnostic_category": "merge_conflict"
+  }
+}

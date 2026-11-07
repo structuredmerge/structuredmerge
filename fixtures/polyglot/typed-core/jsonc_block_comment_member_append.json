@@ -1,0 +1,17 @@
+{
+  "id": "jsonc_block_comment_member_append",
+  "description": "Rust source-preserving JSONC output retains an inline block comment on its existing member; the Ruby native provider currently drops this comment when appending a member.",
+  "input": {
+    "dialect": "jsonc",
+    "incoming": "{\n  \"config\": {\n    \"keep\": 9,\n    \"add\": 2\n  }\n}\n",
+    "current": "{\n  \"config\": {\n    \"keep\": 9 /* keep inline */\n  }\n}\n"
+  },
+  "expected": {
+    "ok": true,
+    "output": "{\n  \"config\": {\n    \"keep\": 9, /* keep inline */\n    \"add\": 2\n  }\n}\n"
+  },
+  "ruby_native_expected": {
+    "ok": true,
+    "output": "{\n  \"config\": {\n    \"keep\": 9,\n    \"add\": 2\n  }\n}\n"
+  }
+}

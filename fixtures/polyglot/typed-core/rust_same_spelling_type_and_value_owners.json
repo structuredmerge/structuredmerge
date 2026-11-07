@@ -1,0 +1,18 @@
+{
+  "id": "rust_same_spelling_type_and_value_owners",
+  "contract": "rust_same_spelling_type_and_value_owners",
+  "description": "Syn distinguishes Rust type-namespace and value-namespace items that share a spelling; independent changes must select each owner separately.",
+  "input": {
+    "base": "/// Shared type contract.\npub type Shared = u32;\n\n/// Shared value contract.\npub fn Shared() -> u32 { 1 }\n",
+    "ours": "/// Shared type contract.\npub type Shared = u64;\n\n/// Shared value contract.\npub fn Shared() -> u32 { 1 }\n",
+    "theirs": "/// Shared type contract.\npub type Shared = u32;\n\n/// Shared value contract.\npub fn Shared() -> u32 { 2 }\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "/// Shared type contract.\npub type Shared = u64;\n\n/// Shared value contract.\npub fn Shared() -> u32 { 2 }\n",
+    "owner_paths": [
+      "/type:Shared",
+      "/function:Shared"
+    ]
+  }
+}

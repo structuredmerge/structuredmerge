@@ -1424,7 +1424,7 @@ mod tests {
     #[test]
     fn keeps_inline_comment_with_existing_member_when_appending_jsonc_member() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../fixtures/polyglot/typed-core/jsonc_inline_comment_member_append.json"
+            "../../../fixtures/polyglot/typed-core/jsonc_inline_comment_member_append.json"
         ))
         .unwrap();
         let input = fixture.get("input").unwrap();
@@ -1440,7 +1440,7 @@ mod tests {
     #[test]
     fn keeps_inline_block_comment_with_existing_member_when_appending_jsonc_member() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../fixtures/polyglot/typed-core/jsonc_block_comment_member_append.json"
+            "../../../fixtures/polyglot/typed-core/jsonc_block_comment_member_append.json"
         ))
         .unwrap();
         let input = fixture.get("input").unwrap();
@@ -1456,7 +1456,7 @@ mod tests {
     #[test]
     fn keeps_inline_block_comment_in_compact_jsonc_object_when_appending_member() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../fixtures/polyglot/typed-core/jsonc_compact_block_comment_member_append.json"
+            "../../../fixtures/polyglot/typed-core/jsonc_compact_block_comment_member_append.json"
         ))
         .unwrap();
         let input = fixture.get("input").unwrap();
@@ -1472,7 +1472,7 @@ mod tests {
     #[test]
     fn normalizes_comma_after_jsonc_comment_before_appending_member() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../fixtures/polyglot/typed-core/jsonc_block_comment_after_comma_member_append.json"
+            "../../../fixtures/polyglot/typed-core/jsonc_block_comment_after_comma_member_append.json"
         ))
         .unwrap();
         let input = fixture.get("input").unwrap();

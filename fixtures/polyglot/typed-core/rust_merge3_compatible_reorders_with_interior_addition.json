@@ -1,0 +1,18 @@
+{
+  "id": "rust_merge3_compatible_reorders_with_interior_addition",
+  "contract": "rust_merge3_compatible_reorders_with_interior_addition",
+  "description": "A documented interior owner addition composes with independent acyclic reorders from both tips when its adjacent gap anchors retain their order.",
+  "input": {
+    "base": "// docs a\nfn a() {}\n// docs b\nfn b() {}\n// docs c\nfn c() {}\n// docs d\nfn d() {}\n// docs e\nfn e() {}\n// docs f\nfn f() {}\n",
+    "ours": "// docs b\nfn b() {}\n// docs a\nfn a() {}\n// docs c\nfn c() {}\n// docs x\nfn x() {}\n// docs d\nfn d() {}\n// docs e\nfn e() {}\n// docs f\nfn f() {}\n",
+    "theirs": "// docs a\nfn a() {}\n// docs b\nfn b() {}\n// docs c\nfn c() {}\n// docs d\nfn d() {}\n// docs f\nfn f() {}\n// docs e\nfn e() {}\n"
+  },
+  "expected": {
+    "outcome": "clean",
+    "output": "// docs b\nfn b() {}\n// docs a\nfn a() {}\n// docs c\nfn c() {}\n// docs x\nfn x() {}\n// docs d\nfn d() {}\n// docs f\nfn f() {}\n// docs e\nfn e() {}\n"
+  },
+  "ruby_native_expected": {
+    "outcome": "clean",
+    "output": "// docs b\nfn b() {}\n// docs a\nfn a() {}\n// docs c\nfn c() {}\n// docs x\nfn x() {}\n// docs d\nfn d() {}\n// docs e\nfn e() {}\n// docs f\nfn f() {}\n"
+  }
+}

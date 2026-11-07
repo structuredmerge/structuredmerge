@@ -1,0 +1,63 @@
+{
+  "id": "json_duplicate_object_keys",
+  "description": "Duplicate JSON member names are retained by the Ruby source-preserving provider, while the Rust structural owner profile rejects ambiguous two-way analysis and reports conflicts when both merge3 tips change that member identity.",
+  "input": {
+    "base": "{\"x\":1,\"x\":2}\n",
+    "ours": "{\"x\":1,\"x\":3}\n",
+    "theirs": "{\"x\":1,\"x\":4}\n"
+  },
+  "expected": {
+    "ruby_native": {
+      "analyze": {
+        "ok": true
+      },
+      "diff2": {
+        "ok": true
+      },
+      "merge2": {
+        "ok": true,
+        "output": "{\n  \"x\":1,\n  \"x\":2\n}\n"
+      },
+      "merge3_exact": {
+        "ok": true,
+        "output": "{\"x\":1,\"x\":2}\n"
+      },
+      "merge3_one_sided": {
+        "ok": true,
+        "output": "{\"x\":1,\"x\":3}\n"
+      },
+      "merge3_conflicting": {
+        "ok": false,
+        "conflict_category": "edit_edit",
+        "conflict_path": "/x"
+      }
+    },
+    "rust_tslp": {
+      "analyze": {
+        "ok": false,
+        "diagnostic_category": "ambiguity"
+      },
+      "diff2": {
+        "ok": false,
+        "diagnostic_category": "ambiguity"
+      },
+      "merge2": {
+        "ok": false,
+        "diagnostic_category": "ambiguity"
+      },
+      "merge3_exact": {
+        "ok": true,
+        "output": "{\"x\":1,\"x\":2}\n"
+      },
+      "merge3_one_sided": {
+        "ok": true,
+        "output": "{\"x\":1,\"x\":3}\n"
+      },
+      "merge3_conflicting": {
+        "ok": false,
+        "conflict_category": "edit_edit",
+        "conflict_path": "/x"
+      }
+    }
+  }
+}

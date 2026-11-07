@@ -4,11 +4,12 @@
 Uses the installed CLI and normal TSLP loader, not a replacement downloader.
 The resulting cache is retained for the job; callers own its final cleanup.
 """
+
 import argparse
 import json
 import os
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 from check_core_python_source import run
 from typed_cli_git import CAPTURE_LIMIT, digest
@@ -18,6 +19,7 @@ PROVISION_BUDGET = 256 * 1024**2
 
 
 def prepare(binary, destination):
+    """Prepare."""
     binary = binary.resolve(strict=True)
     scratch_root = (ROOT / "tmp").resolve()
     scratch_root.mkdir(exist_ok=True)
@@ -30,28 +32,62 @@ def prepare(binary, destination):
     if not binary.is_file() or binary.stat().st_size > 128 * 1024**2:
         raise ValueError("binary exceeds 128 MiB or is not a file")
     evidence = Path(tempfile.mkdtemp(prefix="cli-provision-evidence-", dir=scratch_root))
-    report = {"binary": str(binary), "sha256": digest(binary), "cold_cache": True,
-              "work_budget_bytes": PROVISION_BUDGET, "passed": False,
-              "publication_gate": False, "default_approved": False}
+    report = {
+        "binary": str(binary),
+        "sha256": digest(binary),
+        "cold_cache": True,
+        "work_budget_bytes": PROVISION_BUDGET,
+        "passed": False,
+        "publication_gate": False,
+        "default_approved": False,
+    }
     try:
         with tempfile.TemporaryDirectory(prefix="cli-provision-work-", dir=scratch_root) as temporary:
             work = Path(temporary)
             cache = work / "cache"
             cache.mkdir()
-            env = {key: value for key, value in os.environ.items()
-                   if not key.startswith(("GIT_", "TREE_HAVER_", "TREE_SITTER_LANGUAGE_PACK_"))}
-            env.update(TMPDIR=str(work), TREE_HAVER_LANGUAGE_PACK_CACHE_DIR=str(cache),
-                       TREE_SITTER_LANGUAGE_PACK_CACHE_DIR=str(cache),
-                       GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
-                       GIT_TERMINAL_PROMPT="0", LC_ALL="C")
-            for name, value in (("base", {"base": 0}), ("ours", {"base": 0, "ours": 1}),
-                                ("theirs", {"base": 0, "theirs": 2})):
+            env = {
+                key: value
+                for key, value in os.environ.items()
+                if not key.startswith(("GIT_", "TREE_HAVER_", "TREE_SITTER_LANGUAGE_PACK_"))
+            }
+            env.update(
+                TMPDIR=str(work),
+                TREE_HAVER_LANGUAGE_PACK_CACHE_DIR=str(cache),
+                TREE_SITTER_LANGUAGE_PACK_CACHE_DIR=str(cache),
+                GIT_CONFIG_NOSYSTEM="1",
+                GIT_CONFIG_GLOBAL=os.devnull,
+                GIT_TERMINAL_PROMPT="0",
+                LC_ALL="C",
+            )
+            for name, value in (
+                ("base", {"base": 0}),
+                ("ours", {"base": 0, "ours": 1}),
+                ("theirs", {"base": 0, "theirs": 2}),
+            ):
                 (work / name).write_text(json.dumps(value))
             # A nontrivial strict merge forces parsing; identical inputs could
             # short-circuit without ever acquiring or loading the JSON grammar.
-            run([str(binary), "merge-driver", "--strict", "--report", "driver.json",
-                 "base", "ours", "theirs", "provision.json"], work, env, evidence,
-                "provision", work, timeout=120, work_budget=PROVISION_BUDGET)
+            run(
+                [
+                    str(binary),
+                    "merge-driver",
+                    "--strict",
+                    "--report",
+                    "driver.json",
+                    "base",
+                    "ours",
+                    "theirs",
+                    "provision.json",
+                ],
+                work,
+                env,
+                evidence,
+                "provision",
+                work,
+                timeout=120,
+                work_budget=PROVISION_BUDGET,
+            )
             for name in ("ours", "driver.json"):
                 if (work / name).stat().st_size > CAPTURE_LIMIT:
                     raise ValueError("provisioning result exceeds capture budget")

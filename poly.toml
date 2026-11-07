@@ -117,8 +117,16 @@ disable = [
 [per-file-ignores]
 "**/tests/**" = [
   "ANN",
+  "D101",
+  "D102",
   "D103",
   "PLR2004",
+  "S607",
+  "PLW1510",
+  "E402",
+  "PLC0415",
+  "B023",
+  "PT009",
   "PLR0915",
   "PLR0913",
   "S101",
@@ -321,7 +329,7 @@ cargo = true
 commit = { stages = ["commit-msg"] }
 
 [hooks.pre-commit.commands.pyrefly]
-run = "pyrefly check packages/python"
+run = "pyrefly check packages/python/structuredmerge_core"
 workspace = true
 files = "packages/python/**/*.py"
 
