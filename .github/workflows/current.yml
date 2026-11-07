@@ -381,6 +381,16 @@ jobs:
       - name: Place fixtures beside kernel
         shell: bash
         run: mv shared-fixtures ../fixtures
+      - name: Install Alef formatters
+        shell: bash
+        run: |
+          python3 -m venv tmp/alef-tools
+          tmp/alef-tools/bin/python -m pip install 'polylint==0.33.1'
+          export PATH="$PWD/tmp/alef-tools/bin:$PATH"
+          echo "$PWD/tmp/alef-tools/bin" >> "$GITHUB_PATH"
+          cargo install cargo-sort --version 2.1.4 --locked
+          poly --version
+          cargo sort --version
       - name: Install Alef
         shell: bash
         run: |
@@ -392,9 +402,8 @@ jobs:
         run: |
           set -euo pipefail
           for pass in 1 2; do
-            alef all --clean --skip-compile --skip-snippet-validation
-            changes="$(git status --porcelain --untracked-files=all -- \
-              .alef-generation.toml .alef-ownership.toml packages/ruby docs/reference)"
+            alef all --clean --strict --skip-compile --skip-snippet-validation
+            changes="$(git status --porcelain --untracked-files=all)"
             if [[ -n "$changes" ]]; then
               printf 'Alef generation pass %s changed the committed tree:\n%s\n' "$pass" "$changes" >&2
               exit 1
