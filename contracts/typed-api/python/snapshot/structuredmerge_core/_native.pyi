@@ -2941,3 +2941,10 @@ def workflow_selection_reports_controlled(
     limits: WorkflowLimits,
     control: OperationControl,
 ) -> list[MergeSelectionReport]: ...
+
+
+class ParserHost:
+    """Runtime marker for parser host registration."""
+
+class WorkflowHost:
+    """Runtime marker for workflow host registration."""

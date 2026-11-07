@@ -166,7 +166,7 @@ jobs:
             runner: ubuntu-24.04-arm
             python: "3.14"
           - platform: macos-arm64
-            runner: macos-14
+            runner: macos-15
             python: "3.14"
           - platform: macos-x64
             runner: macos-15-intel
@@ -228,7 +228,7 @@ jobs:
             runner: ubuntu-24.04-arm
             ruby: "4.0"
           - platform: arm64-darwin
-            runner: macos-14
+            runner: macos-15
             ruby: "4.0"
           - platform: x86_64-darwin
             runner: macos-15-intel

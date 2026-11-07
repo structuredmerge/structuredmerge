@@ -1,10 +1,10 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "python",
-  "review_reason": "Alef 0.121.0 regen: options.py StrEnum (Python 3.11 floor, approved); adds register_typescript_oxc_parser from merged oxc provider work; hash-comment refresh",
+  "review_reason": "Add static signatures for the existing ParserHost and WorkflowHost PyO3 marker classes exported by the runtime.",
   "files": {
     "structuredmerge_core/__init__.py": "4aa4e12197246988f6ea00b498d51887a6fc6718035a610e4ef23ab6503a279a",
-    "structuredmerge_core/_native.pyi": "98778900bfe8cd6f213169b7b98fab7e332e0022102560c09b3729e8e6461bd3",
+    "structuredmerge_core/_native.pyi": "1871dc4b0727d8d3c09ef23635c4b9dc66b7865f0029bf7677ebeac539ca0eb5",
     "structuredmerge_core/api.py": "e871e274fb595e9a6bb2ee59db633d78ea99eb0488cf13a445d01d0590573599",
     "structuredmerge_core/exceptions.py": "25e61ce52e2e192df977a5f2ba7473dd6012e064c4bba38b05c15dc043201a29",
     "structuredmerge_core/options.py": "bd4cf941ccbd622f743a2364253365206b922ee2f48597fe2bfd62a9fd115640",
