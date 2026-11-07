@@ -12,7 +12,7 @@ template:
   local_env:
     STRUCTUREDMERGE_DEV: "{{config_root}}/../../../ruby/gems"
     STRUCTUREDMERGE_CORE_DEV: "{{config_root}}/../.."
-    KETTLE_DEV_DEV: "{{config_root}}/../../../kettle-dev"
+    KETTLE_DEV_DEV: "{{config_root}}/../../../../kettle-dev"
 
 changelog:
   mode: root
