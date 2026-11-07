@@ -1,11 +1,11 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "ruby",
-  "review_reason": "Adds register_typescript_oxc_parser from merged oxc provider work; native.rb hash.key guard is the upstream Alef flattened-fields fix family; hash-comment refresh",
+  "review_reason": "Alef 0.128.0 regeneration changes only whitespace/formatting in the Ruby wrapper and RBS declarations; reviewed public names and signatures are unchanged.",
   "files": {
-    "lib/structuredmerge_core/native.rb": "88f183b7a14d14522bcf2c03134e91860c766fdb87efe21fab92412784dad602",
+    "lib/structuredmerge_core/native.rb": "8d373c4dc7c519371d97ed9a31d602b6403511ddaed8ed7a4876af0e912589e2",
     "lib/structuredmerge_core/version.rb": "99c8b3f93ad0d98825c986c3d405eb50b97bc4e5c14d61fa087ea228966c424a",
     "lib/structuredmerge_core.rb": "defe67340887e4fcfecefc0a68d255fab86768e5c81260916819b636303f5cdf",
-    "sig/types.rbs": "fd1c39b185f0ff7fb6f028b26af0b274c04460e5f87a77108a76628496c8bee4"
+    "sig/types.rbs": "8049f8d0868bed3e09867f445439c2b18a8627bd9565db7441d7d9b91838a571"
   }
 }

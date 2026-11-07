@@ -1,5 +1,5 @@
 [workspace]
-alef_version = "0.121.0"
+alef_version = "0.128.0"
 languages = ["ruby", "python", "ffi", "go"]
 
 [workspace.ownership]
@@ -10,6 +10,10 @@ user_owned = [
   # Never regenerate these alongside the live API: that would erase drift.
   "contracts/typed-api/python/snapshot/**",
   "contracts/typed-api/ruby/snapshot/**",
+  # Project-specific hook policy is maintained here, not in Alef's stock scaffold.
+  "poly.toml",
+  # Alef omits the two Python trait-bridge marker classes from its native stub.
+  "packages/python/structuredmerge_core/_native.pyi",
   # Retained legacy regression inputs, not active generation/publication targets.
   # Keep exact paths so new typed-core outputs cannot inherit an exclusion.
 ]
@@ -80,7 +84,15 @@ output = "packages/ruby/sig"
 send_sync_types = ["OperationControl"]
 # Input and result DTOs share these identities; do not shadow them with
 # facade dataclasses that native SourceInput constructors cannot accept.
-reexported_types = ["SourceDescriptor", "LineEndings", "TemplateDestinationContext", "ParseRequest", "ParseOptions", "MergeProviderDescriptor", "MergeParserRequirements"]
+reexported_types = [
+  "SourceDescriptor",
+  "LineEndings",
+  "TemplateDestinationContext",
+  "ParseRequest",
+  "ParseOptions",
+  "MergeProviderDescriptor",
+  "MergeParserRequirements",
+]
 pip_name = "structuredmerge-core"
 module_name = "_native"
 scaffold_output = "packages/python"
@@ -89,22 +101,50 @@ scaffold_output = "packages/python"
 output = "packages/python/structuredmerge_core"
 
 [crates.node]
-exclude_functions = ["register_parser_host", "replace_parser_host", "unregister_parser_host", "register_workflow_host", "replace_workflow_host", "unregister_workflow_host"]
+exclude_functions = [
+  "register_parser_host",
+  "replace_parser_host",
+  "unregister_parser_host",
+  "register_workflow_host",
+  "replace_workflow_host",
+  "unregister_workflow_host",
+]
 package_name = "@structuredmerge/core"
 scaffold_output = "packages/node"
 
 [crates.wasm]
-exclude_functions = ["register_parser_host", "replace_parser_host", "unregister_parser_host", "register_workflow_host", "replace_workflow_host", "unregister_workflow_host"]
+exclude_functions = [
+  "register_parser_host",
+  "replace_parser_host",
+  "unregister_parser_host",
+  "register_workflow_host",
+  "replace_workflow_host",
+  "unregister_workflow_host",
+]
 package_name = "@structuredmerge/core-wasm"
 
 [crates.ffi]
-exclude_functions = ["register_parser_host", "replace_parser_host", "unregister_parser_host", "register_workflow_host", "replace_workflow_host", "unregister_workflow_host"]
+exclude_functions = [
+  "register_parser_host",
+  "replace_parser_host",
+  "unregister_parser_host",
+  "register_workflow_host",
+  "replace_workflow_host",
+  "unregister_workflow_host",
+]
 prefix = "smc"
 lib_name = "structuredmerge_core_ffi"
 header_name = "structuredmerge_core.h"
 
 [crates.go]
-exclude_functions = ["register_parser_host", "replace_parser_host", "unregister_parser_host", "register_workflow_host", "replace_workflow_host", "unregister_workflow_host"]
+exclude_functions = [
+  "register_parser_host",
+  "replace_parser_host",
+  "unregister_parser_host",
+  "register_workflow_host",
+  "replace_workflow_host",
+  "unregister_workflow_host",
+]
 module = "github.com/structuredmerge/structuredmerge-go/core"
 package_name = "core"
 
@@ -128,62 +168,264 @@ exclude_languages = ["ffi", "go"]
 
 [crates.include]
 types = [
-  "OperationKind", "OperationRequest", "OperationSource", "OperationPolicy",
-  "AnalyzePolicy", "DiffPolicy", "DirectionalMergePolicy", "ThreeWayMergePolicy",
-  "MergeProviderSelection", "OperationParserSelection", "OperationResult",
-  "ResultProvider", "ResultParserSelection", "ResultProfile", "ResultRange", "ResultPoint", "ResultSpan",
-  "ResultSourceRegion", "ResultDiagnostic", "ResultChange", "ResultConflict", "PreservationProperty",
-  "ResultVerification", "ResultDiff", "ResultAnalysis",
-  "PortableCategory", "DiagnosticLayer", "DiagnosticOrigin", "DiagnosticSourceRef", "DiagnosticSubjectRef",
-  "PortableDiagnostic", "DiagnosticRecord", "ConflictCategory", "AlternativeState", "LocalizationStatus",
-  "ResolutionStatus", "ResolutionStrategy", "ConflictSubject", "ExactConflictRegion", "ConflictSourceAlternative",
-  "ConflictClassification", "ConflictLocalization", "ConflictResolution", "PortableConflict", "ConflictRecord",
-  "NativeDiffRequest", "NativeDiffResult", "OwnerDiff", "OwnerChange", "OwnerChangeKind", "DiffSourceRegion",
-  "TemplateSessionOptions", "TemplateSessionRequestReport", "TemplateProfileRequest",
-  "DirectorySessionMode", "DirectorySessionProfile", "SessionDiagnostic", "TemplateSessionPlanReport",
-  "TemplateDestinationContext", "TemplateTokenConfig", "TemplateStrategy", "TemplateStrategyOverride",
-  "TemplateDirectoryRunnerReport", "TemplateDirectoryPlanReport", "TemplateDirectoryPlanReportEntry",
-  "TemplateDirectoryPlanReportSummary", "TemplateDirectoryPlanStatus", "TemplateExecutionAction",
-  "TemplatePreviewResult", "TemplateTreeRunReport", "TemplateTreeRunReportEntry",
-  "TemplateTreeRunReportSummary", "TemplateTreeRunStatus", "TemplateDirectoryApplyReport",
-  "TemplateDirectoryApplyReportEntry", "TemplateDirectoryApplyReportSummary",
-  "CrisprBoundaryRelationships", "CrisprBoundaryImplementation", "CrisprBoundaryMetadata", "CrisprBoundaryReport",
-  "CrisprLimitOperator", "CrisprLimitConstraint", "CrisprLimitReport", "CrisprLimitRequest",
-  "CrisprMatchRequest", "CrisprMatchReport", "CrisprSelectionRequest", "CrisprSelectionReport",
-  "CrisprDestinationRequest", "CrisprDestinationReport",
-  "CrisprOperationRequest", "CrisprOperationReport", "CrisprBatchOperationReport",
-  "ExplicitSourceEdit", "SourceEditRequest", "SourceEditLimits", "SourceEditResult",
+  "OperationKind",
+  "OperationRequest",
+  "OperationSource",
+  "OperationPolicy",
+  "AnalyzePolicy",
+  "DiffPolicy",
+  "DirectionalMergePolicy",
+  "ThreeWayMergePolicy",
+  "MergeProviderSelection",
+  "OperationParserSelection",
+  "OperationResult",
+  "ResultProvider",
+  "ResultParserSelection",
+  "ResultProfile",
+  "ResultRange",
+  "ResultPoint",
+  "ResultSpan",
+  "ResultSourceRegion",
+  "ResultDiagnostic",
+  "ResultChange",
+  "ResultConflict",
+  "PreservationProperty",
+  "ResultVerification",
+  "ResultDiff",
+  "ResultAnalysis",
+  "PortableCategory",
+  "DiagnosticLayer",
+  "DiagnosticOrigin",
+  "DiagnosticSourceRef",
+  "DiagnosticSubjectRef",
+  "PortableDiagnostic",
+  "DiagnosticRecord",
+  "ConflictCategory",
+  "AlternativeState",
+  "LocalizationStatus",
+  "ResolutionStatus",
+  "ResolutionStrategy",
+  "ConflictSubject",
+  "ExactConflictRegion",
+  "ConflictSourceAlternative",
+  "ConflictClassification",
+  "ConflictLocalization",
+  "ConflictResolution",
+  "PortableConflict",
+  "ConflictRecord",
+  "NativeDiffRequest",
+  "NativeDiffResult",
+  "OwnerDiff",
+  "OwnerChange",
+  "OwnerChangeKind",
+  "DiffSourceRegion",
+  "TemplateSessionOptions",
+  "TemplateSessionRequestReport",
+  "TemplateProfileRequest",
+  "DirectorySessionMode",
+  "DirectorySessionProfile",
+  "SessionDiagnostic",
+  "TemplateSessionPlanReport",
+  "TemplateDestinationContext",
+  "TemplateTokenConfig",
+  "TemplateStrategy",
+  "TemplateStrategyOverride",
+  "TemplateDirectoryRunnerReport",
+  "TemplateDirectoryPlanReport",
+  "TemplateDirectoryPlanReportEntry",
+  "TemplateDirectoryPlanReportSummary",
+  "TemplateDirectoryPlanStatus",
+  "TemplateExecutionAction",
+  "TemplatePreviewResult",
+  "TemplateTreeRunReport",
+  "TemplateTreeRunReportEntry",
+  "TemplateTreeRunReportSummary",
+  "TemplateTreeRunStatus",
+  "TemplateDirectoryApplyReport",
+  "TemplateDirectoryApplyReportEntry",
+  "TemplateDirectoryApplyReportSummary",
+  "CrisprBoundaryRelationships",
+  "CrisprBoundaryImplementation",
+  "CrisprBoundaryMetadata",
+  "CrisprBoundaryReport",
+  "CrisprLimitOperator",
+  "CrisprLimitConstraint",
+  "CrisprLimitReport",
+  "CrisprLimitRequest",
+  "CrisprMatchRequest",
+  "CrisprMatchReport",
+  "CrisprSelectionRequest",
+  "CrisprSelectionReport",
+  "CrisprDestinationRequest",
+  "CrisprDestinationReport",
+  "CrisprOperationRequest",
+  "CrisprOperationReport",
+  "CrisprBatchOperationReport",
+  "ExplicitSourceEdit",
+  "SourceEditRequest",
+  "SourceEditLimits",
+  "SourceEditResult",
   "OperationControl",
-  "WorkflowHost", "WorkflowOperation", "WorkflowBatchRequest", "WorkflowRegistryExpectation", "PreparedWorkflowOperation",
-  "PreparedWorkflowBatch", "WorkflowBatchResult", "WorkflowLimits", "WorkflowExecutionOwner", "WorkflowExecution",
-  "MergeParserRequirements", "MergeProviderDescriptor", "MergeProviderInventory", "MergeProviderRole",
-  "MergeSelectionRequest", "MergeSelectionCandidate", "MergeSelectionReport",
-  "NativeMergeProfile", "OperationProfileCatalog", "OperationProfileDeclaration",
-  "CapabilityQuery", "CapabilityObservation", "CapabilityManifest",
-  "NativeMergeResult", "NativeAnalysisRejection", "RetainedSourceSegment", "ThreeWayMergeOutcome", "Diagnostic", "DiagnosticCategory",
-  "DiagnosticSeverity", "ReviewDiagnosticDetail", "ReviewDiagnosticReason", "ReviewDecisionAction",
-  "MergeConflict", "ConflictAlternative", "ConflictAlternativeState", "OwnedSourceRegion",
-  "SourceRevision", "PolicyReference", "PolicySurface",
-  "CoreError", "ParserFailure", "ParserHost", "CoreParseResult", "ParseLimits", "ParserRegistryInventory", "ParserSelectionRequest",
-  "ParseBatchRequest", "ParseBatchResult", "ProbeBatchRequest", "ProbeBatchResult",
-  "ParserSelection", "ParserProviderDescriptor", "ParserProbeRequest", "ParserProbeResult",
-  "ParseOptions", "ParseRequest", "ParserCandidate", "SelectionReport",
-  "SourceRole", "SourceEncoding", "LineEndings", "SourceDescriptor", "SourceInput",
-  "ByteRange", "SourcePoint", "SourceSpan", "NodeRole",
-  "NativeExtension", "ChildEdge", "ParseNode", "ParseSeverity", "ParseDiagnostic",
-  "AttachmentHint", "ParseComment", "ParseOutput",
+  "WorkflowHost",
+  "WorkflowOperation",
+  "WorkflowBatchRequest",
+  "WorkflowRegistryExpectation",
+  "PreparedWorkflowOperation",
+  "PreparedWorkflowBatch",
+  "WorkflowBatchResult",
+  "WorkflowLimits",
+  "WorkflowExecutionOwner",
+  "WorkflowExecution",
+  "MergeParserRequirements",
+  "MergeProviderDescriptor",
+  "MergeProviderInventory",
+  "MergeProviderRole",
+  "MergeSelectionRequest",
+  "MergeSelectionCandidate",
+  "MergeSelectionReport",
+  "NativeMergeProfile",
+  "OperationProfileCatalog",
+  "OperationProfileDeclaration",
+  "CapabilityQuery",
+  "CapabilityObservation",
+  "CapabilityManifest",
+  "NativeMergeResult",
+  "NativeAnalysisRejection",
+  "RetainedSourceSegment",
+  "ThreeWayMergeOutcome",
+  "Diagnostic",
+  "DiagnosticCategory",
+  "DiagnosticSeverity",
+  "ReviewDiagnosticDetail",
+  "ReviewDiagnosticReason",
+  "ReviewDecisionAction",
+  "MergeConflict",
+  "ConflictAlternative",
+  "ConflictAlternativeState",
+  "OwnedSourceRegion",
+  "SourceRevision",
+  "PolicyReference",
+  "PolicySurface",
+  "CoreError",
+  "ParserFailure",
+  "ParserHost",
+  "CoreParseResult",
+  "ParseLimits",
+  "ParserRegistryInventory",
+  "ParserSelectionRequest",
+  "ParseBatchRequest",
+  "ParseBatchResult",
+  "ProbeBatchRequest",
+  "ProbeBatchResult",
+  "ParserSelection",
+  "ParserProviderDescriptor",
+  "ParserProbeRequest",
+  "ParserProbeResult",
+  "ParseOptions",
+  "ParseRequest",
+  "ParserCandidate",
+  "SelectionReport",
+  "SourceRole",
+  "SourceEncoding",
+  "LineEndings",
+  "SourceDescriptor",
+  "SourceInput",
+  "ByteRange",
+  "SourcePoint",
+  "SourceSpan",
+  "NodeRole",
+  "NativeExtension",
+  "ChildEdge",
+  "ParseNode",
+  "ParseSeverity",
+  "ParseDiagnostic",
+  "AttachmentHint",
+  "ParseComment",
+  "ParseOutput",
 ]
-functions = ["register_workflow_host", "replace_workflow_host", "unregister_workflow_host", "workflow_registry_inventory", "workflow_selection_reports", "workflow_selection_reports_controlled", "execute_workflow_batch", "execute_workflow_batch_controlled", "execute_workflow_batch_at_registry", "execute_workflow_batch_at_registry_controlled", "execute_operation", "execute_operation_controlled", "diff_native_owners", "diff_native_owners_controlled", "report_template_options", "report_template_profile", "plan_template_directory", "report_structural_boundary", "report_structural_limit", "report_structural_match", "report_structural_selection", "report_structural_destination", "report_structural_operations", "apply_explicit_source_edits", "native_merge_profiles", "operation_profile_catalog", "capability_manifest", "capability_manifest_controlled", "create_operation_control", "parse_sources", "parse_sources_controlled", "register_parser_host", "replace_parser_host", "register_rust_syn_parser", "register_typescript_oxc_parser", "parser_registry_inventory", "parser_selection_report", "parser_selection_report_controlled", "unregister_parser_host", "register_language_pack_parser", "register_cached_language_pack_parser", "unregister_parser_provider", "merge_yaml_mapping", "merge_yaml_mapping_controlled", "merge_python_declarations", "merge_python_declarations_controlled"]
+functions = [
+  "register_workflow_host",
+  "replace_workflow_host",
+  "unregister_workflow_host",
+  "workflow_registry_inventory",
+  "workflow_selection_reports",
+  "workflow_selection_reports_controlled",
+  "execute_workflow_batch",
+  "execute_workflow_batch_controlled",
+  "execute_workflow_batch_at_registry",
+  "execute_workflow_batch_at_registry_controlled",
+  "execute_operation",
+  "execute_operation_controlled",
+  "diff_native_owners",
+  "diff_native_owners_controlled",
+  "report_template_options",
+  "report_template_profile",
+  "plan_template_directory",
+  "report_structural_boundary",
+  "report_structural_limit",
+  "report_structural_match",
+  "report_structural_selection",
+  "report_structural_destination",
+  "report_structural_operations",
+  "apply_explicit_source_edits",
+  "native_merge_profiles",
+  "operation_profile_catalog",
+  "capability_manifest",
+  "capability_manifest_controlled",
+  "create_operation_control",
+  "parse_sources",
+  "parse_sources_controlled",
+  "register_parser_host",
+  "replace_parser_host",
+  "register_rust_syn_parser",
+  "register_typescript_oxc_parser",
+  "parser_registry_inventory",
+  "parser_selection_report",
+  "parser_selection_report_controlled",
+  "unregister_parser_host",
+  "register_language_pack_parser",
+  "register_cached_language_pack_parser",
+  "unregister_parser_provider",
+  "merge_yaml_mapping",
+  "merge_yaml_mapping_controlled",
+  "merge_python_declarations",
+  "merge_python_declarations_controlled",
+]
 
 [crates.exclude]
-types = ["ValidatedOperationRequest", "ConflictEvidence", "ResolutionAuthorization", "ConflictValidationContext",
-  "SourceDocument", "SourceMap", "ParserProvider", "ExecutionContext", "ParserRegistrySnapshot",
-  "ResultContractError", "DiagnosticContractError", "ConflictContractError", "OperationRequestError", "OperationRequestErrorCode"]
-methods = ["ByteRange.contains_range", "ByteRange.overlaps", "OwnedSourceRegion.validate",
+types = [
+  "ValidatedOperationRequest",
+  "ConflictEvidence",
+  "ResolutionAuthorization",
+  "ConflictValidationContext",
+  "SourceDocument",
+  "SourceMap",
+  "ParserProvider",
+  "ExecutionContext",
+  "ParserRegistrySnapshot",
+  "ResultContractError",
+  "DiagnosticContractError",
+  "ConflictContractError",
+  "OperationRequestError",
+  "OperationRequestErrorCode",
+]
+methods = [
+  "ByteRange.contains_range",
+  "ByteRange.overlaps",
+  "OwnedSourceRegion.validate",
   "MergeSelectionRequest.validate",
-  "OperationRequest.validate", "OperationResult.validate_against", "OperationResult.validate_with_conflict_evidence",
-  "OperationKind.source_roles", "OperationPolicy.kind", "OperationPolicy.fallback_policy",
-  "DiagnosticRecord.id", "DiagnosticRecord.blocking", "ConflictRecord.id", "ConflictRecord.unresolved", "ConflictRecord.matches_path"]
+  "OperationRequest.validate",
+  "OperationResult.validate_against",
+  "OperationResult.validate_with_conflict_evidence",
+  "OperationKind.source_roles",
+  "OperationPolicy.kind",
+  "OperationPolicy.fallback_policy",
+  "DiagnosticRecord.id",
+  "DiagnosticRecord.blocking",
+  "ConflictRecord.id",
+  "ConflictRecord.unresolved",
+  "ConflictRecord.matches_path",
+]
 
 [crates.e2e]
 fixtures = "../fixtures/polyglot/typed-core"
@@ -242,9 +484,7 @@ args = [
 function = "run_yaml_common_analyze"
 module = "native_merge_fixture"
 skip_languages = ["python"]
-args = [
-  { name = "source", field = "input.source", type = "string" },
-]
+args = [{ name = "source", field = "input.source", type = "string" }]
 
 [crates.e2e.calls.yaml_common_diff]
 function = "run_yaml_common_diff"
@@ -269,9 +509,7 @@ args = [
 function = "run_python_common_analyze"
 module = "native_merge_fixture"
 skip_languages = ["ruby"]
-args = [
-  { name = "source", field = "input.source", type = "string" },
-]
+args = [{ name = "source", field = "input.source", type = "string" }]
 
 [crates.e2e.calls.python_common_diff]
 function = "run_python_common_diff"
@@ -352,9 +590,7 @@ args = [
 [crates.e2e.calls.bash_common_analyze]
 function = "run_bash_common_analyze"
 module = "native_merge_fixture"
-args = [
-  { name = "source", field = "input.source", type = "string" },
-]
+args = [{ name = "source", field = "input.source", type = "string" }]
 
 [crates.e2e.calls.bash_common_diff]
 function = "run_bash_common_diff"
@@ -420,9 +656,7 @@ args = [
 [crates.e2e.calls.rust_common_analyze]
 function = "run_rust_common_analyze"
 module = "native_merge_fixture"
-args = [
-  { name = "source", field = "input.source", type = "string" },
-]
+args = [{ name = "source", field = "input.source", type = "string" }]
 
 [crates.e2e.calls.rust_common_diff]
 function = "run_rust_common_diff"
@@ -452,9 +686,7 @@ args = [
 [crates.e2e.calls.go_common_analyze]
 function = "run_go_common_analyze"
 module = "native_merge_fixture"
-args = [
-  { name = "source", field = "input.source", type = "string" },
-]
+args = [{ name = "source", field = "input.source", type = "string" }]
 
 [crates.e2e.calls.go_common_diff]
 function = "run_go_common_diff"

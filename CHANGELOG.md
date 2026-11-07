@@ -11,7 +11,10 @@
 - [kc] bash-typed-unsafe-owner-range-diagnostics: Preserve unsafe Bash owner-range failures as a stable source diagnostic in typed-core analysis and merge3.
 
 ### Changed
-- Raise the Python package floor to 3.11 (abi3-py311 wheels, `StrEnum` options) and the RuboCop target to Ruby 3.3, matching the generator minimums in Alef 0.121.0 and the already-declared `required_ruby_version >= 3.3.0`; the hosted minimum-runtime job moves from Python 3.10 to 3.11.
+
+- Raise the Python package floor to 3.11 (abi3-py311 wheels, `StrEnum` options) and the RuboCop target to Ruby 3.3, matching the generator minimums in Alef 0.128.0 and the already-declared `required_ruby_version >= 3.3.0`; the hosted minimum-runtime job moves from Python 3.10 to 3.11.
+
+- Upgrade Alef to 0.128.0 and regenerate the polyglot bindings, package scaffolds and fixture consumers; reviewed Ruby and Python API signatures are unchanged.
 
 
 - Point kernel crate metadata and new artifact provenance at structuredmerge/structuredmerge; remove kettle-rusty from this repository’s release inventory while accepting pre-split registry metadata.
