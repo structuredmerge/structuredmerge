@@ -11,32 +11,42 @@ require "open3"
 require "rbconfig"
 require "rubygems/package"
 require "tmpdir"
+
 require_relative "artifact_workspace"
 
 usage = "usage: check_core_ruby_artifact.rb [--package-only OUTPUT_DIRECTORY | --provider-gem PSYCH_GEM [--provider-support-dir SUPPORT_DIRECTORY]]"
 if ARGV == ["--help"]
-  puts usage
+  puts(usage)
   exit
 end
+
 options = {}
 remaining = ARGV.dup
 until remaining.empty?
   flag = remaining.shift
   value = remaining.shift
-  abort usage unless %w[--package-only --provider-gem --provider-support-dir].include?(flag) && !value.to_s.empty?
-  abort usage if options.key?(flag)
+  abort(usage) unless %w[--package-only --provider-gem --provider-support-dir].include?(flag) && !value.to_s.empty?
+  abort(usage) if options.key?(flag)
 
   options[flag] = value
 end
-abort usage if options.key?("--package-only") && (options.key?("--provider-gem") || options.key?("--provider-support-dir"))
-abort usage if options.key?("--provider-support-dir") && !options.key?("--provider-gem")
+
+if options.key?("--package-only") && (options.key?("--provider-gem") || options.key?("--provider-support-dir"))
+  abort(usage)
+end
+
+abort(usage) if options.key?("--provider-support-dir") && !options.key?("--provider-gem")
 export_directory = File.expand_path(options.fetch("--package-only")) if options.key?("--package-only")
 provider_gem = File.realpath(options.fetch("--provider-gem")) if options.key?("--provider-gem")
-provider_support_dir = File.expand_path(options.fetch("--provider-support-dir")) if options.key?("--provider-support-dir")
+if options.key?("--provider-support-dir")
+  provider_support_dir = File.expand_path(options.fetch("--provider-support-dir"))
+end
 
 # Runtime dependency requirements keyed by gem name.
 def runtime_dependency_requirements(spec)
-  spec.dependencies.select { |dependency| dependency.type == :runtime }
+  spec
+    .dependencies
+    .select { |dependency| dependency.type == :runtime }
     .each_with_object({}) do |dependency, requirements|
       (requirements[dependency.name] ||= []) << dependency.requirement
     end
@@ -48,20 +58,22 @@ end
 # Archives are accepted only when they satisfy the provider's transitive runtime
 # requirements; anything else fails closed before a workspace is created.
 def validated_provider_support(support_directory, provider_archive)
-  abort "provider support directory is missing: #{support_directory}" unless File.directory?(support_directory)
+  abort("provider support directory is missing: #{support_directory}") unless File.directory?(support_directory)
   archives_by_name = {}
   Dir.glob(File.join(support_directory, "*.gem")).sort.each do |path|
     archive = Gem::Package.new(path)
     archive.verify
     name = archive.spec.name
     if %w[psych-merge structuredmerge-core].include?(name)
-      abort "provider support archive must not duplicate the provider or core: #{name}"
+      abort("provider support archive must not duplicate the provider or core: #{name}")
     end
-    abort "duplicate provider support archive for #{name}" if archives_by_name.key?(name)
+
+    abort("duplicate provider support archive for #{name}") if archives_by_name.key?(name)
 
     archives_by_name[name] = [path, archive]
   end
-  abort "provider support directory has no gem archives" if archives_by_name.empty?
+
+  abort("provider support directory has no gem archives") if archives_by_name.empty?
 
   requirements = runtime_dependency_requirements(provider_archive.spec)
   validated = []
@@ -74,17 +86,21 @@ def validated_provider_support(support_directory, provider_archive)
 
     version = entry.last.spec.version
     unless requirements.fetch(name).all? { |requirement| requirement.satisfied_by?(version) }
-      abort "provider support archive #{name} #{version} does not satisfy " \
-            "#{requirements.fetch(name).map(&:to_s).join(", ")}"
+      abort(
+        "provider support archive #{name} #{version} does not satisfy " \
+          "#{requirements.fetch(name).map(&:to_s).join(", ")}"
+      )
     end
+
     validated << entry
     runtime_dependency_requirements(entry.last.spec).each do |dependency_name, dependency_requirements|
       (requirements[dependency_name] ||= []).concat(dependency_requirements)
       queue << dependency_name
     end
   end
+
   leftover = archives_by_name.keys - validated.map { |entry| entry.last.spec.name }
-  abort "unexpected provider support archive #{leftover.first}" unless leftover.empty?
+  abort("unexpected provider support archive #{leftover.first}") unless leftover.empty?
 
   validated
 end
@@ -92,17 +108,23 @@ end
 if provider_gem
   provider_archive = Gem::Package.new(provider_gem)
   provider_archive.verify
-  abort "expected a psych-merge provider gem" unless provider_archive.spec.name == "psych-merge"
-  abort "provider gem lacks the typed parser host" unless provider_archive.contents.include?("lib/psych/merge/core_parser_host.rb")
+  abort("expected a psych-merge provider gem") unless provider_archive.spec.name == "psych-merge"
+  unless provider_archive.contents.include?("lib/psych/merge/core_parser_host.rb")
+    abort("provider gem lacks the typed parser host")
+  end
+
   provider_support = validated_provider_support(provider_support_dir, provider_archive) if provider_support_dir
 end
 
 root = File.expand_path("..", __dir__)
 package_root = File.join(root, "packages/ruby")
 FileUtils.mkdir_p(File.join(root, "tmp"))
-ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
-  disposable: %w[package consumer gems]) do |stage|
-  puts "Artifact report directory: #{stage}"
+ArtifactWorkspace.open(
+  root: root,
+  prefix: "core-ruby-artifact-",
+  disposable: %w[package consumer gems]
+) do |stage|
+  puts("Artifact report directory: #{stage}")
   gem_root = File.join(stage, "package")
   FileUtils.mkdir_p(gem_root)
 
@@ -111,10 +133,11 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
   spec = Dir.chdir(package_root) do
     Gem::Specification.load("structuredmerge_core.gemspec") || abort("cannot load core gemspec")
   end
-  abort "unexpected generated package" unless spec.name == "structuredmerge-core"
-  extension = "structuredmerge_core_rb.#{RbConfig::CONFIG.fetch('DLEXT')}"
+
+  abort("unexpected generated package") unless spec.name == "structuredmerge-core"
+  extension = "structuredmerge_core_rb.#{RbConfig::CONFIG.fetch("DLEXT")}"
   native_path = File.join(package_root, "lib", extension)
-  abort "build the current native extension with bundle exec rake compile first" unless File.file?(native_path)
+  abort("build the current native extension with bundle exec rake compile first") unless File.file?(native_path)
   abi = RbConfig::CONFIG.fetch("ruby_version")
   major, minor = RUBY_VERSION.split(".").map(&:to_i)
   copies = {
@@ -125,7 +148,7 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
     "README.md" => File.join(root, "crates/structuredmerge-core/README.md"),
     "AGPL-3.0-only.md" => File.join(root, "AGPL-3.0-only.md"),
     "PolyForm-Small-Business-1.0.0.md" => File.join(root, "PolyForm-Small-Business-1.0.0.md"),
-    "sig/types.rbs" => File.join(package_root, "sig/types.rbs"),
+    "sig/types.rbs" => File.join(package_root, "sig/types.rbs")
   }
   copies.each do |destination, source|
     target = File.join(gem_root, destination)
@@ -133,11 +156,15 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
     FileUtils.cp(source, target)
     File.chmod(destination.end_with?(extension) ? 0o755 : 0o644, target)
   end
+
   baseline = JSON.parse(File.read(File.join(root, "contracts/typed-api/ruby/manifest.json")))
   baseline.fetch("files").each do |name, digest|
     path = File.join(gem_root, name)
-    raise "gem API differs from reviewed baseline: #{name}" unless File.file?(path) && Digest::SHA256.file(path).hexdigest == digest
+    unless File.file?(path) && Digest::SHA256.file(path).hexdigest == digest
+      raise "gem API differs from reviewed baseline: #{name}"
+    end
   end
+
   spec.files = copies.keys.sort
   spec.extensions = []
   spec.executables = []
@@ -158,56 +185,81 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
     # CI can build a pre-publication artifact without running/installing the test
     # harness. Keep the same allowlist, ABI restriction and API checks as the full
     # gate, and never label package-only output as installed-runtime verification.
-    output, status = Open3.capture2e(RbConfig.ruby,
-      File.join(root, "workspace-scripts/check_ruby_linkage.rb"), artifact)
-    puts output
-    abort "core artifact linkage check failed" unless status.success?
+    output, status = Open3.capture2e(
+      RbConfig.ruby,
+      File.join(root, "workspace-scripts/check_ruby_linkage.rb"),
+      artifact
+    )
+    puts(output)
+    abort("core artifact linkage check failed") unless status.success?
     FileUtils.mkdir_p(export_directory)
     destination = File.join(export_directory, File.basename(artifact))
     report_path = File.join(export_directory, "core-ruby-artifact.json")
-    abort "refusing to overwrite an existing artifact or report" if File.exist?(destination) || File.symlink?(destination) || File.exist?(report_path) || File.symlink?(report_path)
+    if File.exist?(destination) || File.symlink?(destination) || File.exist?(report_path) || File.symlink?(report_path)
+      abort("refusing to overwrite an existing artifact or report")
+    end
+
     report = {
-      "artifact" => File.basename(artifact), "sha256" => Digest::SHA256.file(artifact).hexdigest,
-      "package" => spec.name, "version" => spec.version.to_s,
-      "platform" => spec.platform.to_s, "ruby" => RUBY_VERSION, "ruby_abi" => abi,
+      "artifact" => File.basename(artifact),
+      "sha256" => Digest::SHA256.file(artifact).hexdigest,
+      "package" => spec.name,
+      "version" => spec.version.to_s,
+      "platform" => spec.platform.to_s,
+      "ruby" => RUBY_VERSION,
+      "ruby_abi" => abi,
       "required_ruby_version" => spec.required_ruby_version.to_s,
-      "files" => archive.contents.sort, "linkage_check" => "passed",
+      "files" => archive.contents.sort,
+      "linkage_check" => "passed",
       "api_review_baseline" => "ruby source surface matched",
-      "mode" => "package-only", "installed_merge_tests" => "not_run",
-      "generated_e2e_tests" => "not_run", "type_declarations" => "not_validated",
-      "generated_test_app" => "not_run", "registry_install" => "not_run",
-      "publication_gate" => false, "source_gem_gate" => false,
+      "mode" => "package-only",
+      "installed_merge_tests" => "not_run",
+      "generated_e2e_tests" => "not_run",
+      "type_declarations" => "not_validated",
+      "generated_test_app" => "not_run",
+      "registry_install" => "not_run",
+      "publication_gate" => false,
+      "source_gem_gate" => false
     }
     File.open(destination, File::WRONLY | File::CREAT | File::EXCL, 0o644) do |file|
       File.open(artifact, "rb") { |source| IO.copy_stream(source, file) }
     end
+
     File.open(report_path, File::WRONLY | File::CREAT | File::EXCL, 0o644) do |file|
       file.write(JSON.pretty_generate(report) + "\n")
     end
-    puts JSON.generate(report)
+
+    puts(JSON.generate(report))
     exit
   end
 
   consumer = File.join(stage, "consumer")
   gem_home = File.join(stage, "gems")
   FileUtils.mkdir_p(consumer)
-  File.write(File.join(consumer, "Gemfile"), <<~GEMFILE)
-    source "https://rubygems.org"
-    gem "structuredmerge-core", "= #{spec.version}"
-    gem "rspec", "~> 3.0"
-    gem "rbs", ">= 3.0"
-  GEMFILE
+  File.write(
+    File.join(consumer, "Gemfile"),
+    <<~GEMFILE
+      source "https://rubygems.org"
+      gem "structuredmerge-core", "= #{spec.version}"
+      gem "rspec", "~> 3.0"
+      gem "rbs", ">= 3.0"
+    GEMFILE
+  )
   if provider_gem
     File.open(File.join(consumer, "Gemfile"), "a") do |file|
-      file.puts "gem 'psych-merge', '= #{provider_archive.spec.version}'"
-      file.puts "gem 'psych', '~> 5.5.0'"
+      file.puts("gem 'psych-merge', '= #{provider_archive.spec.version}'")
+      file.puts("gem 'psych', '~> 5.5.0'")
     end
   end
+
   FileUtils.cp(File.join(package_root, "spec/structuredmerge_core_spec.rb"), File.join(consumer, "core_spec.rb"))
   FileUtils.cp(File.join(package_root, "spec/native_merge_fixture.rb"), File.join(consumer, "native_merge_fixture.rb"))
   unless provider_gem
-    FileUtils.cp(File.join(root, "crates/yaml-merge/tests/support/psych_facts.rb"), File.join(consumer, "psych_facts.rb"))
+    FileUtils.cp(
+      File.join(root, "crates/yaml-merge/tests/support/psych_facts.rb"),
+      File.join(consumer, "psych_facts.rb")
+    )
   end
+
   FileUtils.cp_r(File.join(root, "e2e/ruby/spec"), File.join(consumer, "generated"))
   test_app = File.join(consumer, "test_app")
   FileUtils.cp_r(File.join(root, "test_apps/ruby"), test_app)
@@ -215,50 +267,99 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
   # Keep the binding installed in GEM_HOME; never add checkout load paths.
   FileUtils.cp(File.join(consumer, "native_merge_fixture.rb"), File.join(test_app, "native_merge_fixture.rb"))
   env = Bundler.unbundled_env.merge(
-    "GEM_HOME" => gem_home, "GEM_PATH" => gem_home,
+    "GEM_HOME" => gem_home,
+    "GEM_PATH" => gem_home,
     "BUNDLE_GEMFILE" => File.join(consumer, "Gemfile"),
     "BUNDLE_APP_CONFIG" => File.join(consumer, ".bundle"),
     "BUNDLE_USER_HOME" => File.join(consumer, ".bundle-user"),
-    "BUNDLE_PATH" => nil, "RUBYLIB" => nil, "RUBYOPT" => nil,
+    "BUNDLE_PATH" => nil,
+    "RUBYLIB" => nil,
+    "RUBYOPT" => nil,
     "STRUCTUREDMERGE_PSYCH_FACTS" => File.join(consumer, "psych_facts.rb"),
     # Never inherit installed-provider mode accidentally in the default gate.
     "STRUCTUREDMERGE_PSYCH_INSTALLED" => provider_gem ? "1" : nil,
     "STRUCTUREDMERGE_EXPECT_GEM_HOME" => gem_home,
-    "TREE_HAVER_LANGUAGE_PACK_CACHE_DIR" => ENV.fetch("TREE_HAVER_LANGUAGE_PACK_CACHE_DIR", File.join(root, "tmp/typed-tslp-cache")),
+    "TREE_HAVER_LANGUAGE_PACK_CACHE_DIR" => ENV.fetch(
+      "TREE_HAVER_LANGUAGE_PACK_CACHE_DIR",
+      File.join(root, "tmp/typed-tslp-cache")
+    )
   )
   run = lambda do |*command, directory: consumer|
     output, status = Open3.capture2e(env, *command, chdir: directory, unsetenv_others: true)
-    puts output
-    raise "artifact gate failed: #{command.first(3).join(' ')}" unless status.success?
+    puts(output)
+    raise "artifact gate failed: #{command.first(3).join(" ")}" unless status.success?
   end
+
   run.call(RbConfig.ruby, File.join(root, "workspace-scripts/check_ruby_linkage.rb"), artifact)
-  run.call(RbConfig.ruby, "-S", "gem", "install", artifact, "--no-document",
-    "--clear-sources", "--source", "https://rubygems.org")
+  run.call(
+    RbConfig.ruby,
+    "-S",
+    "gem",
+    "install",
+    artifact,
+    "--no-document",
+    "--clear-sources",
+    "--source",
+    "https://rubygems.org"
+  )
   if provider_support
     # Stage the candidate sibling closure first. A release-bumped Ruby checkout
     # pins sibling gems (= same version) that the registry does not have yet, so
     # the provider install below resolves them from this disposable gem home.
     # --ignore-dependencies is safe: the closure was validated transitively above.
     provider_support.each do |support_path, _support_archive|
-      run.call(RbConfig.ruby, "-S", "gem", "install", support_path, "--no-document",
-        "--local", "--ignore-dependencies", "--clear-sources")
+      run.call(
+        RbConfig.ruby,
+        "-S",
+        "gem",
+        "install",
+        support_path,
+        "--no-document",
+        "--local",
+        "--ignore-dependencies",
+        "--clear-sources"
+      )
     end
   end
+
   if provider_gem
-    run.call(RbConfig.ruby, "-S", "gem", "install", provider_gem, "--no-document",
-      "--clear-sources", "--source", "https://rubygems.org")
+    run.call(
+      RbConfig.ruby,
+      "-S",
+      "gem",
+      "install",
+      provider_gem,
+      "--no-document",
+      "--clear-sources",
+      "--source",
+      "https://rubygems.org"
+    )
   end
+
   run.call(RbConfig.ruby, "-S", "bundle", "install", "--jobs", "4")
-  run.call(RbConfig.ruby, "-S", "bundle", "exec", "rbs", "-I",
-    File.join(gem_home, "gems", spec.full_name, "sig"), "validate")
+  run.call(
+    RbConfig.ruby,
+    "-S",
+    "bundle",
+    "exec",
+    "rbs",
+    "-I",
+    File.join(gem_home, "gems", spec.full_name, "sig"),
+    "validate"
+  )
   run.call(RbConfig.ruby, "-S", "bundle", "exec", "rspec", "core_spec.rb")
   run.call(RbConfig.ruby, "-S", "bundle", "exec", "rspec", "generated")
   run.call(RbConfig.ruby, "-S", "bundle", "exec", "rspec", "spec", directory: test_app)
   report = {
-    "artifact" => artifact, "sha256" => Digest::SHA256.file(artifact).hexdigest,
-    "package" => spec.name, "version" => spec.version.to_s,
-    "platform" => spec.platform.to_s, "ruby" => RUBY_VERSION, "ruby_abi" => abi,
-    "files" => archive.contents.sort, "installed_merge_tests" => "passed",
+    "artifact" => artifact,
+    "sha256" => Digest::SHA256.file(artifact).hexdigest,
+    "package" => spec.name,
+    "version" => spec.version.to_s,
+    "platform" => spec.platform.to_s,
+    "ruby" => RUBY_VERSION,
+    "ruby_abi" => abi,
+    "files" => archive.contents.sort,
+    "installed_merge_tests" => "passed",
     "linkage_check" => "passed",
     "type_declarations" => "validated",
     "api_review_baseline" => "ruby source surface matched",
@@ -266,7 +367,8 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
     "generated_test_app" => provider_gem ? "passed with local gems and independent provider" : "passed with local gem and copied native-provider support",
     "native_provider_mode" => provider_gem ? "installed-provider" : "conformance-adapter",
     "registry_install" => "not_run",
-    "publication_gate" => false, "source_gem_gate" => false,
+    "publication_gate" => false,
+    "source_gem_gate" => false
   }
   if provider_gem
     report["provider_artifact"] = provider_gem
@@ -283,8 +385,10 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-artifact-",
         }
       end
     end
+
     FileUtils.cp(File.join(consumer, "Gemfile.lock"), File.join(stage, "Gemfile.lock"))
   end
+
   File.write(File.join(stage, "report.json"), JSON.pretty_generate(report) + "\n")
-  puts JSON.generate(report)
+  puts(JSON.generate(report))
 end

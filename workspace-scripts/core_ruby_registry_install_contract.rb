@@ -4,7 +4,8 @@ require "rubygems"
 
 # Assertions shared by the post-release installation gate and its unit tests.
 module CoreRubyRegistryInstallContract
-  class VerificationError < StandardError; end
+  class VerificationError < StandardError
+  end
 
   module_function
 
@@ -26,7 +27,7 @@ module CoreRubyRegistryInstallContract
       raise VerificationError, "native extension escaped installed core gem"
     end
 
-    { version: spec.version.to_s, gem_path: gem_path, native_paths: real_paths }
+    {version: spec.version.to_s, gem_path: gem_path, native_paths: real_paths}
   rescue Errno::ENOENT => error
     raise VerificationError, "installed package path is missing: #{error.message}"
   end
@@ -34,5 +35,6 @@ module CoreRubyRegistryInstallContract
   def nested_path?(parent, path)
     path.start_with?(parent + File::SEPARATOR)
   end
+
   private_class_method :nested_path?
 end

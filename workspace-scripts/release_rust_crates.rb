@@ -40,7 +40,7 @@ INDEX_LAG_PATTERN = /no matching package named|failed to select a version for th
 DUPLICATE_PUBLISH_PATTERN = /already (?:uploaded|published|exists)|version .+ already exists/i
 
 def registry_probe_delay(attempt)
-  [(REGISTRY_PROBE_INTERVAL * 1.6**(attempt - 1)).round, REGISTRY_PROBE_MAX_INTERVAL].min
+  [(REGISTRY_PROBE_INTERVAL * 1.6 ** (attempt - 1)).round, REGISTRY_PROBE_MAX_INTERVAL].min
 end
 
 LEGACY_CRATES = [
@@ -60,16 +60,19 @@ LEGACY_CRATES = [
   ["zip-merge", "structuredmerge-zip-merge"],
   ["yaml-serde-merge", "yaml-serde-merge"],
   ["pest-toml-merge", "pest-toml-merge"],
-  ["pulldown-cmark-merge", "pulldown-cmark-merge"],
+  ["pulldown-cmark-merge", "pulldown-cmark-merge"]
 ].freeze
 
 # Preserve legacy leaf releases while deriving typed roots and their complete
 # dependency-first closure from Cargo metadata. Never substitute a hand-maintained
 # list for the facade's transitive implementation dependencies.
-TYPED_CRATES = JSON.parse(File.read(File.join(RUST_REPO, "contracts/typed-release-inventory.json")))
-  .fetch("dependency_first_order").map do |item|
+TYPED_CRATES = JSON
+  .parse(File.read(File.join(RUST_REPO, "contracts/typed-release-inventory.json")))
+  .fetch("dependency_first_order")
+  .map do |item|
     [File.basename(File.dirname(item.fetch("manifest"))), item.fetch("package")]
-  end.freeze
+  end
+  .freeze
 CRATES = (TYPED_CRATES + LEGACY_CRATES.reject { |_, name| TYPED_CRATES.any? { |_, typed| typed == name } }).freeze
 
 options = {
@@ -77,7 +80,7 @@ options = {
   push_git: false,
   skip_tests: false,
   tag: false,
-  preflight_only: false,
+  preflight_only: false
 }
 
 parser = OptionParser.new do |opts|
@@ -127,15 +130,16 @@ def sh(cmd)
 end
 
 def run_command(cmd, chdir:)
-  puts "\n$ #{sh(cmd)}"
+  puts("\n$ #{sh(cmd)}")
   output = +""
   status = nil
   Open3.popen2e(*cmd, chdir: chdir) do |stdin, outerr, wait_thread|
     stdin.close
     outerr.each do |line|
-      print line
+      print(line)
       output << line
     end
+
     status = wait_thread.value
   end
 
@@ -184,7 +188,7 @@ def validate_release_metadata!(crates)
       "homepage" => package["homepage"].nil? || package["homepage"] == STRUCTUREDMERGE_HOMEPAGE,
       "repository" => package["repository"] == STRUCTUREDMERGE_REPOSITORY,
       "license" => package["license"] == STRUCTUREDMERGE_LICENSE,
-      "crates.io publication permission" => package["publish"].nil? || package["publish"].include?("crates-io"),
+      "crates.io publication permission" => package["publish"].nil? || package["publish"].include?("crates-io")
     }
     missing = checks.filter_map { |field, valid| field unless valid }
     problems << "#{crate[:name]}: missing or incorrect #{missing.join(", ")}" unless missing.empty?
@@ -198,7 +202,9 @@ end
 def validate_crates_io_auth!
   capture!(["cargo", "owner", "--list", "tree-haver"], chdir: RUST_REPO)
 rescue RuntimeError => error
-  raise "Could not authenticate Cargo with crates.io before release validation; no crates were published.\n#{error.message}"
+  raise(
+    "Could not authenticate Cargo with crates.io before release validation; no crates were published.\n#{error.message}"
+  )
 end
 
 def ensure_clean_git!
@@ -216,6 +222,7 @@ def cargo_package_field(cargo_toml, field)
       in_package = stripped == "[package]"
       next
     end
+
     next unless in_package
     next unless stripped.start_with?("#{field} ")
 
@@ -231,10 +238,16 @@ def crates_io_get(path)
   request = Net::HTTP::Get.new(uri)
   request["User-Agent"] = CRATES_IO_USER_AGENT
   request["Accept"] = "application/json"
-  response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == "https",
-    open_timeout: 10, read_timeout: 30) do |http|
-    http.request(request)
-  end
+  response = Net::HTTP
+    .start(
+      uri.hostname,
+      uri.port,
+      use_ssl: uri.scheme == "https",
+      open_timeout: 10,
+      read_timeout: 30
+    ) do |http|
+      http.request(request)
+    end
 
   [response, response.body]
 end
@@ -255,17 +268,21 @@ def crate_released?(name, version)
   payload = JSON.parse(body)
   crate = payload.fetch("crate")
   unless structuredmerge_crate_metadata?(crate)
-    raise "Crates.io package #{name.inspect} has repository metadata outside the StructuredMerge repositories.\n" \
-      "repository=#{crate["repository"].inspect}\n" \
-      "license=#{crate["license"].inspect}"
+    raise(
+      "Crates.io package #{name.inspect} has repository metadata outside the StructuredMerge repositories.\n" \
+        "repository=#{crate["repository"].inspect}\n" \
+        "license=#{crate["license"].inspect}"
+    )
   end
 
   released_version = payload.fetch("versions").find { |entry| entry["num"] == version }
   return false unless released_version
 
   unless released_version["license"] == STRUCTUREDMERGE_LICENSE
-    raise "Crate #{name.inspect} #{version} is live on crates.io, but has unexpected license metadata.\n" \
-      "license=#{released_version["license"].inspect}"
+    raise(
+      "Crate #{name.inspect} #{version} is live on crates.io, but has unexpected license metadata.\n" \
+        "license=#{released_version["license"].inspect}"
+    )
   end
 
   true
@@ -282,7 +299,7 @@ end
 
 def sleep_until_retry(retry_at)
   wait_seconds = [(retry_at - Time.now).ceil + PUBLISH_RETRY_BUFFER_SECONDS, PUBLISH_RETRY_BUFFER_SECONDS].max
-  puts "\ncrates.io publish rate limit hit; sleeping #{wait_seconds}s until #{retry_at.utc.iso8601} plus buffer."
+  puts("\ncrates.io publish rate limit hit; sleeping #{wait_seconds}s until #{retry_at.utc.iso8601} plus buffer.")
   sleep(wait_seconds)
 end
 
@@ -305,8 +322,10 @@ def publish_crate!(crate)
 
     if output.match?(DUPLICATE_PUBLISH_PATTERN) && (duplicate_attempt += 1) < REGISTRY_PROBE_ATTEMPTS
       wait = registry_probe_delay(duplicate_attempt)
-      puts "\n#{crate[:name]} #{crate[:version]} was reported as already published; retrying registry confirmation " \
-        "in #{wait}s (attempt #{duplicate_attempt}/#{REGISTRY_PROBE_ATTEMPTS})."
+      puts(
+        "\n#{crate[:name]} #{crate[:version]} was reported as already published; retrying registry confirmation " \
+          "in #{wait}s (attempt #{duplicate_attempt}/#{REGISTRY_PROBE_ATTEMPTS})."
+      )
       sleep(wait)
       next
     end
@@ -314,8 +333,10 @@ def publish_crate!(crate)
     # A dependency published moments ago may not be in the crates.io index yet.
     if output.match?(INDEX_LAG_PATTERN) && (index_attempt += 1) < REGISTRY_PROBE_ATTEMPTS
       wait = registry_probe_delay(index_attempt)
-      puts "\n#{crate[:name]} waits on a dependency not yet in the crates.io index; retrying in #{wait}s " \
-        "(attempt #{index_attempt}/#{REGISTRY_PROBE_ATTEMPTS})."
+      puts(
+        "\n#{crate[:name]} waits on a dependency not yet in the crates.io index; retrying in #{wait}s " \
+          "(attempt #{index_attempt}/#{REGISTRY_PROBE_ATTEMPTS})."
+      )
       sleep(wait)
       next
     end
@@ -330,20 +351,32 @@ def wait_for_crate_release!(crate)
     return if crate_released?(crate[:name], crate[:version])
 
     if attempt == REGISTRY_PROBE_ATTEMPTS
-      raise "Release confirmation failed: #{crate[:name]} #{crate[:version]} is not live on crates.io " \
-        "after #{REGISTRY_PROBE_ATTEMPTS} attempt(s)."
+      raise(
+        "Release confirmation failed: #{crate[:name]} #{crate[:version]} is not live on crates.io " \
+          "after #{REGISTRY_PROBE_ATTEMPTS} attempt(s)."
+      )
     end
 
     wait = registry_probe_delay(attempt)
-    puts "Waiting #{wait}s for #{crate[:name]} #{crate[:version]} to become visible on crates.io " \
-      "(attempt #{attempt}/#{REGISTRY_PROBE_ATTEMPTS})..."
+    puts(
+      "Waiting #{wait}s for #{crate[:name]} #{crate[:version]} to become visible on crates.io " \
+        "(attempt #{attempt}/#{REGISTRY_PROBE_ATTEMPTS})..."
+    )
     sleep(wait)
   end
 end
 
 def tag_exists?(tag_name)
-  system("git", "rev-parse", "-q", "--verify", "refs/tags/#{tag_name}",
-    chdir: RUST_REPO, out: File::NULL, err: File::NULL)
+  system(
+    "git",
+    "rev-parse",
+    "-q",
+    "--verify",
+    "refs/tags/#{tag_name}",
+    chdir: RUST_REPO,
+    out: File::NULL,
+    err: File::NULL
+  )
 end
 
 def preflight_release_tag!(tag_name, check_remote:)
@@ -362,11 +395,14 @@ def preflight_release_tag!(tag_name, check_remote:)
     ["git", "ls-remote", "origin", "refs/tags/#{tag_name}", "refs/tags/#{tag_name}^{}"],
     chdir: RUST_REPO
   )
-  remote_tag = refs.lines.filter_map do |line|
-    sha, ref = line.split("\t", 2)
-    ref = ref&.strip
-    [sha, ref] if ["refs/tags/#{tag_name}", "refs/tags/#{tag_name}^{}"].include?(ref)
-  end.to_h
+  remote_tag = refs
+    .lines
+    .filter_map do |line|
+      sha, ref = line.split("\t", 2)
+      ref = ref&.strip
+      [sha, ref] if ["refs/tags/#{tag_name}", "refs/tags/#{tag_name}^{}"].include?(ref)
+    end
+    .to_h
   return if remote_tag.empty?
 
   remote_commit = remote_tag["refs/tags/#{tag_name}^{}"] || remote_tag["refs/tags/#{tag_name}"]
@@ -399,6 +435,7 @@ def ensure_one_minor_version!(crates)
   details = minor_versions.map do |minor, grouped_crates|
     "#{minor}: #{grouped_crates.map { |crate| "#{crate[:name]}@#{crate[:version]}" }.join(", ")}"
   end
+
   raise "Rust crates must share one major.minor version before release.\n#{details.join("\n")}"
 end
 
@@ -416,7 +453,7 @@ all_crates = CRATES.map do |crate_dir_name, expected_name|
   raise "Crate order expected #{expected_name}, found #{actual_name}" unless actual_name == expected_name
   raise "Missing version in #{cargo_toml}" unless version
 
-  { dir_name: crate_dir_name, dir: crate_dir, name: actual_name, version: version }
+  {dir_name: crate_dir_name, dir: crate_dir, name: actual_name, version: version}
 end
 
 ensure_one_minor_version!(all_crates)
@@ -442,13 +479,13 @@ versions = crates.map { |crate| crate[:version] }.uniq
 tag_name = versions.one? ? "v#{versions.first}" : nil
 
 if options[:list]
-  puts JSON.pretty_generate(crates.map { |crate| crate.slice(:dir_name, :name, :version) })
+  puts(JSON.pretty_generate(crates.map { |crate| crate.slice(:dir_name, :name, :version) }))
   exit
 end
 
-puts "Selected Rust crates: #{crates.map { |crate| crate[:name] }.join(", ")}"
-puts "Crate versions: #{versions.join(", ")}"
-puts "crates.io publish: #{options[:push] && !options[:preflight_only] ? "enabled" : "disabled for this run"}"
+puts("Selected Rust crates: #{crates.map { |crate| crate[:name] }.join(", ")}")
+puts("Crate versions: #{versions.join(", ")}")
+puts("crates.io publish: #{options[:push] && !options[:preflight_only] ? "enabled" : "disabled for this run"}")
 
 ensure_clean_git! if options[:push] || options[:push_git] || options[:tag]
 
@@ -461,17 +498,17 @@ validate_crates_io_auth! if options[:push] && !options[:preflight_only]
 
 registry_states = {}
 if options[:push] || options[:preflight_only]
-  puts "\nPreflighting crates.io names and existing releases before packaging or publishing..."
+  puts("\nPreflighting crates.io names and existing releases before packaging or publishing...")
   crates.each do |crate|
     released = crate_released?(crate[:name], crate[:version])
     registry_states[crate[:name]] = released
-    puts "  #{crate[:name]} #{crate[:version]}: #{released ? "already released" : "available to publish"}"
+    puts("  #{crate[:name]} #{crate[:version]}: #{released ? "already released" : "available to publish"}")
   end
 end
 
 if options[:preflight_only]
   package_preflight!(crates, allow_dirty: !options[:push])
-  puts "\nPreflight complete for #{crates.length} crates; nothing was published."
+  puts("\nPreflight complete for #{crates.length} crates; nothing was published.")
   exit
 end
 
@@ -485,10 +522,10 @@ published_crates = []
 skipped_crates = []
 
 crates.each do |crate|
-  puts "\n=== #{crate[:name]} #{crate[:version]} ==="
+  puts("\n=== #{crate[:name]} #{crate[:version]} ===")
 
   if options[:push] && registry_states.fetch(crate[:name])
-    puts "Skipping #{crate[:name]} #{crate[:version]}; already released on crates.io."
+    puts("Skipping #{crate[:name]} #{crate[:version]}; already released on crates.io.")
     skipped_crates << crate[:name]
     next
   end
@@ -508,7 +545,9 @@ if options[:push]
   end
 
   if options[:tag]
-    run!(["git", "tag", "-a", tag_name, "-m", "Release Rust crates #{versions.first}"], chdir: RUST_REPO) unless tag_exists?(tag_name)
+    unless tag_exists?(tag_name)
+      run!(["git", "tag", "-a", tag_name, "-m", "Release Rust crates #{versions.first}"], chdir: RUST_REPO)
+    end
   end
 
   if options[:push_git]
@@ -516,9 +555,11 @@ if options[:push]
     run!(["git", "push", "origin", tag_name], chdir: RUST_REPO) if options[:tag]
   end
 
-  puts "\nPublished #{published_crates.length} crate(s) to crates.io: #{published_crates.join(", ")}"
-  puts "Skipped #{skipped_crates.length} already-released crate(s): #{skipped_crates.join(", ")}" unless skipped_crates.empty?
+  puts("\nPublished #{published_crates.length} crate(s) to crates.io: #{published_crates.join(", ")}")
+  unless skipped_crates.empty?
+    puts("Skipped #{skipped_crates.length} already-released crate(s): #{skipped_crates.join(", ")}")
+  end
 else
-  puts "\nLocal validation complete for #{crates.length} crate(s); no crates were published."
-  puts "Skipping release tag creation because --no-push cannot confirm live releases." if options[:tag]
+  puts("\nLocal validation complete for #{crates.length} crate(s); no crates were published.")
+  puts("Skipping release tag creation because --no-push cannot confirm live releases.") if options[:tag]
 end

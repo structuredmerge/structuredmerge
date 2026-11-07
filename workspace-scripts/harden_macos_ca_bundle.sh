@@ -24,8 +24,8 @@ trap 'rm -rf "$work"' EXIT
 
 matches() {
   case "$1" in
-    *"AAA Certificate Services"* | *"emSign ECC Root CA - G3"* | *[eE][mM]udhra*) return 0 ;;
-    *) return 1 ;;
+  *"AAA Certificate Services"* | *"emSign ECC Root CA - G3"* | *[eE][mM]udhra*) return 0 ;;
+  *) return 1 ;;
   esac
 }
 

@@ -11,6 +11,7 @@ require "optparse"
 require "rbconfig"
 require "rubygems/package"
 require "tmpdir"
+
 require_relative "artifact_workspace"
 
 options = {}
@@ -18,16 +19,21 @@ parser = OptionParser.new do |opts|
   opts.banner = "usage: prepare_core_ruby_source.rb --alef EXECUTABLE --output NEW_DIRECTORY"
   opts.on("--alef EXECUTABLE") { |value| options[:alef] = File.expand_path(value) }
   opts.on("--output NEW_DIRECTORY") { |value| options[:output] = File.expand_path(value) }
-  opts.on("--help") { puts opts; exit }
+  opts.on("--help") {
+    puts(opts)
+    exit
+  }
 end
+
 begin
   parser.parse!
 rescue OptionParser::ParseError => error
-  abort "#{error.message}\n#{parser}"
+  abort("#{error.message}\n#{parser}")
 end
-abort parser.to_s unless ARGV.empty? && options.values_at(:alef, :output).all?
-abort "Alef executable missing" unless File.file?(options[:alef]) && File.executable?(options[:alef])
-abort "output already exists" if File.exist?(options[:output]) || File.symlink?(options[:output])
+
+abort(parser.to_s) unless ARGV.empty? && options.values_at(:alef, :output).all?
+abort("Alef executable missing") unless File.file?(options[:alef]) && File.executable?(options[:alef])
+abort("output already exists") if File.exist?(options[:output]) || File.symlink?(options[:output])
 
 root = File.expand_path("..", __dir__)
 run = lambda do |*command, chdir: root|
@@ -35,17 +41,30 @@ run = lambda do |*command, chdir: root|
   raise "command failed: #{command.first}\n#{stdout}\n#{stderr}" unless status.success?
   stdout
 end
+
 revision = run.call("git", "rev-parse", "HEAD").strip
 FileUtils.mkdir_p(File.join(root, "tmp"))
-ArtifactWorkspace.open(root: root, prefix: "core-ruby-source-",
-  disposable: %w[workspace source.tar package]) do |stage|
-  puts "Source preparation report directory: #{stage}"
+ArtifactWorkspace.open(
+  root: root,
+  prefix: "core-ruby-source-",
+  disposable: %w[workspace source.tar package]
+) do |stage|
+  puts("Source preparation report directory: #{stage}")
   workspace = File.join(stage, "workspace")
   FileUtils.mkdir_p(workspace)
   archive_path = File.join(stage, "source.tar")
   run.call("git", "archive", "--format=tar", "--output=#{archive_path}", revision)
   run.call("tar", "-xf", archive_path, "-C", workspace)
-  prepare_log = run.call(options[:alef], "publish", "prepare", "--lang", "ruby", "--crate", "structuredmerge-core", chdir: workspace)
+  prepare_log = run.call(
+    options[:alef],
+    "publish",
+    "prepare",
+    "--lang",
+    "ruby",
+    "--crate",
+    "structuredmerge-core",
+    chdir: workspace
+  )
   File.write(File.join(stage, "prepare.log"), prepare_log)
 
   # The generated extension crate lives under the monorepo Cargo.toml, but the
@@ -68,7 +87,8 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-source-",
     ext/structuredmerge_core_rb/native/extconf.rb
     ext/structuredmerge_core_rb/src/lib.rs
     sig/types.rbs
-  ].to_h { |name| [name, File.join(original, name)] }
+  ]
+    .to_h { |name| [name, File.join(original, name)] }
   files.merge!(
     "README.md" => File.join(workspace, "crates/structuredmerge-core/README.md"),
     "AGPL-3.0-only.md" => File.join(workspace, "AGPL-3.0-only.md"),
@@ -112,11 +132,20 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-source-",
   # Alef currently seeds summary and description from the same package field;
   # Rubygems warns (and strict validation rejects) identical values.
   spec.summary = "Native StructuredMerge kernel"
-  run.call("python", "-c", audit, File.join(package, "ext/structuredmerge_core_rb/native/Cargo.toml"), spec.version.to_s)
+  run.call(
+    "python",
+    "-c",
+    audit,
+    File.join(package, "ext/structuredmerge_core_rb/native/Cargo.toml"),
+    spec.version.to_s
+  )
   baseline = JSON.parse(File.read(File.join(workspace, "contracts/typed-api/ruby/manifest.json")))
   baseline.fetch("files").each do |name, digest|
-    raise "source API differs from reviewed baseline: #{name}" unless Digest::SHA256.file(File.join(package, name)).hexdigest == digest
+    unless Digest::SHA256.file(File.join(package, name)).hexdigest == digest
+      raise "source API differs from reviewed baseline: #{name}"
+    end
   end
+
   spec.files = files.keys.sort
   spec.platform = Gem::Platform::RUBY
   spec.executables = []
@@ -130,18 +159,26 @@ ArtifactWorkspace.open(root: root, prefix: "core-ruby-source-",
   raise "prototype file in source gem" if contents.any? { |name| name.include?("prototype") }
 
   report = {
-    "mode" => "source-package-only", "source_revision" => revision,
-    "package" => spec.name, "version" => spec.version.to_s, "platform" => spec.platform.to_s,
-    "artifact" => File.basename(artifact), "sha256" => Digest::SHA256.file(artifact).hexdigest,
-    "files" => contents, "file_sha256" => files.keys.to_h { |name| [name, Digest::SHA256.file(File.join(package, name)).hexdigest] },
+    "mode" => "source-package-only",
+    "source_revision" => revision,
+    "package" => spec.name,
+    "version" => spec.version.to_s,
+    "platform" => spec.platform.to_s,
+    "artifact" => File.basename(artifact),
+    "sha256" => Digest::SHA256.file(artifact).hexdigest,
+    "files" => contents,
+    "file_sha256" => files.keys.to_h { |name| [name, Digest::SHA256.file(File.join(package, name)).hexdigest] },
     "alef_executable_sha256" => Digest::SHA256.file(options[:alef]).hexdigest,
     "alef_version" => run.call(options[:alef], "--version").strip,
-    "upstream_generation_verified" => false, "registry_resolution" => "not_run",
-    "source_installation" => "not_run", "installed_merge_tests" => "not_run",
-    "publication_gate" => false, "stage" => stage
+    "upstream_generation_verified" => false,
+    "registry_resolution" => "not_run",
+    "source_installation" => "not_run",
+    "installed_merge_tests" => "not_run",
+    "publication_gate" => false,
+    "stage" => stage
   }
   FileUtils.mkdir_p(options[:output])
   FileUtils.cp(artifact, File.join(options[:output], File.basename(artifact)))
   File.write(File.join(options[:output], "core-ruby-source.json"), JSON.pretty_generate(report) + "\n")
-  puts JSON.generate(report)
+  puts(JSON.generate(report))
 end
