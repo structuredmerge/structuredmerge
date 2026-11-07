@@ -181,7 +181,11 @@ jobs:
         with:
           ruby-version: "4.0"
       - name: Install Alef
-        run: cargo install alef --version "=$(cat workspace-scripts/alef-version)" --locked
+        shell: bash
+        run: |
+          bash workspace-scripts/install_alef_binary.sh \
+            workspace-scripts/alef-version "$RUNNER_TEMP/alef-bin"
+          echo "$RUNNER_TEMP/alef-bin" >> "$GITHUB_PATH"
       - name: Verify generated bindings and package metadata
         run: |
           alef verify --exit-code
