@@ -69,7 +69,7 @@ jobs:
         uses: xberg-io/actions/prepare-release-metadata@v1
         with:
           available-targets: "crates,python,ruby"
-          alef-version: "0.127.2"
+          alef-version: "0.128.0"
           targets: ${{ inputs.targets || github.event.client_payload.targets || '' }}
           tag: ${{ inputs.release_tag || github.event.release.tag_name || github.event.client_payload.tag || '' }}
           dry-run: ${{ inputs.dry_run || 'false' }}
@@ -293,8 +293,8 @@ jobs:
 
           matches() {
             case "$1" in
-              *"AAA Certificate Services"* | *"emSign ECC Root CA - G3"* | *[eE][mM]udhra*) return 0 ;;
-              *) return 1 ;;
+            *"AAA Certificate Services"* | *"emSign ECC Root CA - G3"* | *[eE][mM]udhra*) return 0 ;;
+            *) return 1 ;;
             esac
           }
 
@@ -405,7 +405,7 @@ jobs:
         with:
           package-dir: packages/python
           output-dir: dist
-          alef-version: "0.127.2"
+          alef-version: "0.128.0"
           dry-run: ${{ needs.prepare.outputs.dry_run }}
       - name: Upload source distribution
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -596,7 +596,7 @@ jobs:
       - name: Install Alef
         uses: xberg-io/actions/install-alef@v1
         with:
-          version: "0.127.2"
+          version: "0.128.0"
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -717,8 +717,8 @@ jobs:
 
           matches() {
             case "$1" in
-              *"AAA Certificate Services"* | *"emSign ECC Root CA - G3"* | *[eE][mM]udhra*) return 0 ;;
-              *) return 1 ;;
+            *"AAA Certificate Services"* | *"emSign ECC Root CA - G3"* | *[eE][mM]udhra*) return 0 ;;
+            *) return 1 ;;
             esac
           }
 

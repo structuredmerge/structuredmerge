@@ -31,6 +31,8 @@
 
 ### Changed
 
+- Upgrade Tree-sitter Language Pack to 1.25.0 and align cached grammar verification paths with the lockfile.
+
 - Raise the Python package floor to 3.11 (abi3-py311 wheels, `StrEnum` options) and the RuboCop target to Ruby 3.3, matching the generator minimums in Alef 0.128.0 and the already-declared `required_ruby_version >= 3.3.0`; the hosted minimum-runtime job moves from Python 3.10 to 3.11.
 
 - Upgrade Alef to 0.128.0 and regenerate the polyglot bindings, package scaffolds and fixture consumers; reviewed Ruby and Python API signatures are unchanged.

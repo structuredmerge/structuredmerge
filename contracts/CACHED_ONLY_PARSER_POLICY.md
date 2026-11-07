@@ -15,7 +15,7 @@ must deliberately choose the constrained path before claiming no acquisition.
 
 ## Mechanism and dependency evidence
 
-The locked TSLP 1.17.0 public `has_parser` registers configured local cache
+The locked TSLP 1.25.0 public `has_parser` registers configured local cache
 directories and tries actual local loading without downloading. Success retains
 the loaded Language in the process registry. Its public `get_parser` then uses
 that same retained Language; `configure` and `clean_cache` do not evict loaded
@@ -29,7 +29,8 @@ grammars; the Boolean TSLP probe does not distinguish their causes. It must not
 be relabeled unconditionally as `asset_missing` in a richer availability report.
 Construction does not configure, load or download anything.
 
-This mechanism is verified against the version in Cargo.lock. TSLP upgrades must
+This mechanism is verified against TSLP 1.25.0, the current Cargo.lock version.
+TSLP upgrades must
 rerun cold/corrupt/warm tests and re-audit loaded-Language retention; registry
 eviction or a change in public probing semantics would invalidate this reasoning.
 
@@ -43,6 +44,10 @@ isolating TSLP's process-global registry and configured paths. Both reject probe
 and direct provider parsing with `parser.local_unavailable`, leave the designated
 cache empty, and make no observed connection to the test HTTP/HTTPS proxy.
 Children have five-second deadlines and scratch directories are removed.
+
+On 2026-11-07, the same three default tests and five of the six opt-in tests
+passed against TSLP 1.25.0. The remaining warm-cache test passed separately with
+the 1.25.0 JSON library supplied explicitly.
 
 The explicit warm test also passes, using a copied preinstalled JSON grammar:
 
@@ -74,7 +79,7 @@ loaded grammars and all TSLP-registered local directories remain eligible; this
 is not confinement to one filesystem directory. The proxy check complements the
 audited call path, not proof of hard network isolation.
 
-Evidence is local Linux with locked TSLP 1.17.0. Other platforms (including library
+Evidence is local Linux with locked TSLP 1.25.0. Other platforms (including library
 removal semantics on Windows), concurrent reconfiguration, asset provenance,
 full artifact/runtime reports, broader binding-runtime checks, typed CLI integration,
 publication and default authority remain separate gates. The legacy auto-download

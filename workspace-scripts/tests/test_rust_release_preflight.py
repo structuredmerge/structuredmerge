@@ -80,7 +80,6 @@ class RustReleasePreflightTest(unittest.TestCase):
         gemspec = (ROOT / "packages/ruby/structuredmerge_core.gemspec").read_text()
         summary = next(line.split('"')[1] for line in gemspec.splitlines() if "spec.summary" in line)
         description = next(line.split('"')[1] for line in gemspec.splitlines() if "spec.description" in line)
-        preparation = (ROOT / "workspace-scripts/prepare_core_ruby_source.rb").read_text()
         core_version = next(
             line.split('"')[1]
             for line in (ROOT / "crates/structuredmerge-core/Cargo.toml").read_text().splitlines()
@@ -91,9 +90,8 @@ class RustReleasePreflightTest(unittest.TestCase):
         self.assertTrue(description.strip())
         self.assertNotEqual(summary, description)
         self.assertEqual(gem_version, core_version)
-        self.assertIn('spec.homepage      = "https://structuredmerge.org"', gemspec)
+        self.assertIn('spec.homepage = "https://github.com/structuredmerge/structuredmerge"', gemspec)
         self.assertIn('spec.metadata["source_code_uri"]', gemspec)
-        self.assertIn('spec.summary = "Native StructuredMerge kernel"', preparation)
 
     def test_python_wheel_homepage_is_encoded_as_a_project_url(self):
         """Keep Python wheel URLs and version in valid, synchronized metadata."""

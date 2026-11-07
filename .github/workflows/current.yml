@@ -97,7 +97,7 @@ jobs:
         # The explicit bounded preparation step loads JSON through TSLP's
         # normal public loader. These checks neither acquire nor infer a path.
         env:
-          SMORG_TEST_GRAMMAR: ${{ github.workspace }}/tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so
+          SMORG_TEST_GRAMMAR: ${{ github.workspace }}/tmp/typed-tslp-cache/tree-sitter-language-pack/v1.25.0/libs/libtree_sitter_json.so
           SMORG_TEST_ARTIFACT: ${{ github.workspace }}/tmp/cli-install/bin/smorg
         shell: bash
         run: |
@@ -108,12 +108,12 @@ jobs:
         run: >-
           python workspace-scripts/check_installed_cli_git.py tmp/cli-install/bin/smorg
           --typed --fixtures ../fixtures/conformance/cli-v1/typed-git.json
-          --grammar-library tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so
+          --grammar-library tmp/typed-tslp-cache/tree-sitter-language-pack/v1.25.0/libs/libtree_sitter_json.so
       - name: Verify installed typed compatibility merge and diff through real Git
         run: >-
           python workspace-scripts/check_installed_cli_git.py tmp/cli-install/bin/smorg-rs
           --typed --fixtures ../fixtures/conformance/cli-v1/typed-git.json
-          --grammar-library tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so
+          --grammar-library tmp/typed-tslp-cache/tree-sitter-language-pack/v1.25.0/libs/libtree_sitter_json.so
       - name: Retain Git gate evidence even on failure
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -308,7 +308,7 @@ jobs:
       - name: Verify typed Rust language-pack parser service
         env:
           TREE_HAVER_LANGUAGE_PACK_CACHE_DIR: ${{ github.workspace }}/tmp/typed-tslp-cache
-          TREE_HAVER_CACHED_JSON_LIBRARY: ${{ github.workspace }}/tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so
+          TREE_HAVER_CACHED_JSON_LIBRARY: ${{ github.workspace }}/tmp/typed-tslp-cache/tree-sitter-language-pack/v1.25.0/libs/libtree_sitter_json.so
         run: mise exec -- cargo test -p tree-haver --test language_pack_provider --locked -- --include-ignored
       - name: Setup Ruby for native parser integration
         uses: ruby/setup-ruby@v1

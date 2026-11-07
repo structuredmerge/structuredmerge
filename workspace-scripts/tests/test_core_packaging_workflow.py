@@ -69,7 +69,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
             if step.get("with", {}).get("repository") == "structuredmerge/structuredmerge-fixtures"
         )
         assert fixtures["with"]["ref"] == "9c6e4bb0625f28207d1f40e5d103936eed56154a"
-        grammar = "tmp/typed-tslp-cache/tree-sitter-language-pack/v1.17.0/libs/libtree_sitter_json.so"
+        grammar = "tmp/typed-tslp-cache/tree-sitter-language-pack/v1.25.0/libs/libtree_sitter_json.so"
         legacy = [i for i, step in enumerate(steps) if "slice-951-git-driver-json-integration" in step.get("run", "")]
         typed = [(i, step) for i, step in enumerate(steps) if "--typed --fixtures" in step.get("run", "")]
         assert len(legacy) == 2
@@ -87,7 +87,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         assert max(legacy) < auth_index
         assert 'test -f "$SMORG_TEST_GRAMMAR"' in auth["run"]
         assert auth["env"]["SMORG_TEST_GRAMMAR"].endswith(grammar)
-        assert 'name = "tree-sitter-language-pack"\nversion = "1.17.0"' in (self.root / "Cargo.lock").read_text()
+        assert 'name = "tree-sitter-language-pack"\nversion = "1.25.0"' in (self.root / "Cargo.lock").read_text()
         upload = next(step for step in steps if step.get("uses", "").startswith("actions/upload-artifact@"))
         assert "tmp/typed-cli-git-*/report.json" in upload["with"]["path"]
         assert "tmp/cli-grammar-auth.log" in upload["with"]["path"]

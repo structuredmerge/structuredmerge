@@ -82,7 +82,7 @@ impl LanguagePackProvider {
     fn parser(&self, language: &str) -> Result<tree_sitter_language_pack::Parser, ProviderFault> {
         crate::ensure_language_pack_language(language)
             .map_err(|e| fault("parser.unavailable", e))?;
-        // TSLP 1.17's public has_parser never downloads. Success loads/pins the
+        // TSLP 1.25.0's public has_parser never downloads. Success loads/pins the
         // Language in its process registry; get_parser then uses that same
         // cached Language. Cache-file removal/configure/clean_cache do not
         // evict loaded Languages. Do not replace this with has_language (which

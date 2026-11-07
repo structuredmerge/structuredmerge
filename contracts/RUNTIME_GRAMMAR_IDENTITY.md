@@ -2,10 +2,18 @@
 
 ## Audited state
 
-The kernel locks `tree-sitter-language-pack` 1.17.0, crates.io checksum
+The original audit examined `tree-sitter-language-pack` 1.17.0, crates.io checksum
 `8074a6f562c62733c6e1c837affd0b14f8e749b079b416344e3e4d8176b6d5d0`.
-This audit concerns that dependency, not an assertion about upstream HEAD or a
-newer release. No dependency source, lockfile or parser implementation was edited.
+That audit concerns the dependency version inspected at the time, not an assertion
+about upstream HEAD or a newer release. The current kernel lock is 1.25.0; this
+version update tracks the package release and does not claim to resolve the loaded
+grammar identity gap described below.
+
+Inspection of the published 1.25.0 crate source confirms that `has_parser`
+documents local-only probing, while dynamic libraries remain retained in the
+process-wide `LOADED_LIBRARIES` map. The cached-only policy is therefore still
+supported; the public API still does not provide a receipt proving the bytes
+behind an already-loaded handle.
 
 Follow-up read-only upstream inspection on 2026-09-18 checked main at
 [`e147e2d04bbce6eebb92eee66ecd948c94f26722`](https://github.com/xberg-io/tree-sitter-language-pack/tree/e147e2d04bbce6eebb92eee66ecd948c94f26722).
