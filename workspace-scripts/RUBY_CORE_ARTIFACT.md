@@ -155,7 +155,9 @@ the x86_64 Linux / Ruby 4.0.9 platform artifact was built with
 --package-only (SHA-256
 e0403ab03da895dfc5a7f071d67428e7becf316a0079fe0403d35462932a71ad). The first
 isolated install exposed a stale generated Rust analyze fixture that expected
-#[test] to be rejected, despite the shared owner-profile fixture now expecting
+
+## [test] to be rejected, despite the shared owner-profile fixture now expecting
+
 native syn support. The shared typed-core fixture was corrected and Ruby/Python
 generated tests plus the Ruby consumer-app copies were regenerated/synchronized.
 The verifier then passed 53 core, 116 generated e2e, and 116 consumer-app
