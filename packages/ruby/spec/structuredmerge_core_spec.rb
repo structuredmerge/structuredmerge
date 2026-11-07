@@ -11,15 +11,11 @@ require "rbs"
 
 if (expected_home = ENV.fetch("STRUCTUREDMERGE_EXPECT_GEM_HOME", nil))
   installed = Gem.loaded_specs.fetch("structuredmerge-core").full_gem_path
-  unless installed.start_with?(File.expand_path(expected_home) + File::SEPARATOR)
-    raise "core must load from the isolated installed gem"
-  end
+  raise "core must load from the isolated installed gem" unless installed.start_with?(File.expand_path(expected_home) + File::SEPARATOR)
 
   raise "prototype was activated" if Gem.loaded_specs.keys.any? { |name| name.include?("host_prototype") }
   loaded_native = $LOADED_FEATURES.select { |path| path.include?("structuredmerge_core_rb") }
-  if loaded_native.empty? || loaded_native.any? { |path| !path.start_with?(installed + File::SEPARATOR) }
-    raise "native extension came from outside the installed gem"
-  end
+  raise "native extension came from outside the installed gem" if loaded_native.empty? || loaded_native.any? { |path| !path.start_with?(installed + File::SEPARATOR) }
 end
 
 RSpec.describe StructuredmergeCore do
@@ -597,9 +593,7 @@ RSpec.describe StructuredmergeCore do
     expect(described_class.parser_registry_inventory.providers).to(be_empty)
     expect(host.calls).to(eq(0))
   ensure
-    if described_class.parser_registry_inventory.providers.any? { |provider| provider.id == "ruby.typed.psych" }
-      described_class.unregister_parser_host("ruby.typed.psych")
-    end
+    described_class.unregister_parser_host("ruby.typed.psych") if described_class.parser_registry_inventory.providers.any? { |provider| provider.id == "ruby.typed.psych" }
   end
 
   it "exposes the runtime classes, readers and methods declared by the installed RBS" do
@@ -800,9 +794,7 @@ RSpec.describe StructuredmergeCore do
     latest = described_class.parser_registry_inventory.generation
     expect { described_class.replace_parser_host(replacement, latest) }.to(raise_error(RuntimeError, /UnknownId/))
   ensure
-    if described_class.parser_registry_inventory.providers.any? { |provider| provider.id == "ruby.typed.psych" }
-      described_class.unregister_parser_host("ruby.typed.psych")
-    end
+    described_class.unregister_parser_host("ruby.typed.psych") if described_class.parser_registry_inventory.providers.any? { |provider| provider.id == "ruby.typed.psych" }
   end
 
   it "reports request-specific parser eligibility without parsing source" do
@@ -869,9 +861,7 @@ RSpec.describe StructuredmergeCore do
     expect(before.providers.map(&:id)).to(include("ruby.typed.psych"))
     expect(host.calls).to(eq(0))
   ensure
-    if described_class.parser_registry_inventory.providers.any? { |provider| provider.id == "ruby.typed.psych" }
-      described_class.unregister_parser_host("ruby.typed.psych")
-    end
+    described_class.unregister_parser_host("ruby.typed.psych") if described_class.parser_registry_inventory.providers.any? { |provider| provider.id == "ruby.typed.psych" }
   end
 
   it "executes nested JSON common merges in Rust with render and conflict evidence" do

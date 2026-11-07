@@ -9,9 +9,7 @@ if ENV["STRUCTUREDMERGE_PSYCH_INSTALLED"] == "1"
 
   installed = Gem.loaded_specs.fetch("psych-merge").full_gem_path
   expected = File.expand_path(ENV.fetch("STRUCTUREDMERGE_EXPECT_GEM_HOME")) + File::SEPARATOR
-  unless File.realpath(installed).start_with?(File.realpath(expected) + File::SEPARATOR)
-    raise "Psych adapter must come from the installed gem"
-  end
+  raise "Psych adapter must come from the installed gem" unless File.realpath(installed).start_with?(File.realpath(expected) + File::SEPARATOR)
 
   # Test instrumentation only. Preserve the existing fixture ID while retaining
   # the installed adapter's package/parser provenance and callback implementation.
@@ -185,9 +183,7 @@ class TypedWorkflowHost
       items: prepared.items.map do |item|
         parsed = item.parses.first.parsed
         source = item.operation.sources.fetch(:source)
-        unless parsed.source.source_id == source.source_id && parsed.source.sha256 == source.sha256
-          raise "source identity changed"
-        end
+        raise "source identity changed" unless parsed.source.source_id == source.source_id && parsed.source.sha256 == source.sha256
 
         raise "no parser facts" if parsed.nodes.empty?
         core::OperationResult.new(

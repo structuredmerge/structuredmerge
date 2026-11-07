@@ -6,7 +6,6 @@
 
 require_relative "structuredmerge_core/native"
 require "version_gem"
-
 require_relative "structuredmerge_core/version"
 
 # Top-level namespace for the StructuredmergeCore Ruby binding.
@@ -23,5 +22,5 @@ end
 # into Object makes generic names collide with unrelated Ruby libraries.
 
 StructuredmergeCore::Version.class_eval do
-  extend(VersionGem::Basic)
+  extend VersionGem::Basic
 end

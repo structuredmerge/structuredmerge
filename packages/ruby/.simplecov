@@ -1,6 +1,16 @@
-# Coverage thresholds are configured through mise.toml and kettle-soup-cover.
+# kettle-jem:freeze
+# To retain chunks of comments & code during structuredmerge-core templating:
+# Wrap custom sections with freeze markers (e.g., as above and below this comment chunk).
+# structuredmerge-core will then preserve content between those markers across template runs.
+# kettle-jem:unfreeze
+
+# Minimum coverage thresholds are set by kettle-soup-cover.
+# They are controlled by ENV variables loaded by `mise` from `mise.toml`
+# (with optional machine-local overrides in `.env.local`).
+# If the values for minimum coverage need to change, they should be changed both there,
+#   and in 2 places in .github/workflows/coverage.yml.
 SimpleCov.configure do
-  if SimpleCov::Configuration.instance_methods.include?(:cover)
+  if SimpleCov::Configuration.method_defined?(:cover)
     cover "lib/**/*.rb", "lib/**/*.rake", "exe/*.rb"
   else
     track_files "{lib/**/*.rb,lib/**/*.rake,exe/*.rb}"

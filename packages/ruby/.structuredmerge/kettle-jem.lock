@@ -150,7 +150,7 @@ template_state:
     gemfiles/modular/stringio/r4/v3.0.gemfile.example: 476f88c1f0b1acd03a4ef485459d3cc2292c8830295d9038d84666055befc946
     gemfiles/modular/stringio/vHEAD.gemfile.example: e0497ab6dad9667b22725485b781e9d99349a079250eb29cb125d58f01f4a5be
     gemfiles/modular/style.gemfile.example: bb5e3dc3ce3b5459e689b93ad3800671e21d969b1ef26d846bf7cec0d2d2720a
-    gemfiles/modular/style_local.gemfile.example: 46d76e8cf65a6c7b0fa13e8f39da5293b5e0dac4acab43f6cbe7eba64064eadf
+    gemfiles/modular/style_local.gemfile.example: 8b0b3929d2853604ad23524bc9b1e3fa1bec0c5bebb003a435092ca9947a5b44
     gemfiles/modular/templating.gemfile.example: ac12cbc9b3923539792c188a0e1faab7ee2228a4852d074d993f502db2aba47d
     gemfiles/modular/templating_local.gemfile.example: 2e5fbc7ae453a1d48bdbd24fa1d97db1037b8fb785de81b03f77db4a5c612a08
     gemfiles/modular/webrick/r4/v1.9.gemfile.example: 1ee940ff54d5ca3ce7fcff0d82ee9553386979656b9e220d5be5404d0991d5ea
@@ -189,6 +189,13 @@ template_state:
     spec/README.md.example: d8f0d2288bdee716c18b093755c6eff2158e81620306cbf96fc62226a8f22f1c
     spec/spec_helper.rb.example: f9821ea448bbfa67ce3108d3713217c15be097429365821a431d6af360d2d053
 files:
+  ".simplecov":
+    recipe: template_source_application_simplecov
+    action: write
+    dest_sha256: 6128ecf544360dce9eb0dbf56253de47a73f92503366972154c467863156ba96
+    input_fingerprint: b001b8647dd11a5d098eca0040bc87574a02cd5c85c36392a017c958f06992bc
+    template_sources:
+    - ".simplecov.example"
   AGPL-3.0-only.md:
     recipe: template_source_application_AGPL_3_0_only_md
     action: write
@@ -423,8 +430,8 @@ files:
   gemfiles/modular/style_local.gemfile:
     recipe: template_source_application_gemfiles_modular_style_local_gemfile
     action: write
-    dest_sha256: a77fe183899a4682fecbf0d88194889054b21a58199583553034cf205944050c
-    input_fingerprint: f23074c551ecfa36384817224b3d67a2f9d95a838edd99cb9aaf0571afb35966
+    dest_sha256: 7156c02d24e9315123332346d9ed37fc5209023818d5247a7690763cb2af592a
+    input_fingerprint: d1c897617cd9a321b434e78c6196f3f77e3036dff3bf4b1f658428f3da660692
     template_sources:
     - gemfiles/modular/style_local.gemfile.example
   gemfiles/modular/templating.gemfile:
@@ -493,7 +500,7 @@ files:
   mise.toml:
     recipe: template_source_application_mise_toml
     action: write
-    dest_sha256: 47337054e94d1396505cb3d72f3f15f8d20427fd864b1447f53e94f75ac12e72
+    dest_sha256: b6344c9c0dd34d39a7375ba0604557e6689a9dbcaa92188ee2146d5d5340ecef
     input_fingerprint: 91b6ee5e354f6dddf27be548454fdb5d28309c5c5999735d7ecb3edab0b2f043
     template_sources:
     - mise.toml.no-osc.example
@@ -504,6 +511,13 @@ files:
     input_fingerprint: 373743a679b1d670dfffde1f62a85c94a2cb3bedf2a141aa6743b96b39706b78
     template_sources:
     - sig/gem.rbs.example
+  spec/spec_helper.rb:
+    recipe: template_source_application_spec_spec_helper_rb
+    action: write
+    dest_sha256: b1b000bee6951aa26a8469c40e14458f6bc419c9ad7fd91514a60791b4277a75
+    input_fingerprint: 24213b36ee7054acdb1272dc3f747fea4ab7bd258e23ccb7feecd5596f43e3ce
+    template_sources:
+    - spec/spec_helper.rb.example
   structuredmerge_core.gemspec:
     recipe: template_source_application_structuredmerge_core_gemspec
     action: write
