@@ -52,6 +52,8 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.14"
+      - name: Install workspace tooling test dependency
+        run: python -m pip install pytest
       - name: Setup Ruby for cross-language tooling audits
         uses: ruby/setup-ruby@v1
         with:
