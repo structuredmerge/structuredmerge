@@ -189,13 +189,41 @@ template_state:
     spec/README.md.example: d8f0d2288bdee716c18b093755c6eff2158e81620306cbf96fc62226a8f22f1c
     spec/spec_helper.rb.example: f9821ea448bbfa67ce3108d3713217c15be097429365821a431d6af360d2d053
 files:
+  ".rspec":
+    recipe: template_source_application_rspec
+    action: write
+    dest_sha256: 87c2b075fb76dcaeb07357fa307dded4e98924ce56aa39dc769736e15d0b6ef8
+    input_fingerprint: b20c925f088e9d73d741790a781f46f3068019ceae8bb91b914610d7a859293d
+    template_sources:
+    - ".rspec.example"
   ".simplecov":
     recipe: template_source_application_simplecov
     action: write
     dest_sha256: 6128ecf544360dce9eb0dbf56253de47a73f92503366972154c467863156ba96
-    input_fingerprint: b001b8647dd11a5d098eca0040bc87574a02cd5c85c36392a017c958f06992bc
+    input_fingerprint: cd45164668ee2aac7850c9783e2843f239eee92e09bfcf7cc228c3d9ce5a98bd
     template_sources:
     - ".simplecov.example"
+  ".yard-lint.yml":
+    recipe: template_source_application_yard_lint_yml
+    action: write
+    dest_sha256: 90def46867c9436b4e177c47d91fc8165f4602e335715aecc39f5587ae20b55b
+    input_fingerprint: '0348a5f65e4719d72fa5e8005f698122dac9755d85638237d62dea078de4a29e'
+    template_sources:
+    - ".yard-lint.yml.example"
+  ".yardignore":
+    recipe: template_source_application_yardignore
+    action: write
+    dest_sha256: 821f453c609df7d46145d675424b39dfbe6dfdca8edac5f367b85fff48502455
+    input_fingerprint: b620442770c044a7955fa2206952924ec32b1b25a6aa1485a4757bcb034ce0e7
+    template_sources:
+    - ".yardignore.example"
+  ".yardopts":
+    recipe: template_source_application_yardopts
+    action: write
+    dest_sha256: 6fd6f2701713096a8a9ea095c213bbc68eeef37797c4754d97837e3229a3a5f6
+    input_fingerprint: 82642d9fa488f58ce75369ddcdc993eecb9451661956c51f28f3c218d06c7150
+    template_sources:
+    - ".yardopts.example"
   AGPL-3.0-only.md:
     recipe: template_source_application_AGPL_3_0_only_md
     action: write
@@ -238,6 +266,13 @@ files:
     input_fingerprint: eb9996d38294be6be2a9cb625b064c622651843093730670d01f1b2cd2782b07
     template_sources:
     - Rakefile.example
+  bin/setup:
+    recipe: template_source_application_bin_setup
+    action: write
+    dest_sha256: 0ac35089c95a91d8973fe7a318bf9fd98b9f8e00db92c5d9ca6cd858abb8d41b
+    input_fingerprint: 0f74b447f2e7703cab2b246f5b72f1b3d255df96207a06ddad84a46e0705abc1
+    template_sources:
+    - bin/setup.example
   certs/pboling.pem:
     recipe: template_source_application_certs_pboling_pem
     action: write
@@ -518,11 +553,18 @@ files:
     input_fingerprint: 6c24f432af40ee19c84d7b6a951dea50c6ed1841b85c1e1d0c616d2b11013ddd
     template_sources:
     - sig/gem.rbs.example
+  spec/README.md:
+    recipe: template_source_application_spec_README_md
+    action: write
+    dest_sha256: d8f0d2288bdee716c18b093755c6eff2158e81620306cbf96fc62226a8f22f1c
+    input_fingerprint: 4660cc80f02f4e9560cfb6bb837a438fe610a33dba14e92378b104cf98b1518c
+    template_sources:
+    - spec/README.md.example
   spec/spec_helper.rb:
     recipe: template_source_application_spec_spec_helper_rb
     action: write
-    dest_sha256: b1b000bee6951aa26a8469c40e14458f6bc419c9ad7fd91514a60791b4277a75
-    input_fingerprint: 24213b36ee7054acdb1272dc3f747fea4ab7bd258e23ccb7feecd5596f43e3ce
+    dest_sha256: fbb34e774425b4197738ee403a878e67357db31366528f0d17f7ca79c4d5c406
+    input_fingerprint: 1a3954cbed3093821ce435d7e277f4fdcd12d5156cfccb72ca24ce96e5f75a69
     template_sources:
     - spec/spec_helper.rb.example
   structuredmerge_core.gemspec:

@@ -512,6 +512,16 @@ templates:
     - Gemfile
     - certs/pboling.pem
     - tmp/.gitignore
+    - Gemfile
+    - Rakefile
+    - .rspec
+    - .simplecov
+    - .yard-lint.yml
+    - .yardignore
+    - .yardopts
+    - bin/setup
+    - spec/README.md
+    - spec/spec_helper.rb
     - gemfiles/modular/benchmark/r4/v0.5.gemfile
     - gemfiles/modular/benchmark/vHEAD.gemfile
     - gemfiles/modular/cgi/r4/v0.5.gemfile
