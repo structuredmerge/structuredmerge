@@ -33,3 +33,16 @@ includes = ["mise-family.tasks.toml"]
 description = "Release the structuredmerge-core Ruby gem"
 raw = true
 run = "STRUCTUREDMERGE_DEV=false STRUCTUREDMERGE_CORE_DEV=false KETTLE_DEV_DEV=false K_JEM_TEMPLATING=false bundle exec kettle-family release --execute --publish --secrets-provider op"
+
+[tasks.local-template]
+description = "Template core, format generated Ruby, and commit changes"
+raw = true
+run = """
+set -e
+STRUCTUREDMERGE_DEV={{config_root}}/../../../ruby/gems STRUCTUREDMERGE_CORE_DEV={{config_root}}/../.. KETTLE_DEV_DEV={{config_root}}/../../../../kettle-dev STRUCTUREDMERGE_CORE_RUBY_DEV={{config_root}} K_JEM_TEMPLATING=true RUBYOPT=-rbundler/setup BUNDLE_GEMFILE=Gemfile bundle exec kettle-family template --execute --no-commit --env STRUCTUREDMERGE_DEV\\={{config_root}}/../../../ruby/gems --env STRUCTUREDMERGE_CORE_DEV\\={{config_root}}/../.. --env KETTLE_DEV_DEV\\={{config_root}}/../../../../kettle-dev --env STRUCTUREDMERGE_CORE_RUBY_DEV\\={{config_root}} --env K_JEM_TEMPLATING\\=true --env RUBYOPT\\=-rbundler/setup --env BUNDLE_GEMFILE\\=Gemfile
+poly fmt --fix Rakefile lib/structuredmerge_core/version_gem.rb
+git add -A
+if ! git diff --cached --quiet; then
+  git commit -m "chore: apply Kettle Jem template"
+fi
+"""
