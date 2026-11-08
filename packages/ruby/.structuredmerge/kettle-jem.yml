@@ -207,7 +207,7 @@ rubygems:
 #
 # ENV override: KJ_REPOSITORY_TOPOLOGY
 repository:
-  topology: standalone
+  topology: monorepo-subproject
 
 # RubyForum community tag.
 # The project tag is used when present; otherwise the family tag is used.
