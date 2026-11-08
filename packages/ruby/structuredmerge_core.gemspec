@@ -144,7 +144,7 @@ Gem::Specification.new do |spec|
 
   # Dev, Test, & Release Tasks
   # ruby >= 3.4.0
-  spec.add_development_dependency("kettle-dev", "~> 3.1", ">= 3.1.26")
+  spec.add_development_dependency("kettle-dev", "~> 3.1", ">= 3.1.27")
 
   # Security
   # ruby >= 2.0.0

@@ -698,6 +698,15 @@ files:
     strategy: keep_destination
   README.md:
     strategy: merge
+  # This Gemfile carries the release floor and modular local-path wiring used
+  # by this monorepo subgem. Keep the reviewed destination until KJ's
+  # destination-preferred Gemfile merge preserves those constraints.
+  Gemfile:
+    strategy: keep_destination
+  # Preserve the complete SPDX license text; the current packaged merge
+  # collapses this destination file to a blank line.
+  AGPL-3.0-only.md:
+    strategy: keep_destination
   structuredmerge_core.gemspec:
     strategy: merge
     preference: destination
@@ -706,14 +715,10 @@ files:
     strategy: accept_template
   Appraisal.root.gemfile:
     strategy: accept_template
-  Gemfile:
-    strategy: merge
-    preference: destination
-    add_template_only_nodes: true
+  # The current Rakefile merge duplicates generated task docs and Alef headers
+  # on each render; retain the reviewed destination until that merge is fixed.
   Rakefile:
-    strategy: merge
-    preference: destination
-    add_template_only_nodes: true
+    strategy: keep_destination
   lib:
     structuredmerge_core.rb:
       strategy: keep_destination
