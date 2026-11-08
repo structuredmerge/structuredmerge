@@ -270,7 +270,7 @@ files:
     recipe: template_source_application_bin_setup
     action: write
     dest_sha256: 0ac35089c95a91d8973fe7a318bf9fd98b9f8e00db92c5d9ca6cd858abb8d41b
-    input_fingerprint: 0f74b447f2e7703cab2b246f5b72f1b3d255df96207a06ddad84a46e0705abc1
+    input_fingerprint: 440d6fd963633ec4f53382a5ec583ac2fe94147ab367aca4014c2d9c77419922
     template_sources:
     - bin/setup.example
   certs/pboling.pem:
