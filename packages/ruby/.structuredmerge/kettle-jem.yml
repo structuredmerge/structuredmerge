@@ -576,11 +576,12 @@ templates:
   # Template recipe profile.
   # Supported values:
   #   full            - full gem template
-  #   monorepo-subgem - smaller sub-project template
+  #   monorepo-subgem-package - compact sub-project template
+  #   monorepo-subgem-release - sub-project template with release files
   #   monorepo-root   - repository-root support template
   #
   # ENV override: KETTLE_JEM_TEMPLATE_PROFILE
-  profile: monorepo-subgem-package
+  profile: monorepo-subgem-release
 
 # StructuredMerge Git diff driver setup.
 # Default: semantic-diff installs local .gitattributes entries for semantic
