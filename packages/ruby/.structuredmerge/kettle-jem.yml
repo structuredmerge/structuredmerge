@@ -499,8 +499,6 @@ templates:
   apply: true
   entries:
     - README.md
-    - source: .gitignore.example
-      target: .gitignore
     - source: gem.gemspec
       target: structuredmerge_core.gemspec
     - Rakefile
