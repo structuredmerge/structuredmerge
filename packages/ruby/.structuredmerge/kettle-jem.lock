@@ -507,7 +507,7 @@ files:
   mise.toml:
     recipe: template_source_application_mise_toml
     action: write
-    dest_sha256: b6344c9c0dd34d39a7375ba0604557e6689a9dbcaa92188ee2146d5d5340ecef
+    dest_sha256: c958d360aa0179db71c716e1a0e866ecb8899994d029bf9a60e48e99258cdc0a
     input_fingerprint: 91b6ee5e354f6dddf27be548454fdb5d28309c5c5999735d7ecb3edab0b2f043
     template_sources:
     - mise.toml.no-osc.example
