@@ -17,8 +17,8 @@
 ## [0.2.1] - 2026-11-07
 
 - TAG: [v0.2.1][0.2.1t]
-- COVERAGE: 99.01% -- 100/101 lines in 3 files
-- BRANCH COVERAGE: 66.67% -- 10/15 branches in 3 files
+- COVERAGE: 99.02% -- 101/102 lines in 4 files
+- BRANCH COVERAGE: 66.67% -- 10/15 branches in 4 files
 - 81.64% documented
 
 ### Fixed

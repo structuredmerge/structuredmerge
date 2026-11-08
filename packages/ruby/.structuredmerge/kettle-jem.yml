@@ -498,6 +498,7 @@ templates:
   root: packaged
   apply: true
   entries:
+    - .gitignore
     - README.md
     - source: gem.gemspec
       target: structuredmerge_core.gemspec
