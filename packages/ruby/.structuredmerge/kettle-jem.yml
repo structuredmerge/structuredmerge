@@ -502,7 +502,6 @@ templates:
     - source: gem.gemspec
       target: structuredmerge_core.gemspec
     - Rakefile
-    - bin/setup
     - LICENSE.md
     - MIT.md
     - AGPL-3.0-only.md
