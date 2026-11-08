@@ -1,12 +1,12 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "ruby",
-  "review_reason": "The Alef 0.128.0 review restored the traditional StructuredmergeCore::VERSION alias additively; later Alef regeneration changed only Ruby facade formatting and repaired the reviewed snapshot hashes. Public signatures and behavior remain unchanged.",
+  "review_reason": "Alef owns StructuredmergeCore::VERSION in sig/types.rbs; the Kettle template signature now declares only StructuredmergeCore::Version::VERSION to avoid an invalid duplicate RBS declaration.",
   "files": {
     "lib/structuredmerge_core/native.rb": "8d373c4dc7c519371d97ed9a31d602b6403511ddaed8ed7a4876af0e912589e2",
     "lib/structuredmerge_core/version.rb": "0700bd72b5361723dddef226dbe3d36845afb2bec6f309dc50c43e18b30535be",
     "lib/structuredmerge_core.rb": "1183ec4897c49c154669b2d07b4eadd53d9b4260b01ada7d9de921d95078ce16",
-    "sig/structuredmerge_core.rbs": "e36a899efdc34b2be716524c19fd8bbac2b90d5f1d880dd7a9985844440fd79d",
+    "sig/structuredmerge_core.rbs": "13f064a4a44bc11f0e93ef4d9e4788c015e35a716a28d13baf7eaac446b04213",
     "sig/types.rbs": "8049f8d0868bed3e09867f445439c2b18a8627bd9565db7441d7d9b91838a571"
   }
 }

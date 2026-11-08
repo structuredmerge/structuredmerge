@@ -2,5 +2,4 @@ module StructuredmergeCore
     module Version
         VERSION: String
     end
-    VERSION: String
 end

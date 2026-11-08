@@ -671,7 +671,8 @@ patterns:
     strategy: raw_copy
   - path: ".github/workflows/**"
     strategy: accept_template
-  # Signature stub files are fully generated; there is nothing here to hand-edit.
+  # Alef owns the public surface. Keep the version namespace stub, which avoids
+  # duplicating the top-level VERSION constant already emitted by Alef.
   - path: "sig/**/*.rbs"
     strategy: accept_template
 
@@ -696,6 +697,9 @@ files:
     strategy: merge
     preference: destination
     add_template_only_nodes: true
+  sig:
+    structuredmerge_core.rbs:
+      strategy: keep_destination
   .github:
     copilot_instructions.md:
       strategy: accept_template

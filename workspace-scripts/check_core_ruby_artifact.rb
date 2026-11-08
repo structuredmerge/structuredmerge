@@ -148,6 +148,7 @@ ArtifactWorkspace.open(
     "README.md" => File.join(root, "crates/structuredmerge-core/README.md"),
     "AGPL-3.0-only.md" => File.join(root, "AGPL-3.0-only.md"),
     "PolyForm-Small-Business-1.0.0.md" => File.join(root, "PolyForm-Small-Business-1.0.0.md"),
+    "sig/structuredmerge_core.rbs" => File.join(package_root, "sig/structuredmerge_core.rbs"),
     "sig/types.rbs" => File.join(package_root, "sig/types.rbs")
   }
   copies.each do |destination, source|
