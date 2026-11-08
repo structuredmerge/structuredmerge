@@ -2,7 +2,7 @@
 version: 1
 template_state:
   version: 7.1.43
-  applied_at: '2026-11-07'
+  applied_at: '2026-11-08'
   changelog_replay:
     last_entry_key: kettle-jem-template-20261025-001
     last_entry_date: '2026-10-25'
@@ -507,8 +507,8 @@ files:
   sig/structuredmerge_core.rbs:
     recipe: template_source_application_sig_structuredmerge_core_rbs
     action: write
-    dest_sha256: bda8bd0e3e3b3038dc7fd871b2802b70369590fb3d26fa43068b85c7ebe1017b
-    input_fingerprint: 373743a679b1d670dfffde1f62a85c94a2cb3bedf2a141aa6743b96b39706b78
+    dest_sha256: 13f064a4a44bc11f0e93ef4d9e4788c015e35a716a28d13baf7eaac446b04213
+    input_fingerprint: 6c24f432af40ee19c84d7b6a951dea50c6ed1841b85c1e1d0c616d2b11013ddd
     template_sources:
     - sig/gem.rbs.example
   spec/spec_helper.rb:

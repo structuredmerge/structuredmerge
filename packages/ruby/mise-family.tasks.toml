@@ -164,7 +164,15 @@ run = "env -- STRUCTUREDMERGE_CORE_RUBY_DEV=false STRUCTUREDMERGE_DEV=false STRU
 [local-template]
 description = "Apply templates using member-local Nomono and local workspace gems"
 raw = true
-run = "STRUCTUREDMERGE_DEV={{config_root}}/../../../ruby/gems STRUCTUREDMERGE_CORE_DEV={{config_root}}/../.. KETTLE_DEV_DEV={{config_root}}/../../../../kettle-dev STRUCTUREDMERGE_CORE_RUBY_DEV={{config_root}} K_JEM_TEMPLATING=true RUBYOPT=-rbundler/setup BUNDLE_GEMFILE=Gemfile bundle exec kettle-family template --execute --env STRUCTUREDMERGE_DEV\\={{config_root}}/../../../ruby/gems --env STRUCTUREDMERGE_CORE_DEV\\={{config_root}}/../.. --env KETTLE_DEV_DEV\\={{config_root}}/../../../../kettle-dev --env STRUCTUREDMERGE_CORE_RUBY_DEV\\={{config_root}} --env K_JEM_TEMPLATING\\=true --env RUBYOPT\\=-rbundler/setup --env BUNDLE_GEMFILE\\=Gemfile"
+run = '''
+set -eu
+STRUCTUREDMERGE_DEV={{config_root}}/../../../ruby/gems STRUCTUREDMERGE_CORE_DEV={{config_root}}/../.. KETTLE_DEV_DEV={{config_root}}/../../../../kettle-dev STRUCTUREDMERGE_CORE_RUBY_DEV={{config_root}} K_JEM_TEMPLATING=true RUBYOPT=-rbundler/setup BUNDLE_GEMFILE=Gemfile bundle exec kettle-family template --execute --no-commit --env STRUCTUREDMERGE_DEV\={{config_root}}/../../../ruby/gems --env STRUCTUREDMERGE_CORE_DEV\={{config_root}}/../.. --env KETTLE_DEV_DEV\={{config_root}}/../../../../kettle-dev --env STRUCTUREDMERGE_CORE_RUBY_DEV\={{config_root}} --env K_JEM_TEMPLATING\=true --env RUBYOPT\=-rbundler/setup --env BUNDLE_GEMFILE\=Gemfile
+poly fmt --fix Rakefile
+cd "{{config_root}}/../.."
+alef verify --exit-code
+git add -A -- packages/ruby
+if ! git diff --cached --quiet; then git commit -m "chore: apply Kettle Jem template"; fi
+'''
 
 [unreleased-template]
 description = "Apply templates to stale members using the family-root bundle"

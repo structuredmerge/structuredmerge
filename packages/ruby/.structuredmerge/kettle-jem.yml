@@ -697,6 +697,9 @@ files:
     strategy: merge
     preference: destination
     add_template_only_nodes: true
+  lib:
+    structuredmerge_core.rb:
+      strategy: keep_destination
   sig:
     structuredmerge_core.rbs:
       strategy: keep_destination
