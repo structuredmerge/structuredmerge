@@ -1,12 +1,12 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "ruby",
-  "review_reason": "Kettle Jem dedicated VersionGem entrypoint keeps Alef-generated facade stable",
+  "review_reason": "Kettle Jem dedicated VersionGem entrypoint preserves Alef facade while Alef regenerates its input hash",
   "files": {
     "lib/structuredmerge_core/native.rb": "8d373c4dc7c519371d97ed9a31d602b6403511ddaed8ed7a4876af0e912589e2",
     "lib/structuredmerge_core/version.rb": "0700bd72b5361723dddef226dbe3d36845afb2bec6f309dc50c43e18b30535be",
     "lib/structuredmerge_core/version_gem.rb": "9f4a21d54af3169ef318fdb5d3a2996b6a7d6a455d156101cbae107234b3e51d",
-    "lib/structuredmerge_core.rb": "efdf3addd52942e7c75cbec06a5b79761b5eaf5d84b426654c6da865e61d50c0",
+    "lib/structuredmerge_core.rb": "8be8a9d1f63cc0f764e4c30ce6c1b38da874e87f1926b4fbf57f6efda769f7f6",
     "sig/structuredmerge_core.rbs": "13f064a4a44bc11f0e93ef4d9e4788c015e35a716a28d13baf7eaac446b04213",
     "sig/types.rbs": "8049f8d0868bed3e09867f445439c2b18a8627bd9565db7441d7d9b91838a571"
   }
