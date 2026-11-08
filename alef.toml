@@ -22,6 +22,9 @@ user_owned = [
   "packages/python/pyproject.toml",
   # Kettle Jem layers the Ruby package's release workflow and public-facing
   # metadata over these Alef scaffolds; after templating, Kettle Jem owns them.
+  # Kettle Jem also owns this development Gemfile, whose dependency groups are
+  # intentionally assembled from modular Gemfiles instead of Alef's scaffold.
+  "packages/ruby/Gemfile",
   "packages/ruby/README.md",
   "packages/ruby/Rakefile",
   "packages/ruby/lib/structuredmerge_core.rb",
