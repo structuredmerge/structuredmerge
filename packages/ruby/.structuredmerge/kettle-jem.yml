@@ -185,7 +185,7 @@ rubygems:
   # disabled  - do not depend on version_gem or generate VersionGem entrypoints.
   #             Ruby floors below 2.2 use this effective behavior.
   # ENV override: KJ_VERSION_GEM_ENTRYPOINT
-  version_gem_entrypoint: auto
+  version_gem_entrypoint: dedicated
 
 # RubyGems package manifest additions.
 # The generated gemspec owns the default package manifest. Add entries here only
