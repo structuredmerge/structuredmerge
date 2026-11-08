@@ -499,6 +499,8 @@ templates:
   apply: true
   entries:
     - README.md
+    - source: .gitignore.example
+      target: .gitignore
     - source: gem.gemspec
       target: structuredmerge_core.gemspec
     - Rakefile
@@ -690,6 +692,10 @@ patterns:
 # Per-file configuration (nested directory structure)
 # Only files that need overrides belong here. Everything else defaults to merge.
 files:
+  .gitignore:
+    strategy: merge
+    preference: destination
+    add_template_only_nodes: true
   mise-family.tasks.toml:
     strategy: keep_destination
   README.md:
