@@ -3,6 +3,7 @@
 require "anonymous_loader"
 require "structuredmerge_core"
 require "version_gem/rspec"
+require "structuredmerge_core/version_gem"
 
 RSpec.describe StructuredmergeCore::Version do
   it_behaves_like("a Version module", described_class)

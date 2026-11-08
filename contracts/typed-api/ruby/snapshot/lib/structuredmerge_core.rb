@@ -5,8 +5,6 @@
 # frozen_string_literal: true
 
 require_relative "structuredmerge_core/native"
-require "version_gem"
-
 require_relative "structuredmerge_core/version"
 
 # Top-level namespace for the StructuredmergeCore Ruby binding.
@@ -21,7 +19,3 @@ end
 
 # Keep generated types under StructuredmergeCore. Publishing generated constants
 # into Object makes generic names collide with unrelated Ruby libraries.
-
-StructuredmergeCore::Version.class_eval do
-  extend(VersionGem::Basic)
-end

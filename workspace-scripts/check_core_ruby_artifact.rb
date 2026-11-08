@@ -144,6 +144,7 @@ ArtifactWorkspace.open(
     "lib/structuredmerge_core.rb" => File.join(package_root, "lib/structuredmerge_core.rb"),
     "lib/structuredmerge_core/native.rb" => File.join(package_root, "lib/structuredmerge_core/native.rb"),
     "lib/structuredmerge_core/version.rb" => File.join(package_root, "lib/structuredmerge_core/version.rb"),
+    "lib/structuredmerge_core/version_gem.rb" => File.join(package_root, "lib/structuredmerge_core/version_gem.rb"),
     "lib/structuredmerge_core_rb/#{abi}/#{extension}" => native_path,
     "README.md" => File.join(root, "crates/structuredmerge-core/README.md"),
     "AGPL-3.0-only.md" => File.join(root, "AGPL-3.0-only.md"),

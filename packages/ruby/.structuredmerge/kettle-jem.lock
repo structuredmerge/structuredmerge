@@ -497,6 +497,13 @@ files:
     input_fingerprint: 66ffee321835870331e07a863eb8e106ccfb2c44886939dcc3d2c724ac558b03
     template_sources:
     - lib/gem/version.rb.example
+  lib/structuredmerge_core/version_gem.rb:
+    recipe: template_source_application_lib_structuredmerge_core_version_gem_rb
+    action: write
+    dest_sha256: 811833cb50d74fa71defd85c2e17f98825fa1f34bec14bbe288f6921c3b4496f
+    input_fingerprint: be58c46c7e3a79030928cdfd24460f5480eeff0ae303f00d5de36dd85641e2fc
+    template_sources:
+    - lib/gem/version_gem.rb.example
   mise.toml:
     recipe: template_source_application_mise_toml
     action: write
