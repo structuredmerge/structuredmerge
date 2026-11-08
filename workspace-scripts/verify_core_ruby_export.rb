@@ -62,7 +62,9 @@ begin
     "lib/structuredmerge_core.rb",
     "lib/structuredmerge_core/native.rb",
     "lib/structuredmerge_core/version.rb",
+    "lib/structuredmerge_core/version_gem.rb",
     "sig/types.rbs",
+    "sig/structuredmerge_core.rbs",
     "lib/structuredmerge_core_rb/#{abi}/structuredmerge_core_rb.#{RbConfig::CONFIG.fetch("DLEXT")}"
   ].sort
   check.call(archive.contents.sort == expected_files, "archive file allowlist mismatch")

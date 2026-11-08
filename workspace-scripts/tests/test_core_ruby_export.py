@@ -26,7 +26,8 @@ require "json"
 abi = RbConfig::CONFIG.fetch("ruby_version")
 files = ["AGPL-3.0-only.md", "PolyForm-Small-Business-1.0.0.md", "README.md",
   "lib/structuredmerge_core.rb", "lib/structuredmerge_core/native.rb",
-  "lib/structuredmerge_core/version.rb", "sig/types.rbs",
+  "lib/structuredmerge_core/version.rb", "lib/structuredmerge_core/version_gem.rb",
+  "sig/types.rbs", "sig/structuredmerge_core.rbs",
   "lib/structuredmerge_core_rb/#{abi}/structuredmerge_core_rb.#{RbConfig::CONFIG.fetch('DLEXT')}"]
 files.each { |file| FileUtils.mkdir_p(File.dirname(file)); File.write(file, "test fixture\n") }
 major, minor = RUBY_VERSION.split(".").map(&:to_i)
