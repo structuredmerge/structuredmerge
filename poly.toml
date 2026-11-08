@@ -332,5 +332,9 @@ root = "packages/go"
 workspace = true
 files = "packages/go/**/*.go"
 
+[commit.rules.message]
+pattern = '^[a-z][a-z0-9-]*\([^)]+\)!?:[ \t]+\p{Extended_Pictographic}.*$'
+description = "Use type(scope): Gitmoji subject, such as feat(core): ✨ add feature."
+
 [tools.clang-format]
 enabled = true
