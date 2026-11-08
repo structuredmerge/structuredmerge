@@ -30,7 +30,7 @@ Gem::Specification.new do |spec|
   spec.description = "💎 Typed polyglot StructuredMerge kernel"
   spec.homepage = "https://github.com/structuredmerge/structuredmerge"
   spec.licenses = ["AGPL-3.0-only", "PolyForm-Small-Business-1.0.0"]
-  spec.required_ruby_version = ">= 3.3.0"
+  spec.required_ruby_version = ">= 3.4.0"
 
   # Linux distros often package gems and securely certify them independent
   #   of the official RubyGem certification process. Allowed via ENV["SKIP_GEM_SIGNING"]
@@ -120,7 +120,6 @@ Gem::Specification.new do |spec|
   spec.bindir = "exe"
   # Listed files are the relative paths from bindir above.
   spec.executables = []
-
   spec.require_paths = ["lib"]
 
   # Utilities
@@ -134,17 +133,17 @@ Gem::Specification.new do |spec|
   #       visibility and discoverability.
   #       However, development dependencies in gemspec will install on
   #       all versions of Ruby that will run in CI.
-  #       This gem, and its gemspec runtime dependencies, will install on Ruby down to 3.3.0.
-  #       This gem, and its gemspec development dependencies, will install on Ruby down to 3.3.0.
+  #       This gem, and its gemspec runtime dependencies, will install on Ruby down to 3.4.0.
+  #       This gem, and its gemspec development dependencies, will install on Ruby down to 3.4.0.
   #       Thus, dev dependencies in gemspec must have
   #
-  #       required_ruby_version ">= 3.3.0" (or lower)
+  #       required_ruby_version ">= 3.4.0" (or lower)
   #
   #       Development dependencies that require strictly newer Ruby versions should be in a "gemfile",
   #       and preferably a modular one (see gemfiles/modular/*.gemfile).
 
   # Dev, Test, & Release Tasks
-  # ruby >= 3.3.0
+  # ruby >= 3.4.0
   spec.add_development_dependency("kettle-dev", "~> 3.1", ">= 3.1.26")
 
   # Security
@@ -154,8 +153,6 @@ Gem::Specification.new do |spec|
   # Tasks
   # ruby >= 2.2.0
   spec.add_development_dependency("rake", "~> 13.0")
-  # native extension build
-  spec.add_development_dependency("rake-compiler", "~> 1.3")
 
   # Debugging
   # ruby >= 2.2.0
@@ -167,7 +164,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency("anonymous_loader", "~> 0.1", ">= 0.1.5")
   # ruby >= 1.8.7, for testing against multiple versions of dependencies
   spec.add_development_dependency("appraisal2", "~> 3.2", ">= 3.2.6")
-  # ruby >= 3.3.0
+  # ruby >= 3.4.0
   spec.add_development_dependency("kettle-test", "~> 2.0", ">= 2.0.29")
   # ruby >= 2.4.0, default kettle-test runner
   spec.add_development_dependency("turbo_tests2", "~> 4.0", ">= 4.0.0")
@@ -185,10 +182,12 @@ Gem::Specification.new do |spec|
   # spec.add_development_dependency("erb", ">= 2.2")                                  # ruby >= 2.3.0, not SemVer, old rubies get dropped in a patch.
   # ruby >= 2.4
   spec.add_development_dependency("gitmoji-regex", "~> 2.0", ">= 2.0.15")
+
   # HTTP recording for deterministic specs
   # In Ruby 3.5 (HEAD) the CGI library has been pared down, so we also need to depend on gem "cgi" for ruby@head
   # This is done in the "head" appraisal.
   # See: https://github.com/vcr/vcr/issues/1057
   # spec.add_development_dependency("vcr", ">= 4")                        # 6.0 claims to support ruby >= 2.3, but fails on ruby 2.4
   # spec.add_development_dependency("webmock", ">= 3")                    # Last version to support ruby >= 2.3
+  spec.add_development_dependency("rake-compiler", "~> 1.3")
 end

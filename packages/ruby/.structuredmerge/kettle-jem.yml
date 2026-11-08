@@ -707,7 +707,9 @@ files:
   Appraisal.root.gemfile:
     strategy: accept_template
   Gemfile:
-    strategy: accept_template
+    strategy: merge
+    preference: destination
+    add_template_only_nodes: true
   Rakefile:
     strategy: merge
     preference: destination
