@@ -12,6 +12,9 @@ if [[ "$(uname -s)" != Linux || "$(uname -m)" != x86_64 ]]; then
 fi
 
 case "$alef_version" in
+  0.129.0)
+    alef_sha256=3217622be4265c524e512d63b522115e7852ca0bfbe29f95bbdfdc2a287fbce8
+    ;;
   0.128.0)
     alef_sha256=696400c3737881868ffd96e0f44beac4bdbbecd0e5fa8539e1cb1fd22e9bf365
     ;;

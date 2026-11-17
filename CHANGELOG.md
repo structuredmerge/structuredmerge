@@ -10,6 +10,8 @@
   - kettle-dev (>= 3.1.27 -> >= 3.1.29)
   - stone_checksums (>= 1.0.9 -> >= 1.0.11)
 
+- [kc] upgrade-alef-tslp: Upgrade Alef to 0.129.0 and Rust Tree-sitter Language Pack to 1.25.2; regenerate the polyglot bindings.
+
 ### Deprecated
 
 ### Removed

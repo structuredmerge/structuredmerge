@@ -5,11 +5,11 @@
 The original audit examined `tree-sitter-language-pack` 1.17.0, crates.io checksum
 `8074a6f562c62733c6e1c837affd0b14f8e749b079b416344e3e4d8176b6d5d0`.
 That audit concerns the dependency version inspected at the time, not an assertion
-about upstream HEAD or a newer release. The current kernel lock is 1.25.0; this
+about upstream HEAD or a newer release. The current kernel lock is 1.25.2; this
 version update tracks the package release and does not claim to resolve the loaded
 grammar identity gap described below.
 
-Inspection of the published 1.25.0 crate source confirms that `has_parser`
+Inspection of the published 1.25.2 crate source confirms that `has_parser`
 documents local-only probing, while dynamic libraries remain retained in the
 process-wide `LOADED_LIBRARIES` map. The cached-only policy is therefore still
 supported; the public API still does not provide a receipt proving the bytes
