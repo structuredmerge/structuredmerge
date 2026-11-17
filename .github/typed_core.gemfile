@@ -1,0 +1,7 @@
+# frozen_string_literal: true
+
+# Specialized CI bundle for compiling and validating the generated core Ruby
+# artifact. The regular packages/ruby/Gemfile is a local development bundle.
+source "https://gem.coop"
+
+gemspec path: "../packages/ruby"

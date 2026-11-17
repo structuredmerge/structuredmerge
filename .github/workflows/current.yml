@@ -220,7 +220,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     env:
-      K_JEM_TEMPLATING: "true"
+      BUNDLE_GEMFILE: ${{ github.workspace }}/.github/typed_core.gemfile
     strategy:
       fail-fast: false
       matrix:
@@ -332,7 +332,7 @@ jobs:
     name: Typed core Ruby export (not publication)
     runs-on: ubuntu-latest
     env:
-      K_JEM_TEMPLATING: "true"
+      BUNDLE_GEMFILE: ${{ github.workspace }}/.github/typed_core.gemfile
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
