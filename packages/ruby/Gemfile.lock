@@ -172,8 +172,6 @@ GEM
       ruby-progressbar (~> 1.13)
       tty-progressbar (~> 0.18)
       version_gem (~> 1.1, >= 1.1.17)
-    kettle-drift (1.0.19)
-      version_gem (~> 1.1, >= 1.1.17)
     kettle-family (1.3.45)
       ast-crispr (~> 7.1, >= 7.1.11)
       ast-crispr-ruby-prism (~> 7.1, >= 7.1.10)
@@ -270,15 +268,11 @@ GEM
       markdown-merge (= 7.1.16)
       markly (~> 0.9)
       version_gem (~> 1.1, >= 1.1.15)
-    mini_portile2 (2.8.9)
     mister_bin (0.9.0)
       colsole (~> 1.0.0)
       docopt_ng (~> 0.7.1)
       reline (~> 0.6)
     mutex_m (0.3.0)
-    nokogiri (1.19.7)
-      mini_portile2 (~> 2.8.2)
-      racc (~> 1.4)
     nokogiri (1.19.7-aarch64-linux-gnu)
       racc (~> 1.4)
     nokogiri (1.19.7-aarch64-linux-musl)
@@ -634,9 +628,7 @@ DEPENDENCIES
   irb (~> 1.17)
   kettle-changelog (~> 1.0, >= 1.0.16)
   kettle-dev (~> 3.1, >= 3.1.29)
-  kettle-drift (~> 1.0, >= 1.0.19)
   kettle-family (~> 1.3, >= 1.3.38)
-  kettle-jem (~> 7.1, >= 7.1.28)
   kettle-soup-cover (~> 3.0, >= 3.0.16)
   kettle-test (~> 2.0, >= 2.0.29)
   kramdown (~> 2.5, >= 2.5.2)
@@ -661,7 +653,6 @@ DEPENDENCIES
   stone_checksums (~> 1.0, >= 1.0.11)
   stringio (>= 3.2.0)
   structuredmerge-core!
-  tree_sitter_language_pack (~> 1.16, >= 1.16.2)
   turbo_tests2 (~> 4.0, >= 4.0.0)
   webrick (~> 1.9)
   yaml-converter (~> 0.2, >= 0.2.7)
@@ -728,7 +719,6 @@ CHECKSUMS
   kettle-changelog (1.0.19) sha256=f9d9643fe5037ba92200958bbc006a3fafc1c9fa3f792a8a985e86bc801b8ce5
   kettle-deps-floor (0.1.3) sha256=82955163a525f029f3b8fc3656a739be8ae3dc8c941a2157bfcab73f3ea0ff9d
   kettle-dev (3.1.29) sha256=d74eb2a8549e8a036ad8a25dd0a07d30c85c2b1adcae08c08c838b8bdc357061
-  kettle-drift (1.0.19) sha256=c4947944d84839b01fafffd934210c7cc6b438886ff93a663d609ab620b2eb11
   kettle-family (1.3.45) sha256=fc90a6c2eae4f2dd6cef2bedfd11edf11abc5a2765ccb28d1c9186d7e3e25343
   kettle-gha-pins (0.3.21) sha256=c0f08ef9fb6065cb1f1b77c44fdb117c7152255aef4ecd385b027312e874e508
   kettle-jem (7.1.42) sha256=e5d7ab6fbfebe9fda9d529a5352ae0613857144727b8e38145fca8fd69bff022
@@ -745,10 +735,8 @@ CHECKSUMS
   markdown-merge (7.1.16) sha256=16acbd969ed0b5bfac17ef0f14f7f7da891896b0effb34afd6a3cfce18a662ba
   markly (0.19.0) sha256=cd2c0e86eaf3660ed2a3a94104877f8bd41adda78e7c295c017d03de0d4044ca
   markly-merge (7.1.16) sha256=05c93856453a293b3da1f944d4a3b14bdba50857c6c603f164f3b3bb4b339c5f
-  mini_portile2 (2.8.9) sha256=0cd7c7f824e010c072e33f68bc02d85a00aeb6fce05bb4819c03dfd3c140c289
   mister_bin (0.9.0) sha256=624fe401db4faf1978e84c17e0b320827697a13a6cba4fe656001269079be7d3
   mutex_m (0.3.0) sha256=cfcb04ac16b69c4813777022fdceda24e9f798e48092a2b817eb4c0a782b0751
-  nokogiri (1.19.7) sha256=abe94507c54cb18f872777b16bdca4aad32b1abdc4c52fe843f1c80fbdf992b8
   nokogiri (1.19.7-aarch64-linux-gnu) sha256=8f5e15d299602456406e1f03a9f3456cceb33a0722811e818d2ee2214eb4c84a
   nokogiri (1.19.7-aarch64-linux-musl) sha256=efe0c3602e6e54521bc21c681930ce5568e2d11203de17400710b2b3ca2e4cb4
   nokogiri (1.19.7-arm-linux-gnu) sha256=7fd1907125691aa89e838cc91161761c758b4e17bb32f0dd9b5515a82cc759af
