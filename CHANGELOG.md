@@ -6,6 +6,10 @@
 
 ### Changed
 
+- [kc] kettle-deps-floor: Update dependency floors:
+  - kettle-dev (>= 3.1.27 -> >= 3.1.29)
+  - stone_checksums (>= 1.0.9 -> >= 1.0.11)
+
 ### Deprecated
 
 ### Removed

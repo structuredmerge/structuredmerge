@@ -144,7 +144,7 @@ Gem::Specification.new do |spec|
 
   # Dev, Test, & Release Tasks
   # ruby >= 3.4.0
-  spec.add_development_dependency("kettle-dev", "~> 3.1", ">= 3.1.27")
+  spec.add_development_dependency("kettle-dev", "~> 3.1", ">= 3.1.29")
 
   # Security
   # ruby >= 2.0.0
@@ -173,7 +173,7 @@ Gem::Specification.new do |spec|
   # ruby >= 0
   spec.add_development_dependency("ruby-progressbar", "~> 1.13")
   # ruby >= 2.2.0
-  spec.add_development_dependency("stone_checksums", "~> 1.0", ">= 1.0.9")
+  spec.add_development_dependency("stone_checksums", "~> 1.0", ">= 1.0.11")
 
   # Development tasks
   # The cake is a lie. erb v2.2, the oldest release, was never compatible with Ruby 2.3.
