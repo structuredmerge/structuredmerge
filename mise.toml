@@ -1,7 +1,7 @@
 [tools]
 rust = "stable"
 "github:xberg-io/alef" = "latest"
-ruby = "4.0.9"
+ruby = "4.0.10"
 
 [tasks.format]
 run = "cargo fmt --all"
