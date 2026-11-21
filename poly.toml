@@ -315,6 +315,7 @@ file_safety = { exclude = [
   "test_documents/**",
   "**/vendor/**",
   "packages/ruby/ext/structuredmerge_core_rb/src/lib.rs",
+  "crates/structuredmerge-core-ffi/src/lib.rs",
   "crates/structuredmerge-core-py/src/lib.rs",
   "**/Cargo.toml",
 ] }

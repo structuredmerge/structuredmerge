@@ -12,6 +12,8 @@
 
 - [kc] upgrade-alef-tslp: Upgrade Alef to 0.129.0 and Rust Tree-sitter Language Pack to 1.25.2; regenerate the polyglot bindings.
 
+- [kc] upgrade-alef-0132: Upgrade Alef to 0.132.0 (reviewed Linux checksum added) and regenerate the polyglot bindings, dropping unused tokio/ahash/pyo3-async-runtimes dependencies from the FFI and Python crates.
+
 ### Deprecated
 
 ### Removed

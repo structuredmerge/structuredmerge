@@ -66,10 +66,10 @@ jobs:
 
       - name: Prepare release metadata
         id: meta
-        uses: xberg-io/actions/prepare-release-metadata@v1
+        uses: xberg-io/actions/prepare-release-metadata@64bf4fc642ab473af9c6d49938173515a4adb48d
         with:
           available-targets: "crates,python,ruby"
-          alef-version: "0.129.0"
+          alef-version: "0.132.0"
           targets: ${{ inputs.targets || github.event.client_payload.targets || '' }}
           tag: ${{ inputs.release_tag || github.event.release.tag_name || github.event.client_payload.tag || '' }}
           dry-run: ${{ inputs.dry_run || 'false' }}
@@ -128,7 +128,7 @@ jobs:
   check-registries:
     name: Check registries
     needs: prepare
-    uses: xberg-io/actions/.github/workflows/reusable-check-registries.yml@v1
+    uses: xberg-io/actions/.github/workflows/reusable-check-registries.yml@64bf4fc642ab473af9c6d49938173515a4adb48d
     with:
       version: ${{ needs.prepare.outputs.version }}
       registries: |
@@ -169,11 +169,11 @@ jobs:
         shell: bash
         run: mv shared-fixtures ../fixtures
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
           toolchain: stable
       - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
       - name: Setup Ruby
@@ -215,7 +215,7 @@ jobs:
     environment: crates-io
     steps:
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
           toolchain: stable
       - name: Verify crates.io token can authenticate
@@ -350,13 +350,13 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Setup Rust
-        uses: xberg-io/actions/setup-rust@v1
+        uses: xberg-io/actions/setup-rust@64bf4fc642ab473af9c6d49938173515a4adb48d
         with:
           components: ""
           use-sccache: "false"
           install-llvm-cov: "false"
       - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
       - name: Install maturin
@@ -368,7 +368,7 @@ jobs:
         env:
           PROJECT_ROOT: ${{ github.workspace }}
       - name: Upload wheel
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: python-wheel-${{ matrix.label }}
           path: dist/*.whl
@@ -397,18 +397,18 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
       - name: Build source distribution
-        uses: xberg-io/actions/build-python-sdist@v1
+        uses: xberg-io/actions/build-python-sdist@64bf4fc642ab473af9c6d49938173515a4adb48d
         with:
           package-dir: packages/python
           output-dir: dist
-          alef-version: "0.129.0"
+          alef-version: "0.132.0"
           dry-run: ${{ needs.prepare.outputs.dry_run }}
       - name: Upload source distribution
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: python-sdist
           path: dist/*.tar.gz
@@ -442,19 +442,19 @@ jobs:
       id-token: write
     steps:
       - name: Download wheels
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: python-wheel-*
           path: dist
           merge-multiple: true
       - name: Download source distribution
         if: needs.prepare.outputs.dry_run != 'true'
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: python-sdist
           path: dist
       - name: Publish to PyPI
-        uses: xberg-io/actions/publish-pypi@v1
+        uses: xberg-io/actions/publish-pypi@64bf4fc642ab473af9c6d49938173515a4adb48d
         with:
           packages-dir: dist
           expected-version: ${{ needs.prepare.outputs.version }}
@@ -479,22 +479,22 @@ jobs:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           persist-credentials: false
       - name: Download published wheels
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: python-wheel-*
           path: dist
           merge-multiple: true
       - name: Download published source distribution
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: python-sdist
           path: dist
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
           toolchain: stable
       - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
       # PyPI and its CDN lag a fresh upload; the script waits with exponential
@@ -541,7 +541,7 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
           toolchain: stable
       - name: Match typed extension to RubyInstaller ABI
@@ -565,7 +565,7 @@ jobs:
         run: bundle exec ruby ../../workspace-scripts/check_core_ruby_artifact.rb --package-only ../../tmp/core-artifacts
         working-directory: packages/ruby
       - name: Upload platform gem and report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ruby-platform-${{ matrix.label }}-ruby-${{ matrix.ruby }}
           path: |
@@ -590,15 +590,15 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Setup Rust
-        uses: xberg-io/actions/setup-rust@v1
+        uses: xberg-io/actions/setup-rust@64bf4fc642ab473af9c6d49938173515a4adb48d
         with:
           components: ""
           use-sccache: "false"
           install-llvm-cov: "false"
       - name: Install Alef
-        uses: xberg-io/actions/install-alef@v1
+        uses: xberg-io/actions/install-alef@64bf4fc642ab473af9c6d49938173515a4adb48d
         with:
-          version: "0.129.0"
+          version: "0.132.0"
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -612,7 +612,7 @@ jobs:
             --alef "$(command -v alef)" \
             --output tmp/core-ruby-source
       - name: Upload Ruby source gem and report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rubygems-source
           path: |
@@ -639,12 +639,12 @@ jobs:
       id-token: write
     steps:
       - name: Download Ruby source gem
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: rubygems-source
           path: dist
       - name: Publish to RubyGems
-        uses: xberg-io/actions/publish-rubygems@v1
+        uses: xberg-io/actions/publish-rubygems@64bf4fc642ab473af9c6d49938173515a4adb48d
         with:
           gems-dir: dist
           expected-version: ${{ needs.prepare.outputs.version }}
@@ -773,7 +773,7 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
@@ -816,7 +816,7 @@ jobs:
             --version "$version" \
             --platform "${{ matrix.platform }}"
       - name: Upload release archive
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: smorg-${{ needs.prepare.outputs.tag }}-${{ matrix.platform }}
           path: tmp/release-assets/smorg-*
@@ -832,11 +832,11 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
       - name: Download all platform archives
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: smorg-${{ needs.prepare.outputs.tag }}-*
           path: tmp/release-assets
@@ -859,7 +859,7 @@ jobs:
           python -m json.tool tmp/release-evidence/smorg.json >/dev/null
           python -m json.tool tmp/release-evidence/smorg-release-evidence.json >/dev/null
       - name: Upload assembled release evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: smorg-${{ needs.prepare.outputs.tag }}-release-evidence
           path: tmp/release-evidence
@@ -901,11 +901,11 @@ jobs:
         shell: bash
         run: mv shared-fixtures ../fixtures
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
           toolchain: stable
       - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
       - name: Setup Ruby
@@ -939,11 +939,11 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
           toolchain: stable
       - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
       - name: Install published smorg crate
@@ -983,7 +983,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
           persist-credentials: false
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
           toolchain: stable
       - name: Setup Ruby
