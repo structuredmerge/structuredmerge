@@ -34,6 +34,8 @@
 
 ### Fixed
 
+- [kc] release-tag-preflight: Fix the Rust release script's remote tag check, which keyed its `ls-remote` map by commit instead of ref and so rejected any tag that already existed on the remote.
+
 - [kc] cargo-warnings: Inherit `[workspace.lints]` in every crate and keep Cargo manifest warnings non-fatal in the publish workflow (Cargo 1.100 added manifest lints).
 
 - [kc] publish-validate-pytest: Install pytest in the publish workflow's validate job so release manifest tests can import it.

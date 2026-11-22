@@ -400,7 +400,7 @@ def preflight_release_tag!(tag_name, check_remote:)
     .filter_map do |line|
       sha, ref = line.split("\t", 2)
       ref = ref&.strip
-      [sha, ref] if ["refs/tags/#{tag_name}", "refs/tags/#{tag_name}^{}"].include?(ref)
+      [ref, sha] if ["refs/tags/#{tag_name}", "refs/tags/#{tag_name}^{}"].include?(ref)
     end
     .to_h
   return if remote_tag.empty?
