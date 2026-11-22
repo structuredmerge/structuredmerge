@@ -15,3 +15,6 @@ path = "src/lib.rs"
 ast-merge = { version = "0.2.2", path = "../ast-merge" }
 serde = { version = "1.0", features = ["derive"] }
 tree-haver = { version = "0.2.2", path = "../tree-haver" }
+
+[lints]
+workspace = true

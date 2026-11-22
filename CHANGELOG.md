@@ -34,6 +34,8 @@
 
 ### Fixed
 
+- [kc] cargo-warnings: Inherit `[workspace.lints]` in every crate and keep Cargo manifest warnings non-fatal in the publish workflow (Cargo 1.100 added manifest lints).
+
 - [kc] publish-validate-pytest: Install pytest in the publish workflow's validate job so release manifest tests can import it.
 
 ### Security

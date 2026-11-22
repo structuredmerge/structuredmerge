@@ -43,6 +43,9 @@ concurrency:
 env:
   CARGO_INCREMENTAL: "0"
   CARGO_BUILD_JOBS: "1"
+  # Cargo 1.100 warns on manifest lints (generated binding manifests, unused deps);
+  # the shared setup-rust action denies cargo warnings, so keep them non-fatal here.
+  CARGO_BUILD_WARNINGS: warn
   PYTHONDONTWRITEBYTECODE: "1"
 
 jobs:

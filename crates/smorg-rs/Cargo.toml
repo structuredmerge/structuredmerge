@@ -41,3 +41,6 @@ yaml-merge = { version = "0.2.2", path = "../yaml-merge" }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[lints]
+workspace = true

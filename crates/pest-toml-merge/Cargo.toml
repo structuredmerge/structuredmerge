@@ -18,3 +18,6 @@ tree-haver = { version = "0.2.2", path = "../tree-haver" }
 
 [dev-dependencies]
 serde_json = "1"
+
+[lints]
+workspace = true
