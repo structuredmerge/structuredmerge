@@ -98,7 +98,7 @@ dependencies = [
 
 [[package]]
 name = "ast-crispr"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "serde",
@@ -107,7 +107,7 @@ dependencies = [
 
 [[package]]
 name = "ast-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -117,7 +117,7 @@ dependencies = [
 
 [[package]]
 name = "ast-merge-git"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "json-merge",
@@ -128,7 +128,7 @@ dependencies = [
 
 [[package]]
 name = "ast-template"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "markdown-merge",
@@ -169,7 +169,7 @@ checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
 name = "bash-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "serde_json",
@@ -634,7 +634,7 @@ dependencies = [
 
 [[package]]
 name = "generic-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "serde",
@@ -682,7 +682,7 @@ checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 
 [[package]]
 name = "go-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "serde",
@@ -866,7 +866,7 @@ dependencies = [
 
 [[package]]
 name = "ingest_observation"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -969,7 +969,7 @@ dependencies = [
 
 [[package]]
 name = "json-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "serde",
@@ -1067,7 +1067,7 @@ dependencies = [
 
 [[package]]
 name = "markdown-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "serde",
@@ -1377,7 +1377,7 @@ dependencies = [
 
 [[package]]
 name = "pest-toml-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "pest",
@@ -1486,7 +1486,7 @@ checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
 
 [[package]]
 name = "plain-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "serde_json",
@@ -1540,7 +1540,7 @@ checksum = "007d8adb5ddab6f8e3f491ac63566a7d5002cc7ed73901f72057943fa71ae1ae"
 
 [[package]]
 name = "pulldown-cmark-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "markdown-merge",
@@ -1608,7 +1608,7 @@ dependencies = [
 
 [[package]]
 name = "python-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "tree-haver",
@@ -1662,7 +1662,7 @@ checksum = "cca7ad6a7e21e72151d56fe2495a259b5670e204c3adac41ee7ef676ea08117a"
 
 [[package]]
 name = "rbs-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "serde_json",
@@ -1731,7 +1731,7 @@ dependencies = [
 
 [[package]]
 name = "ruby-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "regex-lite",
@@ -1741,7 +1741,7 @@ dependencies = [
 
 [[package]]
 name = "rust-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "proc-macro2",
@@ -2072,7 +2072,7 @@ checksum = "e8e2fb0f499abb4d162f2bedad68f5ef91a1682b5a03596ddb67efd37768d100"
 
 [[package]]
 name = "smorg"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "ast-merge-git",
@@ -2134,7 +2134,7 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "structuredmerge-binary-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "serde_json",
@@ -2143,7 +2143,7 @@ dependencies = [
 
 [[package]]
 name = "structuredmerge-core"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-crispr",
  "ast-merge",
@@ -2163,7 +2163,7 @@ dependencies = [
 
 [[package]]
 name = "structuredmerge-core-ffi"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "cbindgen",
  "serde",
@@ -2174,7 +2174,7 @@ dependencies = [
 
 [[package]]
 name = "structuredmerge-core-py"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "async-trait",
  "pyo3",
@@ -2187,7 +2187,7 @@ dependencies = [
 
 [[package]]
 name = "structuredmerge-core-rb"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "async-trait",
  "magnus",
@@ -2201,7 +2201,7 @@ dependencies = [
 
 [[package]]
 name = "structuredmerge-toml-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "serde",
@@ -2211,7 +2211,7 @@ dependencies = [
 
 [[package]]
 name = "structuredmerge-zip-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "serde_json",
  "tree-haver",
@@ -2424,7 +2424,7 @@ dependencies = [
 
 [[package]]
 name = "tree-haver"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -2485,7 +2485,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "typescript-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "oxc_allocator",
@@ -2908,7 +2908,7 @@ dependencies = [
 
 [[package]]
 name = "yaml-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "serde",
@@ -2919,7 +2919,7 @@ dependencies = [
 
 [[package]]
 name = "yaml-serde-merge"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ast-merge",
  "serde_json",

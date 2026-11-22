@@ -9,14 +9,14 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish the validated 0.2.1 dependency closure and release artifacts
+        description: Publish the validated 0.2.2 dependency closure and release artifacts
         required: true
         default: false
         type: boolean
       release_tag:
-        description: Release tag to validate/publish (for example v0.2.1)
+        description: Release tag to validate/publish (for example v0.2.2)
         required: false
-        default: v0.2.1
+        default: v0.2.2
         type: string
       dry_run:
         description: Build and validate release artifacts without publishing

@@ -6,6 +6,20 @@
 
 ### Changed
 
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.2.2] - 2026-11-21
+
+### Added
+
+### Changed
+
 - [kc] kettle-deps-floor: Update dependency floors:
   - kettle-dev (>= 3.1.27 -> >= 3.1.29)
   - stone_checksums (>= 1.0.9 -> >= 1.0.11)
@@ -19,6 +33,8 @@
 ### Removed
 
 ### Fixed
+
+- [kc] publish-validate-pytest: Install pytest in the publish workflow's validate job so release manifest tests can import it.
 
 ### Security
 

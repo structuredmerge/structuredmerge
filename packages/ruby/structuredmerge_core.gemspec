@@ -22,7 +22,7 @@ end
 
 Gem::Specification.new do |spec|
   spec.name = "structuredmerge-core"
-  spec.version = "0.2.1"
+  spec.version = "0.2.2"
   spec.authors = ["Peter H. Boling"]
   spec.email = ["floss@galtzo.com"]
 

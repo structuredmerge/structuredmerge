@@ -1,6 +1,6 @@
 [package]
 name = "ast-template"
-version = "0.2.1"
+version = "0.2.2"
 repository = "https://github.com/structuredmerge/structuredmerge"
 homepage = "https://structuredmerge.org"
 authors = ["Peter H. Boling"]
@@ -11,11 +11,11 @@ license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 path = "src/lib.rs"
 
 [dependencies]
-ast-merge = { version = "0.2.1", path = "../ast-merge" }
-markdown-merge = { version = "0.2.1", path = "../markdown-merge" }
-ruby-merge = { version = "0.2.1", path = "../ruby-merge" }
+ast-merge = { version = "0.2.2", path = "../ast-merge" }
+markdown-merge = { version = "0.2.2", path = "../markdown-merge" }
+ruby-merge = { version = "0.2.2", path = "../ruby-merge" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml-merge = { package = "structuredmerge-toml-merge", version = "0.2.1", path = "../toml-merge" }
+toml-merge = { package = "structuredmerge-toml-merge", version = "0.2.2", path = "../toml-merge" }
 
 [dev-dependencies]
