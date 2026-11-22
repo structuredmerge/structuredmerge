@@ -191,7 +191,8 @@ jobs:
           alef verify --exit-code
           alef publish validate
           python workspace-scripts/check_typed_release_inventory.py
-          python -m unittest workspace-scripts/tests/test_release_manifests.py -v
+          python -m pip install pytest
+          python -m pytest workspace-scripts/tests/test_release_manifests.py -v
       - name: Run workspace tests
         run: cargo test --workspace
       - name: Preflight every Rust release package and registry name
