@@ -83,9 +83,11 @@ ArtifactWorkspace.open(
     lib/structuredmerge_core.rb
     lib/structuredmerge_core/native.rb
     lib/structuredmerge_core/version.rb
+    lib/structuredmerge_core/version_gem.rb
     ext/structuredmerge_core_rb/native/Cargo.toml
     ext/structuredmerge_core_rb/native/extconf.rb
     ext/structuredmerge_core_rb/src/lib.rs
+    sig/structuredmerge_core.rbs
     sig/types.rbs
   ]
     .to_h { |name| [name, File.join(original, name)] }
