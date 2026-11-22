@@ -38,6 +38,8 @@
 
 - [kc] ruby-source-gem-files: Package `version_gem.rb` and `sig/structuredmerge_core.rbs` in the Ruby source gem so it matches the reviewed typed API baseline; install pytest for the CLI manifest tests and retry maturin installs in the publish workflow.
 
+- [kc] verify-cratesio-fixtures: Check out the canonical fixtures beside the kernel in the crates.io installation verification job so the CLI manifest tests can read them.
+
 - [kc] cargo-warnings: Inherit `[workspace.lints]` in every crate and keep Cargo manifest warnings non-fatal in the publish workflow (Cargo 1.100 added manifest lints).
 
 - [kc] publish-validate-pytest: Install pytest in the publish workflow's validate job so release manifest tests can import it.
