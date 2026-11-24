@@ -15,7 +15,7 @@ def test_repo_pins_agree_with_each_other():
 
 
 def test_stale_pins_fail_when_a_newer_release_exists(capsys):
-    assert pins.main(["--tslp-latest", "999.0.0", "--alef-latest", "999.0.0"]) == 1
+    assert pins.main(["--tslp-latest", "999.0.0", "--alef-latest", "999.0.0", "--polylint-latest", "999.0.0"]) == 1
     err = capsys.readouterr().err
     assert "is not the latest (999.0.0)" in err
 

@@ -183,6 +183,23 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "4.0"
+      - name: Install Alef formatters
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv tmp/alef-tools
+          tmp/alef-tools/bin/python -m pip install 'polylint==0.36.1'
+          archive="tmp/cargo-sort-x86_64-unknown-linux-gnu.tar.gz"
+          curl --fail --location --silent --show-error \
+            https://github.com/DevinR528/cargo-sort/releases/download/v2.1.4/cargo-sort-x86_64-unknown-linux-gnu.tar.gz \
+            --output "$archive"
+          echo 'c35c3df1f2e512890ee2ffd6151aa265fbfe06accbea0d9226e0bb14d821845b  tmp/cargo-sort-x86_64-unknown-linux-gnu.tar.gz' | sha256sum --check
+          tar -xzf "$archive" -C tmp
+          install -m 0755 tmp/cargo-sort "$PWD/tmp/alef-tools/bin/cargo-sort"
+          export PATH="$PWD/tmp/alef-tools/bin:$PATH"
+          echo "$PWD/tmp/alef-tools/bin" >> "$GITHUB_PATH"
+          poly --version
+          cargo sort --version
       - name: Install Alef
         shell: bash
         run: |

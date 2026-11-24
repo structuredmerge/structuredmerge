@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail unless every tree-sitter-language-pack and alef pin is the latest release.
+"""Fail unless every tree-sitter-language-pack, alef and polylint pin is the latest release.
 
 Both projects ship more than once a day, and a stale pin silently changes
 behaviour: a caret requirement such as `tree-sitter-language-pack = "1.25.2"`
@@ -14,7 +14,7 @@ Usage:
   check_latest_pins.py --write    rewrite every site to the latest release
   check_latest_pins.py --offline  only check that all sites agree with each other
 
-Latest versions come from crates.io (TSLP) and GitHub releases (alef).
+Latest versions come from crates.io (TSLP), GitHub releases (alef) and PyPI (polylint, the `poly` formatter).
 `--tslp-latest` / `--alef-latest` override the lookups (used by the tests).
 """
 from __future__ import annotations
@@ -54,6 +54,12 @@ ALEF_SITES = [
 ]
 
 
+POLYLINT_SITES = [
+    ("workflow polylint pin", ".github/workflows/*.yml",
+     re.compile(rf"(polylint==)({VERSION})(['\"\s]|$)", re.M)),
+]
+
+
 def fetch_json(url: str) -> dict:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
     with urllib.request.urlopen(request, timeout=30) as response:
@@ -62,6 +68,10 @@ def fetch_json(url: str) -> dict:
 
 def latest_tslp() -> str:
     return fetch_json(f"https://crates.io/api/v1/crates/{TSLP}")["crate"]["max_stable_version"]
+
+
+def latest_polylint() -> str:
+    return fetch_json("https://pypi.org/pypi/polylint/json")["info"]["version"]
 
 
 def latest_alef() -> str:
@@ -120,33 +130,42 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--offline", action="store_true")
-    parser.add_argument("--only", choices=["tslp", "alef"], help="limit --write to one project")
+    parser.add_argument("--only", choices=["tslp", "alef", "polylint"], help="limit --write to one project")
     parser.add_argument("--tslp-latest")
     parser.add_argument("--alef-latest")
+    parser.add_argument("--polylint-latest")
     args = parser.parse_args(argv)
 
     tslp_hits = list(scan(TSLP_SITES))
     alef_hits = list(scan(ALEF_SITES))
+    polylint_hits = list(scan(POLYLINT_SITES))
     problems: list[str] = []
 
     if args.offline:
-        for name, hits in (("tree-sitter-language-pack", tslp_hits), ("alef", alef_hits)):
+        for name, hits in (("tree-sitter-language-pack", tslp_hits), ("alef", alef_hits), ("polylint", polylint_hits)):
             versions = {hit[3] for hit in hits}
             if len(versions) > 1:
                 problems.append(f"{name} pins disagree: {sorted(versions)}")
     else:
         tslp = args.tslp_latest or latest_tslp()
         alef = args.alef_latest or latest_alef()
+        polylint = args.polylint_latest or latest_polylint()
         if args.write:
             if args.only in (None, "tslp"):
                 rewrite(TSLP_SITES, tslp, exact_cargo_toml=True)
             if args.only in (None, "alef"):
                 rewrite(ALEF_SITES, alef)
-            print(f"rewrote pins: {TSLP} {tslp}, alef {alef}\n"
+            if args.only in (None, "polylint"):
+                rewrite(POLYLINT_SITES, polylint)
+            print(f"rewrote pins: {TSLP} {tslp}, alef {alef}, polylint {polylint}\n"
                   "Add the reviewed alef SHA-256 to workspace-scripts/install_alef_binary.sh, then run: alef generate && alef verify --exit-code, cargo update -p "
                   f"{TSLP} --precise {tslp}, and the full test suites.")
             return 0
-        for name, hits, latest in (("tree-sitter-language-pack", tslp_hits, tslp), ("alef", alef_hits, alef)):
+        for name, hits, latest in (
+            ("tree-sitter-language-pack", tslp_hits, tslp),
+            ("alef", alef_hits, alef),
+            ("polylint", polylint_hits, polylint),
+        ):
             for label, path, line_no, version, _line in hits:
                 if version != latest:
                     problems.append(f"{path.relative_to(ROOT)}:{line_no}: {name} {version} is not the latest ({latest}) [{label}]")
