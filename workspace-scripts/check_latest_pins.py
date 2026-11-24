@@ -120,6 +120,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--offline", action="store_true")
+    parser.add_argument("--only", choices=["tslp", "alef"], help="limit --write to one project")
     parser.add_argument("--tslp-latest")
     parser.add_argument("--alef-latest")
     args = parser.parse_args(argv)
@@ -137,8 +138,10 @@ def main(argv=None) -> int:
         tslp = args.tslp_latest or latest_tslp()
         alef = args.alef_latest or latest_alef()
         if args.write:
-            rewrite(TSLP_SITES, tslp, exact_cargo_toml=True)
-            rewrite(ALEF_SITES, alef)
+            if args.only in (None, "tslp"):
+                rewrite(TSLP_SITES, tslp, exact_cargo_toml=True)
+            if args.only in (None, "alef"):
+                rewrite(ALEF_SITES, alef)
             print(f"rewrote pins: {TSLP} {tslp}, alef {alef}\n"
                   "Add the reviewed alef SHA-256 to workspace-scripts/install_alef_binary.sh, then run: alef generate && alef verify --exit-code, cargo update -p "
                   f"{TSLP} --precise {tslp}, and the full test suites.")

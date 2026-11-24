@@ -9,14 +9,14 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish the validated 0.2.2 dependency closure and release artifacts
+        description: Publish the validated 0.2.3 dependency closure and release artifacts
         required: true
         default: false
         type: boolean
       release_tag:
-        description: Release tag to validate/publish (for example v0.2.2)
+        description: Release tag to validate/publish (for example v0.2.3)
         required: false
-        default: v0.2.2
+        default: v0.2.3
         type: string
       dry_run:
         description: Build and validate release artifacts without publishing
@@ -72,7 +72,7 @@ jobs:
         uses: xberg-io/actions/prepare-release-metadata@64bf4fc642ab473af9c6d49938173515a4adb48d
         with:
           available-targets: "crates,python,ruby"
-          alef-version: "0.132.0"
+          alef-version: "0.132.6"
           targets: ${{ inputs.targets || github.event.client_payload.targets || '' }}
           tag: ${{ inputs.release_tag || github.event.release.tag_name || github.event.client_payload.tag || '' }}
           dry-run: ${{ inputs.dry_run || 'false' }}
@@ -166,7 +166,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: structuredmerge/structuredmerge-fixtures
-          ref: 9c6e4bb0625f28207d1f40e5d103936eed56154a
+          ref: 04fff3eb6c92ddfd859ad0571377bb1fa5367ebc
           path: shared-fixtures
       - name: Place fixtures beside kernel
         shell: bash
@@ -411,7 +411,7 @@ jobs:
         with:
           package-dir: packages/python
           output-dir: dist
-          alef-version: "0.132.0"
+          alef-version: "0.132.6"
           dry-run: ${{ needs.prepare.outputs.dry_run }}
       - name: Upload source distribution
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -604,7 +604,7 @@ jobs:
       - name: Install Alef
         uses: xberg-io/actions/install-alef@64bf4fc642ab473af9c6d49938173515a4adb48d
         with:
-          version: "0.132.0"
+          version: "0.132.6"
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -901,7 +901,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: structuredmerge/structuredmerge-fixtures
-          ref: 9c6e4bb0625f28207d1f40e5d103936eed56154a
+          ref: 04fff3eb6c92ddfd859ad0571377bb1fa5367ebc
           path: shared-fixtures
       - name: Place fixtures beside kernel
         shell: bash
@@ -948,7 +948,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: structuredmerge/structuredmerge-fixtures
-          ref: 9c6e4bb0625f28207d1f40e5d103936eed56154a
+          ref: 04fff3eb6c92ddfd859ad0571377bb1fa5367ebc
           path: shared-fixtures
       - name: Place fixtures beside kernel
         shell: bash

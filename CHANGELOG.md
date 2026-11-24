@@ -14,6 +14,28 @@
 
 ### Security
 
+## [0.2.3] - 2026-11-24
+
+### Added
+
+- [kc] latest-pins-gate: Add `workspace-scripts/check_latest_pins.py`, which fails the publish validation unless every tree-sitter-language-pack and Alef pin (Cargo.toml, Cargo.lock, workflow cache paths, alef.toml, alef-version, publish.yml) is the latest release and every crate requirement is an exact `=` pin; `--write` rewrites all sites.
+
+### Changed
+
+- [kc] upgrade-tslp-1.27.2: Upgrade the Rust Tree-sitter Language Pack to 1.27.2 and pin it exactly (`=1.27.2`) so source-gem builds, which ship no Cargo.lock, can no longer resolve a newer crate than the one this repository was tested against.
+
+- [kc] upgrade-alef-0132-6: Upgrade Alef to 0.132.6 (reviewed Linux checksum added) and regenerate the polyglot bindings, docs and e2e suites.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- [kc] rust-grammar-projection: Normalize the tree-sitter-rust 1.27 node shape at the tree-sitter projection boundary (outer attributes and doc comments hoisted back in front of their item, doc comments reported as line/block comments ending on their own line, items starting at their first own token) so owner ownership, comment attachment and layout behave identically across grammar revisions.
+
+- [kc] rust-trait-alias-fixture: The shared Rust trait alias fixture now records that the tree-sitter Rust grammar accepts trait aliases.
+
 ## [0.2.2] - 2026-11-21
 
 ### Added

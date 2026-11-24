@@ -45,7 +45,7 @@ grammar. The gate does not build, download, or publish either artifact:
 ```sh
 python3 workspace-scripts/check_installed_cli_git.py tmp/workflow-query-bin/smorg \
   --typed --fixtures ../fixtures/conformance/cli-v1/typed-git.json \
-  --grammar-library tmp/typed-tslp-cache/tree-sitter-language-pack/v1.25.2/libs/libtree_sitter_json.so
+  --grammar-library tmp/typed-tslp-cache/tree-sitter-language-pack/v1.27.2/libs/libtree_sitter_json.so
 ```
 
 Repeat with `smorg-rs`. Typed mode selects `kernel.git.json.v1` explicitly and

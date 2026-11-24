@@ -1,6 +1,6 @@
 [package]
 name = "structuredmerge-core"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Peter H. Boling"]
 edition = "2024"
 description = "Typed facade for the StructuredMerge kernel"
@@ -12,20 +12,20 @@ license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 path = "src/lib.rs"
 
 [dependencies]
-ast-crispr = { version = "0.2.2", path = "../ast-crispr" }
-ast-merge = { version = "0.2.2", path = "../ast-merge" }
-ast-merge-git = { version = "0.2.2", path = "../ast-merge-git" }
-ast-template = { version = "0.2.2", path = "../ast-template" }
-bash-merge = { version = "0.2.2", path = "../bash-merge" }
-go-merge = { version = "0.2.2", path = "../go-merge" }
-json-merge = { version = "0.2.2", path = "../json-merge" }
-python-merge = { version = "0.2.2", path = "../python-merge" }
-rust-merge = { version = "0.2.2", path = "../rust-merge" }
+ast-crispr = { version = "0.2.3", path = "../ast-crispr" }
+ast-merge = { version = "0.2.3", path = "../ast-merge" }
+ast-merge-git = { version = "0.2.3", path = "../ast-merge-git" }
+ast-template = { version = "0.2.3", path = "../ast-template" }
+bash-merge = { version = "0.2.3", path = "../bash-merge" }
+go-merge = { version = "0.2.3", path = "../go-merge" }
+json-merge = { version = "0.2.3", path = "../json-merge" }
+python-merge = { version = "0.2.3", path = "../python-merge" }
+rust-merge = { version = "0.2.3", path = "../rust-merge" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tree-haver = { version = "0.2.2", path = "../tree-haver" }
-typescript-merge = { version = "0.2.2", path = "../typescript-merge" }
-yaml-merge = { version = "0.2.2", path = "../yaml-merge" }
+tree-haver = { version = "0.2.3", path = "../tree-haver" }
+typescript-merge = { version = "0.2.3", path = "../typescript-merge" }
+yaml-merge = { version = "0.2.3", path = "../yaml-merge" }
 
 [lints]
 workspace = true
