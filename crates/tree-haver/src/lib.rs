@@ -12,6 +12,7 @@ pub const PACKAGE_NAME: &str = "tree-haver";
 
 pub mod language_pack_provider;
 pub mod parsed;
+pub(crate) mod projection;
 pub mod service;
 pub mod source;
 
@@ -1204,16 +1205,13 @@ fn language_pack_backend_capability(request: &ParserRequest) -> BackendCapabilit
     }
 }
 
-fn tree_sitter_node_role(
-    node: &tree_sitter_language_pack::Node,
-    source_fragment: &str,
-) -> NodeRole {
-    if node.is_error() || node.is_missing() {
+fn tree_sitter_node_role(node: &projection::Projected, source_fragment: &str) -> NodeRole {
+    if node.node.is_error() || node.node.is_missing() {
         return NodeRole::Error;
     }
-    let kind = node.kind();
-    if node.is_named() {
-        return if tree_sitter_comment_kind(&kind)
+    let kind = node.kind.as_str();
+    if node.node.is_named() {
+        return if tree_sitter_comment_kind(kind)
             || (kind.contains("html") && source_fragment.trim_start().starts_with("<!--"))
         {
             NodeRole::Comment
@@ -1221,7 +1219,7 @@ fn tree_sitter_node_role(
             NodeRole::Structural
         };
     }
-    match kind.as_str() {
+    match kind {
         "," | ";" => NodeRole::Separator,
         "(" | ")" | "[" | "]" | "{" | "}" => NodeRole::Delimiter,
         _ => NodeRole::Token,
@@ -1233,7 +1231,7 @@ fn tree_sitter_comment_kind(kind: &str) -> bool {
 }
 
 fn push_language_pack_node(
-    node: tree_sitter_language_pack::Node,
+    node: projection::Projected,
     source: &str,
     language: &str,
     parent_id: Option<String>,
@@ -1241,10 +1239,8 @@ fn push_language_pack_node(
     nodes: &mut Vec<NormalizedTreeNode>,
 ) -> String {
     let id = format!("tslp:{language}:{}", nodes.len());
-    let start = node.start_position();
-    let end = node.end_position();
-    let source_fragment = source.get(node.start_byte()..node.end_byte()).unwrap_or_default();
-    let kind = node.kind();
+    let source_fragment = source.get(node.start_byte..node.end_byte).unwrap_or_default();
+    let kind = node.kind.clone();
     let node_index = nodes.len();
     nodes.push(NormalizedTreeNode {
         id: id.clone(),
@@ -1253,13 +1249,13 @@ fn push_language_pack_node(
         parent_id,
         child_ids: vec![],
         span: SourceSpan {
-            range: ByteRange { start_byte: node.start_byte(), end_byte: node.end_byte() },
-            start_point: SourcePoint { row: start.row, column: start.column },
-            end_point: SourcePoint { row: end.row, column: end.column },
+            range: ByteRange { start_byte: node.start_byte, end_byte: node.end_byte },
+            start_point: SourcePoint { row: node.start_point.0, column: node.start_point.1 },
+            end_point: SourcePoint { row: node.end_point.0, column: node.end_point.1 },
         },
         field_name,
-        named: node.is_named(),
-        anonymous: !node.is_named(),
+        named: node.node.is_named(),
+        anonymous: !node.node.is_named(),
         has_source_text: true,
         source_fragment: source_fragment.to_string(),
         backend_kind: Some(kind),
@@ -1269,22 +1265,17 @@ fn push_language_pack_node(
         metadata: BTreeMap::new(),
     });
 
-    let mut child_ids = Vec::with_capacity(node.child_count());
-    let mut cursor = node.walk();
-    if cursor.goto_first_child() {
-        loop {
-            child_ids.push(push_language_pack_node(
-                cursor.node(),
-                source,
-                language,
-                Some(id.clone()),
-                cursor.field_name(),
-                nodes,
-            ));
-            if !cursor.goto_next_sibling() {
-                break;
-            }
-        }
+    let children = node.children(language, source);
+    let mut child_ids = Vec::with_capacity(children.len());
+    for (child, child_field) in children {
+        child_ids.push(push_language_pack_node(
+            child,
+            source,
+            language,
+            Some(id.clone()),
+            child_field,
+            nodes,
+        ));
     }
     nodes[node_index].child_ids = child_ids;
     id
@@ -1325,7 +1316,7 @@ pub fn parse_normalized_with_language_pack(request: &ParserRequest) -> Normalize
 
     let mut nodes = Vec::new();
     let root_id = push_language_pack_node(
-        tree.root_node(),
+        projection::Projected::root(tree.root_node(), &request.language, &request.source),
         &request.source,
         &request.language,
         None,

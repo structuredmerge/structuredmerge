@@ -487,10 +487,13 @@ fn rust_native_backend_merges_trait_aliases_with_independent_function_edits() {
         RustDialect::Rust,
         RustBackend::TreeSitter,
     );
-    assert!(!tree_sitter_parse.ok, "fixture pins this parser-specific acceptance boundary");
+    // tree-sitter-rust (tree-sitter-language-pack 1.27+) accepts trait aliases; the
+    // fixture records the grammar's current acceptance so a regression is visible.
     assert_eq!(
-        tree_sitter_parse.diagnostics.first().map(|diagnostic| diagnostic.category),
-        Some(ast_merge::DiagnosticCategory::ParseError)
+        tree_sitter_parse.ok,
+        fixture["expected"]["ruby_tree_sitter_boundary"]["ok"].as_bool().unwrap(),
+        "{:?}",
+        tree_sitter_parse.diagnostics
     );
     let result = merge_rust_three_way_with_backend(
         input["base"].as_str().unwrap(),
