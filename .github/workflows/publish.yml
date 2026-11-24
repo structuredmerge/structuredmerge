@@ -189,6 +189,8 @@ jobs:
           bash workspace-scripts/install_alef_binary.sh \
             workspace-scripts/alef-version "$RUNNER_TEMP/alef-bin"
           echo "$RUNNER_TEMP/alef-bin" >> "$GITHUB_PATH"
+      - name: Verify tree-sitter-language-pack and alef pins are the latest releases
+        run: python workspace-scripts/check_latest_pins.py
       - name: Verify generated bindings and package metadata
         run: |
           alef verify --exit-code
