@@ -75,9 +75,8 @@ typedef struct SMCLineEndings SMCLineEndings;
 typedef struct SMCLocalizationStatus SMCLocalizationStatus;
 typedef struct SMCMergeConflict SMCMergeConflict;
 /**
- * Constraints for the eventual TreeHaver negotiation, never direct parser
- * calls. Empty sets add no constraint. These sets have no preference-order
- * semantics.
+ * Constraints for the eventual TreeHaver negotiation, never direct parser calls.
+ * Empty sets add no constraint. These sets have no preference-order semantics.
  */
 typedef struct SMCMergeParserRequirements SMCMergeParserRequirements;
 typedef struct SMCMergeProviderDescriptor SMCMergeProviderDescriptor;
@@ -148,9 +147,8 @@ typedef struct SMCParseLimits SMCParseLimits;
 typedef struct SMCParseNode SMCParseNode;
 typedef struct SMCParseOptions SMCParseOptions;
 /**
- * Parser payload. TreeHaver's service adds validated backend and selection
- * evidence. It is intentionally not a second whole-operation or host-workflow
- * envelope.
+ * Parser payload. TreeHaver's service adds validated backend and selection evidence.
+ * It is intentionally not a second whole-operation or host-workflow envelope.
  */
 typedef struct SMCParseOutput SMCParseOutput;
 typedef struct SMCParseRequest SMCParseRequest;
@@ -167,9 +165,8 @@ typedef struct SMCParserProbeResult SMCParserProbeResult;
 typedef struct SMCParserProviderDescriptor SMCParserProviderDescriptor;
 /**
  * Owned, non-loading registry observations. Descriptors are declarations, not
- * successful availability probes, semantic support evidence or default
- * approval. The generation is meaningful only within the originating registry
- * instance.
+ * successful availability probes, semantic support evidence or default approval.
+ * The generation is meaningful only within the originating registry instance.
  */
 typedef struct SMCParserRegistryInventory SMCParserRegistryInventory;
 typedef struct SMCParserSelection SMCParserSelection;
@@ -228,18 +225,13 @@ typedef struct SMCSourceRole SMCSourceRole;
 typedef struct SMCSourceSpan SMCSourceSpan;
 typedef struct SMCTemplateDestinationContext SMCTemplateDestinationContext;
 typedef struct SMCTemplateDirectoryApplyReport SMCTemplateDirectoryApplyReport;
-typedef struct SMCTemplateDirectoryApplyReportEntry
-    SMCTemplateDirectoryApplyReportEntry;
-typedef struct SMCTemplateDirectoryApplyReportSummary
-    SMCTemplateDirectoryApplyReportSummary;
+typedef struct SMCTemplateDirectoryApplyReportEntry SMCTemplateDirectoryApplyReportEntry;
+typedef struct SMCTemplateDirectoryApplyReportSummary SMCTemplateDirectoryApplyReportSummary;
 typedef struct SMCTemplateDirectoryPlanReport SMCTemplateDirectoryPlanReport;
-typedef struct SMCTemplateDirectoryPlanReportEntry
-    SMCTemplateDirectoryPlanReportEntry;
-typedef struct SMCTemplateDirectoryPlanReportSummary
-    SMCTemplateDirectoryPlanReportSummary;
+typedef struct SMCTemplateDirectoryPlanReportEntry SMCTemplateDirectoryPlanReportEntry;
+typedef struct SMCTemplateDirectoryPlanReportSummary SMCTemplateDirectoryPlanReportSummary;
 typedef struct SMCTemplateDirectoryPlanStatus SMCTemplateDirectoryPlanStatus;
-typedef struct SMCTemplateDirectoryRunnerReport
-    SMCTemplateDirectoryRunnerReport;
+typedef struct SMCTemplateDirectoryRunnerReport SMCTemplateDirectoryRunnerReport;
 typedef struct SMCTemplateExecutionAction SMCTemplateExecutionAction;
 typedef struct SMCTemplatePreviewResult SMCTemplatePreviewResult;
 typedef struct SMCTemplateProfileRequest SMCTemplateProfileRequest;
@@ -266,8 +258,7 @@ typedef uint64_t SMCWorkflowHost;
 typedef struct SMCWorkflowLimits SMCWorkflowLimits;
 typedef struct SMCWorkflowOperation SMCWorkflowOperation;
 /**
- * Caller-required registry state, not authentication or a grammar identity
- * lease.
+ * Caller-required registry state, not authentication or a grammar identity lease.
  */
 typedef struct SMCWorkflowRegistryExpectation SMCWorkflowRegistryExpectation;
 
@@ -276,12 +267,12 @@ enum SMCAlefFfiErrorCode
     : int32_t
 #endif // __STDC_VERSION__ >= 202311L
 {
-  SmcAlefNone = 0,
-  SmcAlefConversion = 1,
-  SmcAlefUnknown = 2,
-  SmcAlefPanic = 3,
-  SmcAlefInvalidHandle = 4,
-  SmcAlefCancelled = 5,
+    SmcAlefNone = 0,
+    SmcAlefConversion = 1,
+    SmcAlefUnknown = 2,
+    SmcAlefPanic = 3,
+    SmcAlefInvalidHandle = 4,
+    SmcAlefCancelled = 5,
 };
 #if __STDC_VERSION__ >= 202311L
 typedef enum SMCAlefFfiErrorCode SMCAlefFfiErrorCode;
@@ -300,19 +291,19 @@ typedef uint64_t SMCAlefHandle;
 int32_t smc_last_error_code(void);
 
 /**
- * Return the last error message. The pointer is borrowed and valid until the
- * next FFI call on this thread. # Safety Caller must ensure all pointer
- * arguments are valid or null. The returned pointer is borrowed from
- * thread-local storage and must NOT be freed.
+ * Return the last error message. The pointer is borrowed and valid until the next FFI call on this
+ * thread. # Safety Caller must ensure all pointer arguments are valid or null. The returned pointer
+ * is borrowed from thread-local storage and must NOT be freed.
  */
 const char *smc_last_error_context(void);
 
 /**
  * Return the variant name of the last typed error, such as `RateLimited`.
- * The pointer is NULL when the last error did not come from a typed error
- * value, and is borrowed and valid until the next FFI call on this thread. #
- * Safety Caller must ensure all pointer arguments are valid or null. The
- * returned pointer is borrowed from thread-local storage and must NOT be freed.
+ * The pointer is NULL when the last error did not come from a typed error value, and is borrowed
+ * and valid until the next FFI call on this thread.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * The returned pointer is borrowed from thread-local storage and must NOT be freed.
  */
 const char *smc_last_error_variant(void);
 
@@ -324,8 +315,9 @@ const char *smc_last_error_variant(void);
 void smc_free_string(char *ptr);
 
 /**
- * Return the library version string. The pointer is static and must NOT be
- * freed. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Return the library version string. The pointer is static and must NOT be freed.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 const char *smc_version(void);
@@ -373,11 +365,11 @@ int32_t smc_analyze_policy_comments(SMCAlefHandle handle);
  * Report whether the `comments` field on a `AnalyzePolicy` is `Some`.
  *
  * `smc_analyze_policy_comments` cannot distinguish a `None` field from a
- * legitimate zero-valued `Some` at the C ABI boundary -- there is no null
- * representation for a numeric return, so both collapse to the same sentinel.
- * Call this function first: `1` means the field getter's return value is
- * meaningful, `0` means the field is absent and the getter's sentinel must be
- * ignored, `-1` reports an invalid handle (see `smc_last_error_code`). # Safety
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
  * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_analyze_policy_has_comments(SMCAlefHandle handle);
@@ -393,11 +385,11 @@ int32_t smc_analyze_policy_tokens(SMCAlefHandle handle);
  * Report whether the `tokens` field on a `AnalyzePolicy` is `Some`.
  *
  * `smc_analyze_policy_tokens` cannot distinguish a `None` field from a
- * legitimate zero-valued `Some` at the C ABI boundary -- there is no null
- * representation for a numeric return, so both collapse to the same sentinel.
- * Call this function first: `1` means the field getter's return value is
- * meaningful, `0` means the field is absent and the getter's sentinel must be
- * ignored, `-1` reports an invalid handle (see `smc_last_error_code`). # Safety
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
  * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_analyze_policy_has_tokens(SMCAlefHandle handle);
@@ -413,11 +405,11 @@ int32_t smc_analyze_policy_ownership(SMCAlefHandle handle);
  * Report whether the `ownership` field on a `AnalyzePolicy` is `Some`.
  *
  * `smc_analyze_policy_ownership` cannot distinguish a `None` field from a
- * legitimate zero-valued `Some` at the C ABI boundary -- there is no null
- * representation for a numeric return, so both collapse to the same sentinel.
- * Call this function first: `1` means the field getter's return value is
- * meaningful, `0` means the field is absent and the getter's sentinel must be
- * ignored, `-1` reports an invalid handle (see `smc_last_error_code`). # Safety
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
  * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_analyze_policy_has_ownership(SMCAlefHandle handle);
@@ -432,12 +424,12 @@ int32_t smc_analyze_policy_native_extensions(SMCAlefHandle handle);
 /**
  * Report whether the `native_extensions` field on a `AnalyzePolicy` is `Some`.
  *
- * `smc_analyze_policy_native_extensions` cannot distinguish a `None` field from
- * a legitimate zero-valued `Some` at the C ABI boundary -- there is no null
- * representation for a numeric return, so both collapse to the same sentinel.
- * Call this function first: `1` means the field getter's return value is
- * meaningful, `0` means the field is absent and the getter's sentinel must be
- * ignored, `-1` reports an invalid handle (see `smc_last_error_code`). # Safety
+ * `smc_analyze_policy_native_extensions` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
  * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_analyze_policy_has_native_extensions(SMCAlefHandle handle);
@@ -489,26 +481,26 @@ uintptr_t smc_byte_range_start_byte(SMCAlefHandle handle);
 uintptr_t smc_byte_range_end_byte(SMCAlefHandle handle);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 int32_t smc_byte_range_is_valid(SMCAlefHandle this_);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 uintptr_t smc_byte_range_len(SMCAlefHandle this_);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 int32_t smc_byte_range_is_empty(SMCAlefHandle this_);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 int32_t smc_byte_range_contains_byte(SMCAlefHandle this_, uintptr_t offset);
 
@@ -589,9 +581,10 @@ char *smc_capability_manifest_observations(SMCAlefHandle handle);
 SMCAlefHandle smc_capability_observation_from_json(const char *json);
 
 /**
- * Serialize a `CapabilityObservation` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `CapabilityObservation` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_capability_observation_to_json(SMCAlefHandle handle);
 
@@ -651,16 +644,15 @@ SMCAlefHandle smc_capability_observation_parser_report(SMCAlefHandle handle);
 int32_t smc_capability_observation_parser_eligible(SMCAlefHandle handle);
 
 /**
- * Report whether the `parser_eligible` field on a `CapabilityObservation` is
- * `Some`.
+ * Report whether the `parser_eligible` field on a `CapabilityObservation` is `Some`.
  *
- * `smc_capability_observation_parser_eligible` cannot distinguish a `None`
- * field from a legitimate zero-valued `Some` at the C ABI boundary -- there is
- * no null representation for a numeric return, so both collapse to the same
- * sentinel. Call this function first: `1` means the field getter's return value
- * is meaningful, `0` means the field is absent and the getter's sentinel must
- * be ignored, `-1` reports an invalid handle (see `smc_last_error_code`). #
- * Safety Pointer must be a valid handle returned by this library.
+ * `smc_capability_observation_parser_eligible` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_capability_observation_has_parser_eligible(SMCAlefHandle handle);
 
@@ -838,16 +830,18 @@ SMCAlefHandle smc_conflict_alternative_state(SMCAlefHandle handle);
 char *smc_conflict_alternative_regions(SMCAlefHandle handle);
 
 /**
- * Create a `ConflictClassification` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `ConflictClassification` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_conflict_classification_free`.
  */
 SMCAlefHandle smc_conflict_classification_from_json(const char *json);
 
 /**
- * Serialize a `ConflictClassification` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `ConflictClassification` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_conflict_classification_to_json(SMCAlefHandle handle);
 
@@ -866,16 +860,15 @@ void smc_conflict_classification_free(SMCAlefHandle handle);
 int32_t smc_conflict_classification_base_participated(SMCAlefHandle handle);
 
 /**
- * Report whether the `base_participated` field on a `ConflictClassification` is
- * `Some`.
+ * Report whether the `base_participated` field on a `ConflictClassification` is `Some`.
  *
- * `smc_conflict_classification_base_participated` cannot distinguish a `None`
- * field from a legitimate zero-valued `Some` at the C ABI boundary -- there is
- * no null representation for a numeric return, so both collapse to the same
- * sentinel. Call this function first: `1` means the field getter's return value
- * is meaningful, `0` means the field is absent and the getter's sentinel must
- * be ignored, `-1` reports an invalid handle (see `smc_last_error_code`). #
- * Safety Pointer must be a valid handle returned by this library.
+ * `smc_conflict_classification_base_participated` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_conflict_classification_has_base_participated(SMCAlefHandle handle);
 
@@ -1050,16 +1043,18 @@ char *smc_conflict_resolution_reason(SMCAlefHandle handle);
 char *smc_conflict_resolution_extra(SMCAlefHandle handle);
 
 /**
- * Create a `ConflictSourceAlternative` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `ConflictSourceAlternative` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_conflict_source_alternative_free`.
  */
 SMCAlefHandle smc_conflict_source_alternative_from_json(const char *json);
 
 /**
- * Serialize a `ConflictSourceAlternative` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `ConflictSourceAlternative` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_conflict_source_alternative_to_json(SMCAlefHandle handle);
 
@@ -1202,12 +1197,12 @@ int32_t smc_conflict_subject_whole_document(SMCAlefHandle handle);
 /**
  * Report whether the `whole_document` field on a `ConflictSubject` is `Some`.
  *
- * `smc_conflict_subject_whole_document` cannot distinguish a `None` field from
- * a legitimate zero-valued `Some` at the C ABI boundary -- there is no null
- * representation for a numeric return, so both collapse to the same sentinel.
- * Call this function first: `1` means the field getter's return value is
- * meaningful, `0` means the field is absent and the getter's sentinel must be
- * ignored, `-1` reports an invalid handle (see `smc_last_error_code`). # Safety
+ * `smc_conflict_subject_whole_document` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
  * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_conflict_subject_has_whole_document(SMCAlefHandle handle);
@@ -1322,16 +1317,18 @@ SMCAlefHandle smc_core_parse_result_backend(SMCAlefHandle handle);
 SMCAlefHandle smc_core_parse_result_parsed(SMCAlefHandle handle);
 
 /**
- * Create a `CrisprBatchOperationReport` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `CrisprBatchOperationReport` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_crispr_batch_operation_report_free`.
  */
 SMCAlefHandle smc_crispr_batch_operation_report_from_json(const char *json);
 
 /**
- * Serialize a `CrisprBatchOperationReport` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `CrisprBatchOperationReport` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_crispr_batch_operation_report_to_json(SMCAlefHandle handle);
 
@@ -1347,8 +1344,7 @@ void smc_crispr_batch_operation_report_free(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-smc_crispr_batch_operation_report_operation_count(SMCAlefHandle handle);
+uintptr_t smc_crispr_batch_operation_report_operation_count(SMCAlefHandle handle);
 
 /**
  * Get the `operation_kinds` field from a `CrisprBatchOperationReport`.
@@ -1366,20 +1362,21 @@ char *smc_crispr_batch_operation_report_operation_kinds(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-smc_crispr_batch_operation_report_operation_profiles(SMCAlefHandle handle);
+char *smc_crispr_batch_operation_report_operation_profiles(SMCAlefHandle handle);
 
 /**
- * Create a `CrisprBoundaryImplementation` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `CrisprBoundaryImplementation` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_crispr_boundary_implementation_free`.
  */
 SMCAlefHandle smc_crispr_boundary_implementation_from_json(const char *json);
 
 /**
- * Serialize a `CrisprBoundaryImplementation` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `CrisprBoundaryImplementation` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_crispr_boundary_implementation_to_json(SMCAlefHandle handle);
 
@@ -1436,16 +1433,18 @@ char *smc_crispr_boundary_implementation_require_path(SMCAlefHandle handle);
 char *smc_crispr_boundary_implementation_crate_name(SMCAlefHandle handle);
 
 /**
- * Create a `CrisprBoundaryMetadata` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `CrisprBoundaryMetadata` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_crispr_boundary_metadata_free`.
  */
 SMCAlefHandle smc_crispr_boundary_metadata_from_json(const char *json);
 
 /**
- * Serialize a `CrisprBoundaryMetadata` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `CrisprBoundaryMetadata` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_crispr_boundary_metadata_to_json(SMCAlefHandle handle);
 
@@ -1475,16 +1474,18 @@ char *smc_crispr_boundary_metadata_source(SMCAlefHandle handle);
 char *smc_crispr_boundary_metadata_decision(SMCAlefHandle handle);
 
 /**
- * Create a `CrisprBoundaryRelationships` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `CrisprBoundaryRelationships` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_crispr_boundary_relationships_free`.
  */
 SMCAlefHandle smc_crispr_boundary_relationships_from_json(const char *json);
 
 /**
- * Serialize a `CrisprBoundaryRelationships` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `CrisprBoundaryRelationships` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_crispr_boundary_relationships_to_json(SMCAlefHandle handle);
 
@@ -1636,16 +1637,18 @@ char *smc_crispr_boundary_report_future_exports(SMCAlefHandle handle);
 SMCAlefHandle smc_crispr_boundary_report_metadata(SMCAlefHandle handle);
 
 /**
- * Create a `CrisprDestinationReport` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `CrisprDestinationReport` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_crispr_destination_report_free`.
  */
 SMCAlefHandle smc_crispr_destination_report_from_json(const char *json);
 
 /**
- * Serialize a `CrisprDestinationReport` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `CrisprDestinationReport` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_crispr_destination_report_to_json(SMCAlefHandle handle);
 
@@ -1679,8 +1682,7 @@ char *smc_crispr_destination_report_resolution_family(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_crispr_destination_report_known_resolution_kind(SMCAlefHandle handle);
+int32_t smc_crispr_destination_report_known_resolution_kind(SMCAlefHandle handle);
 
 /**
  * Get the `resolution_source` field from a `CrisprDestinationReport`.
@@ -1698,16 +1700,14 @@ char *smc_crispr_destination_report_resolution_source(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-smc_crispr_destination_report_resolution_source_family(SMCAlefHandle handle);
+char *smc_crispr_destination_report_resolution_source_family(SMCAlefHandle handle);
 
 /**
  * Get the `known_resolution_source` field from a `CrisprDestinationReport`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_crispr_destination_report_known_resolution_source(SMCAlefHandle handle);
+int32_t smc_crispr_destination_report_known_resolution_source(SMCAlefHandle handle);
 
 /**
  * Get the `anchor_boundary` field from a `CrisprDestinationReport`.
@@ -1725,16 +1725,14 @@ char *smc_crispr_destination_report_anchor_boundary(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-smc_crispr_destination_report_anchor_boundary_family(SMCAlefHandle handle);
+char *smc_crispr_destination_report_anchor_boundary_family(SMCAlefHandle handle);
 
 /**
  * Get the `known_anchor_boundary` field from a `CrisprDestinationReport`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_crispr_destination_report_known_anchor_boundary(SMCAlefHandle handle);
+int32_t smc_crispr_destination_report_known_anchor_boundary(SMCAlefHandle handle);
 
 /**
  * Get the `used_if_missing` field from a `CrisprDestinationReport`.
@@ -1758,16 +1756,18 @@ int32_t smc_crispr_destination_report_append_fallback(SMCAlefHandle handle);
 int32_t smc_crispr_destination_report_anchored(SMCAlefHandle handle);
 
 /**
- * Create a `CrisprDestinationRequest` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `CrisprDestinationRequest` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_crispr_destination_request_free`.
  */
 SMCAlefHandle smc_crispr_destination_request_from_json(const char *json);
 
 /**
- * Serialize a `CrisprDestinationRequest` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `CrisprDestinationRequest` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_crispr_destination_request_to_json(SMCAlefHandle handle);
 
@@ -1821,9 +1821,10 @@ int32_t smc_crispr_destination_request_used_if_missing(SMCAlefHandle handle);
 SMCAlefHandle smc_crispr_limit_constraint_from_json(const char *json);
 
 /**
- * Serialize a `CrisprLimitConstraint` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `CrisprLimitConstraint` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_crispr_limit_constraint_to_json(SMCAlefHandle handle);
 
@@ -2112,9 +2113,10 @@ char *smc_crispr_match_request_payload_kind(SMCAlefHandle handle);
 SMCAlefHandle smc_crispr_operation_report_from_json(const char *json);
 
 /**
- * Serialize a `CrisprOperationReport` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `CrisprOperationReport` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_crispr_operation_report_to_json(SMCAlefHandle handle);
 
@@ -2164,8 +2166,7 @@ char *smc_crispr_operation_report_source_requirement(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_crispr_operation_report_known_source_requirement(SMCAlefHandle handle);
+int32_t smc_crispr_operation_report_known_source_requirement(SMCAlefHandle handle);
 
 /**
  * Get the `destination_requirement` field from a `CrisprOperationReport`.
@@ -2181,8 +2182,7 @@ char *smc_crispr_operation_report_destination_requirement(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_crispr_operation_report_known_destination_requirement(SMCAlefHandle handle);
+int32_t smc_crispr_operation_report_known_destination_requirement(SMCAlefHandle handle);
 
 /**
  * Get the `replacement_source` field from a `CrisprOperationReport`.
@@ -2198,8 +2198,7 @@ char *smc_crispr_operation_report_replacement_source(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_crispr_operation_report_known_replacement_source(SMCAlefHandle handle);
+int32_t smc_crispr_operation_report_known_replacement_source(SMCAlefHandle handle);
 
 /**
  * Get the `captures_source_text` field from a `CrisprOperationReport`.
@@ -2255,20 +2254,21 @@ int32_t smc_crispr_operation_report_explicit_replacement(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_crispr_operation_report_may_reuse_captured_text(SMCAlefHandle handle);
+int32_t smc_crispr_operation_report_may_reuse_captured_text(SMCAlefHandle handle);
 
 /**
- * Create a `CrisprOperationRequest` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `CrisprOperationRequest` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_crispr_operation_request_free`.
  */
 SMCAlefHandle smc_crispr_operation_request_from_json(const char *json);
 
 /**
- * Serialize a `CrisprOperationRequest` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `CrisprOperationRequest` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_crispr_operation_request_to_json(SMCAlefHandle handle);
 
@@ -2304,8 +2304,7 @@ char *smc_crispr_operation_request_source_requirement(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-smc_crispr_operation_request_destination_requirement(SMCAlefHandle handle);
+char *smc_crispr_operation_request_destination_requirement(SMCAlefHandle handle);
 
 /**
  * Get the `replacement_source` field from a `CrisprOperationRequest`.
@@ -2339,9 +2338,10 @@ int32_t smc_crispr_operation_request_supports_if_missing(SMCAlefHandle handle);
 SMCAlefHandle smc_crispr_selection_report_from_json(const char *json);
 
 /**
- * Serialize a `CrisprSelectionReport` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `CrisprSelectionReport` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_crispr_selection_report_to_json(SMCAlefHandle handle);
 
@@ -2434,8 +2434,7 @@ char *smc_crispr_selection_report_selection_intent_family(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_crispr_selection_report_known_selection_intent(SMCAlefHandle handle);
+int32_t smc_crispr_selection_report_known_selection_intent(SMCAlefHandle handle);
 
 /**
  * Get the `comment_region` field from a `CrisprSelectionReport`.
@@ -2477,16 +2476,18 @@ int32_t smc_crispr_selection_report_comment_anchored(SMCAlefHandle handle);
 int32_t smc_crispr_selection_report_include_trailing_gap(SMCAlefHandle handle);
 
 /**
- * Create a `CrisprSelectionRequest` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `CrisprSelectionRequest` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_crispr_selection_request_free`.
  */
 SMCAlefHandle smc_crispr_selection_request_from_json(const char *json);
 
 /**
- * Serialize a `CrisprSelectionRequest` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `CrisprSelectionRequest` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_crispr_selection_request_to_json(SMCAlefHandle handle);
 
@@ -2861,16 +2862,15 @@ char *smc_diff_policy_equivalence(SMCAlefHandle handle);
 int32_t smc_diff_policy_source_preservation_evidence(SMCAlefHandle handle);
 
 /**
- * Report whether the `source_preservation_evidence` field on a `DiffPolicy` is
- * `Some`.
+ * Report whether the `source_preservation_evidence` field on a `DiffPolicy` is `Some`.
  *
- * `smc_diff_policy_source_preservation_evidence` cannot distinguish a `None`
- * field from a legitimate zero-valued `Some` at the C ABI boundary -- there is
- * no null representation for a numeric return, so both collapse to the same
- * sentinel. Call this function first: `1` means the field getter's return value
- * is meaningful, `0` means the field is absent and the getter's sentinel must
- * be ignored, `-1` reports an invalid handle (see `smc_last_error_code`). #
- * Safety Pointer must be a valid handle returned by this library.
+ * `smc_diff_policy_source_preservation_evidence` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_diff_policy_has_source_preservation_evidence(SMCAlefHandle handle);
 
@@ -2943,16 +2943,18 @@ SMCAlefHandle smc_diff_source_region_range(SMCAlefHandle handle);
 char *smc_diff_source_region_sha256(SMCAlefHandle handle);
 
 /**
- * Create a `DirectionalMergePolicy` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `DirectionalMergePolicy` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_directional_merge_policy_free`.
  */
 SMCAlefHandle smc_directional_merge_policy_from_json(const char *json);
 
 /**
- * Serialize a `DirectionalMergePolicy` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `DirectionalMergePolicy` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_directional_merge_policy_to_json(SMCAlefHandle handle);
 
@@ -3000,16 +3002,18 @@ char *smc_directional_merge_policy_fallback_policy(SMCAlefHandle handle);
 char *smc_directional_merge_policy_extra(SMCAlefHandle handle);
 
 /**
- * Create a `DirectorySessionProfile` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `DirectorySessionProfile` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_directory_session_profile_free`.
  */
 SMCAlefHandle smc_directory_session_profile_from_json(const char *json);
 
 /**
- * Serialize a `DirectorySessionProfile` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `DirectorySessionProfile` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_directory_session_profile_to_json(SMCAlefHandle handle);
 
@@ -3045,8 +3049,7 @@ SMCAlefHandle smc_directory_session_profile_context(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle
-smc_directory_session_profile_default_strategy(SMCAlefHandle handle);
+SMCAlefHandle smc_directory_session_profile_default_strategy(SMCAlefHandle handle);
 
 /**
  * Get the `overrides` field from a `DirectorySessionProfile`.
@@ -3309,16 +3312,18 @@ char *smc_merge_conflict_message(SMCAlefHandle handle);
 char *smc_merge_conflict_alternatives(SMCAlefHandle handle);
 
 /**
- * Create a `MergeParserRequirements` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `MergeParserRequirements` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_merge_parser_requirements_free`.
  */
 SMCAlefHandle smc_merge_parser_requirements_from_json(const char *json);
 
 /**
- * Serialize a `MergeParserRequirements` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `MergeParserRequirements` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_merge_parser_requirements_to_json(SMCAlefHandle handle);
 
@@ -3354,8 +3359,7 @@ char *smc_merge_parser_requirements_forbidden_backend_ids(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-smc_merge_parser_requirements_allowed_backend_families(SMCAlefHandle handle);
+char *smc_merge_parser_requirements_allowed_backend_families(SMCAlefHandle handle);
 
 /**
  * Get the `forbidden_backend_families` field from a `MergeParserRequirements`.
@@ -3364,8 +3368,7 @@ smc_merge_parser_requirements_allowed_backend_families(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-smc_merge_parser_requirements_forbidden_backend_families(SMCAlefHandle handle);
+char *smc_merge_parser_requirements_forbidden_backend_families(SMCAlefHandle handle);
 
 /**
  * Get the `languages` field from a `MergeParserRequirements`.
@@ -3413,16 +3416,18 @@ char *smc_merge_parser_requirements_capabilities(SMCAlefHandle handle);
 char *smc_merge_parser_requirements_profiles(SMCAlefHandle handle);
 
 /**
- * Create a `MergeProviderDescriptor` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `MergeProviderDescriptor` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_merge_provider_descriptor_free`.
  */
 SMCAlefHandle smc_merge_provider_descriptor_from_json(const char *json);
 
 /**
- * Serialize a `MergeProviderDescriptor` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `MergeProviderDescriptor` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_merge_provider_descriptor_to_json(SMCAlefHandle handle);
 
@@ -3503,8 +3508,7 @@ char *smc_merge_provider_descriptor_capabilities(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-smc_merge_provider_descriptor_preservation_guarantees(SMCAlefHandle handle);
+char *smc_merge_provider_descriptor_preservation_guarantees(SMCAlefHandle handle);
 
 /**
  * Get the `priority` field from a `MergeProviderDescriptor`.
@@ -3520,8 +3524,7 @@ int32_t smc_merge_provider_descriptor_priority(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle
-smc_merge_provider_descriptor_parser_requirements(SMCAlefHandle handle);
+SMCAlefHandle smc_merge_provider_descriptor_parser_requirements(SMCAlefHandle handle);
 
 /**
  * Get the `allowed_delegation_targets` field from a `MergeProviderDescriptor`.
@@ -3530,8 +3533,7 @@ smc_merge_provider_descriptor_parser_requirements(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-smc_merge_provider_descriptor_allowed_delegation_targets(SMCAlefHandle handle);
+char *smc_merge_provider_descriptor_allowed_delegation_targets(SMCAlefHandle handle);
 
 /**
  * Get the `runtime` field from a `MergeProviderDescriptor`.
@@ -3579,16 +3581,18 @@ char *smc_merge_provider_descriptor_metadata(SMCAlefHandle handle);
 char *smc_merge_provider_descriptor_extensions(SMCAlefHandle handle);
 
 /**
- * Create a `MergeProviderInventory` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `MergeProviderInventory` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_merge_provider_inventory_free`.
  */
 SMCAlefHandle smc_merge_provider_inventory_from_json(const char *json);
 
 /**
- * Serialize a `MergeProviderInventory` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `MergeProviderInventory` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_merge_provider_inventory_to_json(SMCAlefHandle handle);
 
@@ -3634,16 +3638,18 @@ char *smc_merge_provider_inventory_descriptor_digest(SMCAlefHandle handle);
 char *smc_merge_provider_inventory_providers(SMCAlefHandle handle);
 
 /**
- * Create a `MergeProviderSelection` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `MergeProviderSelection` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_merge_provider_selection_free`.
  */
 SMCAlefHandle smc_merge_provider_selection_from_json(const char *json);
 
 /**
- * Serialize a `MergeProviderSelection` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `MergeProviderSelection` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_merge_provider_selection_to_json(SMCAlefHandle handle);
 
@@ -3709,16 +3715,18 @@ char *smc_merge_provider_selection_required_capabilities(SMCAlefHandle handle);
 char *smc_merge_provider_selection_extra(SMCAlefHandle handle);
 
 /**
- * Create a `MergeSelectionCandidate` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `MergeSelectionCandidate` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_merge_selection_candidate_free`.
  */
 SMCAlefHandle smc_merge_selection_candidate_from_json(const char *json);
 
 /**
- * Serialize a `MergeSelectionCandidate` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `MergeSelectionCandidate` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_merge_selection_candidate_to_json(SMCAlefHandle handle);
 
@@ -3886,9 +3894,10 @@ char *smc_merge_selection_report_rejections(SMCAlefHandle handle);
 SMCAlefHandle smc_merge_selection_request_from_json(const char *json);
 
 /**
- * Serialize a `MergeSelectionRequest` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `MergeSelectionRequest` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_merge_selection_request_to_json(SMCAlefHandle handle);
 
@@ -3972,16 +3981,18 @@ char *smc_merge_selection_request_required_preservation(SMCAlefHandle handle);
 SMCAlefHandle smc_merge_selection_request_parser(SMCAlefHandle handle);
 
 /**
- * Create a `NativeAnalysisRejection` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `NativeAnalysisRejection` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_native_analysis_rejection_free`.
  */
 SMCAlefHandle smc_native_analysis_rejection_from_json(const char *json);
 
 /**
- * Serialize a `NativeAnalysisRejection` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `NativeAnalysisRejection` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_native_analysis_rejection_to_json(SMCAlefHandle handle);
 
@@ -4495,8 +4506,7 @@ SMCAlefHandle smc_native_merge_result_output_parse(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle
-smc_native_merge_result_verification_failure(SMCAlefHandle handle);
+SMCAlefHandle smc_native_merge_result_verification_failure(SMCAlefHandle handle);
 
 /**
  * Get the `input_failure` field from a `NativeMergeResult`.
@@ -4553,28 +4563,30 @@ void smc_operation_control_free(SMCAlefHandle handle);
 SMCAlefHandle smc_operation_control_new(void);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 void smc_operation_control_cancel(SMCAlefHandle this_);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 int32_t smc_operation_control_is_cancelled(SMCAlefHandle this_);
 
 /**
- * Create a `OperationParserSelection` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `OperationParserSelection` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_operation_parser_selection_free`.
  */
 SMCAlefHandle smc_operation_parser_selection_from_json(const char *json);
 
 /**
- * Serialize a `OperationParserSelection` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `OperationParserSelection` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_operation_parser_selection_to_json(SMCAlefHandle handle);
 
@@ -4610,8 +4622,7 @@ char *smc_operation_parser_selection_preference(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-smc_operation_parser_selection_required_capabilities(SMCAlefHandle handle);
+char *smc_operation_parser_selection_required_capabilities(SMCAlefHandle handle);
 
 /**
  * Get the `profile_id` field from a `OperationParserSelection`.
@@ -4641,16 +4652,18 @@ char *smc_operation_parser_selection_language_version(SMCAlefHandle handle);
 char *smc_operation_parser_selection_extra(SMCAlefHandle handle);
 
 /**
- * Create a `OperationProfileCatalog` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `OperationProfileCatalog` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_operation_profile_catalog_free`.
  */
 SMCAlefHandle smc_operation_profile_catalog_from_json(const char *json);
 
 /**
- * Serialize a `OperationProfileCatalog` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `OperationProfileCatalog` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_operation_profile_catalog_to_json(SMCAlefHandle handle);
 
@@ -4680,16 +4693,18 @@ char *smc_operation_profile_catalog_schema(SMCAlefHandle handle);
 char *smc_operation_profile_catalog_profiles(SMCAlefHandle handle);
 
 /**
- * Create a `OperationProfileDeclaration` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `OperationProfileDeclaration` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_operation_profile_declaration_free`.
  */
 SMCAlefHandle smc_operation_profile_declaration_from_json(const char *json);
 
 /**
- * Serialize a `OperationProfileDeclaration` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `OperationProfileDeclaration` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_operation_profile_declaration_to_json(SMCAlefHandle handle);
 
@@ -4764,37 +4779,33 @@ char *smc_operation_profile_declaration_semantic_runtime(SMCAlefHandle handle);
 char *smc_operation_profile_declaration_parser_contract(SMCAlefHandle handle);
 
 /**
- * Get the `required_native_extension` field from a
- * `OperationProfileDeclaration`. A non-null returned pointer is owned by the
- * caller. It must be freed with `smc_free_string`. # Safety Pointer must be a
- * valid handle returned by this library.
+ * Get the `required_native_extension` field from a `OperationProfileDeclaration`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `smc_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
-char *smc_operation_profile_declaration_required_native_extension(
-    SMCAlefHandle handle);
+char *smc_operation_profile_declaration_required_native_extension(SMCAlefHandle handle);
 
 /**
  * Get the `parser_available` field from a `OperationProfileDeclaration`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_operation_profile_declaration_parser_available(SMCAlefHandle handle);
+int32_t smc_operation_profile_declaration_parser_available(SMCAlefHandle handle);
 
 /**
- * Report whether the `parser_available` field on a
- * `OperationProfileDeclaration` is `Some`.
+ * Report whether the `parser_available` field on a `OperationProfileDeclaration` is `Some`.
  *
- * `smc_operation_profile_declaration_parser_available` cannot distinguish a
- * `None` field from a legitimate zero-valued `Some` at the C ABI boundary --
- * there is no null representation for a numeric return, so both collapse to the
- * same sentinel. Call this function first: `1` means the field getter's return
- * value is meaningful, `0` means the field is absent and the getter's sentinel
- * must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * `smc_operation_profile_declaration_parser_available` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_operation_profile_declaration_has_parser_available(SMCAlefHandle handle);
+int32_t smc_operation_profile_declaration_has_parser_available(SMCAlefHandle handle);
 
 /**
  * Get the `syntax_scope` field from a `OperationProfileDeclaration`.
@@ -4826,8 +4837,7 @@ int32_t smc_operation_profile_declaration_experimental(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_operation_profile_declaration_approved_as_default(SMCAlefHandle handle);
+int32_t smc_operation_profile_declaration_approved_as_default(SMCAlefHandle handle);
 
 /**
  * Create a `OperationRequest` from a JSON string. Returns null on failure.
@@ -5238,11 +5248,11 @@ int32_t smc_operation_source_bom(SMCAlefHandle handle);
  * Report whether the `bom` field on a `OperationSource` is `Some`.
  *
  * `smc_operation_source_bom` cannot distinguish a `None` field from a
- * legitimate zero-valued `Some` at the C ABI boundary -- there is no null
- * representation for a numeric return, so both collapse to the same sentinel.
- * Call this function first: `1` means the field getter's return value is
- * meaningful, `0` means the field is absent and the getter's sentinel must be
- * ignored, `-1` reports an invalid handle (see `smc_last_error_code`). # Safety
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
  * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_operation_source_has_bom(SMCAlefHandle handle);
@@ -5267,11 +5277,11 @@ int32_t smc_operation_source_final_newline(SMCAlefHandle handle);
  * Report whether the `final_newline` field on a `OperationSource` is `Some`.
  *
  * `smc_operation_source_final_newline` cannot distinguish a `None` field from a
- * legitimate zero-valued `Some` at the C ABI boundary -- there is no null
- * representation for a numeric return, so both collapse to the same sentinel.
- * Call this function first: `1` means the field getter's return value is
- * meaningful, `0` means the field is absent and the getter's sentinel must be
- * ignored, `-1` reports an invalid handle (see `smc_last_error_code`). # Safety
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
  * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_operation_source_has_final_newline(SMCAlefHandle handle);
@@ -5831,11 +5841,11 @@ uint64_t smc_parse_limits_timeout_millis(SMCAlefHandle handle);
  * Report whether the `timeout_millis` field on a `ParseLimits` is `Some`.
  *
  * `smc_parse_limits_timeout_millis` cannot distinguish a `None` field from a
- * legitimate zero-valued `Some` at the C ABI boundary -- there is no null
- * representation for a numeric return, so both collapse to the same sentinel.
- * Call this function first: `1` means the field getter's return value is
- * meaningful, `0` means the field is absent and the getter's sentinel must be
- * ignored, `-1` reports an invalid handle (see `smc_last_error_code`). # Safety
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
  * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_parse_limits_has_timeout_millis(SMCAlefHandle handle);
@@ -6310,11 +6320,11 @@ int32_t smc_parser_candidate_available(SMCAlefHandle handle);
  * Report whether the `available` field on a `ParserCandidate` is `Some`.
  *
  * `smc_parser_candidate_available` cannot distinguish a `None` field from a
- * legitimate zero-valued `Some` at the C ABI boundary -- there is no null
- * representation for a numeric return, so both collapse to the same sentinel.
- * Call this function first: `1` means the field getter's return value is
- * meaningful, `0` means the field is absent and the getter's sentinel must be
- * ignored, `-1` reports an invalid handle (see `smc_last_error_code`). # Safety
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
  * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_parser_candidate_has_available(SMCAlefHandle handle);
@@ -6330,11 +6340,11 @@ int32_t smc_parser_candidate_loadable(SMCAlefHandle handle);
  * Report whether the `loadable` field on a `ParserCandidate` is `Some`.
  *
  * `smc_parser_candidate_loadable` cannot distinguish a `None` field from a
- * legitimate zero-valued `Some` at the C ABI boundary -- there is no null
- * representation for a numeric return, so both collapse to the same sentinel.
- * Call this function first: `1` means the field getter's return value is
- * meaningful, `0` means the field is absent and the getter's sentinel must be
- * ignored, `-1` reports an invalid handle (see `smc_last_error_code`). # Safety
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
  * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_parser_candidate_has_loadable(SMCAlefHandle handle);
@@ -6356,16 +6366,15 @@ char *smc_parser_candidate_probe_fault(SMCAlefHandle handle);
 uintptr_t smc_parser_candidate_request_preference(SMCAlefHandle handle);
 
 /**
- * Report whether the `request_preference` field on a `ParserCandidate` is
- * `Some`.
+ * Report whether the `request_preference` field on a `ParserCandidate` is `Some`.
  *
- * `smc_parser_candidate_request_preference` cannot distinguish a `None` field
- * from a legitimate zero-valued `Some` at the C ABI boundary -- there is no
- * null representation for a numeric return, so both collapse to the same
- * sentinel. Call this function first: `1` means the field getter's return value
- * is meaningful, `0` means the field is absent and the getter's sentinel must
- * be ignored, `-1` reports an invalid handle (see `smc_last_error_code`). #
- * Safety Pointer must be a valid handle returned by this library.
+ * `smc_parser_candidate_request_preference` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_parser_candidate_has_request_preference(SMCAlefHandle handle);
 
@@ -6377,16 +6386,15 @@ int32_t smc_parser_candidate_has_request_preference(SMCAlefHandle handle);
 uintptr_t smc_parser_candidate_profile_preference(SMCAlefHandle handle);
 
 /**
- * Report whether the `profile_preference` field on a `ParserCandidate` is
- * `Some`.
+ * Report whether the `profile_preference` field on a `ParserCandidate` is `Some`.
  *
- * `smc_parser_candidate_profile_preference` cannot distinguish a `None` field
- * from a legitimate zero-valued `Some` at the C ABI boundary -- there is no
- * null representation for a numeric return, so both collapse to the same
- * sentinel. Call this function first: `1` means the field getter's return value
- * is meaningful, `0` means the field is absent and the getter's sentinel must
- * be ignored, `-1` reports an invalid handle (see `smc_last_error_code`). #
- * Safety Pointer must be a valid handle returned by this library.
+ * `smc_parser_candidate_profile_preference` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_parser_candidate_has_profile_preference(SMCAlefHandle handle);
 
@@ -6569,16 +6577,18 @@ int32_t smc_parser_probe_result_available(SMCAlefHandle handle);
 int32_t smc_parser_probe_result_loadable(SMCAlefHandle handle);
 
 /**
- * Create a `ParserProviderDescriptor` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `ParserProviderDescriptor` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_parser_provider_descriptor_free`.
  */
 SMCAlefHandle smc_parser_provider_descriptor_from_json(const char *json);
 
 /**
- * Serialize a `ParserProviderDescriptor` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `ParserProviderDescriptor` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_parser_provider_descriptor_to_json(SMCAlefHandle handle);
 
@@ -6741,16 +6751,18 @@ char *smc_parser_provider_descriptor_metadata(SMCAlefHandle handle);
 char *smc_parser_provider_descriptor_extensions(SMCAlefHandle handle);
 
 /**
- * Create a `ParserRegistryInventory` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `ParserRegistryInventory` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_parser_registry_inventory_free`.
  */
 SMCAlefHandle smc_parser_registry_inventory_from_json(const char *json);
 
 /**
- * Serialize a `ParserRegistryInventory` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `ParserRegistryInventory` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_parser_registry_inventory_to_json(SMCAlefHandle handle);
 
@@ -6846,16 +6858,18 @@ char *smc_parser_selection_preference(SMCAlefHandle handle);
 char *smc_parser_selection_required_capabilities(SMCAlefHandle handle);
 
 /**
- * Create a `ParserSelectionRequest` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `ParserSelectionRequest` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_parser_selection_request_free`.
  */
 SMCAlefHandle smc_parser_selection_request_from_json(const char *json);
 
 /**
- * Serialize a `ParserSelectionRequest` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `ParserSelectionRequest` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_parser_selection_request_to_json(SMCAlefHandle handle);
 
@@ -7336,9 +7350,10 @@ char *smc_portable_diagnostic_extra(SMCAlefHandle handle);
 SMCAlefHandle smc_prepared_workflow_batch_from_json(const char *json);
 
 /**
- * Serialize a `PreparedWorkflowBatch` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `PreparedWorkflowBatch` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_prepared_workflow_batch_to_json(SMCAlefHandle handle);
 
@@ -7359,16 +7374,18 @@ void smc_prepared_workflow_batch_free(SMCAlefHandle handle);
 char *smc_prepared_workflow_batch_items(SMCAlefHandle handle);
 
 /**
- * Create a `PreparedWorkflowOperation` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `PreparedWorkflowOperation` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_prepared_workflow_operation_free`.
  */
 SMCAlefHandle smc_prepared_workflow_operation_from_json(const char *json);
 
 /**
- * Serialize a `PreparedWorkflowOperation` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `PreparedWorkflowOperation` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_prepared_workflow_operation_to_json(SMCAlefHandle handle);
 
@@ -7935,9 +7952,10 @@ char *smc_result_diff_extra(SMCAlefHandle handle);
 SMCAlefHandle smc_result_parser_selection_from_json(const char *json);
 
 /**
- * Serialize a `ResultParserSelection` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `ResultParserSelection` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_result_parser_selection_to_json(SMCAlefHandle handle);
 
@@ -8349,24 +8367,20 @@ char *smc_result_verification_consumed_source_roles(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_result_verification_directional_roles_preserved(SMCAlefHandle handle);
+int32_t smc_result_verification_directional_roles_preserved(SMCAlefHandle handle);
 
 /**
- * Report whether the `directional_roles_preserved` field on a
- * `ResultVerification` is `Some`.
+ * Report whether the `directional_roles_preserved` field on a `ResultVerification` is `Some`.
  *
- * `smc_result_verification_directional_roles_preserved` cannot distinguish a
- * `None` field from a legitimate zero-valued `Some` at the C ABI boundary --
- * there is no null representation for a numeric return, so both collapse to the
- * same sentinel. Call this function first: `1` means the field getter's return
- * value is meaningful, `0` means the field is absent and the getter's sentinel
- * must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * `smc_result_verification_directional_roles_preserved` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_result_verification_has_directional_roles_preserved(SMCAlefHandle handle);
+int32_t smc_result_verification_has_directional_roles_preserved(SMCAlefHandle handle);
 
 /**
  * Get the `base_participated` field from a `ResultVerification`.
@@ -8376,16 +8390,15 @@ smc_result_verification_has_directional_roles_preserved(SMCAlefHandle handle);
 int32_t smc_result_verification_base_participated(SMCAlefHandle handle);
 
 /**
- * Report whether the `base_participated` field on a `ResultVerification` is
- * `Some`.
+ * Report whether the `base_participated` field on a `ResultVerification` is `Some`.
  *
- * `smc_result_verification_base_participated` cannot distinguish a `None` field
- * from a legitimate zero-valued `Some` at the C ABI boundary -- there is no
- * null representation for a numeric return, so both collapse to the same
- * sentinel. Call this function first: `1` means the field getter's return value
- * is meaningful, `0` means the field is absent and the getter's sentinel must
- * be ignored, `-1` reports an invalid handle (see `smc_last_error_code`). #
- * Safety Pointer must be a valid handle returned by this library.
+ * `smc_result_verification_base_participated` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_result_verification_has_base_participated(SMCAlefHandle handle);
 
@@ -8397,19 +8410,17 @@ int32_t smc_result_verification_has_base_participated(SMCAlefHandle handle);
 int32_t smc_result_verification_classification_reached(SMCAlefHandle handle);
 
 /**
- * Report whether the `classification_reached` field on a `ResultVerification`
- * is `Some`.
+ * Report whether the `classification_reached` field on a `ResultVerification` is `Some`.
  *
- * `smc_result_verification_classification_reached` cannot distinguish a `None`
- * field from a legitimate zero-valued `Some` at the C ABI boundary -- there is
- * no null representation for a numeric return, so both collapse to the same
- * sentinel. Call this function first: `1` means the field getter's return value
- * is meaningful, `0` means the field is absent and the getter's sentinel must
- * be ignored, `-1` reports an invalid handle (see `smc_last_error_code`). #
- * Safety Pointer must be a valid handle returned by this library.
+ * `smc_result_verification_classification_reached` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_result_verification_has_classification_reached(SMCAlefHandle handle);
+int32_t smc_result_verification_has_classification_reached(SMCAlefHandle handle);
 
 /**
  * Get the `output_reparsed` field from a `ResultVerification`.
@@ -8419,16 +8430,15 @@ smc_result_verification_has_classification_reached(SMCAlefHandle handle);
 int32_t smc_result_verification_output_reparsed(SMCAlefHandle handle);
 
 /**
- * Report whether the `output_reparsed` field on a `ResultVerification` is
- * `Some`.
+ * Report whether the `output_reparsed` field on a `ResultVerification` is `Some`.
  *
- * `smc_result_verification_output_reparsed` cannot distinguish a `None` field
- * from a legitimate zero-valued `Some` at the C ABI boundary -- there is no
- * null representation for a numeric return, so both collapse to the same
- * sentinel. Call this function first: `1` means the field getter's return value
- * is meaningful, `0` means the field is absent and the getter's sentinel must
- * be ignored, `-1` reports an invalid handle (see `smc_last_error_code`). #
- * Safety Pointer must be a valid handle returned by this library.
+ * `smc_result_verification_output_reparsed` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_result_verification_has_output_reparsed(SMCAlefHandle handle);
 
@@ -8440,19 +8450,17 @@ int32_t smc_result_verification_has_output_reparsed(SMCAlefHandle handle);
 int32_t smc_result_verification_structural_equivalence(SMCAlefHandle handle);
 
 /**
- * Report whether the `structural_equivalence` field on a `ResultVerification`
- * is `Some`.
+ * Report whether the `structural_equivalence` field on a `ResultVerification` is `Some`.
  *
- * `smc_result_verification_structural_equivalence` cannot distinguish a `None`
- * field from a legitimate zero-valued `Some` at the C ABI boundary -- there is
- * no null representation for a numeric return, so both collapse to the same
- * sentinel. Call this function first: `1` means the field getter's return value
- * is meaningful, `0` means the field is absent and the getter's sentinel must
- * be ignored, `-1` reports an invalid handle (see `smc_last_error_code`). #
- * Safety Pointer must be a valid handle returned by this library.
+ * `smc_result_verification_structural_equivalence` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_result_verification_has_structural_equivalence(SMCAlefHandle handle);
+int32_t smc_result_verification_has_structural_equivalence(SMCAlefHandle handle);
 
 /**
  * Get the `preservation` field from a `ResultVerification`.
@@ -8490,9 +8498,10 @@ char *smc_result_verification_extra(SMCAlefHandle handle);
 SMCAlefHandle smc_retained_source_segment_from_json(const char *json);
 
 /**
- * Serialize a `RetainedSourceSegment` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `RetainedSourceSegment` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_retained_source_segment_to_json(SMCAlefHandle handle);
 
@@ -8567,16 +8576,18 @@ char *smc_retained_source_segment_sha256(SMCAlefHandle handle);
 char *smc_retained_source_segment_owner_id(SMCAlefHandle handle);
 
 /**
- * Create a `ReviewDiagnosticDetail` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `ReviewDiagnosticDetail` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_review_diagnostic_detail_free`.
  */
 SMCAlefHandle smc_review_diagnostic_detail_from_json(const char *json);
 
 /**
- * Serialize a `ReviewDiagnosticDetail` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `ReviewDiagnosticDetail` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_review_diagnostic_detail_to_json(SMCAlefHandle handle);
 
@@ -9153,16 +9164,27 @@ SMCAlefHandle smc_source_span_start_point(SMCAlefHandle handle);
 SMCAlefHandle smc_source_span_end_point(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateDestinationContext` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * One-based last source line the span occupies. Grammars whose nodes include
+ * their terminating newline (tree-sitter-rust doc comments, TOML) end such a
+ * node at column 0 of the following row, which holds none of the node's text.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
+ */
+uintptr_t smc_source_span_last_line(SMCAlefHandle this_);
+
+/**
+ * Create a `TemplateDestinationContext` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_template_destination_context_free`.
  */
 SMCAlefHandle smc_template_destination_context_from_json(const char *json);
 
 /**
- * Serialize a `TemplateDestinationContext` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateDestinationContext` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_destination_context_to_json(SMCAlefHandle handle);
 
@@ -9183,17 +9205,18 @@ void smc_template_destination_context_free(SMCAlefHandle handle);
 char *smc_template_destination_context_project_name(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateDirectoryApplyReport` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
- * Returned handle must be freed with
- * `smc_template_directory_apply_report_free`.
+ * Create a `TemplateDirectoryApplyReport` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `smc_template_directory_apply_report_free`.
  */
 SMCAlefHandle smc_template_directory_apply_report_from_json(const char *json);
 
 /**
- * Serialize a `TemplateDirectoryApplyReport` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateDirectoryApplyReport` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_directory_apply_report_to_json(SMCAlefHandle handle);
 
@@ -9223,19 +9246,18 @@ char *smc_template_directory_apply_report_entries(SMCAlefHandle handle);
 SMCAlefHandle smc_template_directory_apply_report_summary(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateDirectoryApplyReportEntry` from a JSON string. Returns null
- * on failure. # Safety JSON string must be valid UTF-8 and null-terminated.
- * Returned handle must be freed with
- * `smc_template_directory_apply_report_entry_free`.
+ * Create a `TemplateDirectoryApplyReportEntry` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `smc_template_directory_apply_report_entry_free`.
  */
-SMCAlefHandle
-smc_template_directory_apply_report_entry_from_json(const char *json);
+SMCAlefHandle smc_template_directory_apply_report_entry_from_json(const char *json);
 
 /**
- * Serialize a `TemplateDirectoryApplyReportEntry` to a JSON string. Returns
- * null on failure. # Safety `handle` must be a valid, non-zero handle returned
- * by a `smc` function. The returned string must be freed with
- * `smc_free_string`.
+ * Serialize a `TemplateDirectoryApplyReportEntry` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_directory_apply_report_entry_to_json(SMCAlefHandle handle);
 
@@ -9247,22 +9269,22 @@ char *smc_template_directory_apply_report_entry_to_json(SMCAlefHandle handle);
 void smc_template_directory_apply_report_entry_free(SMCAlefHandle handle);
 
 /**
- * Get the `template_source_path` field from a
- * `TemplateDirectoryApplyReportEntry`. A non-null returned pointer is owned by
- * the caller. It must be freed with `smc_free_string`. # Safety Pointer must be
- * a valid handle returned by this library.
+ * Get the `template_source_path` field from a `TemplateDirectoryApplyReportEntry`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `smc_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
-char *smc_template_directory_apply_report_entry_template_source_path(
-    SMCAlefHandle handle);
+char *smc_template_directory_apply_report_entry_template_source_path(SMCAlefHandle handle);
 
 /**
- * Get the `logical_destination_path` field from a
- * `TemplateDirectoryApplyReportEntry`. A non-null returned pointer is owned by
- * the caller. It must be freed with `smc_free_string`. # Safety Pointer must be
- * a valid handle returned by this library.
+ * Get the `logical_destination_path` field from a `TemplateDirectoryApplyReportEntry`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `smc_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
-char *smc_template_directory_apply_report_entry_logical_destination_path(
-    SMCAlefHandle handle);
+char *smc_template_directory_apply_report_entry_logical_destination_path(SMCAlefHandle handle);
 
 /**
  * Get the `destination_path` field from a `TemplateDirectoryApplyReportEntry`.
@@ -9271,8 +9293,7 @@ char *smc_template_directory_apply_report_entry_logical_destination_path(
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *smc_template_directory_apply_report_entry_destination_path(
-    SMCAlefHandle handle);
+char *smc_template_directory_apply_report_entry_destination_path(SMCAlefHandle handle);
 
 /**
  * Get the `execution_action` field from a `TemplateDirectoryApplyReportEntry`.
@@ -9281,8 +9302,7 @@ char *smc_template_directory_apply_report_entry_destination_path(
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle smc_template_directory_apply_report_entry_execution_action(
-    SMCAlefHandle handle);
+SMCAlefHandle smc_template_directory_apply_report_entry_execution_action(SMCAlefHandle handle);
 
 /**
  * Get the `status` field from a `TemplateDirectoryApplyReportEntry`.
@@ -9291,8 +9311,7 @@ SMCAlefHandle smc_template_directory_apply_report_entry_execution_action(
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle
-smc_template_directory_apply_report_entry_status(SMCAlefHandle handle);
+SMCAlefHandle smc_template_directory_apply_report_entry_status(SMCAlefHandle handle);
 
 /**
  * Get the `written` field from a `TemplateDirectoryApplyReportEntry`.
@@ -9302,19 +9321,18 @@ smc_template_directory_apply_report_entry_status(SMCAlefHandle handle);
 int32_t smc_template_directory_apply_report_entry_written(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateDirectoryApplyReportSummary` from a JSON string. Returns
- * null on failure. # Safety JSON string must be valid UTF-8 and
- * null-terminated. Returned handle must be freed with
- * `smc_template_directory_apply_report_summary_free`.
+ * Create a `TemplateDirectoryApplyReportSummary` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `smc_template_directory_apply_report_summary_free`.
  */
-SMCAlefHandle
-smc_template_directory_apply_report_summary_from_json(const char *json);
+SMCAlefHandle smc_template_directory_apply_report_summary_from_json(const char *json);
 
 /**
- * Serialize a `TemplateDirectoryApplyReportSummary` to a JSON string. Returns
- * null on failure. # Safety `handle` must be a valid, non-zero handle returned
- * by a `smc` function. The returned string must be freed with
- * `smc_free_string`.
+ * Serialize a `TemplateDirectoryApplyReportSummary` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_directory_apply_report_summary_to_json(SMCAlefHandle handle);
 
@@ -9330,60 +9348,56 @@ void smc_template_directory_apply_report_summary_free(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-smc_template_directory_apply_report_summary_created(SMCAlefHandle handle);
+uintptr_t smc_template_directory_apply_report_summary_created(SMCAlefHandle handle);
 
 /**
  * Get the `updated` field from a `TemplateDirectoryApplyReportSummary`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-smc_template_directory_apply_report_summary_updated(SMCAlefHandle handle);
+uintptr_t smc_template_directory_apply_report_summary_updated(SMCAlefHandle handle);
 
 /**
  * Get the `kept` field from a `TemplateDirectoryApplyReportSummary`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-smc_template_directory_apply_report_summary_kept(SMCAlefHandle handle);
+uintptr_t smc_template_directory_apply_report_summary_kept(SMCAlefHandle handle);
 
 /**
  * Get the `blocked` field from a `TemplateDirectoryApplyReportSummary`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-smc_template_directory_apply_report_summary_blocked(SMCAlefHandle handle);
+uintptr_t smc_template_directory_apply_report_summary_blocked(SMCAlefHandle handle);
 
 /**
  * Get the `omitted` field from a `TemplateDirectoryApplyReportSummary`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-smc_template_directory_apply_report_summary_omitted(SMCAlefHandle handle);
+uintptr_t smc_template_directory_apply_report_summary_omitted(SMCAlefHandle handle);
 
 /**
  * Get the `written` field from a `TemplateDirectoryApplyReportSummary`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-smc_template_directory_apply_report_summary_written(SMCAlefHandle handle);
+uintptr_t smc_template_directory_apply_report_summary_written(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateDirectoryPlanReport` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `TemplateDirectoryPlanReport` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_template_directory_plan_report_free`.
  */
 SMCAlefHandle smc_template_directory_plan_report_from_json(const char *json);
 
 /**
- * Serialize a `TemplateDirectoryPlanReport` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateDirectoryPlanReport` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_directory_plan_report_to_json(SMCAlefHandle handle);
 
@@ -9413,18 +9427,18 @@ char *smc_template_directory_plan_report_entries(SMCAlefHandle handle);
 SMCAlefHandle smc_template_directory_plan_report_summary(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateDirectoryPlanReportEntry` from a JSON string. Returns null
- * on failure. # Safety JSON string must be valid UTF-8 and null-terminated.
- * Returned handle must be freed with
- * `smc_template_directory_plan_report_entry_free`.
+ * Create a `TemplateDirectoryPlanReportEntry` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `smc_template_directory_plan_report_entry_free`.
  */
-SMCAlefHandle
-smc_template_directory_plan_report_entry_from_json(const char *json);
+SMCAlefHandle smc_template_directory_plan_report_entry_from_json(const char *json);
 
 /**
- * Serialize a `TemplateDirectoryPlanReportEntry` to a JSON string. Returns null
- * on failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateDirectoryPlanReportEntry` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_directory_plan_report_entry_to_json(SMCAlefHandle handle);
 
@@ -9436,22 +9450,22 @@ char *smc_template_directory_plan_report_entry_to_json(SMCAlefHandle handle);
 void smc_template_directory_plan_report_entry_free(SMCAlefHandle handle);
 
 /**
- * Get the `template_source_path` field from a
- * `TemplateDirectoryPlanReportEntry`. A non-null returned pointer is owned by
- * the caller. It must be freed with `smc_free_string`. # Safety Pointer must be
- * a valid handle returned by this library.
+ * Get the `template_source_path` field from a `TemplateDirectoryPlanReportEntry`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `smc_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
-char *smc_template_directory_plan_report_entry_template_source_path(
-    SMCAlefHandle handle);
+char *smc_template_directory_plan_report_entry_template_source_path(SMCAlefHandle handle);
 
 /**
- * Get the `logical_destination_path` field from a
- * `TemplateDirectoryPlanReportEntry`. A non-null returned pointer is owned by
- * the caller. It must be freed with `smc_free_string`. # Safety Pointer must be
- * a valid handle returned by this library.
+ * Get the `logical_destination_path` field from a `TemplateDirectoryPlanReportEntry`.
+ * A non-null returned pointer is owned by the caller.
+ * It must be freed with `smc_free_string`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
-char *smc_template_directory_plan_report_entry_logical_destination_path(
-    SMCAlefHandle handle);
+char *smc_template_directory_plan_report_entry_logical_destination_path(SMCAlefHandle handle);
 
 /**
  * Get the `destination_path` field from a `TemplateDirectoryPlanReportEntry`.
@@ -9460,8 +9474,7 @@ char *smc_template_directory_plan_report_entry_logical_destination_path(
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-smc_template_directory_plan_report_entry_destination_path(SMCAlefHandle handle);
+char *smc_template_directory_plan_report_entry_destination_path(SMCAlefHandle handle);
 
 /**
  * Get the `execution_action` field from a `TemplateDirectoryPlanReportEntry`.
@@ -9470,8 +9483,7 @@ smc_template_directory_plan_report_entry_destination_path(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle
-smc_template_directory_plan_report_entry_execution_action(SMCAlefHandle handle);
+SMCAlefHandle smc_template_directory_plan_report_entry_execution_action(SMCAlefHandle handle);
 
 /**
  * Get the `write_action` field from a `TemplateDirectoryPlanReportEntry`.
@@ -9480,8 +9492,7 @@ smc_template_directory_plan_report_entry_execution_action(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-smc_template_directory_plan_report_entry_write_action(SMCAlefHandle handle);
+char *smc_template_directory_plan_report_entry_write_action(SMCAlefHandle handle);
 
 /**
  * Get the `status` field from a `TemplateDirectoryPlanReportEntry`.
@@ -9490,31 +9501,28 @@ smc_template_directory_plan_report_entry_write_action(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle
-smc_template_directory_plan_report_entry_status(SMCAlefHandle handle);
+SMCAlefHandle smc_template_directory_plan_report_entry_status(SMCAlefHandle handle);
 
 /**
  * Get the `previewable` field from a `TemplateDirectoryPlanReportEntry`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_template_directory_plan_report_entry_previewable(SMCAlefHandle handle);
+int32_t smc_template_directory_plan_report_entry_previewable(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateDirectoryPlanReportSummary` from a JSON string. Returns
- * null on failure. # Safety JSON string must be valid UTF-8 and
- * null-terminated. Returned handle must be freed with
- * `smc_template_directory_plan_report_summary_free`.
+ * Create a `TemplateDirectoryPlanReportSummary` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `smc_template_directory_plan_report_summary_free`.
  */
-SMCAlefHandle
-smc_template_directory_plan_report_summary_from_json(const char *json);
+SMCAlefHandle smc_template_directory_plan_report_summary_from_json(const char *json);
 
 /**
- * Serialize a `TemplateDirectoryPlanReportSummary` to a JSON string. Returns
- * null on failure. # Safety `handle` must be a valid, non-zero handle returned
- * by a `smc` function. The returned string must be freed with
- * `smc_free_string`.
+ * Serialize a `TemplateDirectoryPlanReportSummary` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_directory_plan_report_summary_to_json(SMCAlefHandle handle);
 
@@ -9530,16 +9538,14 @@ void smc_template_directory_plan_report_summary_free(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-smc_template_directory_plan_report_summary_create(SMCAlefHandle handle);
+uintptr_t smc_template_directory_plan_report_summary_create(SMCAlefHandle handle);
 
 /**
  * Get the `update` field from a `TemplateDirectoryPlanReportSummary`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-smc_template_directory_plan_report_summary_update(SMCAlefHandle handle);
+uintptr_t smc_template_directory_plan_report_summary_update(SMCAlefHandle handle);
 
 /**
  * Get the `keep` field from a `TemplateDirectoryPlanReportSummary`.
@@ -9553,29 +9559,28 @@ uintptr_t smc_template_directory_plan_report_summary_keep(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-smc_template_directory_plan_report_summary_blocked(SMCAlefHandle handle);
+uintptr_t smc_template_directory_plan_report_summary_blocked(SMCAlefHandle handle);
 
 /**
  * Get the `omitted` field from a `TemplateDirectoryPlanReportSummary`.
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uintptr_t
-smc_template_directory_plan_report_summary_omitted(SMCAlefHandle handle);
+uintptr_t smc_template_directory_plan_report_summary_omitted(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateDirectoryRunnerReport` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
- * Returned handle must be freed with
- * `smc_template_directory_runner_report_free`.
+ * Create a `TemplateDirectoryRunnerReport` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `smc_template_directory_runner_report_free`.
  */
 SMCAlefHandle smc_template_directory_runner_report_from_json(const char *json);
 
 /**
- * Serialize a `TemplateDirectoryRunnerReport` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateDirectoryRunnerReport` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_directory_runner_report_to_json(SMCAlefHandle handle);
 
@@ -9593,8 +9598,7 @@ void smc_template_directory_runner_report_free(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle
-smc_template_directory_runner_report_plan_report(SMCAlefHandle handle);
+SMCAlefHandle smc_template_directory_runner_report_plan_report(SMCAlefHandle handle);
 
 /**
  * Get the `preview` field from a `TemplateDirectoryRunnerReport`.
@@ -9603,8 +9607,7 @@ smc_template_directory_runner_report_plan_report(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle
-smc_template_directory_runner_report_preview(SMCAlefHandle handle);
+SMCAlefHandle smc_template_directory_runner_report_preview(SMCAlefHandle handle);
 
 /**
  * Get the `run_report` field from a `TemplateDirectoryRunnerReport`.
@@ -9613,8 +9616,7 @@ smc_template_directory_runner_report_preview(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle
-smc_template_directory_runner_report_run_report(SMCAlefHandle handle);
+SMCAlefHandle smc_template_directory_runner_report_run_report(SMCAlefHandle handle);
 
 /**
  * Get the `apply_report` field from a `TemplateDirectoryRunnerReport`.
@@ -9623,8 +9625,7 @@ smc_template_directory_runner_report_run_report(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle
-smc_template_directory_runner_report_apply_report(SMCAlefHandle handle);
+SMCAlefHandle smc_template_directory_runner_report_apply_report(SMCAlefHandle handle);
 
 /**
  * Create a `TemplatePreviewResult` from a JSON string. Returns null on failure.
@@ -9635,9 +9636,10 @@ smc_template_directory_runner_report_apply_report(SMCAlefHandle handle);
 SMCAlefHandle smc_template_preview_result_from_json(const char *json);
 
 /**
- * Serialize a `TemplatePreviewResult` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplatePreviewResult` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_preview_result_to_json(SMCAlefHandle handle);
 
@@ -9703,16 +9705,18 @@ char *smc_template_preview_result_blocked_paths(SMCAlefHandle handle);
 char *smc_template_preview_result_omitted_paths(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateProfileRequest` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `TemplateProfileRequest` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_template_profile_request_free`.
  */
 SMCAlefHandle smc_template_profile_request_from_json(const char *json);
 
 /**
- * Serialize a `TemplateProfileRequest` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateProfileRequest` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_profile_request_to_json(SMCAlefHandle handle);
 
@@ -9751,16 +9755,18 @@ char *smc_template_profile_request_profiles(SMCAlefHandle handle);
 SMCAlefHandle smc_template_profile_request_options(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateSessionOptions` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `TemplateSessionOptions` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_template_session_options_free`.
  */
 SMCAlefHandle smc_template_session_options_from_json(const char *json);
 
 /**
- * Serialize a `TemplateSessionOptions` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateSessionOptions` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_session_options_to_json(SMCAlefHandle handle);
 
@@ -9814,8 +9820,7 @@ SMCAlefHandle smc_template_session_options_context(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle
-smc_template_session_options_default_strategy(SMCAlefHandle handle);
+SMCAlefHandle smc_template_session_options_default_strategy(SMCAlefHandle handle);
 
 /**
  * Get the `overrides` field from a `TemplateSessionOptions`.
@@ -9854,16 +9859,18 @@ char *smc_template_session_options_allowed_families(SMCAlefHandle handle);
 SMCAlefHandle smc_template_session_options_config(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateSessionPlanReport` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `TemplateSessionPlanReport` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_template_session_plan_report_free`.
  */
 SMCAlefHandle smc_template_session_plan_report_from_json(const char *json);
 
 /**
- * Serialize a `TemplateSessionPlanReport` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateSessionPlanReport` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_session_plan_report_to_json(SMCAlefHandle handle);
 
@@ -9890,21 +9897,21 @@ SMCAlefHandle smc_template_session_plan_report_mode(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle
-smc_template_session_plan_report_runner_report(SMCAlefHandle handle);
+SMCAlefHandle smc_template_session_plan_report_runner_report(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateSessionRequestReport` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
- * Returned handle must be freed with
- * `smc_template_session_request_report_free`.
+ * Create a `TemplateSessionRequestReport` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `smc_template_session_request_report_free`.
  */
 SMCAlefHandle smc_template_session_request_report_from_json(const char *json);
 
 /**
- * Serialize a `TemplateSessionRequestReport` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateSessionRequestReport` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_session_request_report_to_json(SMCAlefHandle handle);
 
@@ -9965,20 +9972,21 @@ char *smc_template_session_request_report_diagnostics(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle
-smc_template_session_request_report_resolved_options(SMCAlefHandle handle);
+SMCAlefHandle smc_template_session_request_report_resolved_options(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateStrategyOverride` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `TemplateStrategyOverride` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_template_strategy_override_free`.
  */
 SMCAlefHandle smc_template_strategy_override_from_json(const char *json);
 
 /**
- * Serialize a `TemplateStrategyOverride` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateStrategyOverride` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_strategy_override_to_json(SMCAlefHandle handle);
 
@@ -10074,13 +10082,13 @@ uintptr_t smc_template_token_config_max_segments(SMCAlefHandle handle);
 /**
  * Report whether the `max_segments` field on a `TemplateTokenConfig` is `Some`.
  *
- * `smc_template_token_config_max_segments` cannot distinguish a `None` field
- * from a legitimate zero-valued `Some` at the C ABI boundary -- there is no
- * null representation for a numeric return, so both collapse to the same
- * sentinel. Call this function first: `1` means the field getter's return value
- * is meaningful, `0` means the field is absent and the getter's sentinel must
- * be ignored, `-1` reports an invalid handle (see `smc_last_error_code`). #
- * Safety Pointer must be a valid handle returned by this library.
+ * `smc_template_token_config_max_segments` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
 int32_t smc_template_token_config_has_max_segments(SMCAlefHandle handle);
 
@@ -10102,9 +10110,10 @@ char *smc_template_token_config_segment_pattern(SMCAlefHandle handle);
 SMCAlefHandle smc_template_tree_run_report_from_json(const char *json);
 
 /**
- * Serialize a `TemplateTreeRunReport` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateTreeRunReport` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_tree_run_report_to_json(SMCAlefHandle handle);
 
@@ -10134,16 +10143,18 @@ char *smc_template_tree_run_report_entries(SMCAlefHandle handle);
 SMCAlefHandle smc_template_tree_run_report_summary(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateTreeRunReportEntry` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `TemplateTreeRunReportEntry` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_template_tree_run_report_entry_free`.
  */
 SMCAlefHandle smc_template_tree_run_report_entry_from_json(const char *json);
 
 /**
- * Serialize a `TemplateTreeRunReportEntry` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateTreeRunReportEntry` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_tree_run_report_entry_to_json(SMCAlefHandle handle);
 
@@ -10161,8 +10172,7 @@ void smc_template_tree_run_report_entry_free(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *
-smc_template_tree_run_report_entry_template_source_path(SMCAlefHandle handle);
+char *smc_template_tree_run_report_entry_template_source_path(SMCAlefHandle handle);
 
 /**
  * Get the `logical_destination_path` field from a `TemplateTreeRunReportEntry`.
@@ -10171,8 +10181,7 @@ smc_template_tree_run_report_entry_template_source_path(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-char *smc_template_tree_run_report_entry_logical_destination_path(
-    SMCAlefHandle handle);
+char *smc_template_tree_run_report_entry_logical_destination_path(SMCAlefHandle handle);
 
 /**
  * Get the `destination_path` field from a `TemplateTreeRunReportEntry`.
@@ -10190,8 +10199,7 @@ char *smc_template_tree_run_report_entry_destination_path(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-SMCAlefHandle
-smc_template_tree_run_report_entry_execution_action(SMCAlefHandle handle);
+SMCAlefHandle smc_template_tree_run_report_entry_execution_action(SMCAlefHandle handle);
 
 /**
  * Get the `status` field from a `TemplateTreeRunReportEntry`.
@@ -10203,17 +10211,18 @@ smc_template_tree_run_report_entry_execution_action(SMCAlefHandle handle);
 SMCAlefHandle smc_template_tree_run_report_entry_status(SMCAlefHandle handle);
 
 /**
- * Create a `TemplateTreeRunReportSummary` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
- * Returned handle must be freed with
- * `smc_template_tree_run_report_summary_free`.
+ * Create a `TemplateTreeRunReportSummary` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
+ * Returned handle must be freed with `smc_template_tree_run_report_summary_free`.
  */
 SMCAlefHandle smc_template_tree_run_report_summary_from_json(const char *json);
 
 /**
- * Serialize a `TemplateTreeRunReportSummary` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateTreeRunReportSummary` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_tree_run_report_summary_to_json(SMCAlefHandle handle);
 
@@ -10308,19 +10317,17 @@ char *smc_three_way_merge_policy_fallback_policy(SMCAlefHandle handle);
 uint64_t smc_three_way_merge_policy_conflict_marker_size(SMCAlefHandle handle);
 
 /**
- * Report whether the `conflict_marker_size` field on a `ThreeWayMergePolicy` is
- * `Some`.
+ * Report whether the `conflict_marker_size` field on a `ThreeWayMergePolicy` is `Some`.
  *
- * `smc_three_way_merge_policy_conflict_marker_size` cannot distinguish a `None`
- * field from a legitimate zero-valued `Some` at the C ABI boundary -- there is
- * no null representation for a numeric return, so both collapse to the same
- * sentinel. Call this function first: `1` means the field getter's return value
- * is meaningful, `0` means the field is absent and the getter's sentinel must
- * be ignored, `-1` reports an invalid handle (see `smc_last_error_code`). #
- * Safety Pointer must be a valid handle returned by this library.
+ * `smc_three_way_merge_policy_conflict_marker_size` cannot distinguish a `None` field from a
+ * legitimate zero-valued `Some` at the C ABI boundary -- there is no null representation for a
+ * numeric return, so both collapse to the same sentinel. Call this function first: `1` means
+ * the field getter's return value is meaningful, `0` means the field is absent and the getter's
+ * sentinel must be ignored, `-1` reports an invalid handle (see `smc_last_error_code`).
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
  */
-int32_t
-smc_three_way_merge_policy_has_conflict_marker_size(SMCAlefHandle handle);
+int32_t smc_three_way_merge_policy_has_conflict_marker_size(SMCAlefHandle handle);
 
 /**
  * Get the `labels` field from a `ThreeWayMergePolicy`.
@@ -10583,16 +10590,18 @@ char *smc_workflow_operation_parser_dialect(SMCAlefHandle handle);
 SMCAlefHandle smc_workflow_operation_parse_options(SMCAlefHandle handle);
 
 /**
- * Create a `WorkflowRegistryExpectation` from a JSON string. Returns null on
- * failure. # Safety JSON string must be valid UTF-8 and null-terminated.
+ * Create a `WorkflowRegistryExpectation` from a JSON string. Returns null on failure.
+ * # Safety
+ * JSON string must be valid UTF-8 and null-terminated.
  * Returned handle must be freed with `smc_workflow_registry_expectation_free`.
  */
 SMCAlefHandle smc_workflow_registry_expectation_from_json(const char *json);
 
 /**
- * Serialize a `WorkflowRegistryExpectation` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `WorkflowRegistryExpectation` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_workflow_registry_expectation_to_json(SMCAlefHandle handle);
 
@@ -10608,8 +10617,7 @@ void smc_workflow_registry_expectation_free(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uint64_t
-smc_workflow_registry_expectation_provider_generation(SMCAlefHandle handle);
+uint64_t smc_workflow_registry_expectation_provider_generation(SMCAlefHandle handle);
 
 /**
  * Get the `provider_digest` field from a `WorkflowRegistryExpectation`.
@@ -10625,8 +10633,7 @@ char *smc_workflow_registry_expectation_provider_digest(SMCAlefHandle handle);
  * # Safety
  * Pointer must be a valid handle returned by this library.
  */
-uint64_t
-smc_workflow_registry_expectation_parser_generation(SMCAlefHandle handle);
+uint64_t smc_workflow_registry_expectation_parser_generation(SMCAlefHandle handle);
 
 /**
  * Get the `parser_digest` field from a `WorkflowRegistryExpectation`.
@@ -10638,184 +10645,185 @@ smc_workflow_registry_expectation_parser_generation(SMCAlefHandle handle);
 char *smc_workflow_registry_expectation_parser_digest(SMCAlefHandle handle);
 
 /**
- * Convert an integer to a `AlternativeState` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `AlternativeState` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_alternative_state_from_i32(int32_t value);
 
 /**
- * Convert a `AlternativeState` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `AlternativeState` serde wire value (C string) to its integer discriminant. Returns -1
+ * on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_alternative_state_from_str(const char *name);
 
 /**
- * Convert an integer to a `AttachmentHint` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `AttachmentHint` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_attachment_hint_from_i32(int32_t value);
 
 /**
- * Convert a `AttachmentHint` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `AttachmentHint` serde wire value (C string) to its integer discriminant. Returns -1 on
+ * invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_attachment_hint_from_str(const char *name);
 
 /**
- * Convert an integer to a `ConflictAlternativeState` variant. Returns -1 on
- * invalid input. # Safety Caller must ensure all pointer arguments are valid or
- * null. Returned pointers must be freed with the appropriate free function.
+ * Convert an integer to a `ConflictAlternativeState` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_conflict_alternative_state_from_i32(int32_t value);
 
 /**
- * Convert a `ConflictAlternativeState` serde wire value (C string) to its
- * integer discriminant. Returns -1 on invalid input. # Safety Caller must
- * ensure `ptr` is a valid pointer to a `c_char` or null.
+ * Convert a `ConflictAlternativeState` serde wire value (C string) to its integer discriminant.
+ * Returns -1 on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char`
+ * or null.
  */
 int32_t smc_conflict_alternative_state_from_str(const char *name);
 
 /**
- * Convert an integer to a `ConflictCategory` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `ConflictCategory` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_conflict_category_from_i32(int32_t value);
 
 /**
- * Convert a `ConflictCategory` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `ConflictCategory` serde wire value (C string) to its integer discriminant. Returns -1
+ * on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_conflict_category_from_str(const char *name);
 
 /**
- * Convert an integer to a `ConflictRecord` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `ConflictRecord` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_conflict_record_from_i32(int32_t value);
 
 /**
- * Convert a `ConflictRecord` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `ConflictRecord` serde wire value (C string) to its integer discriminant. Returns -1 on
+ * invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_conflict_record_from_str(const char *name);
 
 /**
- * Convert an integer to a `CrisprLimitOperator` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `CrisprLimitOperator` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_crispr_limit_operator_from_i32(int32_t value);
 
 /**
- * Convert a `CrisprLimitOperator` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `CrisprLimitOperator` serde wire value (C string) to its integer discriminant. Returns
+ * -1 on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_crispr_limit_operator_from_str(const char *name);
 
 /**
- * Convert an integer to a `DiagnosticCategory` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `DiagnosticCategory` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_diagnostic_category_from_i32(int32_t value);
 
 /**
- * Convert a `DiagnosticCategory` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `DiagnosticCategory` serde wire value (C string) to its integer discriminant. Returns
+ * -1 on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_diagnostic_category_from_str(const char *name);
 
 /**
- * Convert an integer to a `DiagnosticLayer` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `DiagnosticLayer` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_diagnostic_layer_from_i32(int32_t value);
 
 /**
- * Convert a `DiagnosticLayer` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `DiagnosticLayer` serde wire value (C string) to its integer discriminant. Returns -1
+ * on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_diagnostic_layer_from_str(const char *name);
 
 /**
- * Convert an integer to a `DiagnosticRecord` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `DiagnosticRecord` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_diagnostic_record_from_i32(int32_t value);
 
 /**
- * Convert a `DiagnosticRecord` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `DiagnosticRecord` serde wire value (C string) to its integer discriminant. Returns -1
+ * on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_diagnostic_record_from_str(const char *name);
 
 /**
- * Convert an integer to a `DiagnosticSeverity` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `DiagnosticSeverity` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_diagnostic_severity_from_i32(int32_t value);
 
 /**
- * Convert a `DiagnosticSeverity` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `DiagnosticSeverity` serde wire value (C string) to its integer discriminant. Returns
+ * -1 on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_diagnostic_severity_from_str(const char *name);
 
 /**
- * Convert an integer to a `DirectorySessionMode` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `DirectorySessionMode` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_directory_session_mode_from_i32(int32_t value);
 
 /**
- * Convert a `DirectorySessionMode` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `DirectorySessionMode` serde wire value (C string) to its integer discriminant. Returns
+ * -1 on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_directory_session_mode_from_str(const char *name);
 
 /**
- * Convert an integer to a `LocalizationStatus` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `LocalizationStatus` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_localization_status_from_i32(int32_t value);
 
 /**
- * Convert a `LocalizationStatus` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `LocalizationStatus` serde wire value (C string) to its integer discriminant. Returns
+ * -1 on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_localization_status_from_str(const char *name);
 
 /**
- * Convert an integer to a `MergeProviderRole` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `MergeProviderRole` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_merge_provider_role_from_i32(int32_t value);
 
 /**
- * Convert a `MergeProviderRole` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `MergeProviderRole` serde wire value (C string) to its integer discriminant. Returns -1
+ * on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_merge_provider_role_from_str(const char *name);
 
@@ -10828,9 +10836,8 @@ int32_t smc_merge_provider_role_from_str(const char *name);
 int32_t smc_node_role_from_i32(int32_t value);
 
 /**
- * Convert a `NodeRole` serde wire value (C string) to its integer discriminant.
- * Returns -1 on invalid input. # Safety Caller must ensure `ptr` is a valid
- * pointer to a `c_char` or null.
+ * Convert a `NodeRole` serde wire value (C string) to its integer discriminant. Returns -1 on
+ * invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_node_role_from_str(const char *name);
 
@@ -10843,37 +10850,36 @@ int32_t smc_node_role_from_str(const char *name);
 int32_t smc_operation_kind_from_i32(int32_t value);
 
 /**
- * Convert a `OperationKind` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `OperationKind` serde wire value (C string) to its integer discriminant. Returns -1 on
+ * invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_operation_kind_from_str(const char *name);
 
 /**
- * Convert an integer to a `OperationPolicy` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `OperationPolicy` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_operation_policy_from_i32(int32_t value);
 
 /**
- * Convert a `OperationPolicy` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `OperationPolicy` serde wire value (C string) to its integer discriminant. Returns -1
+ * on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_operation_policy_from_str(const char *name);
 
 /**
- * Convert an integer to a `OwnerChangeKind` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `OwnerChangeKind` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_owner_change_kind_from_i32(int32_t value);
 
 /**
- * Convert a `OwnerChangeKind` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `OwnerChangeKind` serde wire value (C string) to its integer discriminant. Returns -1
+ * on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_owner_change_kind_from_str(const char *name);
 
@@ -10886,9 +10892,8 @@ int32_t smc_owner_change_kind_from_str(const char *name);
 int32_t smc_parse_severity_from_i32(int32_t value);
 
 /**
- * Convert a `ParseSeverity` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `ParseSeverity` serde wire value (C string) to its integer discriminant. Returns -1 on
+ * invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_parse_severity_from_str(const char *name);
 
@@ -10901,107 +10906,107 @@ int32_t smc_parse_severity_from_str(const char *name);
 int32_t smc_policy_surface_from_i32(int32_t value);
 
 /**
- * Convert a `PolicySurface` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `PolicySurface` serde wire value (C string) to its integer discriminant. Returns -1 on
+ * invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_policy_surface_from_str(const char *name);
 
 /**
- * Convert an integer to a `PortableCategory` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `PortableCategory` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_portable_category_from_i32(int32_t value);
 
 /**
- * Convert a `PortableCategory` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `PortableCategory` serde wire value (C string) to its integer discriminant. Returns -1
+ * on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_portable_category_from_str(const char *name);
 
 /**
- * Convert an integer to a `ResolutionStatus` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `ResolutionStatus` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_resolution_status_from_i32(int32_t value);
 
 /**
- * Convert a `ResolutionStatus` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `ResolutionStatus` serde wire value (C string) to its integer discriminant. Returns -1
+ * on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_resolution_status_from_str(const char *name);
 
 /**
- * Convert an integer to a `ResolutionStrategy` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `ResolutionStrategy` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_resolution_strategy_from_i32(int32_t value);
 
 /**
- * Convert a `ResolutionStrategy` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `ResolutionStrategy` serde wire value (C string) to its integer discriminant. Returns
+ * -1 on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_resolution_strategy_from_str(const char *name);
 
 /**
- * Convert an integer to a `ReviewDecisionAction` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `ReviewDecisionAction` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_review_decision_action_from_i32(int32_t value);
 
 /**
- * Convert a `ReviewDecisionAction` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `ReviewDecisionAction` serde wire value (C string) to its integer discriminant. Returns
+ * -1 on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_review_decision_action_from_str(const char *name);
 
 /**
- * Convert an integer to a `ReviewDiagnosticReason` variant. Returns -1 on
- * invalid input. # Safety Caller must ensure all pointer arguments are valid or
- * null. Returned pointers must be freed with the appropriate free function.
+ * Convert an integer to a `ReviewDiagnosticReason` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_review_diagnostic_reason_from_i32(int32_t value);
 
 /**
- * Convert a `ReviewDiagnosticReason` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `ReviewDiagnosticReason` serde wire value (C string) to its integer discriminant.
+ * Returns -1 on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char`
+ * or null.
  */
 int32_t smc_review_diagnostic_reason_from_str(const char *name);
 
 /**
- * Convert an integer to a `SourceEncoding` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `SourceEncoding` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_source_encoding_from_i32(int32_t value);
 
 /**
- * Convert a `SourceEncoding` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `SourceEncoding` serde wire value (C string) to its integer discriminant. Returns -1 on
+ * invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_source_encoding_from_str(const char *name);
 
 /**
- * Convert an integer to a `SourceRevision` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `SourceRevision` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_source_revision_from_i32(int32_t value);
 
 /**
- * Convert a `SourceRevision` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `SourceRevision` serde wire value (C string) to its integer discriminant. Returns -1 on
+ * invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_source_revision_from_str(const char *name);
 
@@ -11014,93 +11019,96 @@ int32_t smc_source_revision_from_str(const char *name);
 int32_t smc_source_role_from_i32(int32_t value);
 
 /**
- * Convert a `SourceRole` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `SourceRole` serde wire value (C string) to its integer discriminant. Returns -1 on
+ * invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_source_role_from_str(const char *name);
 
 /**
- * Convert an integer to a `TemplateDirectoryPlanStatus` variant. Returns -1 on
- * invalid input. # Safety Caller must ensure all pointer arguments are valid or
- * null. Returned pointers must be freed with the appropriate free function.
+ * Convert an integer to a `TemplateDirectoryPlanStatus` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_template_directory_plan_status_from_i32(int32_t value);
 
 /**
- * Convert a `TemplateDirectoryPlanStatus` serde wire value (C string) to its
- * integer discriminant. Returns -1 on invalid input. # Safety Caller must
- * ensure `ptr` is a valid pointer to a `c_char` or null.
+ * Convert a `TemplateDirectoryPlanStatus` serde wire value (C string) to its integer discriminant.
+ * Returns -1 on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char`
+ * or null.
  */
 int32_t smc_template_directory_plan_status_from_str(const char *name);
 
 /**
- * Convert an integer to a `TemplateExecutionAction` variant. Returns -1 on
- * invalid input. # Safety Caller must ensure all pointer arguments are valid or
- * null. Returned pointers must be freed with the appropriate free function.
+ * Convert an integer to a `TemplateExecutionAction` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_template_execution_action_from_i32(int32_t value);
 
 /**
- * Convert a `TemplateExecutionAction` serde wire value (C string) to its
- * integer discriminant. Returns -1 on invalid input. # Safety Caller must
- * ensure `ptr` is a valid pointer to a `c_char` or null.
+ * Convert a `TemplateExecutionAction` serde wire value (C string) to its integer discriminant.
+ * Returns -1 on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char`
+ * or null.
  */
 int32_t smc_template_execution_action_from_str(const char *name);
 
 /**
- * Convert an integer to a `TemplateStrategy` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `TemplateStrategy` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_template_strategy_from_i32(int32_t value);
 
 /**
- * Convert a `TemplateStrategy` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `TemplateStrategy` serde wire value (C string) to its integer discriminant. Returns -1
+ * on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_template_strategy_from_str(const char *name);
 
 /**
- * Convert an integer to a `TemplateTreeRunStatus` variant. Returns -1 on
- * invalid input. # Safety Caller must ensure all pointer arguments are valid or
- * null. Returned pointers must be freed with the appropriate free function.
+ * Convert an integer to a `TemplateTreeRunStatus` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_template_tree_run_status_from_i32(int32_t value);
 
 /**
- * Convert a `TemplateTreeRunStatus` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `TemplateTreeRunStatus` serde wire value (C string) to its integer discriminant.
+ * Returns -1 on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char`
+ * or null.
  */
 int32_t smc_template_tree_run_status_from_str(const char *name);
 
 /**
- * Convert an integer to a `ThreeWayMergeOutcome` variant. Returns -1 on invalid
- * input. # Safety Caller must ensure all pointer arguments are valid or null.
+ * Convert an integer to a `ThreeWayMergeOutcome` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
  * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_three_way_merge_outcome_from_i32(int32_t value);
 
 /**
- * Convert a `ThreeWayMergeOutcome` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `ThreeWayMergeOutcome` serde wire value (C string) to its integer discriminant. Returns
+ * -1 on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char` or null.
  */
 int32_t smc_three_way_merge_outcome_from_str(const char *name);
 
 /**
- * Convert an integer to a `WorkflowExecutionOwner` variant. Returns -1 on
- * invalid input. # Safety Caller must ensure all pointer arguments are valid or
- * null. Returned pointers must be freed with the appropriate free function.
+ * Convert an integer to a `WorkflowExecutionOwner` variant. Returns -1 on invalid input.
+ * # Safety
+ * Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
  */
 int32_t smc_workflow_execution_owner_from_i32(int32_t value);
 
 /**
- * Convert a `WorkflowExecutionOwner` serde wire value (C string) to its integer
- * discriminant. Returns -1 on invalid input. # Safety Caller must ensure `ptr`
- * is a valid pointer to a `c_char` or null.
+ * Convert a `WorkflowExecutionOwner` serde wire value (C string) to its integer discriminant.
+ * Returns -1 on invalid input. # Safety Caller must ensure `ptr` is a valid pointer to a `c_char`
+ * or null.
  */
 int32_t smc_workflow_execution_owner_from_str(const char *name);
 
@@ -11162,9 +11170,10 @@ char *smc_attachment_hint_to_string(SMCAlefHandle handle);
 void smc_conflict_alternative_state_free(SMCAlefHandle handle);
 
 /**
- * Serialize a `ConflictAlternativeState` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `ConflictAlternativeState` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_conflict_alternative_state_to_json(SMCAlefHandle handle);
 
@@ -11636,9 +11645,10 @@ char *smc_review_decision_action_to_string(SMCAlefHandle handle);
 void smc_review_diagnostic_reason_free(SMCAlefHandle handle);
 
 /**
- * Serialize a `ReviewDiagnosticReason` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `ReviewDiagnosticReason` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_review_diagnostic_reason_to_json(SMCAlefHandle handle);
 
@@ -11735,9 +11745,10 @@ char *smc_source_role_to_string(SMCAlefHandle handle);
 void smc_template_directory_plan_status_free(SMCAlefHandle handle);
 
 /**
- * Serialize a `TemplateDirectoryPlanStatus` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateDirectoryPlanStatus` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_directory_plan_status_to_json(SMCAlefHandle handle);
 
@@ -11759,9 +11770,10 @@ char *smc_template_directory_plan_status_to_string(SMCAlefHandle handle);
 void smc_template_execution_action_free(SMCAlefHandle handle);
 
 /**
- * Serialize a `TemplateExecutionAction` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateExecutionAction` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_execution_action_to_json(SMCAlefHandle handle);
 
@@ -11808,9 +11820,10 @@ char *smc_template_strategy_to_string(SMCAlefHandle handle);
 void smc_template_tree_run_status_free(SMCAlefHandle handle);
 
 /**
- * Serialize a `TemplateTreeRunStatus` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `TemplateTreeRunStatus` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_template_tree_run_status_to_json(SMCAlefHandle handle);
 
@@ -11857,9 +11870,10 @@ char *smc_three_way_merge_outcome_to_string(SMCAlefHandle handle);
 void smc_workflow_execution_owner_free(SMCAlefHandle handle);
 
 /**
- * Serialize a `WorkflowExecutionOwner` to a JSON string. Returns null on
- * failure. # Safety `handle` must be a valid, non-zero handle returned by a
- * `smc` function. The returned string must be freed with `smc_free_string`.
+ * Serialize a `WorkflowExecutionOwner` to a JSON string. Returns null on failure.
+ * # Safety
+ * `handle` must be a valid, non-zero handle returned by a `smc` function.
+ * The returned string must be freed with `smc_free_string`.
  */
 char *smc_workflow_execution_owner_to_json(SMCAlefHandle handle);
 
@@ -11877,210 +11891,189 @@ char *smc_workflow_execution_owner_to_string(SMCAlefHandle handle);
  * Apply caller-selected UTF-8 byte edits atomically using the shared renderer.
  * Invalid, overlapping, ambiguous or non-character-boundary edits fail without
  * output. A successful result does not claim a syntax check or AST selection.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_apply_explicit_source_edits(SMCAlefHandle request,
-                                              SMCAlefHandle limits);
+SMCAlefHandle smc_apply_explicit_source_edits(SMCAlefHandle request, SMCAlefHandle limits);
 
 /**
  * An empty query list only inventories declarations. Explicit queries may load
  * parsers/grammars while probing, but never parse source or execute a merge.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_capability_manifest(const char *queries,
-                                      SMCAlefHandle limits);
+SMCAlefHandle smc_capability_manifest(const char *queries, SMCAlefHandle limits);
 
 /**
  * All observations and declarations use one immutable registry snapshot even
  * if a callback mutates registration. Results are observations, not leases.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_capability_manifest_controlled(const char *queries,
-                                                 SMCAlefHandle limits,
+SMCAlefHandle smc_capability_manifest_controlled(const char *queries, SMCAlefHandle limits,
                                                  SMCAlefHandle control);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_create_operation_control(void);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_diff_native_owners(SMCAlefHandle request,
-                                     SMCAlefHandle limits);
+SMCAlefHandle smc_diff_native_owners(SMCAlefHandle request, SMCAlefHandle limits);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_diff_native_owners_controlled(SMCAlefHandle request,
-                                                SMCAlefHandle limits,
+SMCAlefHandle smc_diff_native_owners_controlled(SMCAlefHandle request, SMCAlefHandle limits,
                                                 SMCAlefHandle control);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_execute_operation(SMCAlefHandle request,
-                                    SMCAlefHandle limits);
+SMCAlefHandle smc_execute_operation(SMCAlefHandle request, SMCAlefHandle limits);
 
 /**
  * The deadline covers normalization, registry selection, parsing, Rust
  * analysis/merge and verification. Source references must be resolved by the
  * caller into checked inline content; this API never opens a named path.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_execute_operation_controlled(SMCAlefHandle request,
-                                               SMCAlefHandle limits,
+SMCAlefHandle smc_execute_operation_controlled(SMCAlefHandle request, SMCAlefHandle limits,
                                                SMCAlefHandle control);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_execute_workflow_batch(const char *provider_id,
-                                         SMCAlefHandle request,
+SMCAlefHandle smc_execute_workflow_batch(const char *provider_id, SMCAlefHandle request,
                                          SMCAlefHandle limits);
 
 /**
  * Reject changed registry state before probes or execution; not full preflight.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_execute_workflow_batch_at_registry(const char *provider_id,
-                                                     SMCAlefHandle request,
-                                                     SMCAlefHandle expected,
-                                                     SMCAlefHandle limits);
+SMCAlefHandle smc_execute_workflow_batch_at_registry(const char *provider_id, SMCAlefHandle request,
+                                                     SMCAlefHandle expected, SMCAlefHandle limits);
 
 /**
- * Controlled registry-state guard, not authentication or loaded-asset
- * validation.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * Controlled registry-state guard, not authentication or loaded-asset validation.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_execute_workflow_batch_at_registry_controlled(
-    const char *provider_id, SMCAlefHandle request, SMCAlefHandle expected,
-    SMCAlefHandle limits, SMCAlefHandle control);
+SMCAlefHandle smc_execute_workflow_batch_at_registry_controlled(const char *provider_id,
+                                                                SMCAlefHandle request,
+                                                                SMCAlefHandle expected,
+                                                                SMCAlefHandle limits,
+                                                                SMCAlefHandle control);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_execute_workflow_batch_controlled(const char *provider_id,
-                                                    SMCAlefHandle request,
-                                                    SMCAlefHandle limits,
-                                                    SMCAlefHandle control);
+SMCAlefHandle smc_execute_workflow_batch_controlled(const char *provider_id, SMCAlefHandle request,
+                                                    SMCAlefHandle limits, SMCAlefHandle control);
 
 /**
  * Rust derives Python owners from LibCST facts and uses the same shared merge
  * engine as YAML. This initial profile supports whole top-level declarations.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_merge_python_declarations(const char *requests,
-                                            SMCAlefHandle limits);
+SMCAlefHandle smc_merge_python_declarations(const char *requests, SMCAlefHandle limits);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_merge_python_declarations_controlled(const char *requests,
-                                                       SMCAlefHandle limits,
+SMCAlefHandle smc_merge_python_declarations_controlled(const char *requests, SMCAlefHandle limits,
                                                        SMCAlefHandle control);
 
 /**
  * Experimental block-mapping profile. Native hosts provide syntax only;
- * YAML analysis and shared matching/conflict/render execution remain
- * Rust-owned. No implicit base, parser substitution, textual fallback, or host
- * merge exists.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * YAML analysis and shared matching/conflict/render execution remain Rust-owned.
+ * No implicit base, parser substitution, textual fallback, or host merge exists.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_merge_yaml_mapping(const char *requests,
-                                     SMCAlefHandle limits);
+SMCAlefHandle smc_merge_yaml_mapping(const char *requests, SMCAlefHandle limits);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_merge_yaml_mapping_controlled(const char *requests,
-                                                SMCAlefHandle limits,
+SMCAlefHandle smc_merge_yaml_mapping_controlled(const char *requests, SMCAlefHandle limits,
                                                 SMCAlefHandle control);
 
 /**
  * Does not load or probe parsers. A declared profile may be unavailable in a
  * host until a compatible parser is registered and successfully negotiated.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 char *smc_native_merge_profiles(void);
 
 /**
- * Return the byte length of the C string most recently returned by
- * `smc_native_merge_profiles` on this thread. Returns 0 when the primary call
- * returned null or failed before producing a string. Enables safe slice
- * construction in Zig and Java FFM Panama without a NUL-scan.
- * \note SAFETY: Pointer arguments are ignored and are present only to keep the
- * companion ABI aligned with `smc_native_merge_profiles`.
+ * Return the byte length of the C string most recently returned by `smc_native_merge_profiles` on
+ * this thread. Returns 0 when the primary call returned null or failed before producing a string.
+ * Enables safe slice construction in Zig and Java FFM Panama without a NUL-scan.
+ * \note SAFETY: Pointer arguments are ignored and are present only to keep the companion ABI
+ * aligned with `smc_native_merge_profiles`.
  */
 uintptr_t smc_native_merge_profiles_len(void);
 
 /**
  * Declarations for execute_operation, distinct from the two existing explicit
  * native entry points. All requests still undergo syntax/policy/parse checks.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_operation_profile_catalog(void);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 char *smc_parse_sources(const char *requests, SMCAlefHandle limits);
 
 /**
- * Return the byte length of the C string most recently returned by
- * `smc_parse_sources` on this thread. Returns 0 when the primary call returned
- * null or failed before producing a string. Enables safe slice construction in
- * Zig and Java FFM Panama without a NUL-scan.
- * \note SAFETY: Pointer arguments are ignored and are present only to keep the
- * companion ABI aligned with `smc_parse_sources`.
+ * Return the byte length of the C string most recently returned by `smc_parse_sources` on this
+ * thread. Returns 0 when the primary call returned null or failed before producing a string.
+ * Enables safe slice construction in Zig and Java FFM Panama without a NUL-scan.
+ * \note SAFETY: Pointer arguments are ignored and are present only to keep the companion ABI
+ * aligned with `smc_parse_sources`.
  */
 uintptr_t smc_parse_sources_len(const char *_requests, SMCAlefHandle _limits);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 char *smc_parse_sources_controlled(const char *requests, SMCAlefHandle limits,
                                    SMCAlefHandle control);
 
 /**
- * Return the byte length of the C string most recently returned by
- * `smc_parse_sources_controlled` on this thread. Returns 0 when the primary
- * call returned null or failed before producing a string. Enables safe slice
- * construction in Zig and Java FFM Panama without a NUL-scan.
- * \note SAFETY: Pointer arguments are ignored and are present only to keep the
- * companion ABI aligned with `smc_parse_sources_controlled`.
+ * Return the byte length of the C string most recently returned by `smc_parse_sources_controlled`
+ * on this thread. Returns 0 when the primary call returned null or failed before producing a
+ * string. Enables safe slice construction in Zig and Java FFM Panama without a NUL-scan.
+ * \note SAFETY: Pointer arguments are ignored and are present only to keep the companion ABI
+ * aligned with `smc_parse_sources_controlled`.
  */
-uintptr_t smc_parse_sources_controlled_len(const char *_requests,
-                                           SMCAlefHandle _limits,
+uintptr_t smc_parse_sources_controlled_len(const char *_requests, SMCAlefHandle _limits,
                                            SMCAlefHandle _control);
 
 /**
  * Observe registered parser declarations without loading or probing providers.
- * This is not an availability report, merge capability manifest or authority
- * grant.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * This is not an availability report, merge capability manifest or authority grant.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_parser_registry_inventory(void);
 
@@ -12088,28 +12081,25 @@ SMCAlefHandle smc_parser_registry_inventory(void);
  * Probe source-free eligibility using the same snapshot/selection algorithm as
  * parse dispatch. No eligible parser is a report, not an exception or fallback.
  * Parse byte/node limits do not apply because no document is submitted; timeout
- * and cancellation still apply around callbacks, which are not forcibly
- * stopped.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * and cancellation still apply around callbacks, which are not forcibly stopped.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_parser_selection_report(SMCAlefHandle request,
-                                          SMCAlefHandle limits);
+SMCAlefHandle smc_parser_selection_report(SMCAlefHandle request, SMCAlefHandle limits);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_parser_selection_report_controlled(SMCAlefHandle request,
-                                                     SMCAlefHandle limits,
+SMCAlefHandle smc_parser_selection_report_controlled(SMCAlefHandle request, SMCAlefHandle limits,
                                                      SMCAlefHandle control);
 
 /**
  * Read local template/destination directories and return a plan. No apply API
  * is exposed here. allowed_families retains its historical report-only meaning
  * and is not an access-control boundary. Callers must authorize both roots.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_plan_template_directory(SMCAlefHandle options);
 
@@ -12117,64 +12107,61 @@ SMCAlefHandle smc_plan_template_directory(SMCAlefHandle options);
  * Register a Rust-owned parser restricted to usable local or already-loaded
  * grammars. Missing or unusable grammars fail closed without acquisition during
  * probe/parse. Registration itself does not load grammars or replace providers.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_register_cached_language_pack_parser(const char *id,
-                                                       const char *language);
+SMCAlefHandle smc_register_cached_language_pack_parser(const char *id, const char *language);
 
 /**
  * Opt into a Rust-owned language-pack parser in TreeHaver's shared registry.
  * Registration does not load a grammar or replace an existing provider. Probe
- * and parse may load/download grammars under the configured language-pack
- * policy.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * and parse may load/download grammars under the configured language-pack policy.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-SMCAlefHandle smc_register_language_pack_parser(const char *id,
-                                                const char *language);
+SMCAlefHandle smc_register_language_pack_parser(const char *id, const char *language);
 
 /**
  * Register the native Rust `syn` parser in the shared parser registry.
  * Registration is explicit and idempotent for this provider ID.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_register_rust_syn_parser(const char *id);
 
 /**
- * Register the native TypeScript/TSX `oxc_parser` provider in the shared parser
- * registry. Registration is explicit and idempotent for this provider ID.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * Register the native TypeScript/TSX `oxc_parser` provider in the shared parser registry.
+ * Registration is explicit and idempotent for this provider ID.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_register_typescript_oxc_parser(const char *id);
 
 /**
  * Historical package responsibilities and coordinates, not supported-runtime
  * declarations or a capability/default-authority manifest.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_report_structural_boundary(void);
 
 /**
  * Describe destination policy without resolving or mutating a destination.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_report_structural_destination(SMCAlefHandle request);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_report_structural_limit(SMCAlefHandle request);
 
 /**
  * Describe match vocabulary without matching or selecting any source.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_report_structural_match(SMCAlefHandle request);
 
@@ -12182,27 +12169,27 @@ SMCAlefHandle smc_report_structural_match(SMCAlefHandle request);
  * Describe structural operation profiles in input order using ast-crispr's
  * shared classification. Unknown strings remain observable as unknown; reports
  * are not validation that an operation can execute against a document.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_report_structural_operations(const char *requests);
 
 /**
  * Describe selection vocabulary without executing a structural selector.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_report_structural_selection(SMCAlefHandle request);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_report_template_options(SMCAlefHandle options);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_report_template_profile(SMCAlefHandle request);
 
@@ -12210,14 +12197,14 @@ SMCAlefHandle smc_report_template_profile(SMCAlefHandle request);
  * Remove a native or host parser for future operations. Existing snapshots
  * remain valid. Concurrent registry mutations can cause StaleGeneration;
  * unknown IDs fail rather than silently succeeding.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 int32_t smc_unregister_parser_provider(const char *id);
 
 /**
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 SMCAlefHandle smc_workflow_registry_inventory(void);
 
@@ -12225,43 +12212,38 @@ SMCAlefHandle smc_workflow_registry_inventory(void);
  * Source-free selection observations, not availability or preflight approval.
  * Probes follow registered parser policy and may load/acquire grammars: callers
  * requiring offline behavior must register cached-only providers. This is not
- * host health, authenticated availability, execution approval or a preflight
- * lease.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * host health, authenticated availability, execution approval or a preflight lease.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
 char *smc_workflow_selection_reports(const char *queries, SMCAlefHandle limits);
 
 /**
- * Return the byte length of the C string most recently returned by
- * `smc_workflow_selection_reports` on this thread. Returns 0 when the primary
- * call returned null or failed before producing a string. Enables safe slice
- * construction in Zig and Java FFM Panama without a NUL-scan.
- * \note SAFETY: Pointer arguments are ignored and are present only to keep the
- * companion ABI aligned with `smc_workflow_selection_reports`.
+ * Return the byte length of the C string most recently returned by `smc_workflow_selection_reports`
+ * on this thread. Returns 0 when the primary call returned null or failed before producing a
+ * string. Enables safe slice construction in Zig and Java FFM Panama without a NUL-scan.
+ * \note SAFETY: Pointer arguments are ignored and are present only to keep the companion ABI
+ * aligned with `smc_workflow_selection_reports`.
  */
-uintptr_t smc_workflow_selection_reports_len(const char *_queries,
-                                             SMCAlefHandle _limits);
+uintptr_t smc_workflow_selection_reports_len(const char *_queries, SMCAlefHandle _limits);
 
 /**
  * Controlled source-free selection observations, not preflight approval.
- * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
- * Returned pointers must be freed with the appropriate free function.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null. Returned pointers must
+ * be freed with the appropriate free function.
  */
-char *smc_workflow_selection_reports_controlled(const char *queries,
-                                                SMCAlefHandle limits,
+char *smc_workflow_selection_reports_controlled(const char *queries, SMCAlefHandle limits,
                                                 SMCAlefHandle control);
 
 /**
  * Return the byte length of the C string most recently returned by
- * `smc_workflow_selection_reports_controlled` on this thread. Returns 0 when
- * the primary call returned null or failed before producing a string. Enables
- * safe slice construction in Zig and Java FFM Panama without a NUL-scan.
- * \note SAFETY: Pointer arguments are ignored and are present only to keep the
- * companion ABI aligned with `smc_workflow_selection_reports_controlled`.
+ * `smc_workflow_selection_reports_controlled` on this thread. Returns 0 when the primary call
+ * returned null or failed before producing a string. Enables safe slice construction in Zig and
+ * Java FFM Panama without a NUL-scan.
+ * \note SAFETY: Pointer arguments are ignored and are present only to keep the companion ABI
+ * aligned with `smc_workflow_selection_reports_controlled`.
  */
-uintptr_t smc_workflow_selection_reports_controlled_len(const char *_queries,
-                                                        SMCAlefHandle _limits,
+uintptr_t smc_workflow_selection_reports_controlled_len(const char *_queries, SMCAlefHandle _limits,
                                                         SMCAlefHandle _control);
 
 #endif /* SMC_H */
