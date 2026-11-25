@@ -637,6 +637,7 @@ fn owner_policy_with_kinds(
         ignored_kinds: &["inner_attribute_item", "shebang"],
         wrapper_kinds: &[],
         prefix_node_kinds: &["attribute_item"],
+        leading_container_kinds: &["attributes"],
         name_fields: &["name"],
         fallback_name_kinds: &[
             "identifier",

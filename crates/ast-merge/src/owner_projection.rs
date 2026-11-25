@@ -21,6 +21,10 @@ pub struct NamedOwnerProjectionPolicy<'a> {
     pub wrapper_kinds: &'a [&'a str],
     /// Top-level syntax nodes that the family treats as declaration prefixes.
     pub prefix_node_kinds: &'a [&'a str],
+    /// Child kinds that hold an owner's leading attributes and comments *inside* the
+    /// owner node (tree-sitter-rust 1.27 `attributes`), as opposed to preceding
+    /// siblings (`prefix_node_kinds`). Their comments are the owner's attached comments.
+    pub leading_container_kinds: &'a [&'a str],
     pub name_fields: &'a [&'a str],
     pub fallback_name_kinds: &'a [&'a str],
     pub accept_any_named_kind: bool,
@@ -157,11 +161,20 @@ pub fn project_named_top_level_analysis_with_classified_errors(
             .collect::<Vec<_>>();
         owner_nodes.push(top_level.id.clone());
         owner_node_ids.insert(path.clone(), owner_nodes);
-        let comment_ids = prefix_nodes
-            .iter()
+        let mut comment_ids = index
+            .children(top_level)
+            .into_iter()
+            .filter(|child| policy.leading_container_kinds.contains(&child.kind.as_str()))
+            .flat_map(|container| index.descendants(container))
             .filter(|node| node.role == NodeRole::Comment)
             .map(|node| node.id.clone())
             .collect::<Vec<_>>();
+        comment_ids.extend(
+            prefix_nodes
+                .iter()
+                .filter(|node| node.role == NodeRole::Comment)
+                .map(|node| node.id.clone()),
+        );
         if !comment_ids.is_empty() {
             attached_comment_node_ids.insert(path.clone(), comment_ids);
         }
@@ -174,7 +187,7 @@ pub fn project_named_top_level_analysis_with_classified_errors(
             start_byte,
             end_byte,
             start_line: start_node.span.start_point.row + 1,
-            end_line: top_level.span.end_point.row + 1,
+            end_line: top_level.span.last_line(),
         });
     }
 
@@ -399,7 +412,7 @@ fn attach_normalized_comment_ranges(
                     .max_by_key(|node| node.span.range.end_byte)
                     .expect("comment node list is nonempty");
                 owner.end_byte = owner.end_byte.max(last.span.range.end_byte);
-                owner.end_line = owner.end_line.max(last.span.end_point.row + 1);
+                owner.end_line = owner.end_line.max(last.span.last_line());
             }
         }
         owner.fingerprint = source[owner.start_byte..owner.end_byte].to_string();
@@ -552,6 +565,7 @@ mod tests {
             ignored_kinds: &["import_statement"],
             wrapper_kinds: &["export_statement"],
             prefix_node_kinds: &[],
+            leading_container_kinds: &[],
             name_fields: &["name"],
             fallback_name_kinds: &[],
             accept_any_named_kind: false,
@@ -682,6 +696,7 @@ mod tests {
             ignored_kinds: &[],
             wrapper_kinds: &[],
             prefix_node_kinds: &[],
+            leading_container_kinds: &[],
             name_fields: &["name"],
             fallback_name_kinds: &[],
             accept_any_named_kind: true,

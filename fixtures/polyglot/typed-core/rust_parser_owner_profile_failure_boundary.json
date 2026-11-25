@@ -59,7 +59,7 @@
         "rust_syn_host_merge_ok": true,
         "rust_syn_host_merge_output": "/// unit test docs\n#[test]\nfn unit() { assert_eq!(1, 2); }\n\nfn stable() { 2 }\n",
         "native_rust_ok": true,
-        "tree_sitter_rust_ok": false,
+        "tree_sitter_rust_ok": true,
         "rust_family_category": "unsupported_feature",
         "rust_treesitter_ok": true,
         "rust_treesitter_merge_ok": true,

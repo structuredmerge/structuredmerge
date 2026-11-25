@@ -340,12 +340,7 @@ fn source_lines(source: &str) -> Vec<String> {
 
 fn normalized_layout_owner(node: &NormalizedTreeNode, line_count: usize) -> LayoutOwner {
     let start_line = (node.span.start_point.row + 1).min(line_count.max(1));
-    let end_line =
-        if node.span.end_point.column == 0 && node.span.end_point.row > node.span.start_point.row {
-            node.span.end_point.row
-        } else {
-            node.span.end_point.row + 1
-        };
+    let end_line = node.span.last_line();
     LayoutOwner {
         owner_id: node.id.clone(),
         start_line,

@@ -842,11 +842,7 @@ fn node_start_line(node: &NormalizedTreeNode) -> usize {
 }
 
 fn node_end_line(node: &NormalizedTreeNode) -> usize {
-    if node.span.end_point.column == 0 && node.span.end_point.row > node.span.start_point.row {
-        node.span.end_point.row
-    } else {
-        node.span.end_point.row + 1
-    }
+    node.span.last_line()
 }
 
 fn normalize_toml_comment(text: &str) -> String {

@@ -126,12 +126,7 @@ impl LanguagePackProvider {
         let mut nodes: Vec<ParseNode> = Vec::new();
         let mut comments = Vec::new();
         // Iterative traversal avoids adding a Rust call-stack limit to the tree.
-        let language = request.language.as_str();
-        let mut stack = vec![(
-            crate::projection::Projected::root(root, language, text),
-            None::<usize>,
-            None::<String>,
-        )];
+        let mut stack = vec![(root, None::<usize>, None::<String>)];
         while let Some((node, parent, field_name)) = stack.pop() {
             context.check().map_err(|e| fault("execution.interrupted", format!("{e:?}")))?;
             if nodes.len() >= context.max_nodes {
@@ -140,15 +135,24 @@ impl LanguagePackProvider {
             let index = nodes.len();
             let id = format!("tslp:{}:{index}", request.language);
             let fragment = text
-                .get(node.start_byte..node.end_byte)
+                .get(node.start_byte()..node.end_byte())
                 .ok_or_else(|| fault("parser.invalid_span", "native span cuts source bytes"))?;
-            let role = crate::tree_sitter_node_role(&node, fragment);
+            let mut role = crate::tree_sitter_node_role(&node, fragment);
+            // Pieces of a comment (tree-sitter-rust's `doc_comment` payload inside a
+            // doc `line_comment`) are not independent comments.
+            if role == NodeRole::Comment
+                && parent.is_some_and(|parent| nodes[parent].role == NodeRole::Comment)
+            {
+                role = NodeRole::Token;
+            }
+            let start = node.start_position();
+            let end = node.end_position();
             // The parse contract requires every native Comment-role node to
             // have a comment record, even without optional comment enrichment.
             if role == NodeRole::Comment {
                 comments.push(ParseComment {
                     node_id: id.clone(),
-                    native_kind: node.kind.clone(),
+                    native_kind: node.kind(),
                     attachment_hint: AttachmentHint::Unknown,
                     metadata: Default::default(),
                     extra: Default::default(),
@@ -165,39 +169,43 @@ impl LanguagePackProvider {
             }
             nodes.push(ParseNode {
                 id,
-                kind: node.kind.clone(),
-                native_type: node.kind.clone(),
+                kind: node.kind(),
+                native_type: node.kind(),
                 role,
-                named: node.node.is_named(),
-                missing: node.node.is_missing(),
-                has_error: node.node.has_error(),
+                named: node.is_named(),
+                missing: node.is_missing(),
+                has_error: node.has_error(),
                 span: SourceSpan {
-                    range: ByteRange { start_byte: node.start_byte, end_byte: node.end_byte },
-                    start_point: SourcePoint {
-                        row: node.start_point.0,
-                        column: node.start_point.1,
-                    },
-                    end_point: SourcePoint { row: node.end_point.0, column: node.end_point.1 },
+                    range: ByteRange { start_byte: node.start_byte(), end_byte: node.end_byte() },
+                    start_point: SourcePoint { row: start.row, column: start.column },
+                    end_point: SourcePoint { row: end.row, column: end.column },
                 },
                 parent_id: parent.map(|p| nodes[p].id.clone()),
                 children: vec![],
                 semantic_roles: vec![],
                 unsupported_features: vec![],
                 extensions: if request.options.native_extensions {
-                    vec![node_flags(serde_json::json!({"extra": node.node.is_extra()}))]
+                    vec![node_flags(serde_json::json!({"extra": node.is_extra()}))]
                 } else {
                     vec![]
                 },
                 metadata: Default::default(),
                 extra: Default::default(),
             });
-            let children = node.children(language, text);
-            if children.len() > context.max_nodes.saturating_sub(nodes.len() + stack.len()) {
+            if node.child_count() > context.max_nodes.saturating_sub(nodes.len() + stack.len()) {
                 return Err(fault("resource.limit", "native node projection exceeds budget"));
             }
-            stack.extend(
-                children.into_iter().rev().map(|(child, field)| (child, Some(index), field)),
-            );
+            let mut children = Vec::new();
+            let mut cursor = node.walk();
+            if cursor.goto_first_child() {
+                loop {
+                    children.push((cursor.node(), Some(index), cursor.field_name()));
+                    if !cursor.goto_next_sibling() {
+                        break;
+                    }
+                }
+            }
+            stack.extend(children.into_iter().rev());
         }
         let diagnostics = if ok {
             vec![]

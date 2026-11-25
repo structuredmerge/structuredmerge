@@ -11,8 +11,7 @@
     "output": "// Alias owner comment\npub trait Sendable = Send + Sync + 'static; // Alias trailing comment\n\n/// Stable function contract.\nfn stable() -> i32 { 2 }\n",
     "trait_alias_path": "/trait_alias:Sendable",
     "ruby_tree_sitter_boundary": {
-      "ok": false,
-      "diagnostic_category": "parse_error"
+      "ok": true
     }
   }
 }
