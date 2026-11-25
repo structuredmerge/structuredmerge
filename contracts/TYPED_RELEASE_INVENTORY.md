@@ -52,7 +52,7 @@ The Ruby release workflow now has a post-publication job that installs the exact
 RubyGems version into a clean `GEM_HOME`, checks that both the gem and native
 extension load from that home, validates the installed RBS, and runs the core,
 generated e2e, and consumer-app specs. The new verifier passed locally against
-the 0.2.3 x86_64 Linux platform-gem candidate (53 core, 110 generated, and 110
+the 0.3.0 x86_64 Linux platform-gem candidate (53 core, 110 generated, and 110
 consumer-app examples). It did not test the source gem from RubyGems: that gem is
 not published, and the registry-backed `structuredmerge-core` Cargo dependency
 remains unavailable as described above. No registry package was published; the

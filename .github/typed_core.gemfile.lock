@@ -1,7 +1,7 @@
 PATH
   remote: ../packages/ruby
   specs:
-    structuredmerge-core (0.2.3)
+    structuredmerge-core (0.3.0)
       rb_sys (>= 0.9.130, < 0.10)
       sorbet-runtime (~> 0.6)
       version_gem (~> 1.1, >= 1.1.17)
@@ -92,7 +92,7 @@ GEM
     silent_stream (1.0.13)
       logger (~> 1.2)
       version_gem (>= 1.1.8, < 3)
-    sorbet-runtime (0.6.13724)
+    sorbet-runtime (0.6.13728)
     stone_checksums (1.0.11)
       version_gem (~> 1.1, >= 1.1.17)
     strings-ansi (0.2.0)
@@ -171,10 +171,10 @@ CHECKSUMS
   ruby_version (1.0.3) sha256=5930f9950746b7e6c973184398ee364ee7440b170fef7922b9f5cdf317f1ccb5
   runtime_groups (0.1.5) sha256=67ec26ded158b9ae80371b4342a346aad79d904d1245cd579fb7e06d874b2432
   silent_stream (1.0.13) sha256=beed122ee712d968d9029b169a8e293df149a5fba8b7ea39165b418b70063666
-  sorbet-runtime (0.6.13724) sha256=573bf33330a92ddf4ec25b4b8149293959c8c5de10de5198581c833021c46624
+  sorbet-runtime (0.6.13728) sha256=90db0140031c7b06a5dca2ffe06d27872ebe56e39cdd8cba5835dec09e44cd7f
   stone_checksums (1.0.11) sha256=b9f2f188cb3b47375774cb77b57bf7477d7ae104e57c91ca48cecb472aa42d66
   strings-ansi (0.2.0) sha256=90262d760ea4a94cc2ae8d58205277a343409c288cbe7c29416b1826bd511c88
-  structuredmerge-core (0.2.3)
+  structuredmerge-core (0.3.0)
   thor (1.5.0) sha256=e3a9e55fe857e44859ce104a84675ab6e8cd59c650a49106a05f55f136425e73
   timecop (0.9.11) sha256=41284dc6e5041f2184f781ace766f942108c842f8d8c1386a26e6343decc7542
   timecop-rspec (1.0.3) sha256=005f14841bb606dcaefb060e321b5388e2e59537742bee8b3a9a9a40e598fab9

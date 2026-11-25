@@ -1,6 +1,6 @@
 [package]
 name = "structuredmerge-binary-merge"
-version = "0.2.3"
+version = "0.3.0"
 authors = ["Peter H. Boling"]
 edition = "2024"
 description = "Binary preservation planning and diagnostics for Structured Merge"
@@ -13,8 +13,8 @@ name = "binary_merge"
 path = "src/lib.rs"
 
 [dependencies]
-ast-merge = { version = "0.2.3", path = "../ast-merge" }
-tree-haver = { version = "0.2.3", path = "../tree-haver" }
+ast-merge = { version = "0.3.0", path = "../ast-merge" }
+tree-haver = { version = "0.3.0", path = "../tree-haver" }
 
 [dev-dependencies]
 serde_json = "1.0"
