@@ -1,21 +1,17 @@
-"""The scheduled pin-bump workflow must stay runnable and policy-compliant."""
+"""The scheduled pin-bump workflow must stay runnable and policy-compliant.
+
+Plain text assertions: the CI jobs that run these tests do not ship PyYAML.
+"""
 import pathlib
 import re
-
-import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/pin-bump.yml"
 
 
-def load():
-    return yaml.safe_load(WORKFLOW.read_text())
-
-
 def test_runs_on_a_schedule_and_on_demand():
-    triggers = load()[True]  # PyYAML parses the bare key `on` as boolean True
-    assert triggers["schedule"][0]["cron"]
-    assert "workflow_dispatch" in triggers
+    text = WORKFLOW.read_text()
+    assert re.search(r"^on:\n  schedule:\n    - cron: \"[^\"]+\"\n  workflow_dispatch:", text, re.M)
 
 
 def test_every_action_is_pinned_to_a_commit_sha():
