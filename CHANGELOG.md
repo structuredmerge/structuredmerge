@@ -4,6 +4,10 @@
 
 ### Added
 
+- [kc] scheduled-pin-bump: Add the `Pin bump` workflow (every six hours) and `workspace-scripts/bump_pins.sh`, which move every tree-sitter-language-pack, alef and polylint pin to the latest release (cargo regenerates `Cargo.lock`; the alef checksum comes from GitHub's published digest), regenerate alef output, run the gates, and open or update a pull request (a draft when a gate fails and needs a human).
+
+- [kc] tree-sitter-language-pack-1-27-3: Upgrade the Rust Tree-sitter Language Pack to 1.27.3 (pinned `=1.27.3`); ships with the next release.
+
 ### Changed
 
 ### Deprecated

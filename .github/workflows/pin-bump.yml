@@ -1,0 +1,93 @@
+name: Pin bump
+
+# tree-sitter-language-pack, alef and polylint release more than once a day and
+# every stale or loose pin has bitten a release. Every six hours, move all pins to
+# the latest releases, regenerate, run the gates and open a PR (a draft when a gate
+# fails and needs a human). The logic lives in workspace-scripts/bump_pins.sh so the
+# same thing runs locally.
+#
+# Optional repository secret PIN_BUMP_TOKEN (a PAT with contents + pull-requests
+# write): pull requests opened with the default token do not trigger other workflows,
+# so without it the gates run here but the Current workflow does not run on the PR.
+# The repository setting "Allow GitHub Actions to create and approve pull requests"
+# must be enabled.
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: pin-bump
+  cancel-in-progress: false
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_BUILD_WARNINGS: warn
+
+jobs:
+  bump:
+    name: Bump pins and open a PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PIN_BUMP_TOKEN || github.token }}
+      - name: Place shared fixtures beside the kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The fixtures revision is pinned (and bumped) in current.yml; reuse it.
+          sha="$(grep -m1 -oE 'ref: [0-9a-f]{40}' .github/workflows/current.yml | cut -d' ' -f2)"
+          git clone --filter=blob:none https://github.com/structuredmerge/structuredmerge-fixtures.git ../fixtures
+          git -C ../fixtures checkout "$sha"
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: stable
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Install formatters alef drives
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo install cargo-sort --locked
+          python3 -m pip install pytest
+      - name: Bump pins, regenerate and run the gates
+        shell: bash
+        run: bash workspace-scripts/bump_pins.sh
+      - name: Open or update the pull request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PIN_BUMP_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain --untracked-files=no)" ]; then
+            echo "nothing changed"
+            exit 0
+          fi
+          branch=bot/pin-bump
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add -A -- . ':!tmp'
+          title="chore(deps): ⬆️ Bump pins to the latest releases"
+          git commit -m "$title" -m "$(cat tmp/pin-bump/changes.txt)"
+          git push --force origin "$branch"
+          draft=()
+          if [ -s tmp/pin-bump/failures.txt ]; then draft=(--draft); fi
+          existing="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "$title" --body-file tmp/pin-bump/summary.md
+          else
+            gh pr create --head "$branch" --base main "${draft[@]}" --title "$title" --body-file tmp/pin-bump/summary.md
+          fi

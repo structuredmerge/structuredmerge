@@ -104,6 +104,8 @@ def exact_pin_violations(latest_tslp_version):
 
 def rewrite(sites, latest, exact_cargo_toml=False):
     for label, pattern, regex in sites:
+        if label == "Cargo.lock entry":
+            continue  # cargo regenerates it with the right checksum (see update_cargo_lock)
         for path in files(pattern):
             text = path.read_text(errors="replace")
 
@@ -116,6 +118,38 @@ def rewrite(sites, latest, exact_cargo_toml=False):
             new = regex.sub(replace, text)
             if new != text:
                 path.write_text(new)
+
+
+def update_cargo_lock(version: str) -> None:
+    """Let cargo write the lock entry; a regex edit would leave the old checksum."""
+    import shutil
+    import subprocess
+
+    if not shutil.which("cargo"):
+        print("cargo not found: run `cargo update -p tree-sitter-language-pack --precise "
+              f"{version}` to refresh Cargo.lock", file=sys.stderr)
+        return
+    subprocess.run(["cargo", "update", "-p", TSLP, "--precise", version], cwd=ROOT, check=True)
+
+
+def add_alef_checksum(version: str) -> bool:
+    """Add the Linux binary checksum for `version` from the digest GitHub publishes for the asset."""
+    installer = ROOT / "workspace-scripts" / "install_alef_binary.sh"
+    text = installer.read_text()
+    if re.search(rf"^\s+{re.escape(version)}\)", text, re.M):
+        return False
+    release = fetch_json(f"https://api.github.com/repos/xberg-io/alef/releases/tags/v{version}")
+    digest = next(
+        (asset.get("digest", "") for asset in release["assets"]
+         if asset["name"] == "alef-x86_64-unknown-linux-gnu.tar.gz"),
+        "",
+    )
+    if not digest.startswith("sha256:"):
+        raise SystemExit(f"GitHub publishes no sha256 digest for alef {version}; add the checksum by hand")
+    entry = f"  {version})\n    alef_sha256={digest.removeprefix('sha256:')}\n    ;;\n"
+    marker = 'case "$alef_version" in\n'
+    installer.write_text(text.replace(marker, marker + entry, 1))
+    return True
 
 
 def installer_missing(alef_version: str) -> list[str]:
@@ -151,15 +185,22 @@ def main(argv=None) -> int:
         alef = args.alef_latest or latest_alef()
         polylint = args.polylint_latest or latest_polylint()
         if args.write:
-            if args.only in (None, "tslp"):
+            changes = []
+            if args.only in (None, "tslp") and any(hit[3] != tslp for hit in tslp_hits):
+                changes.append(f"tree-sitter-language-pack {', '.join(sorted({h[3] for h in tslp_hits}))} -> {tslp}")
                 rewrite(TSLP_SITES, tslp, exact_cargo_toml=True)
-            if args.only in (None, "alef"):
+                update_cargo_lock(tslp)
+            if args.only in (None, "alef") and any(hit[3] != alef for hit in alef_hits):
+                changes.append(f"alef {', '.join(sorted({h[3] for h in alef_hits}))} -> {alef}")
                 rewrite(ALEF_SITES, alef)
-            if args.only in (None, "polylint"):
+            if args.only in (None, "alef") and add_alef_checksum(alef):
+                changes.append(f"alef {alef} binary checksum (GitHub-published sha256 digest)")
+            if args.only in (None, "polylint") and any(hit[3] != polylint for hit in polylint_hits):
+                changes.append(f"polylint {', '.join(sorted({h[3] for h in polylint_hits}))} -> {polylint}")
                 rewrite(POLYLINT_SITES, polylint)
-            print(f"rewrote pins: {TSLP} {tslp}, alef {alef}, polylint {polylint}\n"
-                  "Add the reviewed alef SHA-256 to workspace-scripts/install_alef_binary.sh, then run: alef generate && alef verify --exit-code, cargo update -p "
-                  f"{TSLP} --precise {tslp}, and the full test suites.")
+            print("\n".join(changes) if changes else "nothing to update")
+            if changes:
+                print("\nNow regenerate and verify: alef generate, alef verify --exit-code, then the full test suites.")
             return 0
         for name, hits, latest in (
             ("tree-sitter-language-pack", tslp_hits, tslp),
@@ -176,7 +217,7 @@ def main(argv=None) -> int:
         print("Stale or loose pins found:\n  " + "\n  ".join(problems), file=sys.stderr)
         print("\nFix everything at once with: python workspace-scripts/check_latest_pins.py --write", file=sys.stderr)
         return 1
-    print("All tree-sitter-language-pack and alef pins are current.")
+    print("All tree-sitter-language-pack, alef and polylint pins are current.")
     return 0
 
 
