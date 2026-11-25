@@ -74,7 +74,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
             for step in steps
             if step.get("with", {}).get("repository") == "structuredmerge/structuredmerge-fixtures"
         )
-        assert fixtures["with"]["ref"] == "04fff3eb6c92ddfd859ad0571377bb1fa5367ebc"
+        assert fixtures["with"]["ref"] == "dae7060bc3dc416bd73cb42fc00baf12a69c1004"
         grammar = f"tmp/typed-tslp-cache/tree-sitter-language-pack/v{self.tslp_version()}/libs/libtree_sitter_json.so"
         legacy = [i for i, step in enumerate(steps) if "slice-951-git-driver-json-integration" in step.get("run", "")]
         typed = [(i, step) for i, step in enumerate(steps) if "--typed --fixtures" in step.get("run", "")]
@@ -108,7 +108,7 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         assert set(consumers) == {"installed-kernel-cli", "check", "alef"}
         for name, revision in consumers.items():
             with self.subTest(job=name):
-                assert revision == "04fff3eb6c92ddfd859ad0571377bb1fa5367ebc"
+                assert revision == "dae7060bc3dc416bd73cb42fc00baf12a69c1004"
 
     def test_export_compiles_then_packages_verifies_and_uploads_only_core(self):
         steps = self.jobs["ruby-package"]["steps"]
