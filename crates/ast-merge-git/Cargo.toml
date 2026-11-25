@@ -1,6 +1,6 @@
 [package]
 name = "ast-merge-git"
-version = "0.2.3"
+version = "0.3.0"
 repository = "https://github.com/structuredmerge/structuredmerge"
 homepage = "https://structuredmerge.org"
 authors = ["Peter H. Boling"]
@@ -12,10 +12,10 @@ license = "AGPL-3.0-only OR PolyForm-Small-Business-1.0.0"
 path = "src/lib.rs"
 
 [dependencies]
-ast-merge = { version = "0.2.3", path = "../ast-merge" }
-json-merge = { version = "0.2.3", path = "../json-merge" }
+ast-merge = { version = "0.3.0", path = "../ast-merge" }
+json-merge = { version = "0.3.0", path = "../json-merge" }
 serde = { version = "1.0", features = ["derive"] }
-tree-haver = { version = "0.2.3", path = "../tree-haver" }
+tree-haver = { version = "0.3.0", path = "../tree-haver" }
 
 [dev-dependencies]
 serde_json = "1.0"

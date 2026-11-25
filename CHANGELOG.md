@@ -4,10 +4,6 @@
 
 ### Added
 
-- [kc] scheduled-pin-bump: Add the `Pin bump` workflow (every six hours) and `workspace-scripts/bump_pins.sh`, which move every tree-sitter-language-pack, alef and polylint pin to the latest release (cargo regenerates `Cargo.lock`; the alef checksum comes from GitHub's published digest), regenerate alef output, run the gates, and open or update a pull request (a draft when a gate fails and needs a human).
-
-- [kc] tree-sitter-language-pack-1-27-3: Upgrade the Rust Tree-sitter Language Pack to 1.27.3 (pinned `=1.27.3`); ships with the next release.
-
 ### Changed
 
 ### Deprecated
@@ -15,6 +11,38 @@
 ### Removed
 
 ### Fixed
+
+### Security
+
+## [0.3.0] - 2026-11-25
+
+### Added
+
+- [kc] scheduled-pin-bump: Add the `Pin bump` workflow (every six hours) and `workspace-scripts/bump_pins.sh`, which move every tree-sitter-language-pack, alef and polylint pin to the latest release (cargo regenerates `Cargo.lock`; the alef checksum comes from GitHub's published digest), regenerate alef output, run the gates, and open or update a pull request (a draft when a gate fails and needs a human).
+
+### Changed
+
+- [kc] tree-sitter-language-pack-1-27-3: Upgrade the Rust Tree-sitter Language Pack to 1.27.3 (pinned `=1.27.3`); ships with the next release.
+
+- [kc] native-rust-node-shape: **Breaking.** Consume the tree-sitter-rust 1.27 node shape natively and remove the 0.2.3 projection shim: an item owns its outer attributes and doc comments (an `attributes` child), doc comments end at column 0 of the next row, and the pieces of a comment (`doc_comment` payload) are tokens, not comments. The node kinds and spans exposed by tree-haver for Rust change accordingly.
+
+- [kc] source-span-last-line: Add `SourceSpan::last_line` (also exposed in the Ruby, Python and Go bindings), replacing three copies of the newline-inclusive end-line logic.
+
+- [kc] named-owner-leading-containers: Add `NamedOwnerProjectionPolicy::leading_container_kinds`: comments inside an owner's leading container (Rust: `attributes`) are that owner's attached comments.
+
+- [kc] rust-test-attribute-merge: A `#[test]`-prefixed item now merges on tree-sitter (it was rejected); `rust-merge` tracks `line_outer_doc_comment` and `block_outer_doc_comment` as comments.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+- [kc] alef-clean-generation: `alef all --clean` is now a fixed point: the Ruby extension is committed from the clean generation and `poly.toml` (user-owned) no longer carries Alef's stamp.
+
+- [kc] pins-gate-github-auth: The pin gate authenticates GitHub API calls (`GITHUB_TOKEN`/`GH_TOKEN`, falling back to `gh api`) instead of hitting the anonymous rate limit.
+
+- [kc] actions-sha-pinned: Pin `ruby/setup-ruby` to a commit SHA (v1.344.0), as the repository requires, and test that every workflow action is SHA-pinned.
 
 ### Security
 

@@ -64,6 +64,8 @@ jobs:
           python3 -m pip install pytest
       - name: Bump pins, regenerate and run the gates
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: bash workspace-scripts/bump_pins.sh
       - name: Open or update the pull request
         shell: bash

@@ -1,9 +1,9 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "python",
-  "review_reason": "0.2.3 patch: alef hash and version string only; no signature changes",
+  "review_reason": "0.3.0: version-string-only change on top of the reviewed additive SourceSpan#last_line; no existing signature changed",
   "files": {
-    "structuredmerge_core/__init__.py": "6d9b4c2d248fe8e27b66da5a104f8f38a72f23d40e10c29af496050d541dfa73",
+    "structuredmerge_core/__init__.py": "8a325cfba904ae80bd5db711bd9c03d95c959d799e0ff4b2267649d070f6c031",
     "structuredmerge_core/_native.pyi": "cec34fe0544946e2b4abd2255028fb3cf5e567e5b59dfa7ca986fe90cb0e5612",
     "structuredmerge_core/api.py": "97f252abf33d8eb953a8ff0884a96c9a497239a3d7bf45531b07d9f4ebd2d6aa",
     "structuredmerge_core/exceptions.py": "25e61ce52e2e192df977a5f2ba7473dd6012e064c4bba38b05c15dc043201a29",

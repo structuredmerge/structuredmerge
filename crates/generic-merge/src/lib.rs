@@ -181,6 +181,7 @@ fn parse_source_preserving_generic(
             ignored_kinds: &[],
             wrapper_kinds: &[],
             prefix_node_kinds: &[],
+            leading_container_kinds: &[],
             name_fields: &["name"],
             fallback_name_kinds: &[],
             accept_any_named_kind: true,

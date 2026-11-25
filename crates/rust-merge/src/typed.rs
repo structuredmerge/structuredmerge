@@ -158,7 +158,7 @@ pub fn source_line_analysis(parsed: &ParsedResult) -> Result<RustSourceLineAnaly
                         (text.starts_with("///") && !text.starts_with("////"))
                             || (text.starts_with("/**") && !text.starts_with("/***"))
                     };
-                    outer_doc.then_some(node.span.end_point.row + 1)
+                    outer_doc.then_some(node.span.last_line())
                 })
                 .max();
             match leading_doc_end {
@@ -168,7 +168,7 @@ pub fn source_line_analysis(parsed: &ParsedResult) -> Result<RustSourceLineAnaly
         }
         let end_line = structural_nodes
             .iter()
-            .map(|node| node.span.end_point.row + 1)
+            .map(|node| node.span.last_line())
             .max()
             .ok_or_else(|| format!("Rust owner {} has no ending line", owner.id))?;
         let primary_node_id = node_ids
@@ -184,7 +184,16 @@ pub fn source_line_analysis(parsed: &ParsedResult) -> Result<RustSourceLineAnaly
         "rust_comment",
         super::owner_policy().comment_attachment_policy,
         |node| {
-            matches!(node.kind.as_str(), "line_comment" | "block_comment").then(|| {
+            // tree-sitter-rust (1.27+) reports outer doc comments as their own kinds inside
+            // the item's `attributes`; they are the item's leading comments.
+            matches!(
+                node.kind.as_str(),
+                "line_comment"
+                    | "block_comment"
+                    | "line_outer_doc_comment"
+                    | "block_outer_doc_comment"
+            )
+            .then(|| {
                 if node.parent_id.as_deref() == Some(root_id)
                     && (node.source_fragment.trim_start().starts_with("//!")
                         || node.source_fragment.trim_start().starts_with("/*!"))

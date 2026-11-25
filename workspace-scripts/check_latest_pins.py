@@ -61,9 +61,28 @@ POLYLINT_SITES = [
 
 
 def fetch_json(url: str) -> dict:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
+    """GET JSON. GitHub's API rate-limits anonymous callers hard (shared CI runner IPs
+    hit it), so send GITHUB_TOKEN/GH_TOKEN when present and fall back to `gh api`."""
+    import os
+    import shutil
+    import subprocess
+    import urllib.error
+
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token and url.startswith("https://api.github.com/"):
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        if error.code in (403, 429) and url.startswith("https://api.github.com/") and shutil.which("gh"):
+            result = subprocess.run(["gh", "api", url.removeprefix("https://api.github.com/")],
+                                    capture_output=True, text=True, check=False)
+            if result.returncode == 0:
+                return json.loads(result.stdout)
+        raise
 
 
 def latest_tslp() -> str:

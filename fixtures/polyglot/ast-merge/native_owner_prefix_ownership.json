@@ -14,7 +14,6 @@
         7
       ],
       "owner_node_kinds": [
-        "attribute_item",
         "function_item"
       ],
       "attached_comment_texts": [
@@ -36,7 +35,6 @@
         4
       ],
       "owner_node_kinds": [
-        "attribute_item",
         "function_item"
       ],
       "attached_comment_texts": [
@@ -58,7 +56,6 @@
         3
       ],
       "owner_node_kinds": [
-        "attribute_item",
         "function_item"
       ],
       "attached_comment_texts": [
@@ -156,7 +153,6 @@
         2
       ],
       "owner_node_kinds": [
-        "attribute_item",
         "function_item"
       ],
       "attached_comment_texts": [],

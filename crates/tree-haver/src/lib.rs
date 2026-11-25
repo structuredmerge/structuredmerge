@@ -12,7 +12,6 @@ pub const PACKAGE_NAME: &str = "tree-haver";
 
 pub mod language_pack_provider;
 pub mod parsed;
-pub(crate) mod projection;
 pub mod service;
 pub mod source;
 
@@ -412,6 +411,19 @@ pub struct SourceSpan {
     pub range: ByteRange,
     pub start_point: SourcePoint,
     pub end_point: SourcePoint,
+}
+
+impl SourceSpan {
+    /// One-based last source line the span occupies. Grammars whose nodes include
+    /// their terminating newline (tree-sitter-rust doc comments, TOML) end such a
+    /// node at column 0 of the following row, which holds none of the node's text.
+    pub fn last_line(&self) -> usize {
+        if self.end_point.column == 0 && self.end_point.row > self.start_point.row {
+            self.end_point.row
+        } else {
+            self.end_point.row + 1
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1205,13 +1217,16 @@ fn language_pack_backend_capability(request: &ParserRequest) -> BackendCapabilit
     }
 }
 
-fn tree_sitter_node_role(node: &projection::Projected, source_fragment: &str) -> NodeRole {
-    if node.node.is_error() || node.node.is_missing() {
+fn tree_sitter_node_role(
+    node: &tree_sitter_language_pack::Node,
+    source_fragment: &str,
+) -> NodeRole {
+    if node.is_error() || node.is_missing() {
         return NodeRole::Error;
     }
-    let kind = node.kind.as_str();
-    if node.node.is_named() {
-        return if tree_sitter_comment_kind(kind)
+    let kind = node.kind();
+    if node.is_named() {
+        return if tree_sitter_comment_kind(&kind)
             || (kind.contains("html") && source_fragment.trim_start().starts_with("<!--"))
         {
             NodeRole::Comment
@@ -1219,7 +1234,7 @@ fn tree_sitter_node_role(node: &projection::Projected, source_fragment: &str) ->
             NodeRole::Structural
         };
     }
-    match kind {
+    match kind.as_str() {
         "," | ";" => NodeRole::Separator,
         "(" | ")" | "[" | "]" | "{" | "}" => NodeRole::Delimiter,
         _ => NodeRole::Token,
@@ -1231,31 +1246,39 @@ fn tree_sitter_comment_kind(kind: &str) -> bool {
 }
 
 fn push_language_pack_node(
-    node: projection::Projected,
+    node: tree_sitter_language_pack::Node,
     source: &str,
     language: &str,
     parent_id: Option<String>,
+    parent_is_comment: bool,
     field_name: Option<String>,
     nodes: &mut Vec<NormalizedTreeNode>,
 ) -> String {
     let id = format!("tslp:{language}:{}", nodes.len());
-    let source_fragment = source.get(node.start_byte..node.end_byte).unwrap_or_default();
-    let kind = node.kind.clone();
+    let start = node.start_position();
+    let end = node.end_position();
+    let source_fragment = source.get(node.start_byte()..node.end_byte()).unwrap_or_default();
+    let kind = node.kind();
     let node_index = nodes.len();
+    let mut role = tree_sitter_node_role(&node, source_fragment);
+    // Pieces of a comment are not independent comments (see the provider projection).
+    if role == NodeRole::Comment && parent_is_comment {
+        role = NodeRole::Token;
+    }
     nodes.push(NormalizedTreeNode {
         id: id.clone(),
         kind: kind.clone(),
-        role: tree_sitter_node_role(&node, source_fragment),
+        role,
         parent_id,
         child_ids: vec![],
         span: SourceSpan {
-            range: ByteRange { start_byte: node.start_byte, end_byte: node.end_byte },
-            start_point: SourcePoint { row: node.start_point.0, column: node.start_point.1 },
-            end_point: SourcePoint { row: node.end_point.0, column: node.end_point.1 },
+            range: ByteRange { start_byte: node.start_byte(), end_byte: node.end_byte() },
+            start_point: SourcePoint { row: start.row, column: start.column },
+            end_point: SourcePoint { row: end.row, column: end.column },
         },
         field_name,
-        named: node.node.is_named(),
-        anonymous: !node.node.is_named(),
+        named: node.is_named(),
+        anonymous: !node.is_named(),
         has_source_text: true,
         source_fragment: source_fragment.to_string(),
         backend_kind: Some(kind),
@@ -1265,17 +1288,23 @@ fn push_language_pack_node(
         metadata: BTreeMap::new(),
     });
 
-    let children = node.children(language, source);
-    let mut child_ids = Vec::with_capacity(children.len());
-    for (child, child_field) in children {
-        child_ids.push(push_language_pack_node(
-            child,
-            source,
-            language,
-            Some(id.clone()),
-            child_field,
-            nodes,
-        ));
+    let mut child_ids = Vec::with_capacity(node.child_count());
+    let mut cursor = node.walk();
+    if cursor.goto_first_child() {
+        loop {
+            child_ids.push(push_language_pack_node(
+                cursor.node(),
+                source,
+                language,
+                Some(id.clone()),
+                nodes[node_index].role == NodeRole::Comment,
+                cursor.field_name(),
+                nodes,
+            ));
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
     }
     nodes[node_index].child_ids = child_ids;
     id
@@ -1316,10 +1345,11 @@ pub fn parse_normalized_with_language_pack(request: &ParserRequest) -> Normalize
 
     let mut nodes = Vec::new();
     let root_id = push_language_pack_node(
-        projection::Projected::root(tree.root_node(), &request.language, &request.source),
+        tree.root_node(),
         &request.source,
         &request.language,
         None,
+        false,
         None,
         &mut nodes,
     );

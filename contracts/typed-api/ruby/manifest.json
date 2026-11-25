@@ -1,13 +1,13 @@
 {
   "schema": "structuredmerge.typed-api-review-baseline/v1",
   "target": "ruby",
-  "review_reason": "0.2.3 patch: version-string-only API surface change (alef 0.132.6 regeneration; no signature changes reviewed)",
+  "review_reason": "0.3.0: version-string-only change on top of the reviewed additive SourceSpan#last_line; no existing signature changed",
   "files": {
     "lib/structuredmerge_core/native.rb": "8d373c4dc7c519371d97ed9a31d602b6403511ddaed8ed7a4876af0e912589e2",
-    "lib/structuredmerge_core/version.rb": "dcbf0fd5a6683d04af2cdadb4fed489286a15666e07884ddc7c0e699ea4cb8d4",
+    "lib/structuredmerge_core/version.rb": "ad4d3a92c3be797cc0ff45cfd42715a8c067407b8b8b77c8b09473c2e726abd2",
     "lib/structuredmerge_core/version_gem.rb": "9f4a21d54af3169ef318fdb5d3a2996b6a7d6a455d156101cbae107234b3e51d",
     "lib/structuredmerge_core.rb": "8be8a9d1f63cc0f764e4c30ce6c1b38da874e87f1926b4fbf57f6efda769f7f6",
     "sig/structuredmerge_core.rbs": "13f064a4a44bc11f0e93ef4d9e4788c015e35a716a28d13baf7eaac446b04213",
-    "sig/types.rbs": "8049f8d0868bed3e09867f445439c2b18a8627bd9565db7441d7d9b91838a571"
+    "sig/types.rbs": "3c49b32371d22fc101e1093e5557425037a82c9d8c01629fe6b35501f454dacf"
   }
 }

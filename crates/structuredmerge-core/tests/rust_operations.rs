@@ -536,6 +536,7 @@ fn directional_rust_preserves_current_bytes_comments_and_module_scope() {
             "fn f() {}\nfn g() { current(); }\nuse std::fmt;\n",
         ),
         ("", "// footer", "// footer"),
+        ("#[test]\nfn f() {}\n", "", "#[test]\nfn f() {}\n"),
         (
             "use std::io;\nfn f() { incoming(); }\n",
             "use std::fmt;\nfn f() {}",
@@ -601,7 +602,6 @@ fn directional_rust_rejects_unproven_dependencies_and_ambiguous_placement() {
         ("fn f() {}\nfn g() {}", "fn f() {}\n"),
         ("fn f() {}\nfn g() {}\n", "fn f() {}"),
         ("impl T {}\nfn f() {}\n", "fn f() {}\n"),
-        ("#[test]\nfn f() {}\n", ""),
         ("fn f() {}\nfn f() {}\n", "fn f() {}\n"),
     ] {
         let (result, _) = run(request("merge2", &[incoming, current]));
