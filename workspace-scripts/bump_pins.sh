@@ -49,14 +49,10 @@ if ! command -v poly > /dev/null; then
   export PATH="$PWD/tmp/alef-tools/bin:$PATH"
 fi
 
-if grep -q alef "$out/changes.txt"; then
-  gate "alef generate" alef generate
-  gate "alef test-apps generate" alef test-apps generate
-  gate "alef docs" alef docs
-  gate "alef e2e generate" alef e2e generate
-  # alef rewrites poly.toml on every run, dropping the file_safety exclusion for
-  # the generated Ruby extension; the committed one is authoritative.
-  git checkout HEAD -- poly.toml
+if grep -q alef "$out/changes.txt" || grep -q tree-sitter "$out/changes.txt"; then
+  # Exactly what CI's "Alef generation" job runs and requires to be a fixed point; plain
+  # `alef generate` emits a different (unformatted) Ruby extension that job rejects.
+  gate "alef all --clean" alef all --clean --strict --skip-compile --skip-snippet-validation
 fi
 gate "alef verify" alef verify --exit-code
 gate "typed release inventory" "$py" workspace-scripts/check_typed_release_inventory.py
