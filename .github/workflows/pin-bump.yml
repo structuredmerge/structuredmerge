@@ -81,7 +81,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$branch"
-          git add -A -- . ':!tmp'
+          # tmp/ is gitignored; an exclude pathspec naming an ignored path makes `git add` fail.
+          git add -A
           title="chore(deps): ⬆️ Bump pins to the latest releases"
           git commit -m "$title" -m "$(cat tmp/pin-bump/changes.txt)"
           git push --force origin "$branch"
