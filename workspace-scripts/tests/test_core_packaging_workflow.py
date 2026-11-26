@@ -35,14 +35,27 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         fixture_index = next(
             i
             for i, step in enumerate(steps)
-            if step.get("with", {}).get("repository") == "structuredmerge/structuredmerge-fixtures"
+            if step.get("with", {}).get("repository")
+            == "structuredmerge/structuredmerge-fixtures"
         )
         move_index = commands.index("mv shared-fixtures ../fixtures")
-        ruby_index = next(i for i, step in enumerate(steps) if step.get("uses", "").startswith("ruby/setup-ruby@"))
-        build_index = next(i for i, command in enumerate(commands) if "cargo install --path" in command)
-        audits = [(i, step) for i, step in enumerate(steps) if "unittest discover" in step.get("run", "")]
+        ruby_index = next(
+            i
+            for i, step in enumerate(steps)
+            if step.get("uses", "").startswith("ruby/setup-ruby@")
+        )
+        build_index = next(
+            i for i, command in enumerate(commands) if "cargo install --path" in command
+        )
+        audits = [
+            (i, step)
+            for i, step in enumerate(steps)
+            if "unittest discover" in step.get("run", "")
+        ]
         assert len(audits) == 3
-        assert {step["env"]["SMORG_TEST_ARTIFACT"].rsplit("/", 1)[1] for _, step in audits} == {"smorg", "smorg-rs"}
+        assert {
+            step["env"]["SMORG_TEST_ARTIFACT"].rsplit("/", 1)[1] for _, step in audits
+        } == {"smorg", "smorg-rs"}
         assert fixture_index < move_index
         for index, step in audits:
             assert move_index < index
@@ -50,7 +63,9 @@ class CorePackagingWorkflowTest(unittest.TestCase):
             assert build_index < index
             assert "if" not in step
         assert "command -v ssh-keygen" in audits[0][1]["run"]
-        assert "unittest discover" not in json.dumps(self.jobs["typed-core-python-artifact"])
+        assert "unittest discover" not in json.dumps(
+            self.jobs["typed-core-python-artifact"]
+        )
         assert job["env"]["CARGO_BUILD_JOBS"] == "1"
         assert job["env"]["CARGO_INCREMENTAL"] == "0"
         assert job["env"]["CARGO_PROFILE_DEV_DEBUG"] == "0"
@@ -65,21 +80,36 @@ class CorePackagingWorkflowTest(unittest.TestCase):
     def tslp_version(self):
         """The exact tree-sitter-language-pack pin; never hard-code it in tests."""
         manifest = (self.root / "crates/tree-haver/Cargo.toml").read_text()
-        return re.search(r'tree-sitter-language-pack\s*=\s*"=(\d+\.\d+\.\d+)"', manifest).group(1)
+        return re.search(
+            r'tree-sitter-language-pack\s*=\s*"=(\d+\.\d+\.\d+)"', manifest
+        ).group(1)
 
     def test_typed_git_ci_uses_published_fixtures_and_exact_prepared_grammar(self):
         steps = self.jobs["installed-kernel-cli"]["steps"]
         fixtures = next(
             step
             for step in steps
-            if step.get("with", {}).get("repository") == "structuredmerge/structuredmerge-fixtures"
+            if step.get("with", {}).get("repository")
+            == "structuredmerge/structuredmerge-fixtures"
         )
         assert fixtures["with"]["ref"] == "3c65235166c3a97f99089da1bb5b6af97d5f0526"
         grammar = f"tmp/typed-tslp-cache/tree-sitter-language-pack/v{self.tslp_version()}/libs/libtree_sitter_json.so"
-        legacy = [i for i, step in enumerate(steps) if "slice-951-git-driver-json-integration" in step.get("run", "")]
-        typed = [(i, step) for i, step in enumerate(steps) if "--typed --fixtures" in step.get("run", "")]
+        legacy = [
+            i
+            for i, step in enumerate(steps)
+            if "slice-951-git-driver-json-integration" in step.get("run", "")
+        ]
+        typed = [
+            (i, step)
+            for i, step in enumerate(steps)
+            if "--typed --fixtures" in step.get("run", "")
+        ]
         assert len(legacy) == 2
-        provision = next(i for i, step in enumerate(steps) if "prepare_cli_git_grammar.py" in step.get("run", ""))
+        provision = next(
+            i
+            for i, step in enumerate(steps)
+            if "prepare_cli_git_grammar.py" in step.get("run", "")
+        )
         assert provision < min(legacy)
         assert "--cache tmp/typed-tslp-cache" in steps[provision]["run"]
         assert len(typed) == 2
@@ -88,13 +118,22 @@ class CorePackagingWorkflowTest(unittest.TestCase):
             assert "--grammar-library " + grammar in step["run"]
             assert "../fixtures/conformance/cli-v1/typed-git.json" in step["run"]
         auth_index, auth = next(
-            (i, step) for i, step in enumerate(steps) if "SMORG_TEST_GRAMMAR" in step.get("env", {})
+            (i, step)
+            for i, step in enumerate(steps)
+            if "SMORG_TEST_GRAMMAR" in step.get("env", {})
         )
         assert max(legacy) < auth_index
         assert 'test -f "$SMORG_TEST_GRAMMAR"' in auth["run"]
         assert auth["env"]["SMORG_TEST_GRAMMAR"].endswith(grammar)
-        assert f'name = "tree-sitter-language-pack"\nversion = "{self.tslp_version()}"' in (self.root / "Cargo.lock").read_text()
-        upload = next(step for step in steps if step.get("uses", "").startswith("actions/upload-artifact@"))
+        assert (
+            f'name = "tree-sitter-language-pack"\nversion = "{self.tslp_version()}"'
+            in (self.root / "Cargo.lock").read_text()
+        )
+        upload = next(
+            step
+            for step in steps
+            if step.get("uses", "").startswith("actions/upload-artifact@")
+        )
         assert "tmp/typed-cli-git-*/report.json" in upload["with"]["path"]
         assert "tmp/cli-grammar-auth.log" in upload["with"]["path"]
 
@@ -103,7 +142,10 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         for name, job in self.jobs.items():
             for step in job.get("steps", []):
                 checkout = step.get("with", {})
-                if checkout.get("repository") == "structuredmerge/structuredmerge-fixtures":
+                if (
+                    checkout.get("repository")
+                    == "structuredmerge/structuredmerge-fixtures"
+                ):
                     consumers[name] = checkout["ref"]
         assert set(consumers) == {"installed-kernel-cli", "check", "alef"}
         for name, revision in consumers.items():
@@ -114,10 +156,18 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         steps = self.jobs["ruby-package"]["steps"]
         commands = [step.get("run", "") for step in steps]
         compile_index = commands.index("bundle exec rake compile")
-        export_index = next(i for i, command in enumerate(commands) if "--package-only" in command)
-        verify_index = next(i for i, command in enumerate(commands) if "verify_core_ruby_export.rb" in command)
+        export_index = next(
+            i for i, command in enumerate(commands) if "--package-only" in command
+        )
+        verify_index = next(
+            i
+            for i, command in enumerate(commands)
+            if "verify_core_ruby_export.rb" in command
+        )
         upload_index = next(
-            i for i, step in enumerate(steps) if step.get("uses", "").startswith("actions/upload-artifact@")
+            i
+            for i, step in enumerate(steps)
+            if step.get("uses", "").startswith("actions/upload-artifact@")
         )
         assert compile_index < export_index
         assert export_index < verify_index
@@ -134,15 +184,24 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         steps = self.jobs["typed-core-python-artifact"]["steps"]
         build = next(step for step in steps if "maturin build" in step.get("run", ""))
         assert build["shell"] == "bash"
-        assert 'source_date_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"' in build["run"]
+        assert (
+            'source_date_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"'
+            in build["run"]
+        )
         assert "SOURCE_DATE_EPOCH=$source_date_epoch" in build["run"]
 
     def test_export_does_not_replace_installed_runtime_gate(self):
         steps = self.jobs["typed-core-ruby-artifact"]["steps"]
-        gate = next(step["run"] for step in steps if "check_core_ruby_artifact.rb" in step.get("run", ""))
+        gate = next(
+            step["run"]
+            for step in steps
+            if "check_core_ruby_artifact.rb" in step.get("run", "")
+        )
         assert "--package-only" not in gate
         ruby = next(
-            step for step in self.jobs["ruby-package"]["steps"] if step.get("uses", "").startswith("ruby/setup-ruby@")
+            step
+            for step in self.jobs["ruby-package"]["steps"]
+            if step.get("uses", "").startswith("ruby/setup-ruby@")
         )
         assert ruby["with"]["ruby-version"] == "4.0"
 
@@ -152,20 +211,30 @@ class CorePackagingWorkflowTest(unittest.TestCase):
                 job = self.jobs[name]
                 steps = job["steps"]
                 setup = next(
-                    i for i, step in enumerate(steps) if step.get("uses", "").startswith("dtolnay/rust-toolchain@")
+                    i
+                    for i, step in enumerate(steps)
+                    if step.get("uses", "").startswith("dtolnay/rust-toolchain@")
                 )
                 abi_index, abi = next(
-                    (i, step) for i, step in enumerate(steps) if "CARGO_BUILD_TARGET=" in step.get("run", "")
+                    (i, step)
+                    for i, step in enumerate(steps)
+                    if "CARGO_BUILD_TARGET=" in step.get("run", "")
                 )
                 assert abi["if"] == "runner.os == 'Windows'"
                 assert abi["shell"] == "bash"
                 # No +stable/--toolchain override: honor rust-toolchain.toml,
                 # just as the subsequent rb-sys cargo subprocess does.
-                assert "rustup target add x86_64-pc-windows-gnu" in abi["run"].splitlines()
+                assert (
+                    "rustup target add x86_64-pc-windows-gnu" in abi["run"].splitlines()
+                )
                 assert "RUSTUP_TOOLCHAIN" not in job.get("env", {})
                 assert "working-directory" not in abi
                 assert setup < abi_index
-                builds = [i for i, step in enumerate(steps) if "rake compile" in step.get("run", "")]
+                builds = [
+                    i
+                    for i, step in enumerate(steps)
+                    if "rake compile" in step.get("run", "")
+                ]
                 assert builds
                 for build in builds:
                     assert abi_index < build
@@ -176,7 +245,9 @@ class CorePackagingWorkflowTest(unittest.TestCase):
             with self.subTest(job=name):
                 steps = self.jobs[name]["steps"]
                 checkout = next(
-                    i for i, step in enumerate(steps) if step.get("uses", "").startswith("actions/checkout@")
+                    i
+                    for i, step in enumerate(steps)
+                    if step.get("uses", "").startswith("actions/checkout@")
                 )
                 preservation = [
                     (i, step)
@@ -205,9 +276,17 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         }
         assert not job["strategy"]["fail-fast"]
         assert job["runs-on"] == "${{ matrix.runner }}"
-        ruby = next(step for step in job["steps"] if step.get("uses", "").startswith("ruby/setup-ruby@"))
+        ruby = next(
+            step
+            for step in job["steps"]
+            if step.get("uses", "").startswith("ruby/setup-ruby@")
+        )
         assert ruby["with"]["ruby-version"] == "${{ matrix.ruby }}"
-        windows = next(step for step in job["steps"] if "CARGO_BUILD_TARGET=" in step.get("run", ""))
+        windows = next(
+            step
+            for step in job["steps"]
+            if "CARGO_BUILD_TARGET=" in step.get("run", "")
+        )
         assert windows["if"] == "runner.os == 'Windows'"
         assert "CARGO_BUILD_TARGET=x86_64-pc-windows-gnu" in windows["run"]
         assert "RUST_TARGET=x86_64-pc-windows-gnu" in windows["run"]
@@ -231,6 +310,13 @@ class CorePackagingWorkflowTest(unittest.TestCase):
         assert job["runs-on"] == "${{ matrix.runner }}"
         assert not job["strategy"]["fail-fast"]
         assert job["env"]["STRUCTUREDMERGE_NATIVE_PYTHON"] == "python"
-        gate = next(step for step in job["steps"] if "check_core_python_artifact.py" in step.get("run", ""))
+        gate = next(
+            step
+            for step in job["steps"]
+            if "check_core_python_artifact.py" in step.get("run", "")
+        )
         assert "if" not in gate
-        assert gate["run"] == "python workspace-scripts/check_core_python_artifact.py tmp/core-wheels"
+        assert (
+            gate["run"]
+            == "python workspace-scripts/check_core_python_artifact.py tmp/core-wheels"
+        )

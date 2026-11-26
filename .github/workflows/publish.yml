@@ -6,7 +6,7 @@ permissions:
 on:
   release:
     types: [published]
-  workflow_dispatch:
+  workflow_dispatch: # checkov:skip=CKV_GHA_7: the release inputs (tag, targets, dry run) are the intended entry point of this workflow
     inputs:
       publish:
         description: Publish the validated 0.3.0 dependency closure and release artifacts

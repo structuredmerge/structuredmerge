@@ -2,6 +2,7 @@
 
 Plain text assertions: the CI jobs that run these tests do not ship PyYAML.
 """
+
 import pathlib
 import re
 
@@ -11,7 +12,9 @@ WORKFLOW = ROOT / ".github/workflows/pin-bump.yml"
 
 def test_runs_on_a_schedule_and_on_demand():
     text = WORKFLOW.read_text()
-    assert re.search(r"^on:\n  schedule:\n    - cron: \"[^\"]+\"\n  workflow_dispatch:", text, re.M)
+    assert re.search(
+        r"^on:\n  schedule:\n    - cron: \"[^\"]+\"\n  workflow_dispatch:", text, re.M
+    )
 
 
 def test_every_action_is_pinned_to_a_commit_sha():
@@ -32,4 +35,6 @@ def test_every_workflow_action_is_pinned_to_a_commit_sha():
             reference = match.group(1)
             if reference.startswith("./"):
                 continue
-            assert re.search(r"@[0-9a-f]{40}$", reference), f"{path.relative_to(ROOT)}: {reference}"
+            assert re.search(r"@[0-9a-f]{40}$", reference), (
+                f"{path.relative_to(ROOT)}: {reference}"
+            )

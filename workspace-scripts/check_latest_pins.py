@@ -17,6 +17,7 @@ Usage:
 Latest versions come from crates.io (TSLP), GitHub releases (alef) and PyPI (polylint, the `poly` formatter).
 `--tslp-latest` / `--alef-latest` override the lookups (used by the tests).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -35,28 +36,53 @@ VERSION = r"\d+\.\d+\.\d+"
 
 # (label, file glob, regex with groups (prefix)(version)(suffix)); `=` handling for Cargo.toml is below.
 TSLP_SITES = [
-    ("Cargo.toml requirement", "**/Cargo.toml",
-     re.compile(rf'(^\s*{TSLP}\s*=\s*"=?)({VERSION})(")', re.M)),
-    ("Cargo.toml table requirement", "**/Cargo.toml",
-     re.compile(rf'({TSLP}\s*=\s*\{{[^}}]*version\s*=\s*"=?)({VERSION})(")')),
-    ("Cargo.lock entry", "Cargo.lock",
-     re.compile(rf'(name = "{TSLP}"\nversion = ")({VERSION})(")')),
-    ("workflow/script cache path", ".github/workflows/*.yml",
-     re.compile(rf'({TSLP}/v)({VERSION})(/)')),
-    ("script cache path", "workspace-scripts/**/*.*",
-     re.compile(rf'({TSLP}/v)({VERSION})(/)')),
+    (
+        "Cargo.toml requirement",
+        "**/Cargo.toml",
+        re.compile(rf'(^\s*{TSLP}\s*=\s*"=?)({VERSION})(")', re.M),
+    ),
+    (
+        "Cargo.toml table requirement",
+        "**/Cargo.toml",
+        re.compile(rf'({TSLP}\s*=\s*\{{[^}}]*version\s*=\s*"=?)({VERSION})(")'),
+    ),
+    (
+        "Cargo.lock entry",
+        "Cargo.lock",
+        re.compile(rf'(name = "{TSLP}"\nversion = ")({VERSION})(")'),
+    ),
+    (
+        "workflow/script cache path",
+        ".github/workflows/*.yml",
+        re.compile(rf"({TSLP}/v)({VERSION})(/)"),
+    ),
+    (
+        "script cache path",
+        "workspace-scripts/**/*.*",
+        re.compile(rf"({TSLP}/v)({VERSION})(/)"),
+    ),
 ]
 ALEF_SITES = [
     ("alef.toml", "alef.toml", re.compile(rf'(alef_version = ")({VERSION})(")')),
-    ("workspace-scripts/alef-version", "workspace-scripts/alef-version", re.compile(rf'(^)({VERSION})(\s*$)', re.M)),
-    ("workflow alef version", ".github/workflows/*.yml",
-     re.compile(rf'((?:alef-version|version):\s*")({VERSION})(")')),
+    (
+        "workspace-scripts/alef-version",
+        "workspace-scripts/alef-version",
+        re.compile(rf"(^)({VERSION})(\s*$)", re.M),
+    ),
+    (
+        "workflow alef version",
+        ".github/workflows/*.yml",
+        re.compile(rf'((?:alef-version|version):\s*")({VERSION})(")'),
+    ),
 ]
 
 
 POLYLINT_SITES = [
-    ("workflow polylint pin", ".github/workflows/*.yml",
-     re.compile(rf"(polylint==)({VERSION})(['\"\s]|$)", re.M)),
+    (
+        "workflow polylint pin",
+        ".github/workflows/*.yml",
+        re.compile(rf"(polylint==)({VERSION})(['\"\s]|$)", re.M),
+    ),
 ]
 
 
@@ -77,16 +103,26 @@ def fetch_json(url: str) -> dict:
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.load(response)
     except urllib.error.HTTPError as error:
-        if error.code in (403, 429) and url.startswith("https://api.github.com/") and shutil.which("gh"):
-            result = subprocess.run(["gh", "api", url.removeprefix("https://api.github.com/")],
-                                    capture_output=True, text=True, check=False)
+        if (
+            error.code in (403, 429)
+            and url.startswith("https://api.github.com/")
+            and shutil.which("gh")
+        ):
+            result = subprocess.run(
+                ["gh", "api", url.removeprefix("https://api.github.com/")],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
             if result.returncode == 0:
                 return json.loads(result.stdout)
         raise
 
 
 def latest_tslp() -> str:
-    return fetch_json(f"https://crates.io/api/v1/crates/{TSLP}")["crate"]["max_stable_version"]
+    return fetch_json(f"https://crates.io/api/v1/crates/{TSLP}")["crate"][
+        "max_stable_version"
+    ]
 
 
 def latest_polylint() -> str:
@@ -94,7 +130,9 @@ def latest_polylint() -> str:
 
 
 def latest_alef() -> str:
-    return fetch_json("https://api.github.com/repos/xberg-io/alef/releases/latest")["tag_name"].lstrip("v")
+    return fetch_json("https://api.github.com/repos/xberg-io/alef/releases/latest")[
+        "tag_name"
+    ].lstrip("v")
 
 
 def files(pattern: str):
@@ -145,10 +183,15 @@ def update_cargo_lock(version: str) -> None:
     import subprocess
 
     if not shutil.which("cargo"):
-        print("cargo not found: run `cargo update -p tree-sitter-language-pack --precise "
-              f"{version}` to refresh Cargo.lock", file=sys.stderr)
+        print(
+            "cargo not found: run `cargo update -p tree-sitter-language-pack --precise "
+            f"{version}` to refresh Cargo.lock",
+            file=sys.stderr,
+        )
         return
-    subprocess.run(["cargo", "update", "-p", TSLP, "--precise", version], cwd=ROOT, check=True)
+    subprocess.run(
+        ["cargo", "update", "-p", TSLP, "--precise", version], cwd=ROOT, check=True
+    )
 
 
 def add_alef_checksum(version: str) -> bool:
@@ -157,14 +200,21 @@ def add_alef_checksum(version: str) -> bool:
     text = installer.read_text()
     if re.search(rf"^\s+{re.escape(version)}\)", text, re.M):
         return False
-    release = fetch_json(f"https://api.github.com/repos/xberg-io/alef/releases/tags/v{version}")
+    release = fetch_json(
+        f"https://api.github.com/repos/xberg-io/alef/releases/tags/v{version}"
+    )
     digest = next(
-        (asset.get("digest", "") for asset in release["assets"]
-         if asset["name"] == "alef-x86_64-unknown-linux-gnu.tar.gz"),
+        (
+            asset.get("digest", "")
+            for asset in release["assets"]
+            if asset["name"] == "alef-x86_64-unknown-linux-gnu.tar.gz"
+        ),
         "",
     )
     if not digest.startswith("sha256:"):
-        raise SystemExit(f"GitHub publishes no sha256 digest for alef {version}; add the checksum by hand")
+        raise SystemExit(
+            f"GitHub publishes no sha256 digest for alef {version}; add the checksum by hand"
+        )
     entry = f"  {version})\n    alef_sha256={digest.removeprefix('sha256:')}\n    ;;\n"
     marker = 'case "$alef_version" in\n'
     installer.write_text(text.replace(marker, marker + entry, 1))
@@ -175,15 +225,23 @@ def installer_missing(alef_version: str) -> list[str]:
     installer = ROOT / "workspace-scripts" / "install_alef_binary.sh"
     if re.search(rf"^\s+{re.escape(alef_version)}\)", installer.read_text(), re.M):
         return []
-    return [f"workspace-scripts/install_alef_binary.sh has no reviewed SHA-256 for alef {alef_version}; "
-            "download the release tarball, review it, and add its checksum"]
+    return [
+        f"workspace-scripts/install_alef_binary.sh has no reviewed SHA-256 for alef {alef_version}; "
+        "download the release tarball, review it, and add its checksum"
+    ]
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--offline", action="store_true")
-    parser.add_argument("--only", choices=["tslp", "alef", "polylint"], help="limit --write to one project")
+    parser.add_argument(
+        "--only",
+        choices=["tslp", "alef", "polylint"],
+        help="limit --write to one project",
+    )
     parser.add_argument("--tslp-latest")
     parser.add_argument("--alef-latest")
     parser.add_argument("--polylint-latest")
@@ -195,7 +253,11 @@ def main(argv=None) -> int:
     problems: list[str] = []
 
     if args.offline:
-        for name, hits in (("tree-sitter-language-pack", tslp_hits), ("alef", alef_hits), ("polylint", polylint_hits)):
+        for name, hits in (
+            ("tree-sitter-language-pack", tslp_hits),
+            ("alef", alef_hits),
+            ("polylint", polylint_hits),
+        ):
             versions = {hit[3] for hit in hits}
             if len(versions) > 1:
                 problems.append(f"{name} pins disagree: {sorted(versions)}")
@@ -206,20 +268,32 @@ def main(argv=None) -> int:
         if args.write:
             changes = []
             if args.only in (None, "tslp") and any(hit[3] != tslp for hit in tslp_hits):
-                changes.append(f"tree-sitter-language-pack {', '.join(sorted({h[3] for h in tslp_hits}))} -> {tslp}")
+                changes.append(
+                    f"tree-sitter-language-pack {', '.join(sorted({h[3] for h in tslp_hits}))} -> {tslp}"
+                )
                 rewrite(TSLP_SITES, tslp, exact_cargo_toml=True)
                 update_cargo_lock(tslp)
             if args.only in (None, "alef") and any(hit[3] != alef for hit in alef_hits):
-                changes.append(f"alef {', '.join(sorted({h[3] for h in alef_hits}))} -> {alef}")
+                changes.append(
+                    f"alef {', '.join(sorted({h[3] for h in alef_hits}))} -> {alef}"
+                )
                 rewrite(ALEF_SITES, alef)
             if args.only in (None, "alef") and add_alef_checksum(alef):
-                changes.append(f"alef {alef} binary checksum (GitHub-published sha256 digest)")
-            if args.only in (None, "polylint") and any(hit[3] != polylint for hit in polylint_hits):
-                changes.append(f"polylint {', '.join(sorted({h[3] for h in polylint_hits}))} -> {polylint}")
+                changes.append(
+                    f"alef {alef} binary checksum (GitHub-published sha256 digest)"
+                )
+            if args.only in (None, "polylint") and any(
+                hit[3] != polylint for hit in polylint_hits
+            ):
+                changes.append(
+                    f"polylint {', '.join(sorted({h[3] for h in polylint_hits}))} -> {polylint}"
+                )
                 rewrite(POLYLINT_SITES, polylint)
             print("\n".join(changes) if changes else "nothing to update")
             if changes:
-                print("\nNow regenerate and verify: alef generate, alef verify --exit-code, then the full test suites.")
+                print(
+                    "\nNow regenerate and verify: alef generate, alef verify --exit-code, then the full test suites."
+                )
             return 0
         for name, hits, latest in (
             ("tree-sitter-language-pack", tslp_hits, tslp),
@@ -228,13 +302,18 @@ def main(argv=None) -> int:
         ):
             for label, path, line_no, version, _line in hits:
                 if version != latest:
-                    problems.append(f"{path.relative_to(ROOT)}:{line_no}: {name} {version} is not the latest ({latest}) [{label}]")
+                    problems.append(
+                        f"{path.relative_to(ROOT)}:{line_no}: {name} {version} is not the latest ({latest}) [{label}]"
+                    )
         problems.extend(exact_pin_violations(tslp))
         problems.extend(installer_missing(alef))
 
     if problems:
         print("Stale or loose pins found:\n  " + "\n  ".join(problems), file=sys.stderr)
-        print("\nFix everything at once with: python workspace-scripts/check_latest_pins.py --write", file=sys.stderr)
+        print(
+            "\nFix everything at once with: python workspace-scripts/check_latest_pins.py --write",
+            file=sys.stderr,
+        )
         return 1
     print("All tree-sitter-language-pack, alef and polylint pins are current.")
     return 0
